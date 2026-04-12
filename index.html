@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KS / Hub</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #09090d;
+  --surface:  #0e0e14;
+  --border:   rgba(255,255,255,0.06);
+  --border-h: rgba(255,255,255,0.13);
+  --text:     #dddde8;
+  --muted:    #44445a;
+  --radius:   16px;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle dot grid — pure CSS, zero JS */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 80px 48px 96px;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 80px;
+  opacity: 0;
+  animation: fadeUp 0.5s ease forwards 0.05s;
+}
+
+.logo {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text);
+}
+.logo em {
+  font-style: normal;
+  color: #f59e0b;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: blink 2.5s ease-in-out infinite;
+}
+
+/* ── Section label ── */
+.label {
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 28px;
+  opacity: 0;
+  animation: fadeUp 0.5s ease forwards 0.15s;
+}
+
+/* ── App grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  opacity: 0;
+  animation: fadeUp 0.5s ease forwards 0.25s;
+}
+
+/* ── App card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 48px 20px 36px;
+  text-decoration: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  position: relative;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  will-change: transform;
+}
+
+.card:hover {
+  border-color: var(--c, var(--border-h));
+  transform: translateY(-4px);
+  box-shadow: 0 20px 48px rgba(0,0,0,0.5), 0 0 0 1px var(--c, transparent);
+}
+
+.card.dim {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.icon {
+  font-size: 3.4rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.04);
+  transition: background 0.2s;
+}
+
+.card:hover .icon {
+  background: color-mix(in srgb, var(--c, transparent) 12%, rgba(255,255,255,0.04));
+}
+
+.name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: center;
+  color: var(--text);
+}
+
+.soon {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 0.52rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 7px;
+}
+
+/* ── Footer ── */
+footer {
+  margin-top: 80px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: fadeUp 0.5s ease forwards 0.4s;
+}
+
+/* ── Animations ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 600px) {
+  .page { padding: 48px 20px 64px; }
+  header { margin-bottom: 56px; }
+  .logo { font-size: 1.6rem; }
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .icon { font-size: 2.6rem; width: 72px; height: 72px; }
+  .card { padding: 36px 16px 28px; gap: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header>
+    <div class="logo">KS<em>.</em></div>
+    <div class="status"><span class="dot"></span>online</div>
+  </header>
+
+  <div class="label">apps &amp; tools</div>
+
+  <div class="grid">
+
+    <a href="https://kisushotto.com" class="card" style="--c:#f59e0b" target="_blank" rel="noopener">
+      <div class="icon">💼</div>
+      <span class="name">Portfolio</span>
+    </a>
+
+    <a href="https://kisushotto.com/p2p-monitor" class="card" style="--c:#10b981" target="_blank" rel="noopener">
+      <div class="icon">📡</div>
+      <span class="name">P2P Monitor</span>
+    </a>
+
+    <a href="#" class="card dim" style="--c:#6366f1">
+      <span class="soon">soon</span>
+      <div class="icon">📓</div>
+      <span class="name">Trade Journal</span>
+    </a>
+
+    <a href="#" class="card dim" style="--c:#ec4899">
+      <span class="soon">soon</span>
+      <div class="icon">🥗</div>
+      <span class="name">Nutrition</span>
+    </a>
+
+    <a href="#" class="card dim" style="--c:#3b82f6">
+      <span class="soon">soon</span>
+      <div class="icon">💪</div>
+      <span class="name">Body Metrics</span>
+    </a>
+
+    <a href="#" class="card dim" style="--c:#8b5cf6">
+      <span class="soon">soon</span>
+      <div class="icon">🔥</div>
+      <span class="name">Habits</span>
+    </a>
+
+    <a href="#" class="card dim" style="--c:#f43f5e">
+      <span class="soon">soon</span>
+      <div class="icon">🧠</div>
+      <span class="name">BTC Cards</span>
+    </a>
+
+    <a href="#" class="card dim" style="--c:#06b6d4">
+      <span class="soon">soon</span>
+      <div class="icon">⚙️</div>
+      <span class="name">Workspace</span>
+    </a>
+
+  </div>
+
+  <footer>
+    <span>kisushotto · hub</span>
+    <span>v0.1</span>
+  </footer>
+
+</div>
+
+</body>
+</html>
