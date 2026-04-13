@@ -82,60 +82,63 @@
       <button class="modal-close" onclick="document.getElementById('ingestModal').classList.add('hidden')">×</button>
     </div>
     <div class="modal-body">
+      <!-- Exchange selector -->
       <div class="ingest-section-tabs">
-        <button class="isect-tab active" onclick="switchIngestTab('bybit-linear')">Bybit Futures</button>
-        <button class="isect-tab" onclick="switchIngestTab('bybit-inverse')">Bybit Inverse</button>
-        <button class="isect-tab" onclick="switchIngestTab('bybit-spot')">Bybit Spot</button>
-        <button class="isect-tab" onclick="switchIngestTab('binance')">Binance Futures</button>
-        <button class="isect-tab" onclick="switchIngestTab('binance-spot')">Binance Spot</button>
+        <button class="isect-tab active" onclick="switchExchange('bybit',this)">Bybit</button>
+        <button class="isect-tab" onclick="switchExchange('binance',this)">Binance</button>
       </div>
 
-      <div class="isect-panel active" id="panel-bybit-linear">
-        <div class="ingest-note">⚡ Requiere API key de Bybit con permiso de lectura (solo positions). No envía órdenes. Las keys se usan solo para esta importación y no se guardan.</div>
+      <!-- BYBIT panel -->
+      <div class="isect-panel active" id="panel-bybit">
+        <div class="ingest-note">⚡ Una sola API key sirve para todos los tipos. Solo requiere permiso de lectura — no puede hacer órdenes.</div>
         <div class="form-row">
           <div class="form-field"><label>API Key</label><input type="password" id="bybit-key" placeholder="..."></div>
           <div class="form-field"><label>API Secret</label><input type="password" id="bybit-secret" placeholder="..."></div>
         </div>
-        <div class="form-field"><label>Símbolo (opcional, ej: BTCUSDT)</label><input type="text" id="bybit-symbol" placeholder="dejar vacío = todos"></div>
-        <button class="btn btn-accent" onclick="doIngest('bybit-linear')">Importar Futures Linear</button>
-        <div class="ingest-result" id="result-bybit-linear"></div>
-      </div>
-
-      <div class="isect-panel" id="panel-bybit-inverse">
-        <div class="ingest-note">Futuros inversos (BTC-margined). Mismo proceso que linear.</div>
-        <div class="form-row">
-          <div class="form-field"><label>API Key</label><input type="password" id="bybit-inv-key" placeholder="..."></div>
-          <div class="form-field"><label>API Secret</label><input type="password" id="bybit-inv-secret" placeholder="..."></div>
+        <div class="form-field"><label>Símbolo (opcional — vacío = todos)</label><input type="text" id="bybit-symbol" placeholder="ej: BTCUSDT"></div>
+        <div class="form-field">
+          <label>Qué importar</label>
+          <div style="display:flex;gap:16px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+              <input type="checkbox" id="chk-linear"  checked style="accent-color:var(--accent)"> Futures Linear
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+              <input type="checkbox" id="chk-inverse"        style="accent-color:var(--accent)"> Futures Inverse
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+              <input type="checkbox" id="chk-spot"           style="accent-color:var(--accent)"> Spot
+            </label>
+          </div>
         </div>
-        <div class="form-field"><label>Símbolo (opcional)</label><input type="text" id="bybit-inv-symbol" placeholder="ej: BTCUSD"></div>
-        <button class="btn btn-accent" onclick="doIngest('bybit-inverse')">Importar Inverse</button>
-        <div class="ingest-result" id="result-bybit-inverse"></div>
+        <button class="btn btn-accent" onclick="doIngestBybit()">Importar Bybit</button>
+        <div class="ingest-result" id="result-bybit"></div>
       </div>
 
-      <div class="isect-panel" id="panel-bybit-spot">
-        <div class="ingest-note">Importa órdenes Spot completadas de Bybit.</div>
-        <div class="form-row">
-          <div class="form-field"><label>API Key</label><input type="password" id="bybit-sp-key" placeholder="..."></div>
-          <div class="form-field"><label>API Secret</label><input type="password" id="bybit-sp-secret" placeholder="..."></div>
-        </div>
-        <div class="form-field"><label>Símbolo (opcional)</label><input type="text" id="bybit-sp-symbol" placeholder="ej: BTCUSDT"></div>
-        <button class="btn btn-accent" onclick="doIngest('bybit-spot')">Importar Spot</button>
-        <div class="ingest-result" id="result-bybit-spot"></div>
-      </div>
-
+      <!-- BINANCE panel -->
       <div class="isect-panel" id="panel-binance">
-        <div class="ingest-note">Binance USDⓈ-M Futures. El símbolo es obligatorio.</div>
+        <div class="ingest-note">Una sola API key para Futures y Spot. El símbolo es obligatorio para Binance.</div>
         <div class="form-row">
           <div class="form-field"><label>API Key</label><input type="password" id="bn-key" placeholder="..."></div>
           <div class="form-field"><label>API Secret</label><input type="password" id="bn-secret" placeholder="..."></div>
         </div>
         <div class="form-field"><label>Símbolo (requerido)</label><input type="text" id="bn-symbol" placeholder="ej: BTCUSDT"></div>
-        <button class="btn btn-accent" onclick="doIngest('binance')">Importar Binance Futures</button>
+        <div class="form-field">
+          <label>Qué importar</label>
+          <div style="display:flex;gap:16px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+              <input type="checkbox" id="chk-bn-futures" checked style="accent-color:var(--accent)"> Futures (USDⓈ-M)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+              <input type="checkbox" id="chk-bn-spot"          style="accent-color:var(--accent)"> Spot
+            </label>
+          </div>
+        </div>
+        <button class="btn btn-accent" onclick="doIngestBinance()">Importar Binance</button>
         <div class="ingest-result" id="result-binance"></div>
       </div>
 
+      <!-- (legacy hidden panels kept for JS compat) -->
       <div class="isect-panel" id="panel-binance-spot">
-        <div class="ingest-note">Binance Spot. El símbolo es obligatorio.</div>
         <div class="form-row">
           <div class="form-field"><label>API Key</label><input type="password" id="bn-sp-key" placeholder="..."></div>
           <div class="form-field"><label>API Secret</label><input type="password" id="bn-sp-secret" placeholder="..."></div>

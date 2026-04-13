@@ -96,39 +96,82 @@ function renderRecentTrades(trades) {
   </table></div>`;
 }
 
-window.switchIngestTab = function(tab) {
-  const tabs = ['bybit-linear','bybit-inverse','bybit-spot','binance','binance-spot'];
-  document.querySelectorAll('.isect-tab').forEach((btn, i) => btn.classList.toggle('active', tabs[i] === tab));
+window.switchExchange = function(exchange, btn) {
+  document.querySelectorAll('.isect-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
   document.querySelectorAll('.isect-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById(`panel-${tab}`)?.classList.add('active');
+  $(`panel-${exchange}`)?.classList.add('active');
 };
 
-window.doIngest = async function(type) {
-  const resultEl = $(`result-${type}`);
-  resultEl.className = 'ingest-result show';
-  resultEl.textContent = 'Importando…';
-  try {
-    let res;
-    if (type === 'bybit-linear')
-      res = await ingestBybit({ apiKey: $('bybit-key').value, apiSecret: $('bybit-secret').value, symbol: $('bybit-symbol').value || undefined });
-    else if (type === 'bybit-inverse')
-      res = await ingestBybitInverse({ apiKey: $('bybit-inv-key').value, apiSecret: $('bybit-inv-secret').value, symbol: $('bybit-inv-symbol').value || undefined });
-    else if (type === 'bybit-spot')
-      res = await ingestBybitSpot({ apiKey: $('bybit-sp-key').value, apiSecret: $('bybit-sp-secret').value, symbol: $('bybit-sp-symbol').value || undefined });
-    else if (type === 'binance')
-      res = await ingestBinance({ apiKey: $('bn-key').value, apiSecret: $('bn-secret').value, symbol: $('bn-symbol').value });
-    else if (type === 'binance-spot')
-      res = await ingestBinanceSpot({ apiKey: $('bn-sp-key').value, apiSecret: $('bn-sp-secret').value, symbol: $('bn-sp-symbol').value });
+window.doIngestBybit = async function() {
+  const key    = $('bybit-key').value.trim();
+  const secret = $('bybit-secret').value.trim();
+  const symbol = $('bybit-symbol').value.trim() || undefined;
+  const resultEl = $('result-bybit');
 
-    resultEl.className = 'ingest-result show ok';
-    resultEl.textContent = `✓ Total: ${res.total} · Nuevos: ${res.inserted} · Duplicados: ${res.duplicates}`;
-    toast(`${res.inserted} trades nuevos importados`);
-    setTimeout(() => init(), 1200);
-  } catch (err) {
-    resultEl.className = 'ingest-result show err';
-    resultEl.textContent = `✗ ${err.message}`;
-    toast(err.message, 'err');
+  if (!key || !secret) { toast('API key y secret requeridos', 'err'); return; }
+
+  const types = [
+    { id: 'chk-linear',  fn: () => ingestBybit({ apiKey: key, apiSecret: secret, symbol }),          label: 'Linear' },
+    { id: 'chk-inverse', fn: () => ingestBybitInverse({ apiKey: key, apiSecret: secret, symbol }),    label: 'Inverse' },
+    { id: 'chk-spot',    fn: () => ingestBybitSpot({ apiKey: key, apiSecret: secret, symbol }),       label: 'Spot' },
+  ].filter(t => $(t.id)?.checked);
+
+  if (!types.length) { toast('Selecciona al menos un tipo', 'err'); return; }
+
+  resultEl.className = 'ingest-result show';
+  resultEl.textContent = `Importando ${types.map(t => t.label).join(', ')}…`;
+
+  let totalNew = 0, lines = [];
+  for (const t of types) {
+    try {
+      const res = await t.fn();
+      totalNew += res.inserted;
+      lines.push(`${t.label}: +${res.inserted} nuevos (${res.duplicates} dup)`);
+    } catch (err) {
+      lines.push(`${t.label}: ✗ ${err.message}`);
+    }
   }
+
+  resultEl.className = `ingest-result show ${totalNew > 0 ? 'ok' : 'err'}`;
+  resultEl.innerHTML = lines.join('<br>');
+  toast(`${totalNew} trades nuevos importados`);
+  if (totalNew > 0) setTimeout(() => init(), 1200);
+};
+
+window.doIngestBinance = async function() {
+  const key    = $('bn-key').value.trim();
+  const secret = $('bn-secret').value.trim();
+  const symbol = $('bn-symbol').value.trim();
+  const resultEl = $('result-binance');
+
+  if (!key || !secret || !symbol) { toast('API key, secret y símbolo requeridos', 'err'); return; }
+
+  const types = [
+    { id: 'chk-bn-futures', fn: () => ingestBinance({ apiKey: key, apiSecret: secret, symbol }),     label: 'Futures' },
+    { id: 'chk-bn-spot',    fn: () => ingestBinanceSpot({ apiKey: key, apiSecret: secret, symbol }), label: 'Spot' },
+  ].filter(t => $(t.id)?.checked);
+
+  if (!types.length) { toast('Selecciona al menos un tipo', 'err'); return; }
+
+  resultEl.className = 'ingest-result show';
+  resultEl.textContent = `Importando ${types.map(t => t.label).join(', ')}…`;
+
+  let totalNew = 0, lines = [];
+  for (const t of types) {
+    try {
+      const res = await t.fn();
+      totalNew += res.inserted;
+      lines.push(`${t.label}: +${res.inserted} nuevos (${res.duplicates} dup)`);
+    } catch (err) {
+      lines.push(`${t.label}: ✗ ${err.message}`);
+    }
+  }
+
+  resultEl.className = `ingest-result show ${totalNew > 0 ? 'ok' : 'err'}`;
+  resultEl.innerHTML = lines.join('<br>');
+  toast(`${totalNew} trades nuevos importados`);
+  if (totalNew > 0) setTimeout(() => init(), 1200);
 };
 
 async function init() {
