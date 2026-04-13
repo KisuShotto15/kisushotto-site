@@ -38,7 +38,11 @@ export function drawEquityCurve(container, points) {
     crosshairMarkerRadius: 4,
   });
 
-  series.setData(points.map(p => ({ time: p.t, value: p.v })));
+  // Sort asc + deduplicate same timestamps (keep last value per timestamp)
+  const seen = new Map();
+  for (const p of points) seen.set(p.t, p.v);
+  const sorted = [...seen.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ time: t, value: v }));
+  series.setData(sorted);
 
   // Zero baseline
   series.createPriceLine({ price: 0, color: '#333', lineWidth: 1, lineStyle: 2, axisLabelVisible: false });

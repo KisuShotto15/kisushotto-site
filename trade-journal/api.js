@@ -9,14 +9,20 @@ export const cfg = {
 };
 
 export async function api(path, opts = {}) {
-  const res = await fetch(cfg.base() + path, {
-    ...opts,
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Bearer ${cfg.token()}`,
-      ...(opts.headers || {}),
-    },
-  });
+  const url = cfg.base() + path;
+  let res;
+  try {
+    res = await fetch(url, {
+      ...opts,
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${cfg.token()}`,
+        ...(opts.headers || {}),
+      },
+    });
+  } catch (e) {
+    throw new Error(`No se puede conectar: ${url} — ${e.message}`);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`API ${res.status}: ${text}`);
@@ -49,3 +55,7 @@ export const ingestBybitInverse = (b) => api('/ingest/bybit-inverse', { method: 
 export const ingestBybitSpot    = (b) => api('/ingest/bybit-spot',    { method: 'POST', body: JSON.stringify(b) });
 export const ingestBinance      = (b) => api('/ingest/binance',       { method: 'POST', body: JSON.stringify(b) });
 export const ingestBinanceSpot  = (b) => api('/ingest/binance-spot',  { method: 'POST', body: JSON.stringify(b) });
+export const ingestCSV          = (b) => api('/ingest/csv',           { method: 'POST', body: JSON.stringify(b) });
+export const getSyncConfig      = ()  => api('/sync/config');
+export const setSyncConfig      = (b) => api('/sync/config', { method: 'POST', body: JSON.stringify(b) });
+export const runSync            = ()  => api('/sync/run',    { method: 'POST' });

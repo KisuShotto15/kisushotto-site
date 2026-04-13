@@ -34,12 +34,14 @@ async function bybitHeaders(apiKey, apiSecret, queryString) {
 
 // Linear/Inverse futures — uses /v5/position/closed-pnl
 export async function fetchBybitFutures(apiKey, apiSecret, opts = {}) {
-  const { category = 'linear', symbol, limit = 200 } = opts;
+  const { category = 'linear', symbol, limit = 200, since = 0 } = opts;
   const trades = [];
   let cursor = '';
+  // since > 0: incremental sync; otherwise fetch last year
+  const startTime = since > 0 ? since : Date.now() - 365 * 24 * 60 * 60 * 1000;
 
   do {
-    let qs = `category=${category}&limit=${limit}`;
+    let qs = `category=${category}&limit=${limit}&startTime=${startTime}`;
     if (symbol) qs += `&symbol=${symbol}`;
     if (cursor) qs += `&cursor=${encodeURIComponent(cursor)}`;
 
@@ -55,7 +57,8 @@ export async function fetchBybitFutures(apiKey, apiSecret, opts = {}) {
       trades.push({
         symbol:      t.symbol,
         category,
-        side:        t.side?.toLowerCase() === 'buy' ? 'long' : 'short',
+        // closed-pnl side = closing side: Sell=closed a Long, Buy=closed a Short
+        side:        t.side?.toLowerCase() === 'sell' ? 'long' : 'short',
         entry_price: parseFloat(t.avgEntryPrice || 0),
         exit_price:  parseFloat(t.avgExitPrice  || 0) || null,
         size:        parseFloat(t.qty || t.size || 0),
@@ -72,7 +75,7 @@ export async function fetchBybitFutures(apiKey, apiSecret, opts = {}) {
     }
 
     cursor = d.result?.nextPageCursor || '';
-  } while (cursor && trades.length < 2000);
+  } while (cursor && trades.length < 1000);
 
   return trades;
 }
@@ -191,4 +194,77 @@ export async function fetchBinanceSpot(apiKey, apiSecret, symbol, limit = 1000) 
       exchange_id: String(t.id),
     };
   });
+}
+
+// ── Bybit Transaction Log CSV parser ─────────────────────────────────────────
+// Parses CSV exported from Bybit UI → Account → Transaction Log → Export
+// Real column format: Currency,Contract,Type,Direction,Quantity,Position,
+//   Filled Price,Funding,Fee Paid,Cash Flow,Change,Wallet Balance,Action,OrderId,TradeId,Time
+export function parseBybitCSV(csvText) {
+  const lines = csvText.trim().split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+
+  const header = lines[0].replace(/^\uFEFF/, '').split(',').map(h => h.replace(/"/g, '').trim().toLowerCase());
+
+  const idx = name => header.findIndex(h => h === name.toLowerCase());
+
+  const iContract   = idx('contract');
+  const iType       = idx('type');
+  const iDirection  = idx('direction');
+  const iQty        = idx('quantity');
+  const iPrice      = idx('filled price');
+  const iFeePaid    = idx('fee paid');
+  const iCashFlow   = idx('cash flow');
+  const iAction     = idx('action');
+  const iOrderId    = idx('orderid');
+  const iTradeId    = idx('tradeid');
+  const iTime       = idx('time');
+
+  const trades = [];
+  for (let i = 1; i < lines.length; i++) {
+    const c = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+    const type   = (c[iType]   || '').toUpperCase();
+    const action = (c[iAction] || '').toUpperCase();
+
+    // Only import closed trade fills
+    if (type !== 'TRADE' || action !== 'CLOSE') continue;
+
+    const symbol = (c[iContract] || '').toUpperCase().replace('/', '');
+    if (!symbol) continue;
+
+    const rawTime = c[iTime] || '';
+    const ts = rawTime
+      ? Math.floor(new Date(rawTime.replace(' ', 'T') + (rawTime.includes('Z') ? '' : 'Z')).getTime() / 1000)
+      : 0;
+    if (!ts || ts <= 0) continue;
+
+    const direction = (c[iDirection] || '').toUpperCase(); // SELL = closed long, BUY = closed short
+    const price     = parseFloat(c[iPrice])    || 0;
+    const qty       = Math.abs(parseFloat(c[iQty])   || 0);
+    const pnl       = parseFloat(c[iCashFlow]) || 0;  // realized PnL for this fill
+    const fee       = Math.abs(parseFloat(c[iFeePaid]) || 0);
+    const dir       = direction === 'SELL' ? 'long' : 'short';
+    const category  = symbol.endsWith('USDT') || symbol.endsWith('USDC') ? 'linear' : 'inverse';
+    const tradeId   = c[iTradeId] || `csv_${i}`;
+    const orderId   = c[iOrderId] || '';
+
+    trades.push({
+      symbol,
+      category,
+      side:        dir,
+      entry_price: price,
+      exit_price:  price,
+      size:        qty,
+      pnl,
+      fees:        fee,
+      entry_time:  ts,
+      exit_time:   ts,
+      session:     session(ts),
+      exec_type:   'bot',
+      status:      'closed',
+      exchange:    'bybit',
+      exchange_id: `${orderId}_${tradeId}`,
+    });
+  }
+  return trades;
 }

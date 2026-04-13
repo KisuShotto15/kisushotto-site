@@ -23,20 +23,21 @@
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px">
     <div>
       <div class="page-header-label">// behavioral analytics</div>
-      <h1>TRADING<br><span>INSIGHTS</span></h1>
+      <h1>TRADING <span>INSIGHTS</span></h1>
     </div>
     <button class="btn btn-accent" id="refreshBtn" onclick="doRefresh()">↻ Regenerar insights</button>
   </div>
 
-  <!-- Filter chips -->
-  <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
-    <button class="isect-tab active" onclick="filterInsights('all',this)">Todos</button>
-    <button class="isect-tab" onclick="filterInsights('critical',this)">🔴 Críticos</button>
-    <button class="isect-tab" onclick="filterInsights('warning',this)">🟡 Advertencias</button>
-    <button class="isect-tab" onclick="filterInsights('info',this)">🔵 Info</button>
+  <div class="section-card">
+    <!-- Filter chips -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+      <button class="isect-tab active" onclick="filterInsights('all',this)">Todos</button>
+      <button class="isect-tab" onclick="filterInsights('critical',this)">🔴 Críticos</button>
+      <button class="isect-tab" onclick="filterInsights('warning',this)">🟡 Advertencias</button>
+      <button class="isect-tab" onclick="filterInsights('info',this)">🔵 Info</button>
+    </div>
+    <div id="insightsContainer"><div class="loading">Cargando…</div></div>
   </div>
-
-  <div id="insightsContainer"><div class="loading">Cargando…</div></div>
 
 </div>
 <div class="toast" id="toast"></div>

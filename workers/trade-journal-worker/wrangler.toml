@@ -9,3 +9,6 @@ database_id = "0d902c20-5ba7-4646-a1f6-d2dc00d982e8"
 
 [vars]
 TOKEN = "151322"
+
+[triggers]
+crons = ["0 */4 * * *"]

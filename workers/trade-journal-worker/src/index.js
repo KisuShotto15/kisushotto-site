@@ -1,6 +1,6 @@
 import { computeStats, groupByDimension, buildHeatmap } from './analytics.js';
 import { generateInsights } from './insights.js';
-import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot } from './ingestion.js';
+import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot, parseBybitCSV } from './ingestion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -30,6 +30,10 @@ function session(unixSec) {
 }
 
 export default {
+  async scheduled(event, env) {
+    try { await runSync(env); } catch (e) { console.error('cron sync failed:', e); }
+  },
+
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (!auth(request, env)) return json({ error: 'Unauthorized' }, 401);
@@ -43,38 +47,44 @@ export default {
       if (path === '/health') return json({ ok: true, ts: Date.now() });
 
       // ── Trades ──────────────────────────────────────────────────────────────
-      if (path === '/trades' && method === 'GET')    return listTrades(url, env);
-      if (path === '/trades' && method === 'POST')   return createTrade(request, env);
+      if (path === '/trades' && method === 'GET')    return await listTrades(url, env);
+      if (path === '/trades' && method === 'POST')   return await createTrade(request, env);
       const tradeMatch = path.match(/^\/trades\/([\w-]+)$/);
       if (tradeMatch) {
         const id = tradeMatch[1];
-        if (method === 'GET')    return getTrade(id, env);
-        if (method === 'PUT')    return updateTrade(id, request, env);
-        if (method === 'DELETE') return deleteTrade(id, env);
+        if (method === 'GET')    return await getTrade(id, env);
+        if (method === 'PUT')    return await updateTrade(id, request, env);
+        if (method === 'DELETE') return await deleteTrade(id, env);
       }
 
       // ── Analytics ───────────────────────────────────────────────────────────
-      if (path === '/analytics'              && method === 'GET') return analytics(url, env);
-      if (path === '/analytics/by-session'   && method === 'GET') return byDimension('session',      env);
-      if (path === '/analytics/by-symbol'    && method === 'GET') return byDimension('symbol',       env);
-      if (path === '/analytics/by-setup'     && method === 'GET') return byDimension('setup_tag',    env);
-      if (path === '/analytics/by-strategy'  && method === 'GET') return byDimension('strategy_tag', env);
-      if (path === '/analytics/heatmap'      && method === 'GET') return heatmap(env);
+      if (path === '/analytics'              && method === 'GET') return await analytics(url, env);
+      if (path === '/analytics/by-session'   && method === 'GET') return await byDimension('session',      env);
+      if (path === '/analytics/by-symbol'    && method === 'GET') return await byDimension('symbol',       env);
+      if (path === '/analytics/by-setup'     && method === 'GET') return await byDimension('setup_tag',    env);
+      if (path === '/analytics/by-strategy'  && method === 'GET') return await byDimension('strategy_tag', env);
+      if (path === '/analytics/heatmap'      && method === 'GET') return await heatmap(env);
 
       // ── Insights ────────────────────────────────────────────────────────────
-      if (path === '/insights' && method === 'GET')  return listInsights(env);
-      if (path === '/insights/refresh' && method === 'POST') return refreshInsights(env);
+      if (path === '/insights' && method === 'GET')  return await listInsights(env);
+      if (path === '/insights/refresh' && method === 'POST') return await refreshInsights(env);
 
       // ── Strategies & Setups ─────────────────────────────────────────────────
-      if (path === '/strategies') return tagTable('strategies', request, env, method);
-      if (path === '/setups')     return tagTable('setups',     request, env, method);
+      if (path === '/strategies') return await tagTable('strategies', request, env, method);
+      if (path === '/setups')     return await tagTable('setups',     request, env, method);
 
       // ── Ingestion ───────────────────────────────────────────────────────────
-      if (path === '/ingest/bybit'          && method === 'POST') return ingestBybit(request, env, 'linear');
-      if (path === '/ingest/bybit-inverse'  && method === 'POST') return ingestBybit(request, env, 'inverse');
-      if (path === '/ingest/bybit-spot'     && method === 'POST') return ingestBybitSpot(request, env);
-      if (path === '/ingest/binance'        && method === 'POST') return ingestBinance(request, env);
-      if (path === '/ingest/binance-spot'   && method === 'POST') return ingestBinanceSpot(request, env);
+      if (path === '/ingest/bybit'          && method === 'POST') return await ingestBybit(request, env, 'linear');
+      if (path === '/ingest/bybit-inverse'  && method === 'POST') return await ingestBybit(request, env, 'inverse');
+      if (path === '/ingest/bybit-spot'     && method === 'POST') return await ingestBybitSpot(request, env);
+      if (path === '/ingest/binance'        && method === 'POST') return await ingestBinance(request, env);
+      if (path === '/ingest/binance-spot'   && method === 'POST') return await ingestBinanceSpot(request, env);
+      if (path === '/ingest/csv'            && method === 'POST') return await ingestCSV(request, env);
+
+      // ── Sync config ─────────────────────────────────────────────────────────
+      if (path === '/sync/config' && method === 'GET')  return await getSyncConfig(env);
+      if (path === '/sync/config' && method === 'POST') return await setSyncConfig(request, env);
+      if (path === '/sync/run'    && method === 'POST') return await runSync(env);
 
       return json({ error: 'Not found' }, 404);
     } catch (err) {
@@ -296,4 +306,49 @@ async function ingestBinanceSpot(request, env) {
   if (!apiKey || !apiSecret || !symbol) return json({ error: 'apiKey + apiSecret + symbol required' }, 400);
   const trades = await fetchBinanceSpot(apiKey, apiSecret, symbol);
   return json(await upsertTrades(trades, env));
+}
+
+async function ingestCSV(request, env) {
+  const { csv } = await request.json();
+  if (!csv) return json({ error: 'csv field required' }, 400);
+  const trades = parseBybitCSV(csv);
+  if (!trades.length) return json({ error: 'No se encontraron trades en el CSV. Verifica que sea el Transaction Log de Bybit con tipo Trade.' }, 400);
+  return json(await upsertTrades(trades, env));
+}
+
+// ── Sync config ───────────────────────────────────────────────────────────────
+
+async function getSyncConfig(env) {
+  const row = await env.DB.prepare('SELECT id, exchange, last_sync, enabled FROM sync_configs WHERE id = ?').bind('bybit').first();
+  return json({ config: row || null });
+}
+
+async function setSyncConfig(request, env) {
+  const { apiKey, apiSecret, enabled = 1 } = await request.json();
+  if (!apiKey || !apiSecret) return json({ error: 'apiKey + apiSecret required' }, 400);
+  await env.DB.prepare(`
+    INSERT INTO sync_configs (id, exchange, api_key, api_secret, enabled, updated_at)
+    VALUES ('bybit', 'bybit', ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET api_key=excluded.api_key, api_secret=excluded.api_secret,
+      enabled=excluded.enabled, updated_at=excluded.updated_at
+  `).bind(apiKey, apiSecret, enabled ? 1 : 0, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true });
+}
+
+async function runSync(env) {
+  const cfg = await env.DB.prepare('SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
+  if (!cfg) return json({ skipped: true, reason: 'no config or disabled' });
+
+  const since = cfg.last_sync > 0 ? cfg.last_sync * 1000 : 0;
+  const [linear, inverse] = await Promise.all([
+    fetchBybitFutures(cfg.api_key, cfg.api_secret, { category: 'linear',  since }),
+    fetchBybitFutures(cfg.api_key, cfg.api_secret, { category: 'inverse', since }),
+  ]);
+
+  const all = [...linear, ...inverse];
+  const result = await upsertTrades(all, env);
+  await env.DB.prepare('UPDATE sync_configs SET last_sync = ? WHERE id = ?')
+    .bind(Math.floor(Date.now() / 1000), 'bybit').run();
+
+  return json({ ok: true, ...result, synced_at: Date.now() });
 }

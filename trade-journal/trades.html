@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<div class="container">
+<div class="container" id="mainContainer">
 
   <a href="/" class="back-link">← hub</a>
 
@@ -22,7 +22,7 @@
 
   <div class="page-header">
     <div class="page-header-label">// historial</div>
-    <h1>TRADE<br><span>LIST</span></h1>
+    <h1>TRADE <span>LIST</span></h1>
   </div>
 
   <!-- Filter bar -->
@@ -42,8 +42,6 @@
       <option value="">Side</option>
       <option value="long">Long</option>
       <option value="short">Short</option>
-      <option value="buy">Buy</option>
-      <option value="sell">Sell</option>
     </select>
     <select id="fSession" onchange="applyFilters()">
       <option value="">Sesión</option>
@@ -57,19 +55,31 @@
       <option value="closed">Closed</option>
       <option value="open">Open</option>
     </select>
-    <input type="text" id="fSymbol" placeholder="Símbolo" style="width:110px" oninput="applyFiltersDebounced()">
+    <input type="text" id="fSymbol" placeholder="Símbolo" style="width:120px" oninput="applyFiltersDebounced()">
     <input type="date" id="fFrom" onchange="applyFilters()" title="Desde">
     <input type="date" id="fTo"   onchange="applyFilters()" title="Hasta">
     <button class="btn btn-sm" onclick="resetFilters()">↺ Reset</button>
-    <button class="btn btn-accent btn-sm ml-auto" onclick="openAddTrade()">+ Agregar trade</button>
   </div>
 
-  <!-- Summary mini-bar -->
-  <div id="miniSummary" style="display:flex;gap:16px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:12px;"></div>
+  <!-- Mini summary -->
+  <div id="miniSummary" class="mini-summary"></div>
 
   <!-- Table -->
   <div class="table-wrap">
     <table>
+      <colgroup>
+        <col class="col-num">
+        <col class="col-symbol">
+        <col class="col-side">
+        <col class="col-price">
+        <col class="col-price">
+        <col class="col-size">
+        <col class="col-pnl">
+        <col class="col-session">
+        <col class="col-tag">
+        <col class="col-tag">
+        <col class="col-date">
+      </colgroup>
       <thead>
         <tr>
           <th>#</th>
@@ -79,116 +89,96 @@
           <th>Exit</th>
           <th>Size</th>
           <th>PnL</th>
-          <th>Fees</th>
           <th>Sesión</th>
           <th>Setup</th>
           <th>Estrategia</th>
-          <th>Notas</th>
-          <th></th>
+          <th>Fecha</th>
         </tr>
       </thead>
-      <tbody id="tradesBody"><tr><td colspan="13"><div class="loading">Cargando…</div></td></tr></tbody>
+      <tbody id="tradesBody"><tr><td colspan="11"><div class="loading">Cargando…</div></td></tr></tbody>
     </table>
   </div>
 
   <div class="pagination">
     <button class="btn btn-sm" id="btnPrev" onclick="prevPage()">← Anterior</button>
-    <span id="pageInfo">Página 1</span>
+    <span id="pageInfo" style="color:var(--muted2)">Página 1</span>
     <button class="btn btn-sm" id="btnNext" onclick="nextPage()">Siguiente →</button>
   </div>
 
 </div><!-- /container -->
 
-<!-- Add/Edit trade modal -->
-<div class="modal-backdrop hidden" id="tradeModal">
-  <div class="modal">
-    <div class="modal-header">
-      <span id="tradeModalTitle">Agregar trade</span>
-      <button class="modal-close" onclick="closeTradeModal()">×</button>
+<!-- Side panel -->
+<div class="panel-backdrop hidden" id="panelBackdrop" onclick="closePanel()"></div>
+<div class="side-panel hidden" id="sidePanel">
+  <div class="panel-header">
+    <div>
+      <div id="panelSymbol" class="panel-symbol">—</div>
+      <div id="panelMeta" class="panel-meta"></div>
     </div>
-    <div class="modal-body">
-      <div class="form-row">
-        <div class="form-field"><label>Símbolo</label><input type="text" id="fmSymbol" placeholder="BTCUSDT" style="text-transform:uppercase"></div>
-        <div class="form-field"><label>Exchange</label>
-          <select id="fmExchange">
-            <option value="bybit">Bybit</option>
-            <option value="binance">Binance</option>
-          </select>
-        </div>
+    <button class="panel-close" onclick="closePanel()">×</button>
+  </div>
+
+  <div class="panel-body">
+    <!-- PnL highlight -->
+    <div class="panel-pnl-row">
+      <div class="panel-stat">
+        <div class="panel-stat-label">PnL</div>
+        <div class="panel-stat-val" id="panelPnl">—</div>
       </div>
-      <div class="form-row three">
-        <div class="form-field"><label>Categoría</label>
-          <select id="fmCategory">
-            <option value="linear">Linear</option>
-            <option value="inverse">Inverse</option>
-            <option value="spot">Spot</option>
-          </select>
-        </div>
-        <div class="form-field"><label>Side</label>
-          <select id="fmSide">
-            <option value="long">Long</option>
-            <option value="short">Short</option>
-            <option value="buy">Buy</option>
-            <option value="sell">Sell</option>
-          </select>
-        </div>
-        <div class="form-field"><label>Sesión</label>
-          <select id="fmSession">
-            <option value="asia">Asia</option>
-            <option value="london">London</option>
-            <option value="ny">NY</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
+      <div class="panel-stat">
+        <div class="panel-stat-label">Entry</div>
+        <div class="panel-stat-val" id="panelEntry">—</div>
       </div>
-      <div class="form-row three">
-        <div class="form-field"><label>Entry Price</label><input type="number" id="fmEntry" step="any" placeholder="0.00"></div>
-        <div class="form-field"><label>Exit Price</label><input type="number" id="fmExit" step="any" placeholder="0.00 (opt)"></div>
-        <div class="form-field"><label>Size</label><input type="number" id="fmSize" step="any" placeholder="0.00"></div>
+      <div class="panel-stat">
+        <div class="panel-stat-label">Exit</div>
+        <div class="panel-stat-val" id="panelExit">—</div>
       </div>
-      <div class="form-row three">
-        <div class="form-field"><label>PnL (USDT)</label><input type="number" id="fmPnl" step="any" placeholder="0.00"></div>
-        <div class="form-field"><label>Fees</label><input type="number" id="fmFees" step="any" placeholder="0.00"></div>
-        <div class="form-field"><label>Rule Score (0–10)</label><input type="number" id="fmRule" min="0" max="10" placeholder="—"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>Entry Time</label><input type="datetime-local" id="fmEntryTime"></div>
-        <div class="form-field"><label>Exit Time (opt)</label><input type="datetime-local" id="fmExitTime"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>Setup</label><input type="text" id="fmSetup" placeholder="ej: BOS, OB, FVG…" list="setupsList"></div>
-        <div class="form-field"><label>Estrategia</label><input type="text" id="fmStrategy" placeholder="ej: ICT, Scalp, Swing…" list="strategiesList"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>Emoción</label>
-          <select id="fmEmotion">
-            <option value="">—</option>
-            <option value="calm">Calmado</option>
-            <option value="fomo">FOMO</option>
-            <option value="fear">Miedo</option>
-            <option value="greed">Avaricia</option>
-            <option value="revenge">Revenge</option>
-            <option value="confident">Confiado</option>
-          </select>
-        </div>
-        <div class="form-field"><label>Tipo ejecución</label>
-          <select id="fmExecType">
-            <option value="manual">Manual</option>
-            <option value="bot">Bot</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-field"><label>Notas</label><textarea id="fmNotes" placeholder="Descripción, contexto del trade…"></textarea></div>
-      <div class="form-actions">
-        <button class="btn" onclick="closeTradeModal()">Cancelar</button>
-        <button class="btn btn-accent" onclick="saveTrade()">Guardar</button>
+      <div class="panel-stat">
+        <div class="panel-stat-label">Size</div>
+        <div class="panel-stat-val" id="panelSize">—</div>
       </div>
     </div>
+
+    <!-- Divider -->
+    <div class="panel-divider"></div>
+
+    <!-- Setup tags -->
+    <div class="panel-section">
+      <div class="panel-section-label">Setup</div>
+      <div class="tag-grid" id="tagSetup"></div>
+    </div>
+
+    <!-- Strategy tags -->
+    <div class="panel-section">
+      <div class="panel-section-label">Estrategia</div>
+      <div class="tag-grid" id="tagStrategy"></div>
+    </div>
+
+    <!-- Emotion tags -->
+    <div class="panel-section">
+      <div class="panel-section-label">Emoción</div>
+      <div class="tag-grid" id="tagEmotion"></div>
+    </div>
+
+    <!-- Rule score -->
+    <div class="panel-section">
+      <div class="panel-section-label">Rule Score</div>
+      <div class="rule-score-row" id="ruleScoreRow"></div>
+    </div>
+
+    <!-- Notes -->
+    <div class="panel-section">
+      <div class="panel-section-label">Notas</div>
+      <textarea id="panelNotes" class="panel-textarea" placeholder="Describe el contexto, confluencias, errores…"></textarea>
+    </div>
+
+    <div class="panel-divider"></div>
+
+    <!-- Save -->
+    <button class="btn btn-accent" style="width:100%" onclick="savePanel()">Guardar cambios</button>
   </div>
 </div>
 
-<datalist id="setupsList"></datalist>
-<datalist id="strategiesList"></datalist>
 <div class="toast" id="toast"></div>
 <script type="module" src="./trades.js"></script>
 </body>

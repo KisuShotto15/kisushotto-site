@@ -22,7 +22,7 @@
 
   <div class="page-header">
     <div class="page-header-label">// edge analytics</div>
-    <h1>TRADE<br><span>JOURNAL</span></h1>
+    <h1>TRADE <span>JOURNAL</span></h1>
   </div>
 
   <!-- KPI row -->
@@ -61,7 +61,7 @@
     </div>
     <div class="section-card">
       <div class="section-card-title">mejor / peor trade</div>
-      <div id="bestWorst" style="font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.8;color:var(--muted2)">—</div>
+      <div id="bestWorst" style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.9;color:var(--muted2)">—</div>
     </div>
   </div>
 
@@ -86,6 +86,8 @@
       <div class="ingest-section-tabs">
         <button class="isect-tab active" onclick="switchExchange('bybit',this)">Bybit</button>
         <button class="isect-tab" onclick="switchExchange('binance',this)">Binance</button>
+        <button class="isect-tab" onclick="switchExchange('csv',this)">CSV histórico</button>
+        <button class="isect-tab" onclick="switchExchange('autosync',this)">⚡ Auto-sync</button>
       </div>
 
       <!-- BYBIT panel -->
@@ -135,6 +137,32 @@
         </div>
         <button class="btn btn-accent" onclick="doIngestBinance()">Importar Binance</button>
         <div class="ingest-result" id="result-binance"></div>
+      </div>
+
+      <!-- CSV panel -->
+      <div class="isect-panel" id="panel-csv">
+        <div class="ingest-note">Exporta el Transaction Log desde Bybit → Account → Transaction Log → Export (CSV). Filtra por tipo "Trade" antes de exportar para mejores resultados.</div>
+        <div class="form-field">
+          <label>Archivo CSV</label>
+          <input type="file" id="csv-file" accept=".csv" style="color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;margin-top:4px">
+        </div>
+        <button class="btn btn-accent" onclick="doIngestCSV()">Importar CSV</button>
+        <div class="ingest-result" id="result-csv"></div>
+      </div>
+
+      <!-- Auto-sync panel -->
+      <div class="isect-panel" id="panel-autosync">
+        <div class="ingest-note">⚡ Guarda tu API key una vez y el sistema sincronizará automáticamente cada 4 horas. Solo importa trades nuevos — sin duplicados.</div>
+        <div id="sync-status" style="font-family:'IBM Plex Mono',monospace;font-size:11px;margin-bottom:12px;color:var(--muted)">Cargando…</div>
+        <div class="form-row">
+          <div class="form-field"><label>API Key</label><input type="password" id="sync-key" placeholder="..."></div>
+          <div class="form-field"><label>API Secret</label><input type="password" id="sync-secret" placeholder="..."></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-accent" onclick="doSaveSync()">Guardar y activar</button>
+          <button class="btn" onclick="doRunSync()" style="border:1px solid var(--border)">Sync ahora</button>
+        </div>
+        <div class="ingest-result" id="result-sync"></div>
       </div>
 
       <!-- (legacy hidden panels kept for JS compat) -->
