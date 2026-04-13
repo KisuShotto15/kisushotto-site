@@ -17,6 +17,9 @@
   --radius:   16px;
 }
 
+html {
+  font-size: 20px;
+}
 html, body {
   height: 100%;
   background: var(--bg);
@@ -39,9 +42,9 @@ body::before {
 .page {
   position: relative;
   z-index: 1;
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 80px 48px 96px;
+  padding: 28px 32px 80px;
 }
 
 /* ── Header ── */
@@ -199,7 +202,7 @@ footer {
   .grid { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 600px) {
-  .page { padding: 48px 20px 64px; }
+  .page { padding: 24px 20px 64px; }
   header { margin-bottom: 56px; }
   .logo { font-size: 1.6rem; }
   .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
