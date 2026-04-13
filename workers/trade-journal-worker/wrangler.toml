@@ -5,7 +5,7 @@ compatibility_date = "2025-04-10"
 [[d1_databases]]
 binding = "DB"
 database_name = "trade-journal-db"
-database_id = "PLACEHOLDER_REPLACE_WITH_YOUR_D1_ID"
+database_id = "0d902c20-5ba7-4646-a1f6-d2dc00d982e8"
 
 [vars]
 TOKEN = "151322"
