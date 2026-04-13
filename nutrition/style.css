@@ -511,14 +511,47 @@ body {
 .supp-box p  { font-size: 12px; color: #7ab0c0; line-height: 1.6; }
 .supp-box strong { color: var(--accent3); }
 
+/* ── macro-val-unit — rendered in IBM Plex so "g" looks like "g" ── */
+.macro-val-unit {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.45em;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  vertical-align: super;
+  margin-left: 1px;
+  opacity: 0.8;
+}
+
 /* ── Responsive ── */
 @media (max-width: 640px) {
+  body { padding: 24px 14px 64px; }
+
+  /* Summary: 2×2 grid, smaller values */
   .summary-bar { grid-template-columns: repeat(2, 1fr); }
-  .meal-macros { gap: 8px; }
-  .meal-macro-item:nth-child(3) { display: none; }
+  .macro-val { font-size: 28px; }
+
+  /* Meal header: hide fat macro + reorder buttons, keep prot + kcal */
+  .meal-macro-item:nth-child(2),   /* fat */
+  .meal-macro-item:nth-child(3) {  /* carbs */
+    display: none;
+  }
+  /* Hide ↑↓ reorder, keep only delete */
+  .meal-controls .icon-btn:not(.icon-btn--danger),
+  .meal-controls .icon-btn-placeholder { display: none; }
   .meal-controls { gap: 2px; }
-  .rules-grid { grid-template-columns: 1fr; }
+
+  /* Ingredients: hide per-ingredient macros to save space */
   .ing-macros { display: none; }
+  .meal-header { padding: 12px 12px; gap: 8px; }
+  .meal-number { font-size: 22px; min-width: 26px; }
+
+  /* TDEE form */
   .tdee-row { flex-direction: column; }
   .tdee-chips { flex-direction: column; }
+
+  /* Rules */
+  .rules-grid { grid-template-columns: 1fr; }
+
+  /* Back link */
+  .back-link { margin-bottom: 20px; }
 }

@@ -229,17 +229,17 @@ function renderSummary() {
       ${pct !== null ? `<div class="macro-progress"><div class="macro-progress-bar" style="width:${pct}%"></div></div><div class="macro-label">${pct}% del target</div>` : '<div class="macro-label">Total</div>'}
     </div>
     <div class="macro-block prot">
-      <div class="macro-val">${fmt(m.protein)}g</div>
+      <div class="macro-val">${fmt(m.protein)}<span class="macro-val-unit">g</span></div>
       <div class="macro-unit">PROTEÍNA</div>
       <div class="macro-label">${m.calories ? fmt(m.protein * 4 / m.calories * 100) : 0}% kcal</div>
     </div>
     <div class="macro-block fat">
-      <div class="macro-val">${fmt(m.fat)}g</div>
+      <div class="macro-val">${fmt(m.fat)}<span class="macro-val-unit">g</span></div>
       <div class="macro-unit">GRASAS</div>
       <div class="macro-label">${m.calories ? fmt(m.fat * 9 / m.calories * 100) : 0}% kcal</div>
     </div>
     <div class="macro-block carb">
-      <div class="macro-val">${fmt(m.carbs)}g</div>
+      <div class="macro-val">${fmt(m.carbs)}<span class="macro-val-unit">g</span></div>
       <div class="macro-unit">CARBS</div>
       <div class="macro-label">${m.calories ? fmt(m.carbs * 4 / m.calories * 100) : 0}% kcal</div>
     </div>`;
@@ -398,7 +398,7 @@ window._updateAmount = function(mealId, ingId, val) {
   const card = document.getElementById(`mc-${mealId}`);
   if (card) {
     const vals = card.querySelectorAll('.meal-macro-val');
-    if (vals[0]) vals[0].textContent = `${fmt(mealMac.protein)}g`;
+    if (vals[0]) vals[0].textContent = `${fmt(mealMac.protein)}g`;  // meal-macro-val uses IBM Plex Mono, fine
     if (vals[1]) vals[1].textContent = `${fmt(mealMac.fat)}g`;
     if (vals[2]) vals[2].textContent = `${fmt(mealMac.carbs)}g`;
     if (vals[3]) vals[3].textContent = `${fmt(mealMac.calories)}`;
