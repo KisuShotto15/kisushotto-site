@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,14 +7,220 @@
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<div class="page">
-  <a href="/" class="back">← hub</a>
-  <div class="wip">
-    <div class="icon">🔥</div>
-    <h1>Habits</h1>
-    <p>En construcción</p>
+<div class="container">
+
+  <a href="/" class="back-link">← hub</a>
+
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
+    <div>
+      <div class="page-header-label">// daily practice</div>
+      <h1>HABIT <span>TRACKER</span></h1>
+    </div>
+  </div>
+
+  <!-- Notification permission banner -->
+  <div class="notif-banner hidden" id="notifBanner">
+    🔔 Activa las notificaciones para recibir recordatorios de tus hábitos
+    <button onclick="requestNotifPermission()">Activar</button>
+  </div>
+
+  <!-- Stats strip -->
+  <div class="stats-strip">
+    <div class="stat-block">
+      <div class="stat-label">Hoy</div>
+      <div class="stat-val" id="statToday">—</div>
+      <div class="stat-sub" id="statTodaySub">completados</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Mejor racha</div>
+      <div class="stat-val" id="statStreak">—</div>
+      <div class="stat-sub" id="statStreakSub">días seguidos</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Este mes</div>
+      <div class="stat-val" id="statMonth">—</div>
+      <div class="stat-sub">% completado</div>
+    </div>
+  </div>
+
+  <!-- Main layout -->
+  <div class="habits-layout">
+
+    <!-- LEFT: Today checklist -->
+    <div>
+      <div class="card">
+        <div class="card-title">
+          <span id="todayDate">hoy</span>
+          <span id="todayPct" style="color:var(--accent)">0%</span>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span id="progressLabel">0 de 0 hábitos</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <div class="habit-list" id="habitList">
+          <div class="loading">Cargando…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Calendar + manage -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+
+      <!-- Calendar heatmap -->
+      <div class="card">
+        <div class="card-title">calendario</div>
+        <div class="calendar-wrap">
+          <div class="cal-header">
+            <span class="cal-month" id="calMonth">—</span>
+            <div class="cal-nav">
+              <button class="cal-nav-btn" onclick="shiftMonth(-1)">‹</button>
+              <button class="cal-nav-btn" onclick="shiftMonth(+1)">›</button>
+            </div>
+          </div>
+          <div class="cal-days-header">
+            <div class="cal-day-label">L</div>
+            <div class="cal-day-label">M</div>
+            <div class="cal-day-label">X</div>
+            <div class="cal-day-label">J</div>
+            <div class="cal-day-label">V</div>
+            <div class="cal-day-label">S</div>
+            <div class="cal-day-label">D</div>
+          </div>
+          <div class="cal-grid" id="calGrid"></div>
+        </div>
+      </div>
+
+      <!-- Manage habits -->
+      <div class="card">
+        <div class="card-title">
+          <span>hábitos</span>
+          <button class="btn btn-accent" style="padding:4px 12px;font-size:10px" onclick="openPanel(null)">+ nuevo</button>
+        </div>
+        <div id="manageList" style="display:flex;flex-direction:column;gap:6px">
+          <div class="loading">Cargando…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Add/Edit side panel -->
+<div class="panel-backdrop hidden" id="panelBackdrop" onclick="closePanel()"></div>
+<div class="side-panel" id="sidePanel">
+  <div class="panel-header">
+    <span class="panel-title" id="panelTitle">NUEVO HÁBITO</span>
+    <button class="panel-close" onclick="closePanel()">×</button>
+  </div>
+  <div class="panel-body">
+
+    <div class="form-row">
+      <div class="form-field">
+        <label>Emoji</label>
+        <input type="text" id="fEmoji" placeholder="🔥" maxlength="2" style="font-size:20px;text-align:center">
+      </div>
+      <div class="form-field">
+        <label>Nombre</label>
+        <input type="text" id="fName" placeholder="Ej: Meditar">
+      </div>
+    </div>
+
+    <div class="form-field">
+      <label>Color</label>
+      <div class="color-picker" id="colorPicker">
+        <div class="color-swatch active" data-color="lavender" style="background:#c4b5fd" onclick="selectColor(this)"></div>
+        <div class="color-swatch" data-color="mint"     style="background:#6ee7b7" onclick="selectColor(this)"></div>
+        <div class="color-swatch" data-color="coral"    style="background:#fca5a5" onclick="selectColor(this)"></div>
+        <div class="color-swatch" data-color="amber"    style="background:#fcd34d" onclick="selectColor(this)"></div>
+        <div class="color-swatch" data-color="sky"      style="background:#7dd3fc" onclick="selectColor(this)"></div>
+        <div class="color-swatch" data-color="rose"     style="background:#f9a8d4" onclick="selectColor(this)"></div>
+      </div>
+    </div>
+
+    <div class="form-field">
+      <label>Tipo</label>
+      <select id="fType" onchange="onTypeChange()">
+        <option value="binary">Binario (hecho / no hecho)</option>
+        <option value="count">Cuantitativo (cantidad)</option>
+      </select>
+    </div>
+
+    <div id="countFields" style="display:none">
+      <div class="form-row">
+        <div class="form-field">
+          <label>Meta</label>
+          <input type="number" id="fTarget" min="1" placeholder="8">
+        </div>
+        <div class="form-field">
+          <label>Unidad</label>
+          <input type="text" id="fUnit" placeholder="vasos, min, km…">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-divider"></div>
+
+    <div class="form-field">
+      <label>Frecuencia</label>
+      <select id="fFreq" onchange="onFreqChange()">
+        <option value="daily">Diario</option>
+        <option value="weekly">Semanal (días específicos)</option>
+        <option value="custom">Cada N días</option>
+      </select>
+    </div>
+
+    <div id="weeklyFields" style="display:none">
+      <div class="form-field">
+        <label>Días de la semana</label>
+        <div class="weekday-picker" id="weekdayPicker">
+          <button class="wd-btn active" data-day="1">L</button>
+          <button class="wd-btn active" data-day="2">M</button>
+          <button class="wd-btn active" data-day="3">X</button>
+          <button class="wd-btn active" data-day="4">J</button>
+          <button class="wd-btn active" data-day="5">V</button>
+          <button class="wd-btn" data-day="6">S</button>
+          <button class="wd-btn" data-day="0">D</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="customFields" style="display:none">
+      <div class="form-field">
+        <label>Cada cuántos días</label>
+        <input type="number" id="fEvery" min="2" max="30" placeholder="2">
+      </div>
+    </div>
+
+    <div class="form-field">
+      <label>Recordatorio (opcional)</label>
+      <input type="time" id="fReminder">
+    </div>
+
+    <div class="form-field">
+      <label>Descripción (opcional)</label>
+      <textarea id="fDesc" placeholder="¿Por qué este hábito?"></textarea>
+    </div>
+
+    <div class="panel-divider"></div>
+
+    <div class="panel-actions">
+      <button class="btn btn-danger hidden" id="btnDelete" onclick="confirmDelete()">Eliminar</button>
+      <button class="btn btn-accent" onclick="saveHabit()">Guardar hábito</button>
+    </div>
+
   </div>
 </div>
+
+<button class="fab" onclick="openPanel(null)" title="Nuevo hábito">+</button>
+<div class="toast" id="toast"></div>
 <script type="module" src="./main.js"></script>
 </body>
 </html>

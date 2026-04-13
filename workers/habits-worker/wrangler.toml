@@ -1,0 +1,11 @@
+name = "habits-worker"
+main = "src/index.js"
+compatibility_date = "2025-04-10"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "habits-db"
+database_id = "d15b535c-edda-4bf8-8805-1fc3c1c244ea"
+
+[vars]
+TOKEN = "151322"

@@ -11,7 +11,7 @@ export default defineConfig({
         tradeJournalTrades:    resolve(__dirname, 'trade-journal/trades.html'),
         tradeJournalAnalytics: resolve(__dirname, 'trade-journal/analytics.html'),
         tradeJournalInsights:  resolve(__dirname, 'trade-journal/insights.html'),
-        habits:        resolve(__dirname, 'habits/index.html'),
+        habits:         resolve(__dirname, 'habits/index.html'),
       }
     }
   }
