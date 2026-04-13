@@ -107,6 +107,44 @@ body {
 .profile-pill.active { border-color: var(--accent); color: var(--accent); }
 .profile-pill--add { border-style: dashed; }
 
+/* ── Day tabs ── */
+.days-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.day-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+  user-select: none;
+}
+.day-tab:hover { border-color: var(--border2); color: var(--text); }
+.day-tab.active { border-color: var(--accent2); color: var(--accent2); background: color-mix(in srgb, var(--accent2) 8%, var(--card)); }
+.day-tab--add { border-style: dashed; background: transparent; }
+.day-tab--add:hover { background: var(--card); color: var(--text); border-color: var(--border2); }
+.day-tab-del {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  padding: 0 2px;
+  transition: color 0.15s;
+}
+.day-tab-del:hover { color: var(--danger); }
+.day-tab-label { cursor: pointer; }
+.day-label-edit { background: transparent; border: none; border-bottom: 1px solid var(--accent2); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 11px; width: 100px; outline: none; padding: 0; }
+
 /* ── TDEE panel ── */
 .tdee-panel {
   background: var(--card);

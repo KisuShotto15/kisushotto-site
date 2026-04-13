@@ -32,7 +32,8 @@ function defaultProfile(name) {
   return {
     name,
     tdee: { weight:'', height:'', age:'', gender:'male', activity:1.55, goal:'maintenance', goalPct:15 },
-    meals: JSON.parse(JSON.stringify(DEFAULT_MEALS))
+    days: [{ id:'d1', label:'Día base', meals: JSON.parse(JSON.stringify(DEFAULT_MEALS)) }],
+    activeDay: 'd1'
   };
 }
 
@@ -48,10 +49,31 @@ let searchTargetMealId = null;
 let pendingFood = null;
 
 // ── State helpers ─────────────────────────────────────────────────────────────
-function profile()  { return S.profiles[S.activeProfile]; }
-function uid()      { return Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4); }
-function fmt(n)     { return Math.round(n); }
-function fmtD(n)    { return n.toFixed(1); }
+function profile() { return S.profiles[S.activeProfile]; }
+function day() {
+  const p = profile();
+  return p.days.find(d => d.id === p.activeDay) || p.days[0] || { meals: [] };
+}
+function uid()  { return Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4); }
+function fmt(n) { return Math.round(n); }
+function fmtD(n){ return n.toFixed(1); }
+
+// Migrate old state (profile.meals → profile.days)
+function migrateState(s) {
+  if (!s?.profiles) return s;
+  Object.values(s.profiles).forEach(p => {
+    if (Array.isArray(p.meals) && !p.days) {
+      p.days = [{ id: 'd1', label: 'Día base', meals: p.meals }];
+      p.activeDay = 'd1';
+      delete p.meals;
+    }
+    if (!p.days) {
+      p.days = [{ id: 'd1', label: 'Día base', meals: [] }];
+      p.activeDay = 'd1';
+    }
+  });
+  return s;
+}
 
 function save() {
   S.lastModified = Date.now();
@@ -63,17 +85,14 @@ function save() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   const local = loadLocal();
-  if (local) S = local;
+  if (local) S = migrateState(local);
 
   render();
-
-  // Hydrate TDEE form
   hydrateForm();
 
-  // Try cloud pull
   const cloud = await pull();
   if (cloud && (cloud.lastModified || 0) > (S.lastModified || 0)) {
-    S = cloud;
+    S = migrateState(cloud);
     saveLocal(S);
     render();
     hydrateForm();
@@ -125,6 +144,80 @@ window._deleteProfile = function(id) {
   save();
   render();
   hydrateForm();
+};
+
+// ── Days ──────────────────────────────────────────────────────────────────────
+function renderDayTabs() {
+  const bar = document.getElementById('daysBar');
+  if (!bar) return;
+  const p = profile();
+  const tabs = p.days.map(d => {
+    const active = d.id === p.activeDay ? ' active' : '';
+    const delBtn = p.days.length > 1
+      ? `<span class="day-tab-del" onclick="event.stopPropagation(); window._deleteDay('${d.id}')" title="Eliminar día">×</span>`
+      : '';
+    return `<div class="day-tab${active}" onclick="window._switchDay('${d.id}')">
+      <span class="day-tab-label" ondblclick="event.stopPropagation(); window._editDayLabel('${d.id}',this)">${d.label}</span>
+      ${delBtn}
+    </div>`;
+  }).join('');
+  bar.innerHTML = tabs + `<button class="day-tab day-tab--add" onclick="window._addDay()">+ día</button>`;
+}
+
+window._switchDay = function(id) {
+  profile().activeDay = id;
+  save();
+  renderDayTabs();
+  renderSummary();
+  renderMeals();
+};
+
+window._addDay = function() {
+  const label = prompt('Nombre del día (ej: Entreno, Descanso, Refeed):');
+  if (!label?.trim()) return;
+  const p = profile();
+  const id = uid();
+  p.days.push({ id, label: label.trim(), meals: [] });
+  p.activeDay = id;
+  save();
+  renderDayTabs();
+  renderSummary();
+  renderMeals();
+};
+
+window._deleteDay = function(id) {
+  const p = profile();
+  if (p.days.length <= 1) { alert('No puedes eliminar el único día.'); return; }
+  if (!confirm(`¿Eliminar "${p.days.find(d => d.id === id)?.label}"?`)) return;
+  p.days = p.days.filter(d => d.id !== id);
+  if (p.activeDay === id) p.activeDay = p.days[0].id;
+  save();
+  renderDayTabs();
+  renderSummary();
+  renderMeals();
+};
+
+window._editDayLabel = function(id, el) {
+  if (el.querySelector('input')) return;
+  const current = el.textContent;
+  const input = document.createElement('input');
+  input.className = 'inline-edit day-label-edit';
+  input.value = current;
+  el.textContent = '';
+  el.appendChild(input);
+  input.focus();
+  input.select();
+  const commit = () => {
+    const val = input.value.trim() || current;
+    const d = profile().days.find(d => d.id === id);
+    if (d) { d.label = val; save(); }
+    el.textContent = val;
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { el.textContent = current; }
+  });
 };
 
 // ── TDEE panel ────────────────────────────────────────────────────────────────
@@ -202,8 +295,7 @@ function renderTDEEResults() {
 }
 
 window._applyTDEE = function(target) {
-  const p = profile();
-  p.meals = scalePortions(p.meals, target);
+  day().meals = scalePortions(day().meals, target);
   save();
   renderSummary();
   renderMeals();
@@ -213,7 +305,7 @@ window._applyTDEE = function(target) {
 function renderSummary() {
   const el = document.getElementById('summaryBar');
   if (!el) return;
-  const m = totalMacros(profile().meals);
+  const m = totalMacros(day().meals);
   const t = profile().tdee;
   let targetKcal = 0;
   if (t.weight && t.height && t.age) {
@@ -247,9 +339,10 @@ function renderSummary() {
 
 // ── Meals ─────────────────────────────────────────────────────────────────────
 function renderMeals() {
+  renderDayTabs();
   const container = document.getElementById('mealsContainer');
   if (!container) return;
-  const meals = profile().meals;
+  const meals = day().meals;
   if (!meals.length) {
     container.innerHTML = '<div class="meals-empty">Sin comidas. Agrega una.</div>';
     return;
@@ -319,13 +412,12 @@ window._toggleMeal = function(id) {
 
 window._deleteMeal = function(id) {
   if (!confirm('¿Eliminar esta comida?')) return;
-  const p = profile();
-  p.meals = p.meals.filter(m => m.id !== id);
+  day().meals = day().meals.filter(m => m.id !== id);
   save(); renderSummary(); renderMeals();
 };
 
 window._moveMeal = function(id, dir) {
-  const meals = profile().meals;
+  const meals = day().meals;
   const idx   = meals.findIndex(m => m.id === id);
   const nIdx  = idx + dir;
   if (nIdx < 0 || nIdx >= meals.length) return;
@@ -334,11 +426,9 @@ window._moveMeal = function(id, dir) {
 };
 
 window._addMeal = function() {
-  const p = profile();
-  p.meals.push({ id: uid(), name: 'Nueva comida', time: '00:00', ingredients: [] });
+  day().meals.push({ id: uid(), name: 'Nueva comida', time: '00:00', ingredients: [] });
   save(); renderMeals();
-  // Open last meal
-  const lastId = p.meals.at(-1).id;
+  const lastId = day().meals.at(-1).id;
   setTimeout(() => window._toggleMeal(lastId), 50);
 };
 
@@ -356,7 +446,7 @@ window._editField = function(mealId, field, el) {
   input.select();
   const commit = () => {
     const val = input.value.trim() || current;
-    const meal = profile().meals.find(m => m.id === mealId);
+    const meal = day().meals.find(m => m.id === mealId);
     if (meal) { meal[field] = val; save(); }
     el.textContent = val;
   };
@@ -366,11 +456,10 @@ window._editField = function(mealId, field, el) {
 
 // ── Ingredient CRUD ───────────────────────────────────────────────────────────
 window._deleteIng = function(mealId, ingId) {
-  const meal = profile().meals.find(m => m.id === mealId);
+  const meal = day().meals.find(m => m.id === mealId);
   if (!meal) return;
   meal.ingredients = meal.ingredients.filter(i => i.id !== ingId);
   save(); renderSummary(); renderMeals();
-  // Re-open that meal
   setTimeout(() => {
     const body = document.getElementById(`body-${mealId}`);
     const chev = document.getElementById(`chev-${mealId}`);
@@ -380,25 +469,23 @@ window._deleteIng = function(mealId, ingId) {
 };
 
 window._updateAmount = function(mealId, ingId, val) {
-  const meal = profile().meals.find(m => m.id === mealId);
+  const meal = day().meals.find(m => m.id === mealId);
   if (!meal) return;
   const ing = meal.ingredients.find(i => i.id === ingId);
   if (!ing) return;
   ing.amountG = Math.max(1, parseInt(val) || 1);
   save(); renderSummary();
-  // Update just the macros text for this ingredient without full re-render
   const m = mealMacros([ing]);
   const li = document.getElementById(`ii-${ingId}`);
   if (li) {
     const macroEl = li.querySelector('.ing-macros');
     if (macroEl) macroEl.textContent = `${fmt(m.protein)}P · ${fmt(m.fat)}F · ${fmt(m.carbs)}C · ${fmt(m.calories)}kcal`;
   }
-  // Update meal header macros
-  const mealMac = mealMacros(profile().meals.find(m2 => m2.id === mealId)?.ingredients || []);
+  const mealMac = mealMacros(day().meals.find(m2 => m2.id === mealId)?.ingredients || []);
   const card = document.getElementById(`mc-${mealId}`);
   if (card) {
     const vals = card.querySelectorAll('.meal-macro-val');
-    if (vals[0]) vals[0].textContent = `${fmt(mealMac.protein)}g`;  // meal-macro-val uses IBM Plex Mono, fine
+    if (vals[0]) vals[0].textContent = `${fmt(mealMac.protein)}g`;
     if (vals[1]) vals[1].textContent = `${fmt(mealMac.fat)}g`;
     if (vals[2]) vals[2].textContent = `${fmt(mealMac.carbs)}g`;
     if (vals[3]) vals[3].textContent = `${fmt(mealMac.calories)}`;
@@ -420,8 +507,6 @@ window._openSearch = function(mealId) {
   results.innerHTML = '';
   amountWrap.classList.add('hidden');
   input.focus();
-
-  // Show fallback immediately
   renderFallbackResults('');
 };
 
@@ -440,13 +525,9 @@ window._handleSearchInput = function() {
 async function doSearch(q) {
   const results = document.getElementById('searchResults');
   if (!q) { renderFallbackResults(''); return; }
-
-  // Filter fallback first while waiting for USDA
   renderFallbackResults(q);
-
   const apiKey = getApiKey(S.activeProfile);
-  if (!apiKey) return; // no key → only fallback
-
+  if (!apiKey) return;
   results.innerHTML = '<div class="search-loading">Buscando...</div>';
   try {
     const foods = await searchFoods(q, apiKey);
@@ -490,7 +571,7 @@ window._confirmIngredient = function() {
   if (!pendingFood || !searchTargetMealId) return;
   const amtEl = document.getElementById('ingredientAmount');
   const amountG = Math.max(1, parseInt(amtEl.value) || 100);
-  const meal = profile().meals.find(m => m.id === searchTargetMealId);
+  const meal = day().meals.find(m => m.id === searchTargetMealId);
   if (!meal) return;
   meal.ingredients.push({
     id:     uid(),
