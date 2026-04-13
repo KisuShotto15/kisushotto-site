@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insights · Trade Journal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="container">
+
+  <a href="/" class="back-link">← hub</a>
+
+  <nav class="page-nav">
+    <a href="./index.html"     class="nav-link">dashboard</a>
+    <a href="./trades.html"    class="nav-link">trades</a>
+    <a href="./analytics.html" class="nav-link">analytics</a>
+    <a href="./insights.html"  class="nav-link active">insights</a>
+  </nav>
+
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px">
+    <div>
+      <div class="page-header-label">// behavioral analytics</div>
+      <h1>TRADING<br><span>INSIGHTS</span></h1>
+    </div>
+    <button class="btn btn-accent" id="refreshBtn" onclick="doRefresh()">↻ Regenerar insights</button>
+  </div>
+
+  <!-- Filter chips -->
+  <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+    <button class="isect-tab active" onclick="filterInsights('all',this)">Todos</button>
+    <button class="isect-tab" onclick="filterInsights('critical',this)">🔴 Críticos</button>
+    <button class="isect-tab" onclick="filterInsights('warning',this)">🟡 Advertencias</button>
+    <button class="isect-tab" onclick="filterInsights('info',this)">🔵 Info</button>
+  </div>
+
+  <div id="insightsContainer"><div class="loading">Cargando…</div></div>
+
+</div>
+<div class="toast" id="toast"></div>
+<script type="module" src="./insights-page.js"></script>
+</body>
+</html>

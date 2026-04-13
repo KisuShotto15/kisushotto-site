@@ -7,7 +7,10 @@ export default defineConfig({
       input: {
         main:          resolve(__dirname, 'index.html'),
         nutrition:     resolve(__dirname, 'nutrition/index.html'),
-        tradeJournal:  resolve(__dirname, 'trade-journal/index.html'),
+        tradeJournal:          resolve(__dirname, 'trade-journal/index.html'),
+        tradeJournalTrades:    resolve(__dirname, 'trade-journal/trades.html'),
+        tradeJournalAnalytics: resolve(__dirname, 'trade-journal/analytics.html'),
+        tradeJournalInsights:  resolve(__dirname, 'trade-journal/insights.html'),
         habits:        resolve(__dirname, 'habits/index.html'),
       }
     }

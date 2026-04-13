@@ -1,0 +1,11 @@
+name = "trade-journal-worker"
+main = "src/index.js"
+compatibility_date = "2025-04-10"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "trade-journal-db"
+database_id = "PLACEHOLDER_REPLACE_WITH_YOUR_D1_ID"
+
+[vars]
+TOKEN = "151322"

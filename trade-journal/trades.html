@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trades · Trade Journal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="container">
+
+  <a href="/" class="back-link">← hub</a>
+
+  <nav class="page-nav">
+    <a href="./index.html"     class="nav-link">dashboard</a>
+    <a href="./trades.html"    class="nav-link active">trades</a>
+    <a href="./analytics.html" class="nav-link">analytics</a>
+    <a href="./insights.html"  class="nav-link">insights</a>
+  </nav>
+
+  <div class="page-header">
+    <div class="page-header-label">// historial</div>
+    <h1>TRADE<br><span>LIST</span></h1>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <select id="fExchange" onchange="applyFilters()">
+      <option value="">Exchange</option>
+      <option value="bybit">Bybit</option>
+      <option value="binance">Binance</option>
+    </select>
+    <select id="fCategory" onchange="applyFilters()">
+      <option value="">Categoría</option>
+      <option value="linear">Linear</option>
+      <option value="inverse">Inverse</option>
+      <option value="spot">Spot</option>
+    </select>
+    <select id="fSide" onchange="applyFilters()">
+      <option value="">Side</option>
+      <option value="long">Long</option>
+      <option value="short">Short</option>
+      <option value="buy">Buy</option>
+      <option value="sell">Sell</option>
+    </select>
+    <select id="fSession" onchange="applyFilters()">
+      <option value="">Sesión</option>
+      <option value="asia">Asia</option>
+      <option value="london">London</option>
+      <option value="ny">NY</option>
+      <option value="other">Other</option>
+    </select>
+    <select id="fStatus" onchange="applyFilters()">
+      <option value="">Status</option>
+      <option value="closed">Closed</option>
+      <option value="open">Open</option>
+    </select>
+    <input type="text" id="fSymbol" placeholder="Símbolo" style="width:110px" oninput="applyFiltersDebounced()">
+    <input type="date" id="fFrom" onchange="applyFilters()" title="Desde">
+    <input type="date" id="fTo"   onchange="applyFilters()" title="Hasta">
+    <button class="btn btn-sm" onclick="resetFilters()">↺ Reset</button>
+    <button class="btn btn-accent btn-sm ml-auto" onclick="openAddTrade()">+ Agregar trade</button>
+  </div>
+
+  <!-- Summary mini-bar -->
+  <div id="miniSummary" style="display:flex;gap:16px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:12px;"></div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Símbolo</th>
+          <th>Side</th>
+          <th>Entry</th>
+          <th>Exit</th>
+          <th>Size</th>
+          <th>PnL</th>
+          <th>Fees</th>
+          <th>Sesión</th>
+          <th>Setup</th>
+          <th>Estrategia</th>
+          <th>Notas</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tradesBody"><tr><td colspan="13"><div class="loading">Cargando…</div></td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <button class="btn btn-sm" id="btnPrev" onclick="prevPage()">← Anterior</button>
+    <span id="pageInfo">Página 1</span>
+    <button class="btn btn-sm" id="btnNext" onclick="nextPage()">Siguiente →</button>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Add/Edit trade modal -->
+<div class="modal-backdrop hidden" id="tradeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="tradeModalTitle">Agregar trade</span>
+      <button class="modal-close" onclick="closeTradeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field"><label>Símbolo</label><input type="text" id="fmSymbol" placeholder="BTCUSDT" style="text-transform:uppercase"></div>
+        <div class="form-field"><label>Exchange</label>
+          <select id="fmExchange">
+            <option value="bybit">Bybit</option>
+            <option value="binance">Binance</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row three">
+        <div class="form-field"><label>Categoría</label>
+          <select id="fmCategory">
+            <option value="linear">Linear</option>
+            <option value="inverse">Inverse</option>
+            <option value="spot">Spot</option>
+          </select>
+        </div>
+        <div class="form-field"><label>Side</label>
+          <select id="fmSide">
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+            <option value="buy">Buy</option>
+            <option value="sell">Sell</option>
+          </select>
+        </div>
+        <div class="form-field"><label>Sesión</label>
+          <select id="fmSession">
+            <option value="asia">Asia</option>
+            <option value="london">London</option>
+            <option value="ny">NY</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row three">
+        <div class="form-field"><label>Entry Price</label><input type="number" id="fmEntry" step="any" placeholder="0.00"></div>
+        <div class="form-field"><label>Exit Price</label><input type="number" id="fmExit" step="any" placeholder="0.00 (opt)"></div>
+        <div class="form-field"><label>Size</label><input type="number" id="fmSize" step="any" placeholder="0.00"></div>
+      </div>
+      <div class="form-row three">
+        <div class="form-field"><label>PnL (USDT)</label><input type="number" id="fmPnl" step="any" placeholder="0.00"></div>
+        <div class="form-field"><label>Fees</label><input type="number" id="fmFees" step="any" placeholder="0.00"></div>
+        <div class="form-field"><label>Rule Score (0–10)</label><input type="number" id="fmRule" min="0" max="10" placeholder="—"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Entry Time</label><input type="datetime-local" id="fmEntryTime"></div>
+        <div class="form-field"><label>Exit Time (opt)</label><input type="datetime-local" id="fmExitTime"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Setup</label><input type="text" id="fmSetup" placeholder="ej: BOS, OB, FVG…" list="setupsList"></div>
+        <div class="form-field"><label>Estrategia</label><input type="text" id="fmStrategy" placeholder="ej: ICT, Scalp, Swing…" list="strategiesList"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Emoción</label>
+          <select id="fmEmotion">
+            <option value="">—</option>
+            <option value="calm">Calmado</option>
+            <option value="fomo">FOMO</option>
+            <option value="fear">Miedo</option>
+            <option value="greed">Avaricia</option>
+            <option value="revenge">Revenge</option>
+            <option value="confident">Confiado</option>
+          </select>
+        </div>
+        <div class="form-field"><label>Tipo ejecución</label>
+          <select id="fmExecType">
+            <option value="manual">Manual</option>
+            <option value="bot">Bot</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field"><label>Notas</label><textarea id="fmNotes" placeholder="Descripción, contexto del trade…"></textarea></div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeTradeModal()">Cancelar</button>
+        <button class="btn btn-accent" onclick="saveTrade()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<datalist id="setupsList"></datalist>
+<datalist id="strategiesList"></datalist>
+<div class="toast" id="toast"></div>
+<script type="module" src="./trades.js"></script>
+</body>
+</html>

@@ -1,20 +1,154 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trade Journal · KS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<div class="page">
-  <a href="/" class="back">← hub</a>
-  <div class="wip">
-    <div class="icon">📓</div>
-    <h1>Trade Journal</h1>
-    <p>En construcción</p>
+<div class="container">
+
+  <a href="/" class="back-link">← hub</a>
+
+  <nav class="page-nav">
+    <a href="./index.html"     class="nav-link active">dashboard</a>
+    <a href="./trades.html"    class="nav-link">trades</a>
+    <a href="./analytics.html" class="nav-link">analytics</a>
+    <a href="./insights.html"  class="nav-link">insights</a>
+  </nav>
+
+  <div class="page-header">
+    <div class="page-header-label">// edge analytics</div>
+    <h1>TRADE<br><span>JOURNAL</span></h1>
+  </div>
+
+  <!-- KPI row -->
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi-card"><div class="kpi-label">PnL Total</div><div class="kpi-value neu" id="kpiPnl">—</div><div class="kpi-sub" id="kpiPnlSub">USDT</div></div>
+    <div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value neu" id="kpiWr">—</div><div class="kpi-sub" id="kpiWrSub">cerrados</div></div>
+    <div class="kpi-card"><div class="kpi-label">Profit Factor</div><div class="kpi-value neu" id="kpiPf">—</div><div class="kpi-sub">bruto/pérdidas</div></div>
+    <div class="kpi-card"><div class="kpi-label">Expectancy</div><div class="kpi-value neu" id="kpiExp">—</div><div class="kpi-sub">USDT / trade</div></div>
+    <div class="kpi-card"><div class="kpi-label">Max DD</div><div class="kpi-value neu" id="kpiDD">—</div><div class="kpi-sub">desde pico</div></div>
+    <div class="kpi-card"><div class="kpi-label">Trades</div><div class="kpi-value acc" id="kpiCount">—</div><div class="kpi-sub" id="kpiOpen">abiertos: —</div></div>
+  </div>
+
+  <!-- Equity curve -->
+  <div class="chart-wrap">
+    <div class="chart-title">equity curve — PnL acumulado</div>
+    <div class="chart-inner" id="equityChart"></div>
+  </div>
+
+  <!-- Bottom row: streak + recent insights + recent trades -->
+  <div class="two-col">
+    <div class="section-card">
+      <div class="section-card-title">últimas insights <a href="./insights.html" style="color:var(--accent);font-size:10px;text-decoration:none">ver todas →</a></div>
+      <div id="insightsList"><div class="loading">Cargando…</div></div>
+    </div>
+    <div class="section-card">
+      <div class="section-card-title">trades recientes <a href="./trades.html" style="color:var(--accent);font-size:10px;text-decoration:none">ver todos →</a></div>
+      <div id="recentTrades"><div class="loading">Cargando…</div></div>
+    </div>
+  </div>
+
+  <!-- Streak info -->
+  <div class="two-col">
+    <div class="section-card">
+      <div class="section-card-title">racha actual</div>
+      <div id="streakInfo" style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:2px">—</div>
+    </div>
+    <div class="section-card">
+      <div class="section-card-title">mejor / peor trade</div>
+      <div id="bestWorst" style="font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.8;color:var(--muted2)">—</div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Ingest modal trigger (floating button) -->
+<button class="btn btn-accent" id="ingestBtn"
+  style="position:fixed;bottom:24px;right:24px;z-index:50;box-shadow:0 4px 20px rgba(53,200,241,0.2)"
+  onclick="document.getElementById('ingestModal').classList.remove('hidden')">
+  ↑ Importar trades
+</button>
+
+<!-- Ingest modal -->
+<div class="modal-backdrop hidden" id="ingestModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span>Importar trades desde exchange</span>
+      <button class="modal-close" onclick="document.getElementById('ingestModal').classList.add('hidden')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="ingest-section-tabs">
+        <button class="isect-tab active" onclick="switchIngestTab('bybit-linear')">Bybit Futures</button>
+        <button class="isect-tab" onclick="switchIngestTab('bybit-inverse')">Bybit Inverse</button>
+        <button class="isect-tab" onclick="switchIngestTab('bybit-spot')">Bybit Spot</button>
+        <button class="isect-tab" onclick="switchIngestTab('binance')">Binance Futures</button>
+        <button class="isect-tab" onclick="switchIngestTab('binance-spot')">Binance Spot</button>
+      </div>
+
+      <div class="isect-panel active" id="panel-bybit-linear">
+        <div class="ingest-note">⚡ Requiere API key de Bybit con permiso de lectura (solo positions). No envía órdenes. Las keys se usan solo para esta importación y no se guardan.</div>
+        <div class="form-row">
+          <div class="form-field"><label>API Key</label><input type="password" id="bybit-key" placeholder="..."></div>
+          <div class="form-field"><label>API Secret</label><input type="password" id="bybit-secret" placeholder="..."></div>
+        </div>
+        <div class="form-field"><label>Símbolo (opcional, ej: BTCUSDT)</label><input type="text" id="bybit-symbol" placeholder="dejar vacío = todos"></div>
+        <button class="btn btn-accent" onclick="doIngest('bybit-linear')">Importar Futures Linear</button>
+        <div class="ingest-result" id="result-bybit-linear"></div>
+      </div>
+
+      <div class="isect-panel" id="panel-bybit-inverse">
+        <div class="ingest-note">Futuros inversos (BTC-margined). Mismo proceso que linear.</div>
+        <div class="form-row">
+          <div class="form-field"><label>API Key</label><input type="password" id="bybit-inv-key" placeholder="..."></div>
+          <div class="form-field"><label>API Secret</label><input type="password" id="bybit-inv-secret" placeholder="..."></div>
+        </div>
+        <div class="form-field"><label>Símbolo (opcional)</label><input type="text" id="bybit-inv-symbol" placeholder="ej: BTCUSD"></div>
+        <button class="btn btn-accent" onclick="doIngest('bybit-inverse')">Importar Inverse</button>
+        <div class="ingest-result" id="result-bybit-inverse"></div>
+      </div>
+
+      <div class="isect-panel" id="panel-bybit-spot">
+        <div class="ingest-note">Importa órdenes Spot completadas de Bybit.</div>
+        <div class="form-row">
+          <div class="form-field"><label>API Key</label><input type="password" id="bybit-sp-key" placeholder="..."></div>
+          <div class="form-field"><label>API Secret</label><input type="password" id="bybit-sp-secret" placeholder="..."></div>
+        </div>
+        <div class="form-field"><label>Símbolo (opcional)</label><input type="text" id="bybit-sp-symbol" placeholder="ej: BTCUSDT"></div>
+        <button class="btn btn-accent" onclick="doIngest('bybit-spot')">Importar Spot</button>
+        <div class="ingest-result" id="result-bybit-spot"></div>
+      </div>
+
+      <div class="isect-panel" id="panel-binance">
+        <div class="ingest-note">Binance USDⓈ-M Futures. El símbolo es obligatorio.</div>
+        <div class="form-row">
+          <div class="form-field"><label>API Key</label><input type="password" id="bn-key" placeholder="..."></div>
+          <div class="form-field"><label>API Secret</label><input type="password" id="bn-secret" placeholder="..."></div>
+        </div>
+        <div class="form-field"><label>Símbolo (requerido)</label><input type="text" id="bn-symbol" placeholder="ej: BTCUSDT"></div>
+        <button class="btn btn-accent" onclick="doIngest('binance')">Importar Binance Futures</button>
+        <div class="ingest-result" id="result-binance"></div>
+      </div>
+
+      <div class="isect-panel" id="panel-binance-spot">
+        <div class="ingest-note">Binance Spot. El símbolo es obligatorio.</div>
+        <div class="form-row">
+          <div class="form-field"><label>API Key</label><input type="password" id="bn-sp-key" placeholder="..."></div>
+          <div class="form-field"><label>API Secret</label><input type="password" id="bn-sp-secret" placeholder="..."></div>
+        </div>
+        <div class="form-field"><label>Símbolo (requerido)</label><input type="text" id="bn-sp-symbol" placeholder="ej: BTCUSDT"></div>
+        <button class="btn btn-accent" onclick="doIngest('binance-spot')">Importar Spot</button>
+        <div class="ingest-result" id="result-binance-spot"></div>
+      </div>
+    </div>
   </div>
 </div>
+
+<div class="toast" id="toast"></div>
 <script type="module" src="./main.js"></script>
 </body>
 </html>

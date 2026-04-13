@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics · Trade Journal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="container">
+
+  <a href="/" class="back-link">← hub</a>
+
+  <nav class="page-nav">
+    <a href="./index.html"     class="nav-link">dashboard</a>
+    <a href="./trades.html"    class="nav-link">trades</a>
+    <a href="./analytics.html" class="nav-link active">analytics</a>
+    <a href="./insights.html"  class="nav-link">insights</a>
+  </nav>
+
+  <div class="page-header">
+    <div class="page-header-label">// edge discovery</div>
+    <h1>DEEP<br><span>ANALYTICS</span></h1>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+    <button class="tab-btn" onclick="switchTab('sessions')">Sesiones</button>
+    <button class="tab-btn" onclick="switchTab('symbols')">Símbolos</button>
+    <button class="tab-btn" onclick="switchTab('setups')">Setups</button>
+    <button class="tab-btn" onclick="switchTab('heatmap')">Heatmap</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="tab-panel active" id="panel-overview">
+    <div class="kpi-grid" id="overviewKPIs" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi-card"><div class="kpi-label">Avg Win</div><div class="kpi-value pos" id="aWin">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Avg Loss</div><div class="kpi-value neg" id="aLoss">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Max Racha Win</div><div class="kpi-value acc" id="aMaxW">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Max Racha Loss</div><div class="kpi-value neg" id="aMaxL">—</div></div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">equity curve</div>
+      <div class="chart-inner" id="analyticsEquity"></div>
+    </div>
+    <div class="two-col">
+      <div class="section-card">
+        <div class="section-card-title">distribución win/loss</div>
+        <div id="winLossBars" style="padding-top:8px"></div>
+        <div id="winLossLabels" style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-top:6px;"></div>
+      </div>
+      <div class="section-card">
+        <div class="section-card-title">mejor / peor trade</div>
+        <div id="bestWorstDetail" style="font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.9;color:var(--muted2)">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SESSIONS -->
+  <div class="tab-panel" id="panel-sessions">
+    <div class="two-col">
+      <div class="section-card">
+        <div class="section-card-title">PnL por sesión</div>
+        <div id="sessionPnlChart" style="min-height:160px"></div>
+      </div>
+      <div class="section-card">
+        <div class="section-card-title">Win rate por sesión</div>
+        <div id="sessionWrChart" style="min-height:160px"></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-card-title">detalle sesiones</div>
+      <table class="stats-table">
+        <thead><tr><th>Sesión</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th></tr></thead>
+        <tbody id="sessionTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SYMBOLS -->
+  <div class="tab-panel" id="panel-symbols">
+    <div class="two-col">
+      <div class="section-card">
+        <div class="section-card-title">PnL por símbolo (top 10)</div>
+        <div id="symbolPnlChart" style="min-height:200px"></div>
+      </div>
+      <div class="section-card">
+        <div class="section-card-title">Win rate por símbolo</div>
+        <div id="symbolWrChart" style="min-height:200px"></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-card-title">detalle símbolos</div>
+      <table class="stats-table">
+        <thead><tr><th>Símbolo</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th></tr></thead>
+        <tbody id="symbolTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SETUPS -->
+  <div class="tab-panel" id="panel-setups">
+    <div class="two-col">
+      <div class="section-card">
+        <div class="section-card-title">PnL por setup</div>
+        <div id="setupPnlChart" style="min-height:200px"></div>
+      </div>
+      <div class="section-card">
+        <div class="section-card-title">expectancy por setup (avg PnL)</div>
+        <div id="setupExpChart" style="min-height:200px"></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-card-title">detalle setups</div>
+      <table class="stats-table">
+        <thead><tr><th>Setup</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th></tr></thead>
+        <tbody id="setupTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- HEATMAP -->
+  <div class="tab-panel" id="panel-heatmap">
+    <div class="section-card">
+      <div class="section-card-title">avg PnL por hora UTC × día de semana (verde = profit, rojo = loss)</div>
+      <div id="heatmapChart" style="margin-top:8px"></div>
+    </div>
+    <div style="margin-top:12px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">
+      Eje Y: hora UTC · Eje X: L=Lunes … D=Domingo · Celda vacía = sin datos suficientes
+    </div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+<script type="module" src="./analytics-page.js"></script>
+</body>
+</html>
