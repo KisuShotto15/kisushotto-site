@@ -23,15 +23,15 @@ body {
   color: var(--text);
   font-family: 'IBM Plex Sans', sans-serif;
   min-height: 100vh;
-  padding: 40px 20px 80px;
+  padding: 28px 32px 80px;
 }
 
-.container { max-width: 900px; margin: 0 auto; }
+.container { max-width: 1600px; margin: 0 auto; }
 
 /* ── Back link ── */
 .back-link {
   display: inline-block;
-  font-size: 11px;
+  font-size: 15px;
   color: var(--muted);
   text-decoration: none;
   letter-spacing: 0.08em;
@@ -44,7 +44,7 @@ body {
 .header { margin-bottom: 32px; }
 .header-label {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 15px;
   color: var(--accent);
   letter-spacing: 4px;
   text-transform: uppercase;
@@ -52,7 +52,7 @@ body {
 }
 .header h1 {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(48px, 9vw, 88px);
+  font-size: clamp(52px, 9vw, 92px);
   line-height: 0.9;
   letter-spacing: 2px;
 }
@@ -61,7 +61,7 @@ body {
 /* ── Section title ── */
 .section-title {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 15px;
   color: var(--accent);
   letter-spacing: 4px;
   text-transform: uppercase;
@@ -78,7 +78,7 @@ body {
   background: var(--border);
 }
 .section-note {
-  font-size: 9px;
+  font-size: 13px;
   color: var(--muted);
   text-transform: lowercase;
   letter-spacing: 0.05em;
@@ -93,7 +93,7 @@ body {
 }
 .profile-pill {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 15px;
   letter-spacing: 0.08em;
   padding: 5px 14px;
   border-radius: 20px;
@@ -119,7 +119,7 @@ body {
   align-items: center;
   gap: 6px;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 15px;
   letter-spacing: 0.06em;
   padding: 5px 12px;
   border-radius: 6px;
@@ -135,7 +135,7 @@ body {
 .day-tab--add { border-style: dashed; background: transparent; }
 .day-tab--add:hover { background: var(--card); color: var(--text); border-color: var(--border2); }
 .day-tab-del {
-  font-size: 13px;
+  font-size: 17px;
   line-height: 1;
   color: var(--muted);
   padding: 0 2px;
@@ -143,7 +143,7 @@ body {
 }
 .day-tab-del:hover { color: var(--danger); }
 .day-tab-label { cursor: pointer; }
-.day-label-edit { background: transparent; border: none; border-bottom: 1px solid var(--accent2); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 11px; width: 100px; outline: none; padding: 0; }
+.day-label-edit { background: transparent; border: none; border-bottom: 1px solid var(--accent2); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 15px; width: 100px; outline: none; padding: 0; }
 
 /* ── TDEE panel ── */
 .tdee-panel {
@@ -168,7 +168,7 @@ body {
 .tdee-field--wide { flex: 2; min-width: 200px; }
 .tdee-field label {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 9px;
+  font-size: 13px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
@@ -179,7 +179,7 @@ body {
   border: 1px solid var(--border);
   color: var(--text);
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
+  font-size: 17px;
   padding: 8px 10px;
   outline: none;
   transition: border-color 0.2s;
@@ -189,7 +189,7 @@ body {
 .tdee-field select:focus { border-color: var(--accent); }
 .tdee-hint {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 15px;
   color: var(--muted);
   display: block;
   padding: 12px 0 4px;
@@ -208,13 +208,13 @@ body {
 .tdee-chip--accent { border-color: var(--accent); background: rgba(200,241,53,0.05); }
 .tdee-chip-val {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: 28px;
+  font-size: 32px;
   line-height: 1;
   color: var(--accent);
 }
 .tdee-chip-label {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 9px;
+  font-size: 13px;
   color: var(--muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -240,22 +240,22 @@ body {
 .macro-block.carb { border-color: var(--carb); }
 .macro-val {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: 36px;
+  font-size: 40px;
   line-height: 1;
 }
 .macro-block.cal  .macro-val { color: var(--cal); }
 .macro-block.prot .macro-val { color: var(--protein); }
 .macro-block.fat  .macro-val { color: var(--fat); }
 .macro-block.carb .macro-val { color: var(--carb); }
-.macro-unit { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--muted); letter-spacing: 2px; margin-top: 2px; }
-.macro-label { font-size: 10px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
+.macro-unit { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--muted); letter-spacing: 2px; margin-top: 2px; }
+.macro-label { font-size: 14px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
 .macro-progress { height: 3px; background: var(--border); margin-top: 6px; border-radius: 2px; overflow: hidden; }
 .macro-progress-bar { height: 100%; background: var(--cal); transition: width 0.3s; }
 
 /* ── Section title with add button ── */
 .btn-add-meal {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 9px;
+  font-size: 13px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 4px 10px;
@@ -270,7 +270,7 @@ body {
 
 /* ── Meal cards ── */
 .meals { display: flex; flex-direction: column; gap: 3px; margin-bottom: 12px; }
-.meals-empty { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); padding: 24px 0; }
+.meals-empty { font-family: 'IBM Plex Mono', monospace; font-size: 16px; color: var(--muted); padding: 24px 0; }
 .meal-card { background: var(--card); border: 1px solid var(--border); overflow: hidden; }
 .meal-header {
   display: flex;
@@ -284,19 +284,19 @@ body {
 }
 .meal-header:hover { background: #1a1a1a; }
 .meal-left { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
-.meal-number { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); line-height: 1; min-width: 32px; }
-.meal-info h3 { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: 0.3px; }
+.meal-number { font-family: 'Bebas Neue', sans-serif; font-size: 32px; color: var(--accent); line-height: 1; min-width: 32px; }
+.meal-info h3 { font-size: 18px; font-weight: 600; color: var(--text); letter-spacing: 0.3px; }
 .meal-info h3.editable:hover { color: var(--accent); cursor: text; }
-.meal-time { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 1px; }
+.meal-time { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--muted); margin-top: 2px; letter-spacing: 1px; }
 .meal-time.editable:hover { color: var(--accent); cursor: text; }
 .meal-macros { display: flex; gap: 14px; align-items: center; flex-shrink: 0; }
 .meal-macro-item { text-align: right; }
-.meal-macro-val { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; }
+.meal-macro-val { font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; }
 .meal-macro-val.p { color: var(--protein); }
 .meal-macro-val.f { color: var(--fat); }
 .meal-macro-val.c { color: var(--carb); }
 .meal-macro-val.k { color: var(--cal); }
-.meal-macro-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+.meal-macro-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 
 /* Meal controls (↑↓⌫) */
 .meal-controls { display: flex; gap: 4px; flex-shrink: 0; }
@@ -305,7 +305,7 @@ body {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 15px;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color 0.2s, color 0.2s;
@@ -314,7 +314,7 @@ body {
 .icon-btn--danger:hover { border-color: var(--danger); color: var(--danger); }
 .icon-btn-placeholder { width: 24px; height: 24px; display: inline-block; }
 
-.chevron { color: var(--muted); transition: transform 0.3s; font-size: 12px; flex-shrink: 0; }
+.chevron { color: var(--muted); transition: transform 0.3s; font-size: 16px; flex-shrink: 0; }
 .chevron.open { transform: rotate(180deg); }
 
 /* ── Meal body ── */
@@ -329,7 +329,7 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .ingredient-item:last-child { border-bottom: none; }
-.ing-name { font-size: 13px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ing-name { font-size: 17px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ing-amount-wrap { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
 .ing-amount {
   width: 60px;
@@ -337,21 +337,21 @@ body {
   border: 1px solid var(--border);
   color: var(--accent2);
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
+  font-size: 16px;
   padding: 4px 6px;
   text-align: right;
   outline: none;
   transition: border-color 0.2s;
 }
 .ing-amount:focus { border-color: var(--accent2); }
-.ing-unit { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); }
-.ing-macros { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
+.ing-unit { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--muted); }
+.ing-macros { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
 .ing-del {
   width: 20px; height: 20px;
   background: transparent;
   border: none;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 18px;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
@@ -361,7 +361,7 @@ body {
 
 .add-ing-btn {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   color: var(--muted);
   background: transparent;
@@ -388,7 +388,7 @@ body {
 /* ── API hint ── */
 .api-hint {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
+  font-size: 14px;
   color: var(--muted);
   display: flex;
   align-items: center;
@@ -401,18 +401,18 @@ body {
   border: none;
   color: var(--accent3);
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
+  font-size: 14px;
   cursor: pointer;
   text-decoration: underline;
   padding: 0;
 }
 .btn-link:hover { color: var(--text); }
-.btn-link.small { font-size: 9px; }
+.btn-link.small { font-size: 13px; }
 
 /* ── Buttons ── */
 .btn-accent {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 15px;
   letter-spacing: 0.08em;
   background: var(--accent);
   color: #000;
@@ -453,7 +453,7 @@ body {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 15px;
   letter-spacing: 0.08em;
   color: var(--muted);
   text-transform: uppercase;
@@ -464,14 +464,14 @@ body {
   background: transparent;
   border: none;
   color: var(--muted);
-  font-size: 18px;
+  font-size: 22px;
   cursor: pointer;
   line-height: 1;
   padding: 0;
 }
 .modal-close:hover { color: var(--text); }
 .modal-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
-.modal-desc { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.modal-desc { font-size: 16px; color: var(--muted); line-height: 1.6; }
 .modal-desc a { color: var(--accent3); }
 .modal-body input[type="text"],
 .modal-body input[type="number"] {
@@ -479,7 +479,7 @@ body {
   border: 1px solid var(--border2);
   color: var(--text);
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
+  font-size: 17px;
   padding: 10px 12px;
   outline: none;
   width: 100%;
@@ -489,7 +489,7 @@ body {
 
 /* Search results */
 .search-results { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; }
-.search-loading { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); padding: 12px 0; }
+.search-loading { font-family: 'IBM Plex Mono', monospace; font-size: 15px; color: var(--muted); padding: 12px 0; }
 .search-result {
   padding: 10px 12px;
   background: var(--card);
@@ -498,14 +498,14 @@ body {
   transition: border-color 0.15s, background 0.15s;
 }
 .search-result:hover { border-color: var(--accent); background: rgba(200,241,53,0.04); }
-.sr-name { font-size: 13px; color: var(--text); margin-bottom: 3px; }
-.sr-macros { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); }
+.sr-name { font-size: 17px; color: var(--text); margin-bottom: 3px; }
+.sr-macros { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--muted); }
 .sr-per { opacity: 0.5; }
 
 /* Amount confirm */
 .amount-wrap { display: flex; flex-direction: column; gap: 10px; }
 .amount-wrap.hidden { display: none; }
-.selected-food-name { font-size: 13px; color: var(--accent); font-weight: 600; }
+.selected-food-name { font-size: 17px; color: var(--accent); font-weight: 600; }
 .amount-row { display: flex; align-items: center; gap: 8px; }
 .amount-row input { width: 90px; flex: none; }
 
@@ -524,9 +524,9 @@ body {
   justify-content: space-between;
   align-items: center;
 }
-.micro-name { font-size: 13px; color: var(--text); }
-.micro-source { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
-.micro-status { font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 3px 7px; border-radius: 2px; white-space: nowrap; }
+.micro-name { font-size: 17px; color: var(--text); }
+.micro-source { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--muted); margin-top: 2px; }
+.micro-status { font-family: 'IBM Plex Mono', monospace; font-size: 14px; padding: 3px 7px; border-radius: 2px; white-space: nowrap; }
 .micro-status.ok   { background: #0a2000; color: var(--accent); }
 .micro-status.warn { background: #201a00; color: var(--accent2); }
 .micro-status.sup  { background: #001a20; color: var(--accent3); }
@@ -534,9 +534,9 @@ body {
 /* ── Rules ── */
 .rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-bottom: 48px; }
 .rule-card { background: var(--card); border: 1px solid var(--border); padding: 18px; }
-.rule-icon { font-size: 20px; margin-bottom: 8px; }
-.rule-title { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 5px; }
-.rule-text { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.rule-icon { font-size: 24px; margin-bottom: 8px; }
+.rule-title { font-size: 16px; font-weight: 600; color: var(--accent); margin-bottom: 5px; }
+.rule-text { font-size: 16px; color: var(--muted); line-height: 1.6; }
 
 /* ── Supplement box ── */
 .supp-box {
@@ -545,8 +545,8 @@ body {
   padding: 18px 22px;
   margin-bottom: 48px;
 }
-.supp-box h4 { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 3px; color: var(--accent3); text-transform: uppercase; margin-bottom: 8px; }
-.supp-box p  { font-size: 12px; color: #7ab0c0; line-height: 1.6; }
+.supp-box h4 { font-family: 'IBM Plex Mono', monospace; font-size: 14px; letter-spacing: 3px; color: var(--accent3); text-transform: uppercase; margin-bottom: 8px; }
+.supp-box p  { font-size: 16px; color: #7ab0c0; line-height: 1.6; }
 .supp-box strong { color: var(--accent3); }
 
 /* ── macro-val-unit — rendered in IBM Plex so "g" looks like "g" ── */
@@ -562,16 +562,16 @@ body {
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
-  body { padding: 24px 14px 64px; }
+  body { padding: 24px 20px 64px; }
 
   /* Summary: 2×2 grid, smaller values */
   .summary-bar { grid-template-columns: repeat(2, 1fr); }
-  .macro-val { font-size: 28px; }
+  .macro-val { font-size: 32px; }
 
   /* Meal header: show all 4 macros, compact */
   .meal-macros { gap: 6px; }
-  .meal-macro-val { font-size: 11px; }
-  .meal-macro-label { font-size: 8px; }
+  .meal-macro-val { font-size: 15px; }
+  .meal-macro-label { font-size: 12px; }
   /* Hide ↑↓ reorder, keep only delete */
   .meal-controls .icon-btn:not(.icon-btn--danger),
   .meal-controls .icon-btn-placeholder { display: none; }
@@ -580,7 +580,7 @@ body {
   /* Ingredients: hide per-ingredient macros to save space */
   .ing-macros { display: none; }
   .meal-header { padding: 10px 12px; gap: 6px; }
-  .meal-number { font-size: 20px; min-width: 24px; }
+  .meal-number { font-size: 24px; min-width: 24px; }
 
   /* TDEE form */
   .tdee-row { flex-direction: column; }
