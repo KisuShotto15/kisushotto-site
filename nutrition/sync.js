@@ -1,4 +1,5 @@
-const DATA_URL = 'https://portfolio-data.efrenalejandro2010.workers.dev';
+// Worker URL — se actualiza una vez que el worker esté desplegado
+const DATA_URL = 'https://nutrition-data-worker.efrenalejandro2010.workers.dev';
 const TOKEN    = '151322';
 const LS_KEY   = 'nutrition_v1';
 
@@ -15,7 +16,7 @@ export function saveLocal(state) {
 
 export async function pull() {
   try {
-    const r = await fetch(`${DATA_URL}/nutrition`, {
+    const r = await fetch(DATA_URL, {
       headers: { Authorization: `Bearer ${TOKEN}` }
     });
     if (!r.ok) return null;
@@ -26,7 +27,7 @@ export async function pull() {
 
 export async function push(state) {
   try {
-    await fetch(`${DATA_URL}/nutrition`, {
+    await fetch(DATA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
       body: JSON.stringify(state)

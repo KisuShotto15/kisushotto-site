@@ -271,8 +271,8 @@ function renderMealCard(meal, idx, total) {
       </div>
       <div class="meal-macros">
         <div class="meal-macro-item"><div class="meal-macro-val p">${fmt(m.protein)}g</div><div class="meal-macro-label">Prot</div></div>
-        <div class="meal-macro-item"><div class="meal-macro-val f">${fmt(m.fat)}g</div><div class="meal-macro-label">Grasa</div></div>
-        <div class="meal-macro-item"><div class="meal-macro-val c">${fmt(m.carbs)}g</div><div class="meal-macro-label">Carbs</div></div>
+        <div class="meal-macro-item"><div class="meal-macro-val f">${fmt(m.fat)}g</div><div class="meal-macro-label">Fat</div></div>
+        <div class="meal-macro-item"><div class="meal-macro-val c">${fmt(m.carbs)}g</div><div class="meal-macro-label">Carb</div></div>
         <div class="meal-macro-item"><div class="meal-macro-val k">${fmt(m.calories)}</div><div class="meal-macro-label">kcal</div></div>
       </div>
       <div class="meal-controls" onclick="event.stopPropagation()">

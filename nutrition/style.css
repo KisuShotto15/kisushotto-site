@@ -530,11 +530,10 @@ body {
   .summary-bar { grid-template-columns: repeat(2, 1fr); }
   .macro-val { font-size: 28px; }
 
-  /* Meal header: hide fat macro + reorder buttons, keep prot + kcal */
-  .meal-macro-item:nth-child(2),   /* fat */
-  .meal-macro-item:nth-child(3) {  /* carbs */
-    display: none;
-  }
+  /* Meal header: show all 4 macros, compact */
+  .meal-macros { gap: 6px; }
+  .meal-macro-val { font-size: 11px; }
+  .meal-macro-label { font-size: 8px; }
   /* Hide ↑↓ reorder, keep only delete */
   .meal-controls .icon-btn:not(.icon-btn--danger),
   .meal-controls .icon-btn-placeholder { display: none; }
@@ -542,8 +541,8 @@ body {
 
   /* Ingredients: hide per-ingredient macros to save space */
   .ing-macros { display: none; }
-  .meal-header { padding: 12px 12px; gap: 8px; }
-  .meal-number { font-size: 22px; min-width: 26px; }
+  .meal-header { padding: 10px 12px; gap: 6px; }
+  .meal-number { font-size: 20px; min-width: 24px; }
 
   /* TDEE form */
   .tdee-row { flex-direction: column; }
