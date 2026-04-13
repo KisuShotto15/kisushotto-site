@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nutrition · KS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-label">// protocolo diario · base</div>
+    <h1>PERFECT<br><span>NUTRITION</span></h1>
+    <div class="header-sub">Alta proteína · Baja en carbos · Venezuela-ready · Escalable</div>
+  </div>
+
+  <div class="summary-bar">
+    <div class="macro-block cal">
+      <div class="macro-val">~2000</div>
+      <div class="macro-unit">KCAL / DÍA</div>
+      <div class="macro-label">Base</div>
+    </div>
+    <div class="macro-block prot">
+      <div class="macro-val">175g</div>
+      <div class="macro-unit">PROTEÍNA</div>
+      <div class="macro-label">~35% kcal</div>
+    </div>
+    <div class="macro-block fat">
+      <div class="macro-val">110g</div>
+      <div class="macro-unit">GRASAS</div>
+      <div class="macro-label">~50% kcal</div>
+    </div>
+    <div class="macro-block carb">
+      <div class="macro-val">65g</div>
+      <div class="macro-unit">CARBS</div>
+      <div class="macro-label">~13% kcal</div>
+    </div>
+  </div>
+
+  <div class="section-title">comidas del día</div>
+  <div class="meals">
+
+    <div class="meal-card">
+      <div class="meal-header" onclick="toggle(this)">
+        <div class="meal-left">
+          <div class="meal-number">01</div>
+          <div class="meal-info">
+            <h3>DESAYUNO — Huevos + Aguacate</h3>
+            <div class="meal-time">07:00 · Rompe el ayuno</div>
+          </div>
+        </div>
+        <div class="meal-macros">
+          <div class="meal-macro-item"><div class="meal-macro-val p">38g</div><div class="meal-macro-label">Prot</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val f">42g</div><div class="meal-macro-label">Grasa</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val c">8g</div><div class="meal-macro-label">Carbs</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val k">554</div><div class="meal-macro-label">kcal</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="meal-body">
+        <ul class="ingredient-list">
+          <li class="ingredient-item">
+            <span class="ing-name">Huevos enteros (sunnyside up o revueltos)</span>
+            <span class="ing-amount">4 huevos (200g)</span>
+            <span class="ing-macros">28P · 20F · 1C · 296kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Aguacate</span>
+            <span class="ing-amount">½ aguacate mediano (~80g)</span>
+            <span class="ing-macros">1P · 12F · 4C · 128kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Queso blanco duro (rallado o en trozos)</span>
+            <span class="ing-amount">40g</span>
+            <span class="ing-macros">9P · 10F · 1C · 130kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Aceite de coco o mantequilla (para freír)</span>
+            <span class="ing-amount">1 cdta (5g)</span>
+            <span class="ing-macros">0P · 5F · 0C · 45kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Sal, pimienta, cúrcuma o curry</span>
+            <span class="ing-amount">Al gusto</span>
+            <span class="ing-macros">—</span>
+          </li>
+        </ul>
+        <div class="meal-note">💡 El aguacate reemplaza el pan — aporta grasa de calidad, potasio y fibra. El queso blanco venezolano suma proteína y calcio sin carbos. Si no hay aguacate ese día, añade otro huevo y una cucharada extra de mantequilla.</div>
+      </div>
+    </div>
+
+    <div class="meal-card">
+      <div class="meal-header" onclick="toggle(this)">
+        <div class="meal-left">
+          <div class="meal-number">02</div>
+          <div class="meal-info">
+            <h3>ALMUERZO — Pollo con vegetales</h3>
+            <div class="meal-time">13:00 · Comida principal</div>
+          </div>
+        </div>
+        <div class="meal-macros">
+          <div class="meal-macro-item"><div class="meal-macro-val p">85g</div><div class="meal-macro-label">Prot</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val f">32g</div><div class="meal-macro-label">Grasa</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val c">30g</div><div class="meal-macro-label">Carbs</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val k">748</div><div class="meal-macro-label">kcal</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="meal-body">
+        <ul class="ingredient-list">
+          <li class="ingredient-item">
+            <span class="ing-name">Muslo de pollo con piel (peso crudo)</span>
+            <span class="ing-amount">400g</span>
+            <span class="ing-macros">72P · 28F · 0C · 552kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Brócoli o vainitas (al vapor o salteado)</span>
+            <span class="ing-amount">150g</span>
+            <span class="ing-macros">4P · 0F · 7C · 44kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Cebolla, ajo, tomate (sofrito base)</span>
+            <span class="ing-amount">100g total</span>
+            <span class="ing-macros">1P · 0F · 8C · 36kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Aceite de oliva o girasol (cocción)</span>
+            <span class="ing-amount">1 cda (12g)</span>
+            <span class="ing-macros">0P · 12F · 0C · 108kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Curry, comino, pimentón, sal, pimienta</span>
+            <span class="ing-amount">Al gusto</span>
+            <span class="ing-macros">—</span>
+          </li>
+        </ul>
+        <div class="meal-note">💡 Mantén la piel del pollo — ahí está gran parte de la grasa y sabor. Sin arroz en esta versión base; las calorías extra vienen de grasas, no de carbos.</div>
+      </div>
+    </div>
+
+    <div class="meal-card">
+      <div class="meal-header" onclick="toggle(this)">
+        <div class="meal-left">
+          <div class="meal-number">03</div>
+          <div class="meal-info">
+            <h3>MERIENDA — Sardinas + Queso</h3>
+            <div class="meal-time">16:30 · Proteína rápida y económica</div>
+          </div>
+        </div>
+        <div class="meal-macros">
+          <div class="meal-macro-item"><div class="meal-macro-val p">30g</div><div class="meal-macro-label">Prot</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val f">18g</div><div class="meal-macro-label">Grasa</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val c">4g</div><div class="meal-macro-label">Carbs</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val k">298</div><div class="meal-macro-label">kcal</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="meal-body">
+        <ul class="ingredient-list">
+          <li class="ingredient-item">
+            <span class="ing-name">Sardinas en lata (agua o aceite, escurridas)</span>
+            <span class="ing-amount">1 lata 125g</span>
+            <span class="ing-macros">22P · 10F · 0C · 178kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Queso blanco duro venezolano</span>
+            <span class="ing-amount">50g</span>
+            <span class="ing-macros">8P · 8F · 1C · 104kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Pepino, lechuga o apio (para acompañar)</span>
+            <span class="ing-amount">Libre cantidad</span>
+            <span class="ing-macros">~1P · 0F · 3C · 16kcal</span>
+          </li>
+        </ul>
+        <div class="meal-note">💡 Las sardinas son el mejor costo-proteína del mercado venezolano. También aportan Omega-3, vitamina D y B12.</div>
+      </div>
+    </div>
+
+    <div class="meal-card">
+      <div class="meal-header" onclick="toggle(this)">
+        <div class="meal-left">
+          <div class="meal-number">04</div>
+          <div class="meal-info">
+            <h3>CENA — Huevos + Vegetales salteados</h3>
+            <div class="meal-time">20:00 · Ligero, alta proteína</div>
+          </div>
+        </div>
+        <div class="meal-macros">
+          <div class="meal-macro-item"><div class="meal-macro-val p">22g</div><div class="meal-macro-label">Prot</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val f">18g</div><div class="meal-macro-label">Grasa</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val c">10g</div><div class="meal-macro-label">Carbs</div></div>
+          <div class="meal-macro-item"><div class="meal-macro-val k">290</div><div class="meal-macro-label">kcal</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="meal-body">
+        <ul class="ingredient-list">
+          <li class="ingredient-item">
+            <span class="ing-name">Huevos enteros (revueltos o tortilla)</span>
+            <span class="ing-amount">3 huevos (150g)</span>
+            <span class="ing-macros">21P · 15F · 1C · 222kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Espinaca, chayota o brócoli salteado</span>
+            <span class="ing-amount">100g</span>
+            <span class="ing-macros">2P · 0F · 5C · 28kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Aceite o mantequilla</span>
+            <span class="ing-amount">½ cdta (3g)</span>
+            <span class="ing-macros">0P · 3F · 0C · 27kcal</span>
+          </li>
+          <li class="ingredient-item">
+            <span class="ing-name">Ajo, sal, especias</span>
+            <span class="ing-amount">Al gusto</span>
+            <span class="ing-macros">—</span>
+          </li>
+        </ul>
+        <div class="meal-note">💡 Cena ligera para no sobrecargar la digestión al dormir.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="section-title">cobertura de micronutrientes</div>
+  <div class="micro-grid">
+    <div class="micro-card"><div><div class="micro-name">Vitamina A</div><div class="micro-source">Huevos · Auyama · Zanahoria</div></div><div class="micro-status ok">✓ OK</div></div>
+    <div class="micro-card"><div><div class="micro-name">Vitamina D</div><div class="micro-source">Sardinas · Huevos</div></div><div class="micro-status warn">~ BAJO</div></div>
+    <div class="micro-card"><div><div class="micro-name">Vitamina B12</div><div class="micro-source">Sardinas · Pollo · Huevos</div></div><div class="micro-status ok">✓ OK</div></div>
+    <div class="micro-card"><div><div class="micro-name">Vitamina C</div><div class="micro-source">Brócoli · Tomate · Limón</div></div><div class="micro-status ok">✓ OK</div></div>
+    <div class="micro-card"><div><div class="micro-name">Hierro</div><div class="micro-source">Sardinas · Pollo · Vegetales</div></div><div class="micro-status ok">✓ OK</div></div>
+    <div class="micro-card"><div><div class="micro-name">Calcio</div><div class="micro-source">Queso blanco · Sardinas</div></div><div class="micro-status ok">✓ OK</div></div>
+    <div class="micro-card"><div><div class="micro-name">Omega-3</div><div class="micro-source">Sardinas (EPA/DHA)</div></div><div class="micro-status ok">✓ OK</div></div>
+    <div class="micro-card"><div><div class="micro-name">Potasio</div><div class="micro-source">Aguacate · Pollo · Brócoli</div></div><div class="micro-status ok">✓ OK</div></div>
+    <div class="micro-card"><div><div class="micro-name">Magnesio</div><div class="micro-source">Vegetales verdes · Sardinas</div></div><div class="micro-status warn">~ BAJO</div></div>
+    <div class="micro-card"><div><div class="micro-name">Zinc</div><div class="micro-source">Pollo · Huevos · Sardinas</div></div><div class="micro-status ok">✓ OK</div></div>
+    <div class="micro-card"><div><div class="micro-name">Colina</div><div class="micro-source">Huevos (yema)</div></div><div class="micro-status sup">↑ ÓPTIMO</div></div>
+    <div class="micro-card"><div><div class="micro-name">Vitamina K2</div><div class="micro-source">Queso · Huevos</div></div><div class="micro-status ok">✓ OK</div></div>
+  </div>
+
+  <div class="section-title">guía de escalado calórico</div>
+  <table class="scale-table">
+    <thead>
+      <tr>
+        <th>FASE</th><th>KCAL/DÍA</th><th>PROTEÍNA</th><th>CÓMO ESCALAR</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Déficit</td><td class="kcal">~1700</td><td class="prot">150g+</td><td class="lever">Quita ½ aguacate y reduce aceite. Mantén pollo y huevos intactos.</td></tr>
+      <tr class="base"><td>BASE ★</td><td class="kcal">~2000</td><td class="prot">175g</td><td class="lever">Plan tal cual. Punto de partida.</td></tr>
+      <tr><td>+250</td><td class="kcal">~2250</td><td class="prot">185g</td><td class="lever">Añade 1 huevo al desayuno + 1 cda aceite de oliva al almuerzo.</td></tr>
+      <tr><td>+500</td><td class="kcal">~2500</td><td class="prot">195g</td><td class="lever">Aumenta pollo a 500g (crudo) + otro ½ aguacate en el día.</td></tr>
+      <tr><td>Volumen</td><td class="kcal">~3000+</td><td class="prot">220g+</td><td class="lever">Añade ½ taza de arroz al almuerzo + más aceite + 100g extra de pollo.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">reglas del protocolo</div>
+  <div class="rules-grid">
+    <div class="rule-card"><div class="rule-icon">🔥</div><div class="rule-title">Calorías desde grasa, no carbos</div><div class="rule-text">Para subir calorías sin inflar los carbos, siempre sube primero aceite, aguacate o más huevos. Los carbos son la última palanca.</div></div>
+    <div class="rule-card"><div class="rule-icon">🍗</div><div class="rule-title">Muslo > Pechuga</div><div class="rule-text">El muslo con piel es más económico, más sabroso y más rico en grasa y micronutrientes. No cambies a pechuga para "comer sano".</div></div>
+    <div class="rule-card"><div class="rule-icon">🐟</div><div class="rule-title">Sardinas: irremplazables</div><div class="rule-text">Son la única fuente de Omega-3 EPA/DHA accesible en Venezuela. Come una lata diaria mínimo.</div></div>
+    <div class="rule-card"><div class="rule-icon">🥑</div><div class="rule-title">Aguacate diario si hay</div><div class="rule-text">Grasa monoinsaturada + potasio + fibra. Úsalo como sustituto del pan o del arroz, no como adicional.</div></div>
+    <div class="rule-card"><div class="rule-icon">🧂</div><div class="rule-title">Especias son libres</div><div class="rule-text">Curry, cúrcuma, comino, ajo, orégano — sin restricción. Antiinflamatorios y hacen la dieta sostenible.</div></div>
+    <div class="rule-card"><div class="rule-icon">💧</div><div class="rule-title">Hidratación con electrolitos</div><div class="rule-text">Dieta alta en proteína requiere más agua. Añade una pizca de sal al agua o exprime limón.</div></div>
+  </div>
+
+  <div class="supp-box">
+    <h4>// Gaps a considerar</h4>
+    <p>
+      Los únicos dos micronutrientes que este plan no cubre completamente son <strong>Vitamina D</strong> y <strong>Magnesio</strong>.
+      La vitamina D se puede obtener con 20–30 min de sol directo antes de las 11am o después de las 3pm.
+      El magnesio se puede complementar con <strong>semillas de girasol o ajonjolí</strong>, o con un suplemento de óxido/citrato de magnesio.
+    </p>
+  </div>
+
+</div>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
