@@ -508,6 +508,14 @@ async function loadCalMonth() {
 }
 
 async function init() {
+  // Dev override: set habits_user in localStorage for local testing without CF Access
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    if (!localStorage.getItem('habits_user')) {
+      const email = prompt('Dev mode: ingresa tu email para identificarte');
+      if (email) localStorage.setItem('habits_user', email.toLowerCase().trim());
+    }
+  }
+
   const now = new Date();
   calYear   = now.getFullYear();
   calMonth  = now.getMonth() + 1;
