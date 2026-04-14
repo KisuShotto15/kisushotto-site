@@ -125,7 +125,17 @@
     <div class="form-row">
       <div class="form-field">
         <label>Emoji</label>
-        <input type="text" id="fEmoji" placeholder="🔥" maxlength="2" style="font-size:20px;text-align:center">
+        <div style="position:relative">
+          <button type="button" id="emojiBtn" onclick="toggleEmojiPicker()" style="width:100%;height:44px;font-size:22px;background:var(--card);border:1px solid var(--border);border-radius:8px;cursor:pointer;color:var(--text)">🔥</button>
+          <div id="emojiPicker" style="display:none;position:absolute;top:48px;left:0;z-index:100;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;display:none;grid-template-columns:repeat(7,1fr);gap:4px;width:240px">
+            <button type="button" class="ep-e" onclick="pickEmoji('🔥')">🔥</button><button type="button" class="ep-e" onclick="pickEmoji('⚡')">⚡</button><button type="button" class="ep-e" onclick="pickEmoji('💪')">💪</button><button type="button" class="ep-e" onclick="pickEmoji('🧠')">🧠</button><button type="button" class="ep-e" onclick="pickEmoji('📚')">📚</button><button type="button" class="ep-e" onclick="pickEmoji('✍️')">✍️</button><button type="button" class="ep-e" onclick="pickEmoji('🎯')">🎯</button>
+            <button type="button" class="ep-e" onclick="pickEmoji('🏃')">🏃</button><button type="button" class="ep-e" onclick="pickEmoji('🚴')">🚴</button><button type="button" class="ep-e" onclick="pickEmoji('🏋️')">🏋️</button><button type="button" class="ep-e" onclick="pickEmoji('🧘')">🧘</button><button type="button" class="ep-e" onclick="pickEmoji('🤸')">🤸</button><button type="button" class="ep-e" onclick="pickEmoji('🚶')">🚶</button><button type="button" class="ep-e" onclick="pickEmoji('🏊')">🏊</button>
+            <button type="button" class="ep-e" onclick="pickEmoji('💧')">💧</button><button type="button" class="ep-e" onclick="pickEmoji('🥗')">🥗</button><button type="button" class="ep-e" onclick="pickEmoji('🍎')">🍎</button><button type="button" class="ep-e" onclick="pickEmoji('☕')">☕</button><button type="button" class="ep-e" onclick="pickEmoji('🥤')">🥤</button><button type="button" class="ep-e" onclick="pickEmoji('💊')">💊</button><button type="button" class="ep-e" onclick="pickEmoji('🥦')">🥦</button>
+            <button type="button" class="ep-e" onclick="pickEmoji('😴')">😴</button><button type="button" class="ep-e" onclick="pickEmoji('🌙')">🌙</button><button type="button" class="ep-e" onclick="pickEmoji('⏰')">⏰</button><button type="button" class="ep-e" onclick="pickEmoji('📝')">📝</button><button type="button" class="ep-e" onclick="pickEmoji('✅')">✅</button><button type="button" class="ep-e" onclick="pickEmoji('🎵')">🎵</button><button type="button" class="ep-e" onclick="pickEmoji('🎨')">🎨</button>
+            <button type="button" class="ep-e" onclick="pickEmoji('💰')">💰</button><button type="button" class="ep-e" onclick="pickEmoji('📊')">📊</button><button type="button" class="ep-e" onclick="pickEmoji('💻')">💻</button><button type="button" class="ep-e" onclick="pickEmoji('🌱')">🌱</button><button type="button" class="ep-e" onclick="pickEmoji('🌞')">🌞</button><button type="button" class="ep-e" onclick="pickEmoji('🧹')">🧹</button><button type="button" class="ep-e" onclick="pickEmoji('❤️')">❤️</button>
+          </div>
+        </div>
+        <input type="hidden" id="fEmoji" value="🔥">
       </div>
       <div class="form-field">
         <label>Nombre</label>

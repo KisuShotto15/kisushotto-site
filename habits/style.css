@@ -78,6 +78,15 @@ body {
   .habits-layout { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 600px) {
+  .container { padding: 20px 16px 60px; }
+  .page-header h1 { font-size: clamp(36px, 12vw, 56px); }
+  .stats-strip { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat-block { padding: 14px; }
+  .side-panel { width: 100%; border-left: none; border-top: 1px solid var(--border2); top: auto; height: 92dvh; border-radius: 16px 16px 0 0; }
+  .panel-body { padding: 18px 18px 28px; }
+}
+
 /* ── Cards ── */
 .card {
   background: var(--card);
@@ -601,6 +610,19 @@ body {
 .toast.show { opacity: 1; transform: none; }
 .toast.ok  { border-color: rgba(110,231,183,0.4); color: var(--mint); }
 .toast.err { border-color: rgba(252,165,165,0.4); color: var(--coral); }
+
+/* ── Emoji picker ── */
+.ep-e {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ep-e:hover { background: var(--card2); border-color: var(--border2); }
 
 /* ── Loading ── */
 .loading {

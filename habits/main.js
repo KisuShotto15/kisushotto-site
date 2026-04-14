@@ -325,7 +325,9 @@ window.openPanel = function(habit) {
   $('panelTitle').textContent = habit ? 'EDITAR HÁBITO' : 'NUEVO HÁBITO';
 
   $('fName').value      = habit?.name          || '';
-  $('fEmoji').value     = habit?.emoji         || '';
+  const emoji = habit?.emoji || '🔥';
+  $('fEmoji').value     = emoji;
+  $('emojiBtn').textContent = emoji;
   $('fType').value      = habit?.type          || 'binary';
   $('fTarget').value    = habit?.target_value  ?? 1;
   $('fUnit').value      = habit?.target_unit   || '';
@@ -355,7 +357,19 @@ window.openPanel = function(habit) {
 window.closePanel = function() {
   $('sidePanel').classList.remove('open');
   $('panelBackdrop').classList.add('hidden');
+  $('emojiPicker').style.display = 'none';
   editingId = null;
+};
+
+window.toggleEmojiPicker = function() {
+  const p = $('emojiPicker');
+  p.style.display = p.style.display === 'grid' ? 'none' : 'grid';
+};
+
+window.pickEmoji = function(e) {
+  $('fEmoji').value = e;
+  $('emojiBtn').textContent = e;
+  $('emojiPicker').style.display = 'none';
 };
 
 window.selectColor = function(el) {

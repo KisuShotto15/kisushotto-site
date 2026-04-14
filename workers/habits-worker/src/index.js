@@ -27,34 +27,8 @@ function auth(request, env) {
 
 // ── DB bootstrap ──────────────────────────────────────────────────────────────
 async function migrate(env) {
-  await env.DB.exec(`
-    CREATE TABLE IF NOT EXISTS habits (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      type TEXT NOT NULL DEFAULT 'binary',
-      target_value REAL DEFAULT 1,
-      target_unit TEXT DEFAULT 'veces',
-      frequency TEXT NOT NULL DEFAULT 'daily',
-      frequency_days TEXT,
-      frequency_every INTEGER DEFAULT 1,
-      color TEXT NOT NULL DEFAULT 'lavender',
-      emoji TEXT NOT NULL DEFAULT '✓',
-      reminder_time TEXT,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL,
-      active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE IF NOT EXISTS completions (
-      id TEXT PRIMARY KEY,
-      habit_id TEXT NOT NULL,
-      date TEXT NOT NULL,
-      value REAL NOT NULL DEFAULT 1,
-      note TEXT,
-      created_at INTEGER NOT NULL,
-      UNIQUE(habit_id, date)
-    );
-  `);
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS habits (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, type TEXT NOT NULL DEFAULT 'binary', target_value REAL DEFAULT 1, target_unit TEXT DEFAULT 'veces', frequency TEXT NOT NULL DEFAULT 'daily', frequency_days TEXT, frequency_every INTEGER DEFAULT 1, color TEXT NOT NULL DEFAULT 'lavender', emoji TEXT NOT NULL DEFAULT '✓', reminder_time TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)").run();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS completions (id TEXT PRIMARY KEY, habit_id TEXT NOT NULL, date TEXT NOT NULL, value REAL NOT NULL DEFAULT 1, note TEXT, created_at INTEGER NOT NULL, UNIQUE(habit_id, date))").run();
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
