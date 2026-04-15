@@ -626,6 +626,7 @@ body {
 }
 .form-field textarea { resize: vertical; min-height: 70px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-row > * { min-width: 0; }
 
 /* Color picker */
 .color-picker {
