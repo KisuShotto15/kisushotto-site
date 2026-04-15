@@ -479,6 +479,17 @@ window.toggleNotifDrawer = function() {
 window.closeNotifDrawer = function() {
   $('notifDrawer').classList.add('hidden');
 };
+window.testNotification = function() {
+  const title = '🔔 Test de notificación';
+  const body  = 'Las notificaciones están funcionando correctamente';
+  pushNotif(title, body);
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body });
+  } else {
+    toast('Activa las notificaciones primero con el banner superior');
+  }
+  renderNotifDrawer();
+};
 function renderNotifDrawer() {
   const list = $('notifList');
   const history = getNotifHistory();

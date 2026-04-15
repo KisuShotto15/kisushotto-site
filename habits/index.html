@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Habits · KS</title>
 <link rel="stylesheet" href="./style.css">
 </head>
@@ -10,23 +10,24 @@
 <div class="container">
 
   <div class="page-header">
-    <div class="header-row">
+    <div class="header-label-row">
       <a href="/" class="back-arrow">←</a>
-      <div class="header-center">
-        <div class="page-header-label">// daily practice</div>
-        <h1>HABIT <span>TRACKER</span></h1>
-      </div>
+      <div class="page-header-label">// daily practice</div>
       <button class="notif-bell" id="notifBell" onclick="toggleNotifDrawer()">
         🔔<span class="notif-badge hidden" id="notifBadge"></span>
       </button>
     </div>
+    <h1 class="page-header-h1">HABIT <span>TRACKER</span></h1>
   </div>
 
   <!-- Notification drawer -->
   <div class="notif-drawer hidden" id="notifDrawer">
     <div class="notif-drawer-head">
       <span>Notificaciones</span>
-      <button class="notif-close" onclick="closeNotifDrawer()">✕</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="notif-test-btn" onclick="testNotification()">Probar</button>
+        <button class="notif-close" onclick="closeNotifDrawer()">✕</button>
+      </div>
     </div>
     <div id="notifList" class="notif-list"></div>
   </div>
