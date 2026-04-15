@@ -9,13 +9,26 @@
 <body>
 <div class="container">
 
-  <a href="/" class="back-link">← hub</a>
-
-  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
-    <div>
-      <div class="page-header-label">// daily practice</div>
-      <h1>HABIT <span>TRACKER</span></h1>
+  <div class="page-header">
+    <div class="header-row">
+      <a href="/" class="back-arrow">←</a>
+      <div class="header-center">
+        <div class="page-header-label">// daily practice</div>
+        <h1>HABIT <span>TRACKER</span></h1>
+      </div>
+      <button class="notif-bell" id="notifBell" onclick="toggleNotifDrawer()">
+        🔔<span class="notif-badge hidden" id="notifBadge"></span>
+      </button>
     </div>
+  </div>
+
+  <!-- Notification drawer -->
+  <div class="notif-drawer hidden" id="notifDrawer">
+    <div class="notif-drawer-head">
+      <span>Notificaciones</span>
+      <button class="notif-close" onclick="closeNotifDrawer()">✕</button>
+    </div>
+    <div id="notifList" class="notif-list"></div>
   </div>
 
   <!-- Notification permission banner -->

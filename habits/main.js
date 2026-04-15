@@ -445,12 +445,65 @@ document.addEventListener('click', e => {
   }
 });
 
+// ── Notification history ──────────────────────────────────────────────────────
+const NOTIF_KEY = 'habits_notifications';
+function getNotifHistory() {
+  try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]'); } catch { return []; }
+}
+function pushNotif(title, body) {
+  const history = getNotifHistory();
+  history.unshift({ title, body, time: Date.now(), read: false });
+  if (history.length > 50) history.length = 50;
+  localStorage.setItem(NOTIF_KEY, JSON.stringify(history));
+  updateNotifBadge();
+}
+function updateNotifBadge() {
+  const badge = $('notifBadge');
+  if (!badge) return;
+  const unread = getNotifHistory().filter(n => !n.read).length;
+  badge.textContent = unread > 9 ? '9+' : String(unread);
+  badge.classList.toggle('hidden', unread === 0);
+}
+window.toggleNotifDrawer = function() {
+  const drawer = $('notifDrawer');
+  if (drawer.classList.contains('hidden')) {
+    renderNotifDrawer();
+    drawer.classList.remove('hidden');
+    const history = getNotifHistory().map(n => ({ ...n, read: true }));
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(history));
+    updateNotifBadge();
+  } else {
+    drawer.classList.add('hidden');
+  }
+};
+window.closeNotifDrawer = function() {
+  $('notifDrawer').classList.add('hidden');
+};
+function renderNotifDrawer() {
+  const list = $('notifList');
+  const history = getNotifHistory();
+  if (!history.length) {
+    list.innerHTML = '<div class="notif-empty">Sin notificaciones aún</div>';
+    return;
+  }
+  list.innerHTML = history.map(n => {
+    const d = new Date(n.time);
+    const time = d.toLocaleString('es', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return `<div class="notif-item${n.read ? '' : ' unread'}">
+      <div class="notif-item-title">${n.title}</div>
+      <div class="notif-item-body">${n.body}</div>
+      <div class="notif-item-time">${time}</div>
+    </div>`;
+  }).join('');
+}
+
 // ── Notifications ─────────────────────────────────────────────────────────────
 function initNotifications() {
   if (!('Notification' in window)) return;
   if (Notification.permission === 'default') {
     $('notifBanner').classList.remove('hidden');
   }
+  updateNotifBadge();
 }
 
 window.requestNotifPermission = async function() {
@@ -478,16 +531,18 @@ function setupReminders() {
     if (ms > 0) {
       reminderTimers.push(setTimeout(() => {
         if (!isDone(habit.id, today())) {
-          new Notification(`${habit.emoji || '⏰'} ${habit.name}`, {
-            body: habit.description || '¡Es hora de completar tu hábito!',
-          });
+          const title = `${habit.emoji || '⏰'} ${habit.name}`;
+          const body  = habit.description || '¡Es hora de completar tu hábito!';
+          new Notification(title, { body });
+          pushNotif(title, body);
         }
       }, ms));
     } else if (ms > -3600000) {
       // Missed within last hour
-      new Notification(`${habit.emoji || '⏰'} ${habit.name}`, {
-        body: `Recordatorio perdido — ${habit.reminder_time}`,
-      });
+      const title = `${habit.emoji || '⏰'} ${habit.name}`;
+      const body  = `Recordatorio perdido — ${habit.reminder_time}`;
+      new Notification(title, { body });
+      pushNotif(title, body);
     }
   }
 }
