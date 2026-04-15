@@ -113,9 +113,41 @@ function renderProfiles() {
   const ids = Object.keys(S.profiles);
   bar.innerHTML = ids.map(id => {
     const active = id === S.activeProfile ? ' active' : '';
-    return `<button class="profile-pill${active}" onclick="window._switchProfile('${id}')">${S.profiles[id].name}</button>`;
+    const delBtn = ids.length > 1
+      ? `<span class="pill-del" onclick="event.stopPropagation(); window._deleteProfile('${id}')" title="Eliminar">×</span>`
+      : '';
+    return `<div class="profile-pill${active}">
+      <span class="pill-name" onclick="window._switchProfile('${id}')"
+            ondblclick="event.stopPropagation(); window._renameProfile('${id}',this)">${S.profiles[id].name}</span>
+      <span class="pill-rename" onclick="event.stopPropagation(); window._renameProfile('${id}',this.previousElementSibling)" title="Renombrar">✎</span>
+      ${delBtn}
+    </div>`;
   }).join('') + `<button class="profile-pill profile-pill--add" onclick="window._addProfile()">+ Perfil</button>`;
 }
+
+window._renameProfile = function(id, nameEl) {
+  if (nameEl.querySelector('input')) return;
+  const current = nameEl.textContent;
+  const input = document.createElement('input');
+  input.className = 'inline-edit';
+  input.value = current;
+  input.style.width = Math.max(60, current.length * 9) + 'px';
+  nameEl.textContent = '';
+  nameEl.appendChild(input);
+  input.focus();
+  input.select();
+  const commit = () => {
+    const val = input.value.trim() || current;
+    S.profiles[id].name = val;
+    save();
+    nameEl.textContent = val;
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { nameEl.textContent = current; }
+  });
+};
 
 window._switchProfile = function(id) {
   S.activeProfile = id;

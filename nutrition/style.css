@@ -95,17 +95,35 @@ body {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 15px;
   letter-spacing: 0.08em;
-  padding: 5px 14px;
+  padding: 5px 10px 5px 14px;
   border-radius: 20px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--muted);
   cursor: pointer;
   transition: border-color 0.2s, color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .profile-pill:hover { border-color: var(--border2); color: var(--text); }
 .profile-pill.active { border-color: var(--accent); color: var(--accent); }
-.profile-pill--add { border-style: dashed; }
+.profile-pill--add { border-style: dashed; padding: 5px 14px; }
+.pill-name { cursor: pointer; }
+.pill-rename, .pill-del {
+  opacity: 0;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+  color: var(--muted);
+}
+.pill-rename:hover { background: var(--card2); color: var(--text); }
+.pill-del:hover    { background: rgba(239,68,68,0.15); color: #f87171; }
+.profile-pill:hover .pill-rename,
+.profile-pill:hover .pill-del { opacity: 1; }
 
 /* ── Day tabs ── */
 .days-bar {
