@@ -12,6 +12,7 @@ export default defineConfig({
         tradeJournalAnalytics: resolve(__dirname, 'trade-journal/analytics.html'),
         tradeJournalInsights:  resolve(__dirname, 'trade-journal/insights.html'),
         habits:         resolve(__dirname, 'habits/index.html'),
+        p2pMonitor:     resolve(__dirname, 'p2p-monitor/index.html'),
       }
     }
   }

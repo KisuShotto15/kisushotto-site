@@ -1,0 +1,7 @@
+{
+  "regions": ["sin1"],
+  "redirects": [
+    { "source": "/", "destination": "https://kisushotto.com", "permanent": false },
+    { "source": "/((?!api/).*)", "destination": "https://kisushotto.com", "permanent": false }
+  ]
+}
