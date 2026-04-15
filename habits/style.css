@@ -190,6 +190,7 @@ body {
   gap: 20px;
   align-items: start;
 }
+.habits-layout > * { min-width: 0; }
 @media (max-width: 900px) {
   .habits-layout { grid-template-columns: 1fr; }
 }
@@ -507,6 +508,8 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 18px;
+  min-width: 0;
+  overflow: hidden;
 }
 .stat-label {
   font-family: 'IBM Plex Mono', monospace;
