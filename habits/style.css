@@ -23,20 +23,24 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+html, body {
+  overflow-x: hidden;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
   font-family: 'IBM Plex Sans', sans-serif;
   font-size: 19px;
   min-height: 100vh;
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
 .container {
   max-width: 1600px;
+  width: 100%;
   margin: 0 auto;
-  padding: 28px max(32px, env(safe-area-inset-right)) 100px max(32px, env(safe-area-inset-left));
+  padding: 28px 32px 100px;
 }
 
 /* ── Page header ── */
@@ -191,9 +195,7 @@ body {
 }
 
 @media (max-width: 600px) {
-  .container {
-    padding: 20px max(20px, env(safe-area-inset-right)) max(80px, calc(env(safe-area-inset-bottom) + 60px)) max(20px, env(safe-area-inset-left));
-  }
+  .container { padding: 20px 20px 80px; }
   .page-header-h1 { font-size: clamp(32px, 10vw, 48px); letter-spacing: 1px; }
   .stats-strip { grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .stat-block { padding: 14px; }
