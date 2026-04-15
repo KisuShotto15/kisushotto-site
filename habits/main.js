@@ -16,6 +16,12 @@ const COLORS = {
   amber:    '#fcd34d',
   sky:      '#7dd3fc',
   rose:     '#f9a8d4',
+  lime:     '#bef264',
+  orange:   '#fdba74',
+  teal:     '#5eead4',
+  indigo:   '#818cf8',
+  pink:     '#f472b6',
+  slate:    '#94a3b8',
 };
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
