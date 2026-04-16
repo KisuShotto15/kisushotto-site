@@ -412,10 +412,18 @@ input:focus {
   <span class="badge badge-off" id="live-badge"><span class="dot dot-off" id="live-dot"></span><span id="live-label">Detenido</span></span>
   <span style="font-size:15px;color:var(--text-3)" id="last-update"></span>
   <div class="spacer"></div>
+  <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative;font-size:17px;padding:5px 10px" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
   <button class="btn btn-gold" id="btn-start" onclick="toggleMonitor()">▶ Iniciar</button>
   <button class="btn btn-sm" onclick="fetchOnce()" title="Actualizar">&#8635;</button>
-  <button class="btn btn-sm" onclick="clearAlerts()" title="Limpiar alertas">Limpiar</button>
-  <button class="btn btn-sm" onclick="testNotif()" title="Test notificación">🔔</button>
+</div>
+
+<!-- Bell alert dropdown -->
+<div id="alert-dropdown" style="display:none;position:fixed;top:52px;right:12px;z-index:200;width:340px;background:var(--surf-2);border:1px solid var(--border-2);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.7);overflow:hidden;flex-direction:column;max-height:420px">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+    <span style="font-size:13px;font-weight:700;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase">Alertas</span>
+    <button class="btn btn-sm" onclick="clearAlerts()">Limpiar</button>
+  </div>
+  <div class="alert-list" id="alert-list" style="overflow-y:auto;padding:8px;flex:1"></div>
 </div>
 
 <div class="layout">
@@ -499,55 +507,66 @@ input:focus {
   <!-- RIGHT col -->
   <div class="col">
 
-    <!-- Alertas -->
+    <!-- Configuración (collapsible) -->
     <div class="panel">
-      <div class="ptitle">🔔 Alertas <span id="al-count" style="color:#F0B90B"></span></div>
-      <div class="alert-list" id="alert-list">
-        <div class="empty">Sin alertas</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleConfig()">
+        <div class="ptitle" style="margin-bottom:0">⚙ Configuración</div>
+        <span id="cfg-arrow" style="color:var(--text-3);font-size:13px">▸</span>
       </div>
-    </div>
-
-    <!-- Configuración -->
-    <div class="panel">
-      <div class="ptitle">⚙ Configuración</div>
-      <div class="cfg-row">
-        <span>Intervalo (seg)</span>
-        <input type="number" id="cfg-int" value="30" min="15" max="300">
-      </div>
-      <div class="cfg-row">
-        <span>Alerta spread ≥</span>
-        <div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div>
-      </div>
-      <div class="cfg-row">
-        <span>Sobrecomprado ≥</span>
-        <div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div>
-      </div>
-      <div class="cfg-row">
-        <span>Debilidad ≥</span>
-        <div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div>
-      </div>
-      <div class="cfg-row">
-        <span>Mayoristas — monto filtro (VES)</span>
-        <input type="number" id="cfg-may-amount" value="2000000" min="100000" step="100000">
-      </div>
-      <div class="cfg-row">
-        <span>Compra — monto filtro (VES)</span>
-        <input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000">
-      </div>
-      <div class="cfg-row">
-        <span>Comisión Binance por anuncio (%)</span>
-        <input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01">
-      </div>
-      <div style="margin-top:8px;display:flex;gap:6px">
-        <button class="btn btn-gold" style="flex:1" onclick="saveConfig()">Guardar</button>
-        <button class="btn btn-sm" onclick="reqNotif()" id="notif-btn">🔔 Notif</button>
-        <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
+      <div id="cfg-body" style="display:none;margin-top:10px">
+        <div class="cfg-row">
+          <span>Intervalo (seg)</span>
+          <input type="number" id="cfg-int" value="30" min="15" max="300">
+        </div>
+        <div class="cfg-row">
+          <span>Alerta spread ≥</span>
+          <div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div>
+        </div>
+        <div class="cfg-row">
+          <span>Sobrecomprado ≥</span>
+          <div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div>
+        </div>
+        <div class="cfg-row">
+          <span>Debilidad ≥</span>
+          <div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div>
+        </div>
+        <div class="cfg-row">
+          <span>Mayoristas — monto filtro (VES)</span>
+          <input type="number" id="cfg-may-amount" value="2000000" min="100000" step="100000">
+        </div>
+        <div class="cfg-row">
+          <span>Compra — monto filtro (VES)</span>
+          <input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000">
+        </div>
+        <div class="cfg-row">
+          <span>Comisión Binance (%)</span>
+          <input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01">
+        </div>
+        <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
+          <button class="btn btn-gold" style="flex:1" onclick="saveConfig()">Guardar</button>
+          <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
+        </div>
       </div>
     </div>
 
     <!-- Auto-Repricing Bot -->
-    <div class="panel" id="bot-panel">
-      <div class="ptitle">🤖 Auto-Repricing</div>
+    <div class="panel" id="bot-panel" style="position:relative">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="ptitle" style="margin-bottom:0">🤖 Auto-Repricing</div>
+        <button id="bot-gear-btn" class="btn btn-sm" onclick="toggleBotGear(event)" title="Configuración API" style="font-size:15px;padding:3px 9px">⚙</button>
+      </div>
+
+      <!-- Gear popup -->
+      <div id="bot-gear-popup" style="display:none;position:absolute;top:44px;right:14px;width:300px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.8);z-index:50">
+        <div class="ptitle" style="margin-bottom:8px">Config. API</div>
+        <div class="cfg-row"><span>Worker URL</span><input type="text" id="cfg-bot-url" value="https://kisushotto-site.vercel.app/api/binance-bot" style="width:140px;font-size:13px"></div>
+        <div class="cfg-row"><span>Bot Token</span><input type="password" id="cfg-bot-token" placeholder="mibot2024"></div>
+        <div class="cfg-row"><span>Ad Number</span><input type="text" id="cfg-bot-adno" placeholder="12855611..." style="font-size:13px"></div>
+        <div class="cfg-row"><span>Límite mínimo (VES)</span><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="1000" step="1000"></div>
+        <div style="margin-top:10px">
+          <button class="btn btn-gold" style="width:100%" onclick="saveBotConfig()">Guardar</button>
+        </div>
+      </div>
 
       <!-- Estado -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -556,7 +575,7 @@ input:focus {
       </div>
 
       <!-- Info en vivo -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px" id="bot-live">
+      <div style="display:none;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px" id="bot-live">
         <div style="background:var(--surf-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
           <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Precio actual</div>
           <div id="bot-cur-price" style="font-size:20px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums">—</div>
@@ -567,10 +586,7 @@ input:focus {
         </div>
       </div>
 
-      <!-- Config bot -->
-      <div class="cfg-row"><span>Worker URL</span><input type="text" id="cfg-bot-url" value="https://kisushotto-site.vercel.app/api/binance-bot" style="width:200px;font-size:14px"></div>
-      <div class="cfg-row"><span>Bot Token</span><input type="password" id="cfg-bot-token" placeholder="mibot2024"></div>
-      <div class="cfg-row"><span>Ad Number</span><input type="text" id="cfg-bot-adno" placeholder="12855611733778165760" style="font-size:14px"></div>
+      <!-- Config bot (campos visibles) -->
       <div class="cfg-row"><span>Incremento (Bs)</span><input type="number" id="cfg-bot-inc" value="0.001" min="0.001" step="0.001"></div>
       <div class="cfg-row"><span>Gap máx. para seguir (Bs)</span><input type="number" id="cfg-bot-gap" value="1.0" min="0.1" step="0.1"></div>
       <div class="cfg-row"><span>Umbral límites (VES)</span><input type="number" id="cfg-bot-thr" value="10000" min="1000" step="1000"></div>
@@ -996,10 +1012,15 @@ function addAlert(type, title, desc) {
 }
 
 function renderAlerts() {
-  var list = document.getElementById('alert-list');
-  var count = document.getElementById('al-count');
-  if (!ST.alerts.length) { list.innerHTML = '<div class="empty">Sin alertas</div>'; count.textContent = ''; return; }
-  count.textContent = '(' + ST.alerts.length + ')';
+  var list  = document.getElementById('alert-list');
+  var badge = document.getElementById('bell-badge');
+  if (!ST.alerts.length) {
+    list.innerHTML = '<div class="empty">Sin alertas</div>';
+    badge.style.display = 'none';
+    return;
+  }
+  badge.style.display = '';
+  badge.textContent = ST.alerts.length > 9 ? '9+' : ST.alerts.length;
   var icons = { spread: '🟡', overbought: '🔴', weakness: '🔵', info: 'ℹ️' };
   list.innerHTML = ST.alerts.slice(0, 25).map(function(a) {
     return '<div class="al ' + a.type + '">' +
@@ -1070,6 +1091,40 @@ function testNotif() {
   push('Test', 'Notificaciones funcionando'); toast('Test enviado');
 }
 
+// ── UI toggles ────────────────────────────────────────
+function toggleAlertDropdown(e) {
+  e.stopPropagation();
+  var d = document.getElementById('alert-dropdown');
+  if (d.style.display === 'flex') { d.style.display = 'none'; return; }
+  d.style.display = 'flex';
+}
+
+function toggleConfig() {
+  var body  = document.getElementById('cfg-body');
+  var arrow = document.getElementById('cfg-arrow');
+  var open  = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  arrow.textContent  = open ? '▸' : '▾';
+}
+
+function toggleBotGear(e) {
+  e.stopPropagation();
+  var p = document.getElementById('bot-gear-popup');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+document.addEventListener('click', function(e) {
+  var d = document.getElementById('alert-dropdown');
+  if (d && d.style.display === 'flex' && !d.contains(e.target) && e.target.id !== 'btn-bell' && !document.getElementById('btn-bell').contains(e.target)) {
+    d.style.display = 'none';
+  }
+  var gp = document.getElementById('bot-gear-popup');
+  var gb = document.getElementById('bot-gear-btn');
+  if (gp && gp.style.display !== 'none' && !gp.contains(e.target) && gb && !gb.contains(e.target)) {
+    gp.style.display = 'none';
+  }
+});
+
 // ── Auto-Repricing Bot ────────────────────────────────
 var BOT = {
   running: false,
@@ -1092,18 +1147,20 @@ var BOT_CFG = {
   maxGap: 1.0,
   limitThreshold: 10000,
   sellPrice: 0,
-  minSpread: 0.5
+  minSpread: 0.5,
+  minLimit: 0
 };
 
 function saveBotConfig() {
   BOT_CFG.url            = document.getElementById('cfg-bot-url').value.trim();
   BOT_CFG.token          = document.getElementById('cfg-bot-token').value.trim();
   BOT_CFG.adNo           = document.getElementById('cfg-bot-adno').value.trim();
-  BOT_CFG.increment      = parseFloat(document.getElementById('cfg-bot-inc').value)  || 0.001;
-  BOT_CFG.maxGap         = parseFloat(document.getElementById('cfg-bot-gap').value)  || 1.0;
-  BOT_CFG.limitThreshold = parseFloat(document.getElementById('cfg-bot-thr').value)    || 10000;
-  BOT_CFG.sellPrice      = parseFloat(document.getElementById('cfg-bot-sell').value)   || 0;
-  BOT_CFG.minSpread      = parseFloat(document.getElementById('cfg-bot-spread').value) || 0.5;
+  BOT_CFG.increment      = parseFloat(document.getElementById('cfg-bot-inc').value)     || 0.001;
+  BOT_CFG.maxGap         = parseFloat(document.getElementById('cfg-bot-gap').value)     || 1.0;
+  BOT_CFG.limitThreshold = parseFloat(document.getElementById('cfg-bot-thr').value)     || 10000;
+  BOT_CFG.sellPrice      = parseFloat(document.getElementById('cfg-bot-sell').value)    || 0;
+  BOT_CFG.minSpread      = parseFloat(document.getElementById('cfg-bot-spread').value)  || 0.5;
+  BOT_CFG.minLimit       = parseFloat(document.getElementById('cfg-bot-minlimit').value) || 0;
   localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
   botUpdateCeiling();
   var st = document.getElementById('bot-cfg-st');
@@ -1115,14 +1172,15 @@ function loadBotConfig() {
     var s = localStorage.getItem('p2p_bot_cfg');
     if (!s) return;
     Object.assign(BOT_CFG, JSON.parse(s));
-    document.getElementById('cfg-bot-url').value   = BOT_CFG.url;
-    document.getElementById('cfg-bot-token').value = BOT_CFG.token;
-    document.getElementById('cfg-bot-adno').value  = BOT_CFG.adNo || '';
-    document.getElementById('cfg-bot-inc').value   = BOT_CFG.increment;
-    document.getElementById('cfg-bot-gap').value   = BOT_CFG.maxGap;
-    document.getElementById('cfg-bot-thr').value    = BOT_CFG.limitThreshold;
-    document.getElementById('cfg-bot-sell').value   = BOT_CFG.sellPrice || '';
-    document.getElementById('cfg-bot-spread').value = BOT_CFG.minSpread;
+    document.getElementById('cfg-bot-url').value      = BOT_CFG.url;
+    document.getElementById('cfg-bot-token').value    = BOT_CFG.token;
+    document.getElementById('cfg-bot-adno').value     = BOT_CFG.adNo || '';
+    document.getElementById('cfg-bot-inc').value      = BOT_CFG.increment;
+    document.getElementById('cfg-bot-gap').value      = BOT_CFG.maxGap;
+    document.getElementById('cfg-bot-thr').value      = BOT_CFG.limitThreshold;
+    document.getElementById('cfg-bot-sell').value     = BOT_CFG.sellPrice || '';
+    document.getElementById('cfg-bot-spread').value   = BOT_CFG.minSpread;
+    document.getElementById('cfg-bot-minlimit').value = BOT_CFG.minLimit || '';
     botUpdateCeiling();
   } catch(e) {}
 }
@@ -1181,6 +1239,15 @@ async function botGetMyAd() {
               || a.status === 'LIVE' || a.adStatus === 1;
     return isBuy && isUsdt && isVes && isLive;
   }) || null;
+}
+
+async function botUpdateMinLimit(adNumber, minAmount) {
+  var data = await botCallWorker('/update-ad', { advNo: adNumber, minSingleTransAmount: parseFloat(minAmount) });
+  if (data.code && data.code !== '000000') {
+    botLog('Límite [' + data.code + ']: ' + (data.message || '?'), '#E24B4A');
+    throw new Error(data.message || 'Error al actualizar límite');
+  }
+  return true;
 }
 
 async function botUpdatePrice(adNumber, price) {
@@ -1386,6 +1453,16 @@ async function botToggle() {
       }
     } catch(e) {
       botLog('⚠ No se pudo activar el anuncio: ' + e.message, '#F6465D');
+    }
+
+    // Actualizar límite mínimo si está configurado
+    if (BOT_CFG.minLimit > 0 && BOT.adNumber) {
+      try {
+        await botUpdateMinLimit(BOT.adNumber, BOT_CFG.minLimit);
+        botLog('📏 Límite mínimo → ' + fmtM(BOT_CFG.minLimit) + ' VES', '#8b949e');
+      } catch(e) {
+        botLog('⚠ No se pudo actualizar límite mínimo: ' + e.message, '#F6465D');
+      }
     }
 
     BOT.running = true;
