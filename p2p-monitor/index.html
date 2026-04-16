@@ -473,28 +473,6 @@ input:focus {
     <div class="sc"><div class="sc-l">Mayoristas activos</div><div class="sc-v" id="st-count">—</div></div>
   </div>
 
-  <!-- Configuración (collapsible, full-width) -->
-  <div class="panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleConfig()">
-      <div class="ptitle" style="margin-bottom:0">⚙ Configuración</div>
-      <span id="cfg-arrow" style="color:var(--text-3);font-size:13px">▸</span>
-    </div>
-    <div id="cfg-body" style="display:none;margin-top:10px">
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0">
-        <div class="cfg-row"><span>Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="15" max="300"></div>
-        <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-        <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-        <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-        <div class="cfg-row"><span>Mayoristas — monto filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="100000" step="100000"></div>
-        <div class="cfg-row"><span>Compra — monto filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
-        <div class="cfg-row"><span>Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
-      </div>
-      <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
-        <button class="btn btn-gold" style="flex:1;max-width:160px" onclick="saveConfig()">Guardar</button>
-        <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
-      </div>
-    </div>
-  </div>
 
 </div>
 
@@ -504,8 +482,28 @@ input:focus {
   <div class="col">
 
     <!-- Order book dividido -->
-    <div class="panel" style="padding:11px">
-      <div class="ptitle">Libro de compradores — Sección Vender (Bank Transfer · Verificados)</div>
+    <div class="panel" style="padding:11px;position:relative">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="ptitle" style="margin-bottom:0;font-size:13px">Libro de compradores — Sección Vender</div>
+        <button id="ob-gear-btn" class="btn btn-sm" onclick="toggleObGear(event)" title="Configuración" style="font-size:15px;padding:3px 9px;flex-shrink:0">⚙</button>
+      </div>
+
+      <!-- Config popup -->
+      <div id="ob-gear-popup" style="display:none;position:absolute;top:44px;right:11px;width:300px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.8);z-index:50">
+        <div class="ptitle" style="margin-bottom:8px">Configuración</div>
+        <div class="cfg-row"><span>Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="15" max="300"></div>
+        <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+        <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+        <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+        <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="100000" step="100000"></div>
+        <div class="cfg-row"><span>Compra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
+        <div class="cfg-row"><span>Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
+        <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
+          <button class="btn btn-gold" style="flex:1" onclick="saveConfig()">Guardar</button>
+          <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
+        </div>
+      </div>
+
       <div class="ob-grid">
         <div class="ob-side">
           <div id="label-may" class="ob-side-title mayoristas">🏦 Mayoristas</div>
@@ -1116,16 +1114,24 @@ function toggleBotGear(e) {
   p.style.display = p.style.display === 'none' ? 'block' : 'none';
 }
 
+function toggleObGear(e) {
+  e.stopPropagation();
+  var p = document.getElementById('ob-gear-popup');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
 document.addEventListener('click', function(e) {
   var d = document.getElementById('alert-dropdown');
   if (d && d.style.display === 'flex' && !d.contains(e.target) && e.target.id !== 'btn-bell' && !document.getElementById('btn-bell').contains(e.target)) {
     d.style.display = 'none';
   }
-  var gp = document.getElementById('bot-gear-popup');
-  var gb = document.getElementById('bot-gear-btn');
-  if (gp && gp.style.display !== 'none' && !gp.contains(e.target) && gb && !gb.contains(e.target)) {
-    gp.style.display = 'none';
-  }
+  [['bot-gear-popup','bot-gear-btn'],['ob-gear-popup','ob-gear-btn']].forEach(function(pair) {
+    var gp = document.getElementById(pair[0]);
+    var gb = document.getElementById(pair[1]);
+    if (gp && gp.style.display !== 'none' && !gp.contains(e.target) && gb && !gb.contains(e.target)) {
+      gp.style.display = 'none';
+    }
+  });
 });
 
 // ── Auto-Repricing Bot ────────────────────────────────
