@@ -203,8 +203,6 @@ body {
   .page-header-h1 { font-size: clamp(32px, 10vw, 48px); letter-spacing: 1px; }
   .stats-strip { grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .stat-block { padding: 14px; }
-  .side-panel { left: 0; right: 0; width: auto; border-left: none; border-top: 1px solid var(--border2); top: auto; height: 92dvh; border-radius: 16px 16px 0 0; transform: translateY(100%); }
-  .side-panel.open { transform: translateY(0); }
   .panel-body { padding: 18px 20px 28px; }
 }
 
@@ -578,6 +576,18 @@ body {
   box-shadow: -16px 0 48px rgba(0,0,0,0.5);
 }
 .side-panel.open { transform: translateX(0); }
+
+/* Mobile: full-width bottom sheet — must come AFTER the desktop rules above */
+@media (max-width: 768px) {
+  .side-panel {
+    left: 0; right: 0; width: 100%;
+    top: auto; bottom: 0; height: 92dvh;
+    border-left: none; border-radius: 16px 16px 0 0;
+    border-top: 1px solid var(--border2);
+    transform: translateY(100%);
+  }
+  .side-panel.open { transform: translateY(0); }
+}
 
 .panel-header {
   display: flex;
