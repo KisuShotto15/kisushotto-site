@@ -23,8 +23,11 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-html, body {
-  overflow-x: hidden;
+html {
+  overflow-x: clip;
+}
+body {
+  overflow-x: clip;
 }
 
 body {
@@ -200,7 +203,8 @@ body {
   .page-header-h1 { font-size: clamp(32px, 10vw, 48px); letter-spacing: 1px; }
   .stats-strip { grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .stat-block { padding: 14px; }
-  .side-panel { left: 0; right: 0; width: auto; border-left: none; border-top: 1px solid var(--border2); top: auto; height: 92dvh; border-radius: 16px 16px 0 0; }
+  .side-panel { left: 0; right: 0; width: auto; border-left: none; border-top: 1px solid var(--border2); top: auto; height: 92dvh; border-radius: 16px 16px 0 0; transform: translateY(100%); }
+  .side-panel.open { transform: translateY(0); }
   .panel-body { padding: 18px 20px 28px; }
 }
 
