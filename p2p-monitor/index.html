@@ -117,8 +117,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 33vw;
   gap: 12px;
-  padding: 12px;
-  min-height: calc(100vh - 52px);
+  padding: 10px 12px 12px;
 }
 @media(max-width:900px){ .layout { grid-template-columns: 1fr; } }
 .col { display: flex; flex-direction: column; gap: 10px; }
@@ -412,9 +411,9 @@ input:focus {
   <span class="badge badge-off" id="live-badge"><span class="dot dot-off" id="live-dot"></span><span id="live-label">Detenido</span></span>
   <span style="font-size:15px;color:var(--text-3)" id="last-update"></span>
   <div class="spacer"></div>
-  <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative;font-size:17px;padding:5px 10px" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
   <button class="btn btn-gold" id="btn-start" onclick="toggleMonitor()">▶ Iniciar</button>
   <button class="btn btn-sm" onclick="fetchOnce()" title="Actualizar">&#8635;</button>
+  <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative;font-size:17px;padding:5px 10px" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
 </div>
 
 <!-- Bell alert dropdown -->
@@ -426,69 +425,93 @@ input:focus {
   <div class="alert-list" id="alert-list" style="overflow-y:auto;padding:8px;flex:1"></div>
 </div>
 
+<!-- Full-width: spread, signals, stats, config -->
+<div style="padding:12px 12px 0;display:flex;flex-direction:column;gap:10px">
+
+  <div class="spread-hero" id="spread-hero">
+    <div>
+      <div style="font-size:15px;color:#555;margin-bottom:6px">SPREAD ACTUAL</div>
+      <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:14px;color:#555;margin-bottom:2px;letter-spacing:.05em">BRUTO</div>
+          <div class="spread-num" id="hero-pct">—</div>
+        </div>
+        <div id="hero-net-wrap" style="display:none">
+          <div style="font-size:14px;color:#888;margin-bottom:2px;letter-spacing:.05em" id="hero-net-lbl">NETO</div>
+          <div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1" id="hero-net">—</div>
+        </div>
+      </div>
+      <div class="spread-pct" id="hero-label" style="margin-top:6px">Esperando datos...</div>
+    </div>
+    <div class="spread-info">
+      <div class="spread-prices">
+        <div class="sp-item">
+          <div class="lbl">Mayorista (mejor)</div>
+          <div class="val g" id="hero-may">—</div>
+        </div>
+        <div class="sp-item" style="color:var(--text-3);font-size:20px;align-self:center">→</div>
+        <div class="sp-item">
+          <div class="lbl" id="hero-small-lbl">Compra</div>
+          <div class="val b" id="hero-small">—</div>
+        </div>
+      </div>
+      <div id="hero-pill" class="opp-pill opp-no" style="margin-top:8px">Sin datos</div>
+    </div>
+  </div>
+
+  <div class="signals" id="signals">
+    <span class="sig" id="sig-stable">⚪ Estable</span>
+    <span class="sig" id="sig-overbought">🔴 Sobrecomprado</span>
+    <span class="sig" id="sig-weakness">🔵 Debilidad</span>
+    <span class="sig" id="sig-spread">🟡 Spread &gt; umbral</span>
+  </div>
+
+  <div class="stats">
+    <div class="sc"><div class="sc-l">Mejor precio venta</div><div class="sc-v g" id="st-best">—</div></div>
+    <div class="sc"><div class="sc-l">Spread (Bs)</div><div class="sc-v y" id="st-diff">—</div></div>
+    <div class="sc"><div class="sc-l">Variación 10 min</div><div class="sc-v" id="st-delta">—</div></div>
+    <div class="sc"><div class="sc-l">Mayoristas activos</div><div class="sc-v" id="st-count">—</div></div>
+  </div>
+
+  <!-- Configuración (collapsible, full-width) -->
+  <div class="panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleConfig()">
+      <div class="ptitle" style="margin-bottom:0">⚙ Configuración</div>
+      <span id="cfg-arrow" style="color:var(--text-3);font-size:13px">▸</span>
+    </div>
+    <div id="cfg-body" style="display:none;margin-top:10px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0">
+        <div class="cfg-row"><span>Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="15" max="300"></div>
+        <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+        <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+        <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+        <div class="cfg-row"><span>Mayoristas — monto filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="100000" step="100000"></div>
+        <div class="cfg-row"><span>Compra — monto filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
+        <div class="cfg-row"><span>Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
+        <button class="btn btn-gold" style="flex:1;max-width:160px" onclick="saveConfig()">Guardar</button>
+        <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 2-col grid: order book aligned with auto-repricing -->
 <div class="layout">
   <!-- LEFT col -->
   <div class="col">
-
-    <!-- Spread hero -->
-    <div class="spread-hero" id="spread-hero">
-      <div>
-        <div style="font-size:15px;color:#555;margin-bottom:6px">SPREAD ACTUAL</div>
-        <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
-          <div>
-            <div style="font-size:14px;color:#555;margin-bottom:2px;letter-spacing:.05em">BRUTO</div>
-            <div class="spread-num" id="hero-pct">—</div>
-          </div>
-          <div id="hero-net-wrap" style="display:none">
-            <div style="font-size:14px;color:#888;margin-bottom:2px;letter-spacing:.05em" id="hero-net-lbl">NETO</div>
-            <div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1" id="hero-net">—</div>
-          </div>
-        </div>
-        <div class="spread-pct" id="hero-label" style="margin-top:6px">Esperando datos...</div>
-      </div>
-      <div class="spread-info">
-        <div class="spread-prices">
-          <div class="sp-item">
-            <div class="lbl">Mayorista (mejor)</div>
-            <div class="val g" id="hero-may">—</div>
-          </div>
-          <div class="sp-item" style="color:var(--text-3);font-size:20px;align-self:center">→</div>
-          <div class="sp-item">
-            <div class="lbl" id="hero-small-lbl">Compra</div>
-            <div class="val b" id="hero-small">—</div>
-          </div>
-        </div>
-        <div id="hero-pill" class="opp-pill opp-no" style="margin-top:8px">Sin datos</div>
-      </div>
-    </div>
-
-    <!-- Señales -->
-    <div class="signals" id="signals">
-      <span class="sig" id="sig-stable">⚪ Estable</span>
-      <span class="sig" id="sig-overbought">🔴 Sobrecomprado</span>
-      <span class="sig" id="sig-weakness">🔵 Debilidad</span>
-      <span class="sig" id="sig-spread">🟡 Spread &gt; umbral</span>
-    </div>
-
-    <!-- Stats -->
-    <div class="stats">
-      <div class="sc"><div class="sc-l">Mejor precio venta</div><div class="sc-v g" id="st-best">—</div></div>
-      <div class="sc"><div class="sc-l">Spread (Bs)</div><div class="sc-v y" id="st-diff">—</div></div>
-      <div class="sc"><div class="sc-l">Variación 10 min</div><div class="sc-v" id="st-delta">—</div></div>
-      <div class="sc"><div class="sc-l">Mayoristas activos</div><div class="sc-v" id="st-count">—</div></div>
-    </div>
 
     <!-- Order book dividido -->
     <div class="panel" style="padding:11px">
       <div class="ptitle">Libro de compradores — Sección Vender (Bank Transfer · Verificados)</div>
       <div class="ob-grid">
-        <!-- Mayoristas -->
         <div class="ob-side">
           <div id="label-may" class="ob-side-title mayoristas">🏦 Mayoristas</div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
           <div id="ob-may"></div>
         </div>
-        <!-- Pequeños / referencia compra -->
         <div class="ob-side">
           <div id="label-small" class="ob-side-title smallbuyers">📉 Compra</div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
@@ -507,48 +530,6 @@ input:focus {
   <!-- RIGHT col -->
   <div class="col">
 
-    <!-- Configuración (collapsible) -->
-    <div class="panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleConfig()">
-        <div class="ptitle" style="margin-bottom:0">⚙ Configuración</div>
-        <span id="cfg-arrow" style="color:var(--text-3);font-size:13px">▸</span>
-      </div>
-      <div id="cfg-body" style="display:none;margin-top:10px">
-        <div class="cfg-row">
-          <span>Intervalo (seg)</span>
-          <input type="number" id="cfg-int" value="30" min="15" max="300">
-        </div>
-        <div class="cfg-row">
-          <span>Alerta spread ≥</span>
-          <div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div>
-        </div>
-        <div class="cfg-row">
-          <span>Sobrecomprado ≥</span>
-          <div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div>
-        </div>
-        <div class="cfg-row">
-          <span>Debilidad ≥</span>
-          <div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div>
-        </div>
-        <div class="cfg-row">
-          <span>Mayoristas — monto filtro (VES)</span>
-          <input type="number" id="cfg-may-amount" value="2000000" min="100000" step="100000">
-        </div>
-        <div class="cfg-row">
-          <span>Compra — monto filtro (VES)</span>
-          <input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000">
-        </div>
-        <div class="cfg-row">
-          <span>Comisión Binance (%)</span>
-          <input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01">
-        </div>
-        <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
-          <button class="btn btn-gold" style="flex:1" onclick="saveConfig()">Guardar</button>
-          <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
-        </div>
-      </div>
-    </div>
-
     <!-- Auto-Repricing Bot -->
     <div class="panel" id="bot-panel" style="position:relative">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -556,13 +537,12 @@ input:focus {
         <button id="bot-gear-btn" class="btn btn-sm" onclick="toggleBotGear(event)" title="Configuración API" style="font-size:15px;padding:3px 9px">⚙</button>
       </div>
 
-      <!-- Gear popup -->
+      <!-- Gear popup (Worker URL, Bot Token, Ad Number) -->
       <div id="bot-gear-popup" style="display:none;position:absolute;top:44px;right:14px;width:300px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.8);z-index:50">
         <div class="ptitle" style="margin-bottom:8px">Config. API</div>
         <div class="cfg-row"><span>Worker URL</span><input type="text" id="cfg-bot-url" value="https://kisushotto-site.vercel.app/api/binance-bot" style="width:140px;font-size:13px"></div>
         <div class="cfg-row"><span>Bot Token</span><input type="password" id="cfg-bot-token" placeholder="mibot2024"></div>
         <div class="cfg-row"><span>Ad Number</span><input type="text" id="cfg-bot-adno" placeholder="12855611..." style="font-size:13px"></div>
-        <div class="cfg-row"><span>Límite mínimo (VES)</span><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="1000" step="1000"></div>
         <div style="margin-top:10px">
           <button class="btn btn-gold" style="width:100%" onclick="saveBotConfig()">Guardar</button>
         </div>
@@ -587,6 +567,7 @@ input:focus {
       </div>
 
       <!-- Config bot (campos visibles) -->
+      <div class="cfg-row"><span>Límite mínimo (VES)</span><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="1000" step="1000"></div>
       <div class="cfg-row"><span>Incremento (Bs)</span><input type="number" id="cfg-bot-inc" value="0.001" min="0.001" step="0.001"></div>
       <div class="cfg-row"><span>Gap máx. para seguir (Bs)</span><input type="number" id="cfg-bot-gap" value="1.0" min="0.1" step="0.1"></div>
       <div class="cfg-row"><span>Umbral límites (VES)</span><input type="number" id="cfg-bot-thr" value="10000" min="1000" step="1000"></div>
@@ -607,21 +588,26 @@ input:focus {
       </div>
     </div>
 
-    <!-- Telegram -->
+    <!-- Telegram (collapsible) -->
     <div class="panel">
-      <div class="ptitle">✈ Telegram</div>
-      <div class="cfg-row">
-        <span>Bot Token</span>
-        <input type="password" id="cfg-tg-token" placeholder="123:AAF...">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleTelegram()">
+        <div class="ptitle" style="margin-bottom:0">✈ Telegram</div>
+        <span id="tg-arrow" style="color:var(--text-3);font-size:13px">▸</span>
       </div>
-      <div class="cfg-row">
-        <span>Chat ID</span>
-        <input type="text" id="cfg-tg-chat" placeholder="1547594870" style="width:90px;text-align:right">
-      </div>
-      <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
-        <button class="btn btn-gold" style="flex:1" onclick="saveTgConfig()">Guardar</button>
-        <button class="btn btn-sm" onclick="testTelegram()">🧪 Test</button>
-        <span id="tg-st" style="font-size:14px;color:#555"></span>
+      <div id="tg-body" style="display:none;margin-top:10px">
+        <div class="cfg-row">
+          <span>Bot Token</span>
+          <input type="password" id="cfg-tg-token" placeholder="123:AAF...">
+        </div>
+        <div class="cfg-row">
+          <span>Chat ID</span>
+          <input type="text" id="cfg-tg-chat" placeholder="1547594870" style="width:90px;text-align:right">
+        </div>
+        <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
+          <button class="btn btn-gold" style="flex:1" onclick="saveTgConfig()">Guardar</button>
+          <button class="btn btn-sm" onclick="testTelegram()">🧪 Test</button>
+          <span id="tg-st" style="font-size:14px;color:#555"></span>
+        </div>
       </div>
     </div>
 
@@ -922,33 +908,42 @@ function renderStats() {
 
 function renderOB(id, ads, bestCls) {
   var wrap = document.getElementById(id);
-  if (!ads.length) {
-    wrap.innerHTML = '<div class="empty-ob">Sin anuncios en este rango</div>';
-    return;
-  }
-  wrap.innerHTML = ads.slice(0, 8).map(function(ad, i) {
-    var cls = 'ob-row' + (i === 0 ? ' ' + bestCls : '');
-    var rnk = '<span class="rank ' + (i === 0 ? 'n1' : '') + '">' + (i + 1) + '</span>';
-    var lims = fmtM(ad.minVES) + '–' + fmtM(ad.maxVES);
-    var lvlColor = ['','#CD7F32','#A8B8C8','#F0B90B'][ad.vipLevel] || '#F0B90B';
-    var badgeHtml = '';
-    if (ad.badges && ad.badges[0]) {
-      if (ad.badges[0] === 'Block') {
-        badgeHtml = '<span style="margin-left:5px;display:inline-block;width:13px;height:13px;background:#9B59B6;transform:rotate(45deg);border-radius:2px;flex-shrink:0" title="Block vip'+ad.vipLevel+'"></span>';
-      } else {
-        badgeHtml = '<span style="margin-left:5px;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:'+lvlColor+';color:#000;font-size:13px;font-weight:900;flex-shrink:0;line-height:1" title="PRO vip'+ad.vipLevel+'">✓</span>';
+  var rows = '';
+  for (var i = 0; i < 8; i++) {
+    var ad = ads[i];
+    if (ad) {
+      var cls = 'ob-row' + (i === 0 ? ' ' + bestCls : '');
+      var rnk = '<span class="rank ' + (i === 0 ? 'n1' : '') + '">' + (i + 1) + '</span>';
+      var lims = fmtM(ad.minVES) + '–' + fmtM(ad.maxVES);
+      var lvlColor = ['','#CD7F32','#A8B8C8','#F0B90B'][ad.vipLevel] || '#F0B90B';
+      var badgeHtml = '';
+      if (ad.badges && ad.badges[0]) {
+        if (ad.badges[0] === 'Block') {
+          badgeHtml = '<span style="margin-left:5px;display:inline-block;width:13px;height:13px;background:#9B59B6;transform:rotate(45deg);border-radius:2px;flex-shrink:0" title="Block vip'+ad.vipLevel+'"></span>';
+        } else {
+          badgeHtml = '<span style="margin-left:5px;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:'+lvlColor+';color:#000;font-size:13px;font-weight:900;flex-shrink:0;line-height:1" title="PRO vip'+ad.vipLevel+'">✓</span>';
+        }
       }
+      var availStr = ad.avail >= 1000
+        ? (ad.avail / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
+        : Math.round(ad.avail).toLocaleString('es-VE');
+      rows += '<div class="' + cls + '">' + rnk +
+        '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
+        '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
+        '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'g' : 'b') : '') + '">' + fmt(ad.price) + '</span>' +
+        '<span class="lim-c">' + lims + '</span>' +
+      '</div>';
+    } else {
+      rows += '<div class="ob-row" style="opacity:0.18">' +
+        '<span class="rank">' + (i + 1) + '</span>' +
+        '<span class="merch" style="color:var(--text-3)">—</span>' +
+        '<span class="lim-c">—</span>' +
+        '<span class="price-c">—</span>' +
+        '<span class="lim-c">—</span>' +
+      '</div>';
     }
-    var availStr = ad.avail >= 1000
-      ? (ad.avail / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
-      : Math.round(ad.avail).toLocaleString('es-VE');
-    return '<div class="' + cls + '">' + rnk +
-      '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
-      '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
-      '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'g' : 'b') : '') + '">' + fmt(ad.price) + '</span>' +
-      '<span class="lim-c">' + lims + '</span>' +
-    '</div>';
-  }).join('');
+  }
+  wrap.innerHTML = rows;
 }
 
 // ── Alertas ───────────────────────────────────────────
@@ -1102,6 +1097,14 @@ function toggleAlertDropdown(e) {
 function toggleConfig() {
   var body  = document.getElementById('cfg-body');
   var arrow = document.getElementById('cfg-arrow');
+  var open  = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  arrow.textContent  = open ? '▸' : '▾';
+}
+
+function toggleTelegram() {
+  var body  = document.getElementById('tg-body');
+  var arrow = document.getElementById('tg-arrow');
   var open  = body.style.display !== 'none';
   body.style.display = open ? 'none' : '';
   arrow.textContent  = open ? '▸' : '▾';
@@ -1572,7 +1575,11 @@ function loadChartJS(cb) {
   s.onload = cb; document.head.appendChild(s);
 }
 
-loadChartJS(function() { loadConfig(); loadTgConfig(); loadBotConfig(); updNotifSt(); renderAlerts(); });
+loadChartJS(function() {
+  loadConfig(); loadTgConfig(); loadBotConfig(); updNotifSt(); renderAlerts();
+  renderOB('ob-may',   [], 'best');
+  renderOB('ob-small', [], 'best-buy');
+});
 </script>
 </body>
 </html>
