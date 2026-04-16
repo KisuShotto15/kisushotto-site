@@ -8,6 +8,7 @@ let calMonth    = 0;    // 1-12
 let calDaily    = {};   // { 'YYYY-MM-DD': pct }
 let editingId   = null;
 let reminderTimers = [];
+let selectedDate = '';  // '' = today (set in init)
 
 const COLORS = {
   lavender: '#c4b5fd',
@@ -26,7 +27,10 @@ const COLORS = {
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 const $     = id => document.getElementById(id);
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 
 function toast(msg, type = 'ok') {
   const el = $('toast');
@@ -111,18 +115,22 @@ function setLocal(habitId, date, value) {
 
 // ── Today stats ───────────────────────────────────────────────────────────────
 function todayStats() {
-  const t    = today();
+  const t    = selectedDate;
   const due  = habits.filter(h => isDueOn(h, t));
-  const done = due.filter(h => isDone(h.id));
+  const done = due.filter(h => isDone(h.id, t));
   const pct  = due.length ? Math.round(done.length / due.length * 100) : 0;
   return { due: due.length, done: done.length, pct };
 }
 
 // ── Render: today checklist ───────────────────────────────────────────────────
 function renderToday() {
-  const t = today();
-  const d = new Date();
-  $('todayDate').textContent = d.toLocaleDateString('es', { weekday:'long', day:'numeric', month:'long' });
+  const t = selectedDate;
+  const d = new Date(t + 'T12:00:00');
+  const isToday = t === today();
+  const dateText = d.toLocaleDateString('es', { weekday:'long', day:'numeric', month:'long' });
+  $('todayDate').innerHTML = isToday
+    ? dateText
+    : `${dateText} <button onclick="selectDate('${today()}')" style="margin-left:8px;background:rgba(196,181,253,0.12);border:1px solid var(--accent);border-radius:5px;color:var(--accent);font-size:11px;padding:2px 8px;cursor:pointer;font-family:'IBM Plex Mono',monospace">Hoy →</button>`;
 
   const { due, done, pct } = todayStats();
   $('progressLabel').textContent = `${done} de ${due} hábitos`;
@@ -248,7 +256,8 @@ function renderCalendar() {
     const iso  = dateStr(calYear, calMonth, d);
     const pct  = calDaily[iso] ?? null;
     const cell = document.createElement('div');
-    cell.className = `cal-cell${iso === todayISO ? ' today' : ''}`;
+    const isSelected = iso === selectedDate && iso !== todayISO;
+    cell.className = `cal-cell${iso === todayISO ? ' today' : ''}${isSelected ? ' selected' : ''}`;
 
     if (pct !== null) {
       cell.style.background = pct === 0
@@ -258,6 +267,10 @@ function renderCalendar() {
 
     cell.title = `${iso}: ${pct !== null ? pct + '%' : 'sin datos'}`;
     cell.innerHTML = `<span class="cal-cell-num">${d}</span>`;
+    if (iso <= todayISO) {
+      cell.style.cursor = 'pointer';
+      cell.onclick = () => selectDate(iso);
+    }
     grid.appendChild(cell);
   }
 
@@ -272,11 +285,17 @@ function renderCalendar() {
 }
 
 // ── Habit interactions ────────────────────────────────────────────────────────
+window.selectDate = function(iso) {
+  selectedDate = iso;
+  renderCalendar();
+  renderToday();
+};
+
 window.onHabitClick = async function(id) {
   const habit = habits.find(h => h.id === id);
   if (!habit || habit.type === 'count') return;
 
-  const t      = today();
+  const t      = selectedDate;
   const wasDone = isDone(id, t);
   setLocal(id, t, wasDone ? null : 1);
   renderToday();
@@ -296,7 +315,7 @@ window.onHabitClick = async function(id) {
 window.adjustCount = async function(id, delta) {
   const habit  = habits.find(h => h.id === id);
   if (!habit) return;
-  const t      = today();
+  const t      = selectedDate;
   const oldVal = getValue(id, t);
   const newVal = Math.max(0, oldVal + delta);
 
@@ -589,8 +608,9 @@ async function init() {
   }
 
   const now = new Date();
-  calYear   = now.getFullYear();
-  calMonth  = now.getMonth() + 1;
+  calYear      = now.getFullYear();
+  calMonth     = now.getMonth() + 1;
+  selectedDate = today();
 
   try {
     const [{ habits: h }] = await Promise.all([getHabits(), loadCompletions()]);

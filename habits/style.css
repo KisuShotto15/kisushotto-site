@@ -484,6 +484,10 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+.cal-cell.selected {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
 .cal-cell.other-month { opacity: 0.2; }
 .cal-cell:hover { transform: scale(1.12); z-index: 1; }
 .cal-cell-num {
@@ -554,6 +558,7 @@ body {
   position: fixed;
   top: 0; right: 0; bottom: 0;
   width: 400px;
+  overflow-x: hidden;
   background: var(--surface);
   border-left: 1px solid var(--border2);
   z-index: 100;
@@ -589,11 +594,13 @@ body {
 .panel-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 22px 24px 32px;
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
+.panel-body > * { min-width: 0; }
 
 /* Form fields */
 .form-field { display: flex; flex-direction: column; gap: 6px; }
