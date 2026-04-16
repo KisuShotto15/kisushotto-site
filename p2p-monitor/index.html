@@ -1145,7 +1145,8 @@ var BOT = {
   currentPrice: null,
   myMinLimit: null,
   lastReprice: 0,
-  cycles: 0
+  cycles: 0,
+  appliedMinLimit: 0
 };
 
 var BOT_CFG = {
@@ -1251,7 +1252,7 @@ async function botGetMyAd() {
 }
 
 async function botUpdateMinLimit(adNumber, minAmount) {
-  var data = await botCallWorker('/update-ad', { advNo: adNumber, minSingleTransAmount: parseFloat(minAmount) });
+  var data = await botCallWorker('/update-limit', { advNo: adNumber, minSingleTransAmount: parseFloat(minAmount) });
   if (data.code && data.code !== '000000') {
     botLog('Límite [' + data.code + ']: ' + (data.message || '?'), '#E24B4A');
     throw new Error(data.message || 'Error al actualizar límite');
@@ -1293,6 +1294,18 @@ async function botCycle() {
   BOT.cycles++;
 
   try {
+    // Actualizar límite mínimo antes de reprice si cambió
+    if (BOT_CFG.minLimit > 0 && BOT_CFG.minLimit !== BOT.appliedMinLimit && BOT.adNumber) {
+      botSetStatus('Actualizando límite mínimo...', '#F0B90B');
+      try {
+        await botUpdateMinLimit(BOT.adNumber, BOT_CFG.minLimit);
+        BOT.appliedMinLimit = BOT_CFG.minLimit;
+        botLog('📏 Límite mínimo → ' + fmtM(BOT_CFG.minLimit) + ' VES', '#8b949e');
+      } catch(e) {
+        botLog('⚠ Límite mínimo: ' + e.message, '#F6465D');
+      }
+    }
+
     botSetStatus('Consultando anuncio...', '#F0B90B');
 
     // 1. Mi anuncio actual
@@ -1464,16 +1477,7 @@ async function botToggle() {
       botLog('⚠ No se pudo activar el anuncio: ' + e.message, '#F6465D');
     }
 
-    // Actualizar límite mínimo si está configurado
-    if (BOT_CFG.minLimit > 0 && BOT.adNumber) {
-      try {
-        await botUpdateMinLimit(BOT.adNumber, BOT_CFG.minLimit);
-        botLog('📏 Límite mínimo → ' + fmtM(BOT_CFG.minLimit) + ' VES', '#8b949e');
-      } catch(e) {
-        botLog('⚠ No se pudo actualizar límite mínimo: ' + e.message, '#F6465D');
-      }
-    }
-
+    BOT.appliedMinLimit = 0; // force update on first cycle
     BOT.running = true;
     BOT.lastReprice = 0;
     botSetStatus('Iniciando...', '#F0B90B');

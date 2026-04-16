@@ -46,6 +46,11 @@ export default async function handler(req, res) {
     if (!advNo || price == null) return res.status(400).json({ error: 'advNo y price requeridos' });
     const body = JSON.stringify({ advNo: String(advNo), price: Number(price) });
     r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
+  } else if (path === '/update-limit') {
+    const { advNo, minSingleTransAmount } = params || {};
+    if (!advNo || minSingleTransAmount == null) return res.status(400).json({ error: 'advNo y minSingleTransAmount requeridos' });
+    const body = JSON.stringify({ advNo: String(advNo), minSingleTransAmount: Number(minSingleTransAmount) });
+    r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
   } else if (path === '/toggle-ad') {
     const { advNo, advStatus } = params || {};
     if (!advNo || advStatus == null) return res.status(400).json({ error: 'advNo y advStatus requeridos' });
