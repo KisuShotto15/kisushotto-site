@@ -608,7 +608,7 @@ body {
 .panel-body > * { min-width: 0; }
 
 /* Form fields */
-.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .form-field label {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 15px;
@@ -629,6 +629,7 @@ body {
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
   width: 100%;
+  min-width: 0;
 }
 .form-field input:focus,
 .form-field select:focus,
@@ -637,7 +638,7 @@ body {
   box-shadow: 0 0 0 3px rgba(196,181,253,0.08);
 }
 .form-field textarea { resize: vertical; min-height: 70px; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-width: 0; }
 .form-row > * { min-width: 0; }
 
 /* Color picker */
