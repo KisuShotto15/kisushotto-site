@@ -78,11 +78,11 @@ function freqLabel(habit) {
 // ── Streak calculation ────────────────────────────────────────────────────────
 function calcStreak(habit) {
   let streak = 0;
-  const now  = new Date();
-  const check = new Date(now.toISOString().slice(0, 10) + 'T00:00:00');
+  const check = new Date();
+  check.setHours(0, 0, 0, 0);
 
   for (let i = 0; i < 365; i++) {
-    const ds = check.toISOString().slice(0, 10);
+    const ds = `${check.getFullYear()}-${String(check.getMonth()+1).padStart(2,'0')}-${String(check.getDate()).padStart(2,'0')}`;
     if (isDueOn(habit, ds)) {
       if (completions[ds]?.[habit.id] != null) {
         streak++;
