@@ -694,7 +694,8 @@ async function fetchTier(transAmount, maxPages) {
       page: page,
       rows: 20,
       tradeType: 'SELL',
-      transAmount: transAmount
+      transAmount: transAmount,
+      payTypes: ['BancoDeVenezuela']
     };
     var r = await fetch(PROXY, {
       method: 'POST',
@@ -731,8 +732,7 @@ function mapAds(raw) {
   }).filter(function(a) {
     // Solo comerciantes con insignia (Bronze/Silver/Gold/Block/Ordinary/PRO)
     // badges: null = sin insignia → excluir
-    var pt = a.payTypes || [];
-    return a.badges && a.badges.length > 0 && (pt.indexOf('BancoDeVenezuela') !== -1 || pt.indexOf('BANK') !== -1);
+    return a.badges && a.badges.length > 0;
   }).sort(function(a, b) { return b.price - a.price; });
 }
 
