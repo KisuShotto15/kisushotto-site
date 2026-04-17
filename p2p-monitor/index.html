@@ -731,7 +731,8 @@ function mapAds(raw) {
   }).filter(function(a) {
     // Solo comerciantes con insignia (Bronze/Silver/Gold/Block/Ordinary/PRO)
     // badges: null = sin insignia → excluir
-    return a.badges && a.badges.length > 0 && (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1;
+    var pt = a.payTypes || [];
+    return a.badges && a.badges.length > 0 && (pt.indexOf('BancoDeVenezuela') !== -1 || pt.indexOf('BANK') !== -1);
   }).sort(function(a, b) { return b.price - a.price; });
 }
 
