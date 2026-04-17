@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     const detailParams = `adsNo=${encodeURIComponent(advNo)}&timestamp=${timestamp}`;
     const detailQs = `${detailParams}&signature=${sign(detailParams)}`;
     const detailHeaders = { 'X-MBX-APIKEY': key, 'clientType': 'web' };
-    const detailRes = await fetch(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { headers: detailHeaders });
+    const detailRes = await fetch(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
     const detail = await detailRes.json();
     if (!detailRes.ok || !detail.data) {
       return res.status(502).json({ error: 'getDetailByNo failed', detail });
