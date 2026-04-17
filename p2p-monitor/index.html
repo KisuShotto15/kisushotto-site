@@ -952,7 +952,7 @@ function renderOB(id, ads, bestCls) {
       var badgeHtml = '';
       if (ad.badges && ad.badges[0]) {
         if (ad.badges[0] === 'Block') {
-          badgeHtml = '<span style="margin-left:5px;display:inline-block;width:13px;height:13px;background:#9B59B6;transform:rotate(45deg);border-radius:2px;flex-shrink:0" title="Block vip'+ad.vipLevel+'"></span>';
+          badgeHtml = '<img src="../Images/block-merchant.png" style="margin-left:5px;width:14px;height:14px;flex-shrink:0;vertical-align:middle" title="Block vip'+ad.vipLevel+'">';
         } else {
           badgeHtml = '<span style="margin-left:5px;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:'+lvlColor+';color:#000;font-size:13px;font-weight:900;flex-shrink:0;line-height:1" title="PRO vip'+ad.vipLevel+'">✓</span>';
         }
