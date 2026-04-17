@@ -1367,17 +1367,10 @@ async function botCycle() {
 
     // 2. Mercado público — 3 páginas para no perder competidores profundos
     botSetStatus('Analizando mercado...', '#F0B90B');
-    // 3. Competidores: sin filtro de badge — todos los que acepten BancoDeVenezuela
-    var rawMarket = await fetchTier(BOT.myMinLimit, 3);
-    var market = rawMarket.map(function(item) {
-      return {
-        price:    parseFloat(item.adv.price),
-        minVES:   parseFloat(item.adv.minSingleTransAmount),
-        maxVES:   parseFloat(item.adv.maxSingleTransAmount),
-        merchant: item.advertiser.nickName,
-        payTypes: (item.adv.tradeMethods || []).map(function(m) { return m.identifier; })
-      };
-    });
+    var market = mapAds(await fetchTier(BOT.myMinLimit, 3));
+    botLog('📊 raw mercado: ' + market.length + ' (badge+BdV)', '#484f58');
+
+    // 3. Competidores: badge + BancoDeVenezuela, límite mínimo ≤ mío + umbral
     var competitors = market.filter(function(a) {
       return a.merchant !== BOT.myNick &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
