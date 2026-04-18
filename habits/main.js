@@ -498,12 +498,21 @@ window.toggleNotifDrawer = function() {
 window.closeNotifDrawer = function() {
   $('notifDrawer').classList.add('hidden');
 };
+function showNotif(title, body) {
+  if (Notification.permission !== 'granted') return;
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, { body, icon: '/icons/icon-192x192.png' }));
+  } else {
+    new Notification(title, { body });
+  }
+}
+
 window.testNotification = function() {
   const title = '🔔 Test de notificación';
   const body  = 'Las notificaciones están funcionando correctamente';
   pushNotif(title, body);
   if (Notification.permission === 'granted') {
-    new Notification(title, { body });
+    showNotif(title, body);
   } else {
     toast('Activa las notificaciones primero con el banner superior');
   }
@@ -563,7 +572,7 @@ function setupReminders() {
         if (!isDone(habit.id, today())) {
           const title = `${habit.emoji || '⏰'} ${habit.name}`;
           const body  = habit.description || '¡Es hora de completar tu hábito!';
-          new Notification(title, { body });
+          showNotif(title, body);
           pushNotif(title, body);
         }
       }, ms));
@@ -571,7 +580,7 @@ function setupReminders() {
       // Missed within last hour
       const title = `${habit.emoji || '⏰'} ${habit.name}`;
       const body  = `Recordatorio perdido — ${habit.reminder_time}`;
-      new Notification(title, { body });
+      showNotif(title, body);
       pushNotif(title, body);
     }
   }

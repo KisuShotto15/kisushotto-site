@@ -13,6 +13,11 @@ self.addEventListener('activate', e => {
   );
 });
 
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.openWindow('/habits/'));
+});
+
 self.addEventListener('fetch', e => {
   // Network-first for navigation, cache-first for static assets
   if (e.request.mode === 'navigate') {
