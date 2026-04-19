@@ -861,10 +861,23 @@ tbody tr:hover td { background: var(--card2); }
 }
 .panel-textarea::placeholder { color: var(--muted); }
 
-/* ── Updated accent colors ─────────────────────────────────────────────────── */
+/* ── Palette override — match reference ────────────────────────────────────── */
 :root {
-  --green: #00d17a;
-  --red:   #ff4d6a;
+  --bg:      #080910;
+  --surface: #0d0e18;
+  --card:    #111220;
+  --card2:   #161728;
+  --border:  #1c1d30;
+  --border2: #252640;
+  --accent:  #35c8f1;
+  --green:   #22c55e;
+  --red:     #ef4444;
+  --amber:   #f59e0b;
+  --violet:  #8b5cf6;
+  --orange:  #f97316;
+  --text:    #e2e3f2;
+  --muted:   #454663;
+  --muted2:  #8889a8;
 }
 
 /* ── Trades table: hold column ─────────────────────────────────────────────── */
@@ -1065,15 +1078,15 @@ table col.col-hold { width: 80px; }
 .cal-cell-empty:hover { background: transparent; border-color: transparent; }
 .cal-cell-today { border-color: var(--accent) !important; border-width: 1.5px; }
 .cal-cell-pos {
-  background: rgba(0,209,122,0.07);
-  border-color: rgba(0,209,122,0.2);
+  background: rgba(34,197,94,0.12);
+  border-color: rgba(34,197,94,0.28);
 }
-.cal-cell-pos:hover { background: rgba(0,209,122,0.12); }
+.cal-cell-pos:hover { background: rgba(34,197,94,0.18); }
 .cal-cell-neg {
-  background: rgba(255,77,106,0.07);
-  border-color: rgba(255,77,106,0.18);
+  background: rgba(239,68,68,0.12);
+  border-color: rgba(239,68,68,0.28);
 }
-.cal-cell-neg:hover { background: rgba(255,77,106,0.12); }
+.cal-cell-neg:hover { background: rgba(239,68,68,0.18); }
 
 .cal-cell-top {
   display: flex;
@@ -1165,17 +1178,13 @@ table col.col-hold { width: 80px; }
   color: var(--muted);
 }
 .ticker-bar-bg {
-  height: 3px;
+  height: 5px;
   background: var(--border2);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
-.ticker-bar {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.4s ease;
-}
-.ticker-bar.pos { background: linear-gradient(90deg, var(--accent), var(--green)); }
+.ticker-bar { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+.ticker-bar.pos { background: var(--green); }
 .ticker-bar.neg { background: var(--red); }
 
 /* Open positions */
@@ -1186,7 +1195,7 @@ table col.col-hold { width: 80px; }
   line-height: 1;
   margin-bottom: 4px;
 }
-.open-pnl-total.pos { color: var(--green); }
+.open-pnl-total.pos { color: var(--violet); }
 .open-pnl-total.neg { color: var(--red); }
 .open-pnl-total.neu { color: var(--muted2); }
 .open-count-label {
@@ -1323,7 +1332,34 @@ table col.col-hold { width: 80px; }
   color: var(--muted2);
 }
 
+/* ── Profit Factor donut ───────────────────────────────────────────────────── */
+.pf-donut-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.pf-donut-svg { display: block; }
+.pf-donut-amounts {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pf-donut-amounts .pf-win  { color: var(--green); }
+.pf-donut-amounts .pf-loss { color: var(--red); }
+.pf-donut-amounts span { display: flex; flex-direction: column; gap: 2px; }
+.pf-donut-amounts small { font-size: 10px; font-weight: 400; color: var(--muted2); }
+
 /* ── KPI grid compact (now secondary) ─────────────────────────────────────── */
 .kpi-grid { margin-top: 0; }
 .kpi-value { font-size: 36px; }
+
+/* ── Side badges brighter ──────────────────────────────────────────────────── */
+.side-badge-long  { background: rgba(34,197,94,0.12);  color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+.side-badge-short { background: rgba(239,68,68,0.12);  color: var(--red);   border: 1px solid rgba(239,68,68,0.25); }
+.side-badge-buy   { background: rgba(34,197,94,0.12);  color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+.side-badge-sell  { background: rgba(239,68,68,0.12);  color: var(--red);   border: 1px solid rgba(239,68,68,0.25); }
 

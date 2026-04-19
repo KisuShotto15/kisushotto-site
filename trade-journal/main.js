@@ -293,6 +293,51 @@ function renderOpenPositions(trades) {
     </div>`).join('');
 }
 
+// ── Profit Factor donut ────────────────────────────────────────────────────────
+function renderProfitFactor(pf, grossWins, grossLosses) {
+  const pfCard = $('pfCard');
+  if (!pfCard) return;
+  pfCard.style.display = '';
+
+  const MAX    = 4;
+  const capped = Math.min(pf >= 999 ? MAX : pf, MAX);
+  const pct    = capped / MAX;
+  const r = 44, cx = 60, cy = 60, sw = 10;
+  const circ     = 2 * Math.PI * r;
+  const dashFill = pct * circ;
+  const dashGap  = circ - dashFill;
+  const pfLabel  = pf >= 999 ? '∞' : pf.toFixed(2);
+
+  const winStr  = grossWins  != null ? '+$' + grossWins.toFixed(0)  : '';
+  const lossStr = grossLosses != null ? '-$' + Math.abs(grossLosses).toFixed(0) : '';
+
+  $('pfPeriodLabel').textContent = { month: 'ESTE MES', year: 'ESTE AÑO', custom: 'CUSTOM' }[periodType] || 'ESTE MES';
+
+  $('pfDonut').innerHTML = `
+    <svg class="pf-donut-svg" viewBox="0 0 120 120" width="150" height="150">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+        stroke="#1c1d30" stroke-width="${sw}"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+        stroke="#f97316" stroke-width="${sw}"
+        stroke-dasharray="${dashFill.toFixed(2)} ${dashGap.toFixed(2)}"
+        stroke-linecap="round"
+        transform="rotate(-90 ${cx} ${cy})"/>
+      <text x="${cx}" y="${cy - 5}" text-anchor="middle"
+        font-family="IBM Plex Mono,monospace" font-size="16" font-weight="600" fill="#e2e3f2">
+        ${pfLabel}
+      </text>
+      <text x="${cx}" y="${cy + 11}" text-anchor="middle"
+        font-family="IBM Plex Sans,sans-serif" font-size="9" fill="#8889a8">
+        profit factor
+      </text>
+    </svg>
+    ${winStr || lossStr ? `
+    <div class="pf-donut-amounts">
+      <span class="pf-win">${winStr}<small>Ganancias</small></span>
+      <span class="pf-loss" style="text-align:right">${lossStr}<small>Pérdidas</small></span>
+    </div>` : ''}`;
+}
+
 // ── Period selector ────────────────────────────────────────────────────────────
 window.setPeriod = function(btn, type) {
   document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
@@ -312,7 +357,10 @@ window.applyCustomPeriod = function() {
 
 function updateTickerLabel() {
   const labels = { month: 'ESTE MES', year: 'ESTE AÑO', custom: 'CUSTOM' };
-  $('tickerPeriodLabel').textContent = labels[periodType] || 'ESTE MES';
+  const label = labels[periodType] || 'ESTE MES';
+  $('tickerPeriodLabel').textContent = label;
+  const pfLbl = $('pfPeriodLabel');
+  if (pfLbl) pfLbl.textContent = label;
 }
 
 // ── Data loading ───────────────────────────────────────────────────────────────
@@ -325,9 +373,21 @@ async function loadStats() {
       getBySymbol({ from, to }),
       getTrades({ status: 'open', limit: 50 }),
     ]);
-    renderKPIs(analyticsData.stats);
+    const s = analyticsData.stats;
+    renderKPIs(s);
     renderTopTickers(symbolData.symbols || symbolData.data || []);
     renderOpenPositions(openData.trades || []);
+    if (s && s.profitFactor != null) {
+      const pf = s.profitFactor;
+      // derive gross wins/losses if possible
+      let grossWins = s.grossWins ?? null;
+      let grossLosses = s.grossLosses ?? null;
+      if (grossWins == null && pf > 1 && s.totalPnl > 0) {
+        grossLosses = s.totalPnl / (pf - 1);
+        grossWins   = grossLosses * pf;
+      }
+      renderProfitFactor(pf, grossWins, grossLosses);
+    }
   } catch (err) {
     toast('Error cargando datos: ' + err.message, 'err');
   }
