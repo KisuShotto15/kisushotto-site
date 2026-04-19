@@ -1,18 +1,20 @@
 :root {
-  --bg:      #0c0c0f;
-  --surface: #111115;
-  --card:    #16161b;
-  --card2:   #1c1c22;
-  --border:  #222228;
-  --border2: #2e2e38;
-  --accent:  #35c8f1;
-  --accent2: #1e8fb0;
-  --green:   #4ade80;
-  --red:     #f87171;
-  --amber:   #fbbf24;
-  --text:    #e8e8ee;
-  --muted:   #5a5a6e;
-  --muted2:  #9494aa;
+  --bg:      #181818;
+  --surface: #1e1e1e;
+  --card:    #242424;
+  --card2:   #2a2a2a;
+  --border:  #303030;
+  --border2: #3c3c3c;
+  --accent:  #00c896;
+  --accent2: #00a87e;
+  --green:   #00c896;
+  --red:     #ef4444;
+  --amber:   #f59e0b;
+  --violet:  #8b5cf6;
+  --orange:  #f97316;
+  --text:    #ffffff;
+  --muted:   #555555;
+  --muted2:  #888888;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -20,7 +22,7 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: 'Inter', 'IBM Plex Sans', sans-serif;
   font-size: 14px;
   min-height: 100vh;
   padding: 32px 40px 100px;
@@ -73,10 +75,11 @@ body {
   opacity: 0.8;
 }
 .page-header h1 {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(36px, 4.5vw, 72px);
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(28px, 3.5vw, 52px);
+  font-weight: 800;
   line-height: 1;
-  letter-spacing: 3px;
+  letter-spacing: -1px;
   white-space: nowrap;
 }
 .page-header { margin-bottom: 20px; }
@@ -121,10 +124,11 @@ body {
   margin-bottom: 10px;
 }
 .kpi-value {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 44px;
-  line-height: 1;
-  letter-spacing: 1px;
+  font-family: 'Inter', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
 }
 .kpi-value.pos  { color: var(--green); }
 .kpi-value.neg  { color: var(--red); }
@@ -861,24 +865,7 @@ tbody tr:hover td { background: var(--card2); }
 }
 .panel-textarea::placeholder { color: var(--muted); }
 
-/* ── Palette override — match reference ────────────────────────────────────── */
-:root {
-  --bg:      #080910;
-  --surface: #0d0e18;
-  --card:    #111220;
-  --card2:   #161728;
-  --border:  #1c1d30;
-  --border2: #252640;
-  --accent:  #35c8f1;
-  --green:   #22c55e;
-  --red:     #ef4444;
-  --amber:   #f59e0b;
-  --violet:  #8b5cf6;
-  --orange:  #f97316;
-  --text:    #e2e3f2;
-  --muted:   #454663;
-  --muted2:  #8889a8;
-}
+/* Palette is now defined in :root at top of file — no override needed */
 
 /* ── Trades table: hold column ─────────────────────────────────────────────── */
 table col.col-hold { width: 80px; }
@@ -894,10 +881,11 @@ table col.col-hold { width: 80px; }
 }
 .dash-title-block { flex-shrink: 0; }
 .dash-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(36px, 4.5vw, 64px);
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(28px, 3.5vw, 48px);
+  font-weight: 800;
   line-height: 1;
-  letter-spacing: 3px;
+  letter-spacing: -1px;
   white-space: nowrap;
   margin: 4px 0 2px;
 }
@@ -1000,11 +988,11 @@ table col.col-hold { width: 80px; }
 }
 .cal-nav-btn:hover { color: var(--text); border-color: var(--accent); }
 .cal-title {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text);
-  letter-spacing: 0.06em;
+  letter-spacing: -0.2px;
   min-width: 130px;
 }
 .cal-today-btn {
@@ -1031,9 +1019,10 @@ table col.col-hold { width: 80px; }
   color: var(--muted2);
 }
 .cal-month-pnl {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 22px;
-  letter-spacing: 1px;
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
   line-height: 1;
 }
 .cal-month-pnl.pos { color: var(--green); }
@@ -1047,13 +1036,12 @@ table col.col-hold { width: 80px; }
   margin-bottom: 6px;
 }
 .cal-day-label {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  text-align: center;
-  padding: 4px 0;
-  text-transform: uppercase;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted2);
+  text-align: left;
+  padding: 6px 12px 8px;
 }
 .cal-grid-inner {
   display: grid;
@@ -1061,57 +1049,61 @@ table col.col-hold { width: 80px; }
   gap: 4px;
 }
 .cal-cell {
-  min-height: 80px;
-  border-radius: 8px;
+  min-height: 110px;
+  border-radius: 4px;
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 8px;
+  padding: 10px 12px 10px;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: background 0.15s;
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
 }
-.cal-cell:hover { border-color: var(--border2); background: var(--card); }
-.cal-cell-empty { cursor: default; background: transparent; border-color: transparent; }
-.cal-cell-empty:hover { background: transparent; border-color: transparent; }
-.cal-cell-today { border-color: var(--accent) !important; border-width: 1.5px; }
+.cal-cell:hover { background: var(--card); }
+.cal-cell-empty { cursor: default; background: var(--surface); border-color: var(--border); }
+.cal-cell-empty:hover { background: var(--surface); }
+.cal-cell-today { border-color: var(--accent) !important; }
 .cal-cell-pos {
-  background: rgba(34,197,94,0.12);
-  border-color: rgba(34,197,94,0.28);
+  background: rgba(0,200,150,0.13);
+  border-color: rgba(0,200,150,0.22);
 }
-.cal-cell-pos:hover { background: rgba(34,197,94,0.18); }
+.cal-cell-pos:hover { background: rgba(0,200,150,0.19); }
 .cal-cell-neg {
-  background: rgba(239,68,68,0.12);
-  border-color: rgba(239,68,68,0.28);
+  background: rgba(239,68,68,0.13);
+  border-color: rgba(239,68,68,0.22);
 }
-.cal-cell-neg:hover { background: rgba(239,68,68,0.18); }
+.cal-cell-neg:hover { background: rgba(239,68,68,0.19); }
 
+/* Cell layout: PnL top-left, count below, day number top-right */
 .cal-cell-top {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: flex-start;
-  margin-bottom: 6px;
+  position: absolute;
+  top: 8px; right: 10px;
 }
 .cal-cell-day {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--muted2);
   line-height: 1;
 }
 .cal-cell-count {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
-  color: var(--muted);
-  line-height: 1;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: var(--muted2);
+  margin-top: 4px;
 }
 .cal-cell-pnl {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1;
-  margin-top: auto;
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 8px;
+  letter-spacing: -0.3px;
 }
 .cal-cell-pnl.pos { color: var(--green); }
 .cal-cell-pnl.neg { color: var(--red); }
@@ -1189,9 +1181,10 @@ table col.col-hold { width: 80px; }
 
 /* Open positions */
 .open-pnl-total {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 36px;
-  letter-spacing: 1px;
+  font-family: 'Inter', sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
   line-height: 1;
   margin-bottom: 4px;
 }
@@ -1270,9 +1263,10 @@ table col.col-hold { width: 80px; }
   margin-bottom: 6px;
 }
 .day-drawer-pnl {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 32px;
-  letter-spacing: 1px;
+  font-family: 'Inter', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
   line-height: 1;
 }
 .day-drawer-pnl.pos { color: var(--green); }

@@ -139,11 +139,11 @@ function renderCalendar(year, month, dayMap) {
     if (data) cls += data.pnl >= 0 ? ' cal-cell-pos' : ' cal-cell-neg';
 
     html += `<div class="${cls}" onclick="openDayDrawer('${ds}')">
-      <div class="cal-cell-top">
-        <span class="cal-cell-day">${day}</span>
-        ${data ? `<span class="cal-cell-count">${data.count}t</span>` : ''}
-      </div>
-      ${data ? `<div class="cal-cell-pnl ${data.pnl >= 0 ? 'pos' : 'neg'}">${data.pnl >= 0 ? '+' : ''}$${Math.abs(data.pnl).toFixed(0)}</div>` : ''}
+      <div class="cal-cell-top"><span class="cal-cell-day">${day}</span></div>
+      ${data ? `
+        <div class="cal-cell-pnl ${data.pnl >= 0 ? 'pos' : 'neg'}">${data.pnl >= 0 ? '+' : '-'}$${Math.abs(data.pnl).toFixed(2)}</div>
+        <div class="cal-cell-count">${data.count} Trade${data.count !== 1 ? 's' : ''}</div>
+      ` : ''}
     </div>`;
   }
   html += '</div>';
