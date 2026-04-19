@@ -303,11 +303,25 @@ function renderScreenshots() {
   if (!el) return;
   el.innerHTML = currentScreenshots.map((url, i) => `
     <div class="td-screenshot">
-      <img src="${url}" alt="screenshot" onerror="this.parentElement.querySelector('.td-ss-err').style.display='flex';this.style.display='none'">
+      <img src="${url}" alt="screenshot" style="cursor:zoom-in"
+        onclick="event.stopPropagation();openLightbox('${url.replace(/'/g,"\\\'")}')"
+        onerror="this.parentElement.querySelector('.td-ss-err').style.display='flex';this.style.display='none'">
       <div class="td-ss-err" style="display:none">${url.length > 40 ? url.slice(0,40)+'…' : url}</div>
       <button class="td-screenshot-remove" onclick="removeScreenshot(${i})">×</button>
     </div>`).join('');
 }
+
+window.openLightbox = function(url) {
+  document.getElementById('td-lightbox')?.remove();
+  const lb = document.createElement('div');
+  lb.id = 'td-lightbox';
+  lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:500;cursor:zoom-out';
+  lb.innerHTML = `
+    <img src="${url}" alt="" style="max-width:90vw;max-height:88vh;object-fit:contain;border-radius:8px;box-shadow:0 20px 80px rgba(0,0,0,0.8);cursor:default" onclick="event.stopPropagation()">
+    <button style="position:absolute;top:16px;right:20px;background:none;border:none;color:rgba(255,255,255,0.7);font-size:32px;cursor:pointer;line-height:1" onclick="document.getElementById('td-lightbox').remove()">×</button>`;
+  lb.onclick = () => lb.remove();
+  document.body.appendChild(lb);
+};
 
 window.addScreenshot = function() {
   const input = $('screenshotInput');
@@ -406,7 +420,10 @@ window.savePanel = async function() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closePanel();
+  if (e.key === 'Escape') {
+    document.getElementById('td-lightbox')?.remove();
+    closePanel();
+  }
 });
 
 load();

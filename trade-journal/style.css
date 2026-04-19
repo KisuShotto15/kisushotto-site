@@ -1757,3 +1757,55 @@ table col.col-hold { width: 80px; }
   align-items: flex-end;
 }
 
+/* ── Trade rows: 1.5× scale ────────────────────────────────────────────────── */
+.tc-header,
+.tc-body {
+  grid-template-columns: 285px 150px 330px 270px 240px 120px 42px;
+  min-width: 1300px;
+  gap: 0 10px;
+}
+.tc-header { padding: 12px 28px; }
+.tc-body   { padding: 18px 28px; }
+.tc-header-cell { font-size: 12px; }
+.tc-detail { min-width: 1300px; }
+.tc-icon   { width: 46px; height: 46px; font-size: 17px; }
+.tc-symbol-col { gap: 14px; }
+.tc-symbol { font-size: 18px; }
+.tc-exchange   { font-size: 13px; }
+.tc-arrow      { font-size: 22px; }
+.tc-side-label { font-size: 16px; }
+.tc-times-col  { font-size: 15px; gap: 8px; }
+.tc-price      { font-size: 16px; }
+.tc-price-change { font-size: 14px; }
+.tc-pnl-badge  { font-size: 16px; padding: 6px 18px; }
+.tc-duration-col { font-size: 15px; }
+.tc-chevron    { font-size: 24px; }
+
+/* ── Left nav hover labels ─────────────────────────────────────────────────── */
+.left-nav-item,
+.left-nav-back { position: relative; }
+.left-nav-item::after,
+.left-nav-back::after {
+  content: attr(title);
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--card2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: 7px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+  z-index: 60;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.left-nav-item:hover::after,
+.left-nav-back:hover::after { opacity: 1; }
+
