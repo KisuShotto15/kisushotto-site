@@ -1568,3 +1568,62 @@ table col.col-hold { width: 80px; }
   background: var(--card2) !important;
 }
 
+/* ── Inline trade expand ───────────────────────────────────────────────────── */
+.tc-detail {
+  border-top: 1px solid var(--border2);
+  padding: 20px 24px 24px;
+  background: var(--surface);
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  min-width: 960px;
+}
+.td-stats-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.td-stat {
+  flex: 1;
+  padding: 0 20px;
+  border-right: 1px solid var(--border);
+}
+.td-stat:first-child { padding-left: 0; }
+.td-stat:last-child  { border-right: none; }
+.td-stat-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.td-stat-val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.td-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 18px 0;
+}
+.td-tags-row {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.td-tag-section {
+  flex: 1;
+  min-width: 160px;
+}
+.td-tag-section .panel-section-label { margin-bottom: 8px; }
+.td-bottom-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.td-score-col { flex: 0 0 auto; min-width: 180px; }
+.td-notes-col { flex: 1; }
+.td-save-col  { flex: 0 0 auto; display: flex; align-items: flex-end; padding-bottom: 2px; }
+

@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 let page = 0;
 let filterDebounce = null;
 let currentTrade = null;
+const tradesMap = {};
 
 // ── Tag definitions ───────────────────────────────────────────────────────────
 const SETUP_TAGS = [
@@ -135,10 +136,10 @@ function renderCards(trades) {
       pctChange = pct >= 0 ? 'pos' : 'neg';
     }
 
-    const tJson = JSON.stringify(t).replace(/"/g, '&quot;');
+    tradesMap[t.id] = t;
     return `
-    <div class="tc ${isWin ? 'tc-win' : isLoss ? 'tc-loss' : ''}" data-id="${t.id}" onclick="openPanel(${tJson})">
-      <div class="tc-body">
+    <div class="tc ${isWin ? 'tc-win' : isLoss ? 'tc-loss' : ''}" data-id="${t.id}">
+      <div class="tc-body" onclick="openPanel('${t.id}')">
         <div class="tc-symbol-col">
           <div class="tc-icon ${sideClass}">${iconChar}</div>
           <div class="tc-symbol-info">
@@ -165,53 +166,92 @@ function renderCards(trades) {
         <div class="tc-duration-col">${fmtHoldTime(t.entry_time, t.exit_time)}</div>
         <div class="tc-chevron">›</div>
       </div>
+      <div class="tc-detail" style="display:none"></div>
     </div>`;
   }).join('');
 }
 
-// ── Side panel ────────────────────────────────────────────────────────────────
-window.openPanel = function(t) {
+// ── Inline expand ─────────────────────────────────────────────────────────────
+window.openPanel = function(id) {
+  const t = tradesMap[id];
+  if (!t) return;
+
+  const card = document.querySelector(`.tc[data-id="${id}"]`);
+  if (!card) return;
+
+  const isOpen = card.classList.contains('open');
+
+  // Close any currently open card
+  document.querySelectorAll('.tc.open').forEach(c => {
+    c.classList.remove('open');
+    const d = c.querySelector('.tc-detail');
+    if (d) { d.style.display = 'none'; d.innerHTML = ''; }
+  });
+  currentTrade = null;
+
+  if (isOpen) return; // was already open → just collapsed it
+
+  // Open this card
   currentTrade = t;
+  card.classList.add('open');
+  const detail = card.querySelector('.tc-detail');
+  detail.style.display = 'block';
 
-  // Header
-  $('panelSymbol').textContent = t.symbol;
-  $('panelMeta').innerHTML = `
-    <span class="side-badge side-badge-${t.side}" style="font-size:11px">${t.side.toUpperCase()}</span>
-    <span style="color:var(--muted2);font-size:12px;margin-left:8px">${t.exchange || ''} · ${t.session || ''}</span>`;
+  const pnlClass = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : '';
+  detail.innerHTML = `
+    <div class="td-stats-row">
+      <div class="td-stat"><div class="td-stat-label">Entry</div><div class="td-stat-val">${fmtNum(t.entry_price, 4)}</div></div>
+      <div class="td-stat"><div class="td-stat-label">Exit</div><div class="td-stat-val">${t.exit_price != null ? fmtNum(t.exit_price, 4) : '—'}</div></div>
+      <div class="td-stat"><div class="td-stat-label">Size</div><div class="td-stat-val">${fmtNum(t.size, 4)}</div></div>
+      <div class="td-stat"><div class="td-stat-label">PnL</div><div class="td-stat-val ${pnlClass}">${fmtPnl(t.pnl)} USDT</div></div>
+      <div class="td-stat"><div class="td-stat-label">Duración</div><div class="td-stat-val">${fmtHoldTime(t.entry_time, t.exit_time)}</div></div>
+      <div class="td-stat"><div class="td-stat-label">Sesión</div><div class="td-stat-val">${t.session || '—'}</div></div>
+    </div>
+    <div class="td-divider"></div>
+    <div class="td-tags-row">
+      <div class="td-tag-section">
+        <div class="panel-section-label">Setup</div>
+        <div class="tag-grid" id="tagSetup"></div>
+      </div>
+      <div class="td-tag-section">
+        <div class="panel-section-label">Estrategia</div>
+        <div class="tag-grid" id="tagStrategy"></div>
+      </div>
+      <div class="td-tag-section">
+        <div class="panel-section-label">Emoción</div>
+        <div class="tag-grid" id="tagEmotion"></div>
+      </div>
+    </div>
+    <div class="td-divider"></div>
+    <div class="td-bottom-row">
+      <div class="td-score-col">
+        <div class="panel-section-label" style="margin-bottom:8px">Rule Score</div>
+        <div class="rule-score-row" id="ruleScoreRow"></div>
+      </div>
+      <div class="td-notes-col">
+        <div class="panel-section-label" style="margin-bottom:8px">Notas</div>
+        <textarea id="panelNotes" class="panel-textarea" placeholder="Describe el contexto, confluencias, errores…"></textarea>
+      </div>
+      <div class="td-save-col">
+        <button class="btn btn-accent" onclick="savePanel()">Guardar</button>
+      </div>
+    </div>`;
 
-  // Stats
-  const pnlEl = $('panelPnl');
-  pnlEl.textContent = fmtPnl(t.pnl) + ' USDT';
-  pnlEl.className = `panel-stat-val ${t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : ''}`;
-  $('panelEntry').textContent = fmtNum(t.entry_price, 4);
-  $('panelExit').textContent  = t.exit_price != null ? fmtNum(t.exit_price, 4) : '—';
-  $('panelSize').textContent  = fmtNum(t.size, 4);
-
-  // Setup tags
   renderTagGrid('tagSetup', SETUP_TAGS, t.setup_tag, 'setup');
-
-  // Strategy tags
   renderTagGrid('tagStrategy', STRATEGY_TAGS, t.strategy_tag, 'strategy');
-
-  // Emotion tags
   renderEmotionGrid(t.emotion);
-
-  // Rule score
   renderRuleScore(t.rule_score);
-
-  // Notes
   $('panelNotes').value = t.notes || '';
 
-  // Open (remove hidden first so display isn't none during transition)
-  $('sidePanel').classList.remove('hidden');
-  $('panelBackdrop').classList.remove('hidden');
-  requestAnimationFrame(() => $('sidePanel').classList.add('open'));
+  requestAnimationFrame(() => detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
 };
 
 window.closePanel = function() {
-  $('sidePanel').classList.remove('open');
-  $('panelBackdrop').classList.add('hidden');
-  setTimeout(() => $('sidePanel').classList.add('hidden'), 260);
+  document.querySelectorAll('.tc.open').forEach(c => {
+    c.classList.remove('open');
+    const d = c.querySelector('.tc-detail');
+    if (d) { d.style.display = 'none'; d.innerHTML = ''; }
+  });
   currentTrade = null;
 };
 
