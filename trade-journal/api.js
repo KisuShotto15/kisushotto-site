@@ -41,7 +41,7 @@ export const updateTrade     = (id, b)   => api(`/trades/${id}`, { method: 'PUT'
 export const deleteTrade     = (id)      => api(`/trades/${id}`, { method: 'DELETE' });
 export const getAnalytics    = (params)  => api(`/analytics${qs(params)}`);
 export const getBySession    = ()        => api('/analytics/by-session');
-export const getBySymbol     = ()        => api('/analytics/by-symbol');
+export const getBySymbol     = (params)  => api(`/analytics/by-symbol${qs(params)}`);
 export const getBySetup      = ()        => api('/analytics/by-setup');
 export const getByStrategy   = ()        => api('/analytics/by-strategy');
 export const getHeatmap      = ()        => api('/analytics/heatmap');

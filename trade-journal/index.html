@@ -20,52 +20,115 @@
     <a href="./insights.html"  class="nav-link">insights</a>
   </nav>
 
-  <div class="page-header">
-    <div class="page-header-label">// edge analytics</div>
-    <h1>TRADE <span>JOURNAL</span></h1>
+  <!-- Dashboard header -->
+  <div class="dash-header">
+    <div class="dash-title-block">
+      <div class="page-header-label">// edge analytics</div>
+      <h1 class="dash-title">TRADE <span>JOURNAL</span></h1>
+      <div class="dash-subtitle">Bybit · <span class="sync-dot" id="syncDot">●</span> <span id="syncLabel">Tiempo real</span></div>
+    </div>
+    <div class="dash-header-right">
+      <div class="period-selector" id="periodSelector">
+        <button class="period-btn active" data-p="month" onclick="setPeriod(this,'month')">Este mes</button>
+        <button class="period-btn" data-p="year"  onclick="setPeriod(this,'year')">Este año</button>
+        <button class="period-btn" data-p="custom" onclick="setPeriod(this,'custom')">Custom</button>
+      </div>
+      <div class="period-custom hidden" id="customRange">
+        <input type="date" id="pFrom">
+        <span class="period-arrow">→</span>
+        <input type="date" id="pTo">
+        <button class="btn btn-sm btn-accent" onclick="applyCustomPeriod()">Aplicar</button>
+      </div>
+    </div>
   </div>
+
+  <!-- Main body: calendar + sidebar -->
+  <div class="dash-body">
+
+    <!-- Calendar column -->
+    <div class="dash-cal-col">
+      <div class="cal-nav-bar">
+        <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+        <span id="calTitle" class="cal-title">—</span>
+        <button class="cal-nav-btn" onclick="calNext()">›</button>
+        <button class="cal-today-btn" onclick="calGoToday()">Este mes</button>
+        <div class="cal-month-stats" id="calMonthStats"></div>
+      </div>
+      <div id="calGrid" class="cal-wrap">
+        <div class="loading">Cargando…</div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="dash-sidebar">
+      <!-- Top Tickers -->
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">TRADED TICKERS · <span id="tickerPeriodLabel">ESTE MES</span></div>
+        <div id="topTickersList"><div class="sidebar-loading">Cargando…</div></div>
+      </div>
+      <!-- Open Positions -->
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">POSICIONES ABIERTAS</div>
+        <div class="open-pnl-total neu" id="openPnlTotal">—</div>
+        <div class="open-count-label" id="openCountLabel">—</div>
+        <div id="openPosList"></div>
+      </div>
+    </div>
+
+  </div><!-- /dash-body -->
 
   <!-- KPI row -->
   <div class="kpi-grid" id="kpiGrid">
-    <div class="kpi-card"><div class="kpi-label">PnL Total</div><div class="kpi-value neu" id="kpiPnl">—</div><div class="kpi-sub" id="kpiPnlSub">USDT</div></div>
-    <div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value neu" id="kpiWr">—</div><div class="kpi-sub" id="kpiWrSub">cerrados</div></div>
-    <div class="kpi-card"><div class="kpi-label">Profit Factor</div><div class="kpi-value neu" id="kpiPf">—</div><div class="kpi-sub">bruto/pérdidas</div></div>
-    <div class="kpi-card"><div class="kpi-label">Expectancy</div><div class="kpi-value neu" id="kpiExp">—</div><div class="kpi-sub">USDT / trade</div></div>
-    <div class="kpi-card"><div class="kpi-label">Max DD</div><div class="kpi-value neu" id="kpiDD">—</div><div class="kpi-sub">desde pico</div></div>
-    <div class="kpi-card"><div class="kpi-label">Trades</div><div class="kpi-value acc" id="kpiCount">—</div><div class="kpi-sub" id="kpiOpen">abiertos: —</div></div>
-  </div>
-
-  <!-- Equity curve -->
-  <div class="chart-wrap">
-    <div class="chart-title">equity curve — PnL acumulado</div>
-    <div class="chart-inner" id="equityChart"></div>
-  </div>
-
-  <!-- Bottom row: streak + recent insights + recent trades -->
-  <div class="two-col">
-    <div class="section-card">
-      <div class="section-card-title">últimas insights <a href="./insights.html" style="color:var(--accent);font-size:10px;text-decoration:none">ver todas →</a></div>
-      <div id="insightsList"><div class="loading">Cargando…</div></div>
+    <div class="kpi-card">
+      <div class="kpi-label">P&L Período</div>
+      <div class="kpi-value neu" id="kpiPnl">—</div>
+      <div class="kpi-sub" id="kpiPnlSub">USDT</div>
     </div>
-    <div class="section-card">
-      <div class="section-card-title">trades recientes <a href="./trades.html" style="color:var(--accent);font-size:10px;text-decoration:none">ver todos →</a></div>
-      <div id="recentTrades"><div class="loading">Cargando…</div></div>
+    <div class="kpi-card">
+      <div class="kpi-label">Win Rate</div>
+      <div class="kpi-value neu" id="kpiWr">—</div>
+      <div class="kpi-sub" id="kpiWrSub">cerrados</div>
     </div>
-  </div>
-
-  <!-- Streak info -->
-  <div class="two-col">
-    <div class="section-card">
-      <div class="section-card-title">racha actual</div>
-      <div id="streakInfo" style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:2px">—</div>
+    <div class="kpi-card">
+      <div class="kpi-label">Profit Factor</div>
+      <div class="kpi-value neu" id="kpiPf">—</div>
+      <div class="kpi-sub">bruto/pérdidas</div>
     </div>
-    <div class="section-card">
-      <div class="section-card-title">mejor / peor trade</div>
-      <div id="bestWorst" style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.9;color:var(--muted2)">—</div>
+    <div class="kpi-card">
+      <div class="kpi-label">Expectancy</div>
+      <div class="kpi-value neu" id="kpiExp">—</div>
+      <div class="kpi-sub">USDT / trade</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Max DD</div>
+      <div class="kpi-value neu" id="kpiDD">—</div>
+      <div class="kpi-sub">desde pico</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Trades</div>
+      <div class="kpi-value acc" id="kpiCount">—</div>
+      <div class="kpi-sub" id="kpiOpen">abiertos: —</div>
     </div>
   </div>
 
 </div><!-- /container -->
+
+<!-- Day drawer backdrop -->
+<div class="day-drawer-backdrop hidden" id="dayDrawerBackdrop" onclick="closeDayDrawer()"></div>
+
+<!-- Day drawer -->
+<div class="day-drawer hidden" id="dayDrawer">
+  <div class="day-drawer-header">
+    <div>
+      <div class="day-drawer-date" id="dayDrawerDate">—</div>
+      <div class="day-drawer-pnl neu" id="dayDrawerPnl">—</div>
+    </div>
+    <button class="panel-close" onclick="closeDayDrawer()">×</button>
+  </div>
+  <div class="day-drawer-body" id="dayDrawerBody">
+    <div class="loading">Cargando…</div>
+  </div>
+</div>
 
 <!-- Ingest modal trigger (floating button) -->
 <button class="btn btn-accent" id="ingestBtn"
@@ -82,15 +145,12 @@
       <button class="modal-close" onclick="document.getElementById('ingestModal').classList.add('hidden')">×</button>
     </div>
     <div class="modal-body">
-      <!-- Exchange selector -->
       <div class="ingest-section-tabs">
         <button class="isect-tab active" onclick="switchExchange('bybit',this)">Bybit</button>
         <button class="isect-tab" onclick="switchExchange('binance',this)">Binance</button>
         <button class="isect-tab" onclick="switchExchange('csv',this)">CSV histórico</button>
         <button class="isect-tab" onclick="switchExchange('autosync',this)">⚡ Auto-sync</button>
       </div>
-
-      <!-- BYBIT panel -->
       <div class="isect-panel active" id="panel-bybit">
         <div class="ingest-note">⚡ Una sola API key sirve para todos los tipos. Solo requiere permiso de lectura — no puede hacer órdenes.</div>
         <div class="form-row">
@@ -115,8 +175,6 @@
         <button class="btn btn-accent" onclick="doIngestBybit()">Importar Bybit</button>
         <div class="ingest-result" id="result-bybit"></div>
       </div>
-
-      <!-- BINANCE panel -->
       <div class="isect-panel" id="panel-binance">
         <div class="ingest-note">Una sola API key para Futures y Spot. El símbolo es obligatorio para Binance.</div>
         <div class="form-row">
@@ -138,8 +196,6 @@
         <button class="btn btn-accent" onclick="doIngestBinance()">Importar Binance</button>
         <div class="ingest-result" id="result-binance"></div>
       </div>
-
-      <!-- CSV panel -->
       <div class="isect-panel" id="panel-csv">
         <div class="ingest-note">Exporta el Transaction Log desde Bybit → Account → Transaction Log → Export (CSV). Filtra por tipo "Trade" antes de exportar para mejores resultados.</div>
         <div class="form-field">
@@ -149,8 +205,6 @@
         <button class="btn btn-accent" onclick="doIngestCSV()">Importar CSV</button>
         <div class="ingest-result" id="result-csv"></div>
       </div>
-
-      <!-- Auto-sync panel -->
       <div class="isect-panel" id="panel-autosync">
         <div class="ingest-note">⚡ Guarda tu API key una vez y el sistema sincronizará automáticamente cada 4 horas. Solo importa trades nuevos — sin duplicados.</div>
         <div id="sync-status" style="font-family:'IBM Plex Mono',monospace;font-size:11px;margin-bottom:12px;color:var(--muted)">Cargando…</div>
@@ -164,8 +218,6 @@
         </div>
         <div class="ingest-result" id="result-sync"></div>
       </div>
-
-      <!-- (legacy hidden panels kept for JS compat) -->
       <div class="isect-panel" id="panel-binance-spot">
         <div class="form-row">
           <div class="form-field"><label>API Key</label><input type="password" id="bn-sp-key" placeholder="..."></div>

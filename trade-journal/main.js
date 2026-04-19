@@ -1,8 +1,58 @@
-import { getAnalytics, getInsights, getTrades, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
-import { drawEquityCurve } from './charts.js';
+import { getAnalytics, getTrades, getBySymbol, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
 
 const $ = id => document.getElementById(id);
 
+// ── State ──────────────────────────────────────────────────────────────────────
+let periodType  = 'month';
+let customFrom  = null;
+let customTo    = null;
+const _now      = new Date();
+let calYear     = _now.getFullYear();
+let calMonth    = _now.getMonth();
+
+const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DAYS_ES   = ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'];
+
+// ── Period helpers ─────────────────────────────────────────────────────────────
+function getPeriodRange() {
+  const n = new Date();
+  if (periodType === 'month') {
+    const y = n.getFullYear(), m = n.getMonth();
+    return { from: ts(new Date(y, m, 1)), to: ts(new Date(y, m+1, 0, 23, 59, 59)) };
+  }
+  if (periodType === 'year') {
+    const y = n.getFullYear();
+    return { from: ts(new Date(y, 0, 1)), to: ts(new Date(y, 11, 31, 23, 59, 59)) };
+  }
+  return { from: customFrom, to: customTo };
+}
+
+function getCalRange() {
+  return {
+    from: ts(new Date(calYear, calMonth, 1)),
+    to:   ts(new Date(calYear, calMonth+1, 0, 23, 59, 59)),
+  };
+}
+
+function ts(d) { return Math.floor(d.getTime() / 1000); }
+
+// ── Formatters ─────────────────────────────────────────────────────────────────
+function fmtPnl(v) {
+  const n = parseFloat(v);
+  return (n >= 0 ? '+' : '') + n.toFixed(2);
+}
+function fmtDate(unixTs) {
+  return new Date(unixTs * 1000).toLocaleDateString('es', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+function fmtHoldTime(entry, exit) {
+  if (!exit) return '—';
+  const mins = Math.round((exit - entry) / 60);
+  if (mins < 60)   return mins + 'm';
+  if (mins < 1440) return Math.floor(mins/60) + 'h ' + (mins%60) + 'm';
+  return Math.floor(mins/1440) + 'd';
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
 function toast(msg, type = 'ok') {
   const el = $('toast');
   el.textContent = msg;
@@ -10,15 +60,10 @@ function toast(msg, type = 'ok') {
   setTimeout(() => el.classList.remove('show'), 3000);
 }
 
-function fmtPnl(v) {
-  const n = parseFloat(v);
-  return (n >= 0 ? '+' : '') + n.toFixed(2);
-}
-function fmtDate(ts) {
-  return new Date(ts * 1000).toLocaleDateString('es', { day: '2-digit', month: 'short', year: '2-digit' });
-}
-
+// ── KPIs ───────────────────────────────────────────────────────────────────────
 function renderKPIs(s) {
+  if (!s) return;
+
   const pnlEl = $('kpiPnl');
   pnlEl.textContent = fmtPnl(s.totalPnl);
   pnlEl.className   = `kpi-value ${s.totalPnl >= 0 ? 'pos' : 'neg'}`;
@@ -42,60 +87,257 @@ function renderKPIs(s) {
 
   $('kpiCount').textContent = s.closedCount;
   $('kpiOpen').textContent  = `abiertos: ${s.openCount}`;
+}
 
-  const sc = s.currentStreak;
-  const streakEl = $('streakInfo');
-  if (!sc) {
-    streakEl.textContent = '—';
-    streakEl.style.color = 'var(--muted)';
+// ── Calendar ───────────────────────────────────────────────────────────────────
+function buildDayMap(trades) {
+  const map = {};
+  for (const t of trades) {
+    if (t.pnl == null || t.status !== 'closed') continue;
+    const d  = new Date(t.entry_time * 1000);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if (!map[ds]) map[ds] = { pnl: 0, count: 0 };
+    map[ds].pnl   += t.pnl;
+    map[ds].count++;
+  }
+  return map;
+}
+
+function renderCalendar(year, month, dayMap) {
+  $('calTitle').textContent = `${MONTHS_ES[month]} ${year}`;
+
+  // Month total
+  const entries   = Object.values(dayMap);
+  const monthPnl  = entries.reduce((s, d) => s + d.pnl, 0);
+  const monthCount = entries.reduce((s, d) => s + d.count, 0);
+  const statsEl   = $('calMonthStats');
+  if (monthCount > 0) {
+    statsEl.innerHTML = `<span class="cal-month-count">${monthCount}t</span><span class="cal-month-pnl ${monthPnl >= 0 ? 'pos' : 'neg'}">${fmtPnl(monthPnl).replace(/\.00$/, '')}</span>`;
   } else {
-    streakEl.textContent = `${Math.abs(sc)} ${sc > 0 ? 'wins' : 'losses'} seguidos`;
-    streakEl.style.color = sc > 0 ? 'var(--green)' : 'var(--red)';
+    statsEl.innerHTML = '';
   }
 
-  const bwEl = $('bestWorst');
-  const lines = [];
-  if (s.bestTrade)  lines.push(`✅ Mejor: ${s.bestTrade.symbol} +${s.bestTrade.pnl.toFixed(2)} USDT (${fmtDate(s.bestTrade.entry_time)})`);
-  if (s.worstTrade) lines.push(`❌ Peor: ${s.worstTrade.symbol} ${s.worstTrade.pnl.toFixed(2)} USDT (${fmtDate(s.worstTrade.entry_time)})`);
-  if (s.avgHoldMinutes) lines.push(`⏱ Hold: ${s.avgHoldMinutes < 60 ? s.avgHoldMinutes + 'min' : Math.round(s.avgHoldMinutes / 60) + 'h'} promedio`);
-  bwEl.innerHTML = lines.join('<br>') || '—';
+  // Day headers
+  let html = `<div class="cal-days-header">${DAYS_ES.map(d => `<div class="cal-day-label">${d}</div>`).join('')}</div>`;
+
+  // Grid
+  const firstDow  = new Date(year, month, 1).getDay();
+  const offset    = firstDow === 0 ? 6 : firstDow - 1;
+  const daysInMon = new Date(year, month+1, 0).getDate();
+  const todayD    = new Date();
+  const todayStr  = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,'0')}-${String(todayD.getDate()).padStart(2,'0')}`;
+
+  html += '<div class="cal-grid-inner">';
+  for (let i = 0; i < offset; i++) html += '<div class="cal-cell cal-cell-empty"></div>';
+
+  for (let day = 1; day <= daysInMon; day++) {
+    const ds   = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const data = dayMap[ds];
+    const isToday = ds === todayStr;
+    let cls = 'cal-cell';
+    if (isToday) cls += ' cal-cell-today';
+    if (data) cls += data.pnl >= 0 ? ' cal-cell-pos' : ' cal-cell-neg';
+
+    html += `<div class="${cls}" onclick="openDayDrawer('${ds}')">
+      <div class="cal-cell-top">
+        <span class="cal-cell-day">${day}</span>
+        ${data ? `<span class="cal-cell-count">${data.count}t</span>` : ''}
+      </div>
+      ${data ? `<div class="cal-cell-pnl ${data.pnl >= 0 ? 'pos' : 'neg'}">${data.pnl >= 0 ? '+' : ''}$${Math.abs(data.pnl).toFixed(0)}</div>` : ''}
+    </div>`;
+  }
+  html += '</div>';
+  $('calGrid').innerHTML = html;
 }
 
-function renderInsightsPreview(insights) {
-  const el = $('insightsList');
-  if (!insights.length) {
-    el.innerHTML = '<div style="color:var(--muted);font-family:\'IBM Plex Mono\',monospace;font-size:12px;padding:16px 0">Sin insights. Ve a la página de Insights y regenera.</div>';
+// ── Calendar navigation ────────────────────────────────────────────────────────
+window.calPrev = function() {
+  calMonth--;
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  loadCalendar();
+};
+window.calNext = function() {
+  calMonth++;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  loadCalendar();
+};
+window.calGoToday = function() {
+  const n = new Date();
+  calYear  = n.getFullYear();
+  calMonth = n.getMonth();
+  loadCalendar();
+};
+
+async function loadCalendar() {
+  $('calGrid').innerHTML = '<div class="loading">Cargando…</div>';
+  const { from, to } = getCalRange();
+  try {
+    const { trades } = await getTrades({ from, to, status: 'closed', limit: 500 });
+    renderCalendar(calYear, calMonth, buildDayMap(trades));
+  } catch (e) {
+    $('calGrid').innerHTML = `<div style="color:var(--red);font-family:monospace;font-size:12px;padding:20px">${e.message}</div>`;
+  }
+}
+
+// ── Day Drawer ─────────────────────────────────────────────────────────────────
+window.openDayDrawer = async function(dateStr) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const from = ts(new Date(year, month-1, day, 0, 0, 0));
+  const to   = ts(new Date(year, month-1, day, 23, 59, 59));
+
+  $('dayDrawerDate').textContent = new Date(year, month-1, day)
+    .toLocaleDateString('es', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  const pnlEl = $('dayDrawerPnl');
+  pnlEl.textContent = '—';
+  pnlEl.className   = 'day-drawer-pnl neu';
+  $('dayDrawerBody').innerHTML = '<div class="loading">Cargando…</div>';
+
+  $('dayDrawer').classList.remove('hidden');
+  $('dayDrawerBackdrop').classList.remove('hidden');
+  requestAnimationFrame(() => $('dayDrawer').classList.add('open'));
+
+  try {
+    const { trades } = await getTrades({ from, to, limit: 100 });
+    const closed  = trades.filter(t => t.pnl != null);
+    const dayPnl  = closed.reduce((s, t) => s + t.pnl, 0);
+
+    if (closed.length) {
+      pnlEl.textContent = fmtPnl(dayPnl) + ' USDT';
+      pnlEl.className   = `day-drawer-pnl ${dayPnl >= 0 ? 'pos' : 'neg'}`;
+    }
+
+    if (!trades.length) {
+      $('dayDrawerBody').innerHTML = '<div class="drawer-empty">Sin trades este día</div>';
+      return;
+    }
+
+    $('dayDrawerBody').innerHTML = trades.map(t => {
+      const hold = fmtHoldTime(t.entry_time, t.exit_time);
+      const pClass = t.pnl > 0 ? 'pos' : t.pnl < 0 ? 'neg' : '';
+      return `
+        <div class="drawer-trade ${pClass}">
+          <div class="drawer-trade-top">
+            <span class="drawer-symbol">${t.symbol}</span>
+            <span class="side-badge side-badge-${t.side}" style="font-size:10px">${t.side.toUpperCase()}</span>
+            <span class="drawer-pnl ${pClass}" style="margin-left:auto">${t.pnl != null ? fmtPnl(t.pnl) : '—'}</span>
+          </div>
+          <div class="drawer-trade-meta">
+            <span>${t.exchange || ''}</span>
+            <span>⏱ ${hold}</span>
+            ${t.setup_tag ? `<span class="td-pill" style="font-size:9px;padding:2px 6px">${t.setup_tag}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    $('dayDrawerBody').innerHTML = `<div style="color:var(--red);font-size:12px;font-family:monospace;padding:12px">${e.message}</div>`;
+  }
+};
+
+window.closeDayDrawer = function() {
+  $('dayDrawer').classList.remove('open');
+  $('dayDrawerBackdrop').classList.add('hidden');
+  setTimeout(() => $('dayDrawer').classList.add('hidden'), 280);
+};
+
+// ── Top Tickers ────────────────────────────────────────────────────────────────
+function renderTopTickers(symbols) {
+  const el = $('topTickersList');
+  if (!symbols || !symbols.length) {
+    el.innerHTML = '<div class="sidebar-empty">Sin datos</div>';
     return;
   }
-  el.innerHTML = insights.slice(0, 4).map(ins => `
-    <div style="padding:14px 0;border-bottom:1px solid var(--border)">
-      <div style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px;color:${ins.severity==='critical'?'var(--red)':ins.severity==='warning'?'var(--amber)':'var(--accent)'}">${ins.severity}</div>
-      <div style="font-weight:600;font-size:14px;margin-bottom:6px">${ins.title}</div>
-      <div style="font-size:13px;color:var(--muted2);line-height:1.5">${ins.description}</div>
-    </div>
-  `).join('');
+  const top      = symbols.slice(0, 7);
+  const maxAbs   = Math.max(...top.map(s => Math.abs(s.totalPnl)), 0.01);
+  el.innerHTML = top.map(s => {
+    const pct  = (Math.abs(s.totalPnl) / maxAbs * 100).toFixed(1);
+    const pos  = s.totalPnl >= 0;
+    const sign = pos ? '+' : '';
+    return `
+      <div class="ticker-row">
+        <div class="ticker-row-top">
+          <span class="ticker-name">${s.symbol}</span>
+          <span class="ticker-pnl ${pos ? 'pos' : 'neg'}">${sign}$${Math.abs(s.totalPnl).toFixed(0)}</span>
+          <span class="ticker-count">${s.count}t</span>
+        </div>
+        <div class="ticker-bar-bg">
+          <div class="ticker-bar ${pos ? 'pos' : 'neg'}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
-function renderRecentTrades(trades) {
-  const el = $('recentTrades');
-  if (!trades.length) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:16px 0;font-family:\'IBM Plex Mono\',monospace">Sin trades. Importa usando el botón.</div>';
+// ── Open Positions ─────────────────────────────────────────────────────────────
+function renderOpenPositions(trades) {
+  const open    = trades.filter(t => t.status === 'open');
+  const openPnl = open.reduce((s, t) => s + (t.pnl || 0), 0);
+  const totalEl = $('openPnlTotal');
+  const countEl = $('openCountLabel');
+  const listEl  = $('openPosList');
+
+  countEl.textContent = `${open.length} posicion${open.length !== 1 ? 'es' : ''} abierta${open.length !== 1 ? 's' : ''}`;
+
+  if (!open.length) {
+    totalEl.textContent = '—';
+    totalEl.className   = 'open-pnl-total neu';
+    listEl.innerHTML    = '<div class="sidebar-empty">Sin posiciones abiertas</div>';
     return;
   }
-  el.innerHTML = `<div style="overflow-x:auto"><table style="min-width:unset">
-    <thead><tr><th>Símbolo</th><th>Side</th><th>PnL</th><th>Fecha</th></tr></thead>
-    <tbody>
-      ${trades.slice(0, 8).map(t => `
-        <tr>
-          <td style="font-weight:600">${t.symbol}</td>
-          <td class="side-${t.side}">${t.side.toUpperCase()}</td>
-          <td class="${t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${t.pnl != null ? fmtPnl(t.pnl) : '—'}</td>
-          <td class="td-muted">${fmtDate(t.entry_time)}</td>
-        </tr>`).join('')}
-    </tbody>
-  </table></div>`;
+  totalEl.textContent = (openPnl >= 0 ? '+' : '') + '$' + Math.abs(openPnl).toFixed(2);
+  totalEl.className   = `open-pnl-total ${openPnl >= 0 ? 'pos' : 'neg'}`;
+
+  listEl.innerHTML = open.slice(0, 8).map(t => `
+    <div class="open-pos-row">
+      <span class="open-pos-symbol">${t.symbol}</span>
+      <span class="side-badge side-badge-${t.side}" style="font-size:9px;padding:2px 6px">${t.side.toUpperCase()}</span>
+      <span class="open-pos-pnl ${(t.pnl || 0) >= 0 ? 'pos' : 'neg'}">${t.pnl != null ? fmtPnl(t.pnl) : '—'}</span>
+    </div>`).join('');
 }
 
+// ── Period selector ────────────────────────────────────────────────────────────
+window.setPeriod = function(btn, type) {
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  periodType = type;
+  $('customRange').classList.toggle('hidden', type !== 'custom');
+  if (type !== 'custom') loadStats();
+};
+
+window.applyCustomPeriod = function() {
+  const f = $('pFrom').value, t = $('pTo').value;
+  if (!f || !t) { toast('Selecciona un rango de fechas', 'err'); return; }
+  customFrom = ts(new Date(f));
+  customTo   = ts(new Date(t + 'T23:59:59'));
+  loadStats();
+};
+
+function updateTickerLabel() {
+  const labels = { month: 'ESTE MES', year: 'ESTE AÑO', custom: 'CUSTOM' };
+  $('tickerPeriodLabel').textContent = labels[periodType] || 'ESTE MES';
+}
+
+// ── Data loading ───────────────────────────────────────────────────────────────
+async function loadStats() {
+  updateTickerLabel();
+  const { from, to } = getPeriodRange();
+  try {
+    const [analyticsData, symbolData, openData] = await Promise.all([
+      getAnalytics({ from, to }),
+      getBySymbol({ from, to }),
+      getTrades({ status: 'open', limit: 50 }),
+    ]);
+    renderKPIs(analyticsData.stats);
+    renderTopTickers(symbolData.symbols || symbolData.data || []);
+    renderOpenPositions(openData.trades || []);
+  } catch (err) {
+    toast('Error cargando datos: ' + err.message, 'err');
+  }
+}
+
+async function init() {
+  await Promise.all([ loadStats(), loadCalendar() ]);
+}
+
+// ── Exchange / ingest functions (unchanged) ────────────────────────────────────
 window.switchExchange = function(exchange, btn) {
   document.querySelectorAll('.isect-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -108,31 +350,23 @@ window.doIngestBybit = async function() {
   const secret = $('bybit-secret').value.trim();
   const symbol = $('bybit-symbol').value.trim() || undefined;
   const resultEl = $('result-bybit');
-
   if (!key || !secret) { toast('API key y secret requeridos', 'err'); return; }
-
   const types = [
-    { id: 'chk-linear',  fn: () => ingestBybit({ apiKey: key, apiSecret: secret, symbol }),          label: 'Linear' },
-    { id: 'chk-inverse', fn: () => ingestBybitInverse({ apiKey: key, apiSecret: secret, symbol }),    label: 'Inverse' },
-    { id: 'chk-spot',    fn: () => ingestBybitSpot({ apiKey: key, apiSecret: secret, symbol }),       label: 'Spot' },
+    { id: 'chk-linear',  fn: () => ingestBybit({ apiKey: key, apiSecret: secret, symbol }),         label: 'Linear' },
+    { id: 'chk-inverse', fn: () => ingestBybitInverse({ apiKey: key, apiSecret: secret, symbol }),   label: 'Inverse' },
+    { id: 'chk-spot',    fn: () => ingestBybitSpot({ apiKey: key, apiSecret: secret, symbol }),      label: 'Spot' },
   ].filter(t => $(t.id)?.checked);
-
   if (!types.length) { toast('Selecciona al menos un tipo', 'err'); return; }
-
   resultEl.className = 'ingest-result show';
   resultEl.textContent = `Importando ${types.map(t => t.label).join(', ')}…`;
-
   let totalNew = 0, lines = [];
   for (const t of types) {
     try {
       const res = await t.fn();
       totalNew += res.inserted;
       lines.push(`${t.label}: +${res.inserted} nuevos (${res.duplicates} dup)`);
-    } catch (err) {
-      lines.push(`${t.label}: ✗ ${err.message}`);
-    }
+    } catch (err) { lines.push(`${t.label}: ✗ ${err.message}`); }
   }
-
   resultEl.className = `ingest-result show ${totalNew > 0 ? 'ok' : 'err'}`;
   resultEl.innerHTML = lines.join('<br>');
   toast(`${totalNew} trades nuevos importados`);
@@ -144,30 +378,22 @@ window.doIngestBinance = async function() {
   const secret = $('bn-secret').value.trim();
   const symbol = $('bn-symbol').value.trim();
   const resultEl = $('result-binance');
-
   if (!key || !secret || !symbol) { toast('API key, secret y símbolo requeridos', 'err'); return; }
-
   const types = [
     { id: 'chk-bn-futures', fn: () => ingestBinance({ apiKey: key, apiSecret: secret, symbol }),     label: 'Futures' },
     { id: 'chk-bn-spot',    fn: () => ingestBinanceSpot({ apiKey: key, apiSecret: secret, symbol }), label: 'Spot' },
   ].filter(t => $(t.id)?.checked);
-
   if (!types.length) { toast('Selecciona al menos un tipo', 'err'); return; }
-
   resultEl.className = 'ingest-result show';
   resultEl.textContent = `Importando ${types.map(t => t.label).join(', ')}…`;
-
   let totalNew = 0, lines = [];
   for (const t of types) {
     try {
       const res = await t.fn();
       totalNew += res.inserted;
       lines.push(`${t.label}: +${res.inserted} nuevos (${res.duplicates} dup)`);
-    } catch (err) {
-      lines.push(`${t.label}: ✗ ${err.message}`);
-    }
+    } catch (err) { lines.push(`${t.label}: ✗ ${err.message}`); }
   }
-
   resultEl.className = `ingest-result show ${totalNew > 0 ? 'ok' : 'err'}`;
   resultEl.innerHTML = lines.join('<br>');
   toast(`${totalNew} trades nuevos importados`);
@@ -175,13 +401,11 @@ window.doIngestBinance = async function() {
 };
 
 window.doIngestCSV = async function() {
-  const file = $('csv-file')?.files?.[0];
+  const file    = $('csv-file')?.files?.[0];
   const resultEl = $('result-csv');
   if (!file) { toast('Selecciona un archivo CSV', 'err'); return; }
-
   resultEl.className = 'ingest-result show';
   resultEl.textContent = 'Procesando CSV…';
-
   const csv = await file.text();
   try {
     const res = await ingestCSV({ csv });
@@ -200,7 +424,6 @@ window.doSaveSync = async function() {
   const secret = $('sync-secret').value.trim();
   const resultEl = $('result-sync');
   if (!key || !secret) { toast('API key y secret requeridos', 'err'); return; }
-
   resultEl.className = 'ingest-result show';
   resultEl.textContent = 'Guardando…';
   try {
@@ -247,22 +470,6 @@ async function loadSyncStatus() {
       el.style.color = 'var(--muted)';
     }
   } catch (_) {}
-}
-
-async function init() {
-  try {
-    const [analyticsData, insightsData, tradesData] = await Promise.all([
-      getAnalytics(),
-      getInsights(),
-      getTrades({ limit: 10, status: 'closed' }),
-    ]);
-    renderKPIs(analyticsData.stats);
-    drawEquityCurve($('equityChart'), analyticsData.stats.equityCurve);
-    renderInsightsPreview(insightsData.insights);
-    renderRecentTrades(tradesData.trades);
-  } catch (err) {
-    toast('Error cargando datos: ' + err.message, 'err');
-  }
 }
 
 init();

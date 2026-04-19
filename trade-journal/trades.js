@@ -46,6 +46,13 @@ function fmtPnl(v) {
   if (isNaN(n) || v == null) return '—';
   return (n >= 0 ? '+' : '') + n.toFixed(2);
 }
+function fmtHoldTime(entry, exit) {
+  if (!exit) return '—';
+  const mins = Math.round((exit - entry) / 60);
+  if (mins < 60)   return mins + 'm';
+  if (mins < 1440) return Math.floor(mins/60) + 'h ' + (mins%60) + 'm';
+  return Math.floor(mins/1440) + 'd';
+}
 
 // ── Filters ───────────────────────────────────────────────────────────────────
 function getFilters() {
@@ -78,7 +85,7 @@ window.nextPage = function() { page++; load(); };
 
 // ── Load & render ─────────────────────────────────────────────────────────────
 async function load() {
-  $('tradesBody').innerHTML = `<tr><td colspan="11"><div class="loading">Cargando…</div></td></tr>`;
+  $('tradesBody').innerHTML = `<tr><td colspan="12"><div class="loading">Cargando…</div></td></tr>`;
   try {
     const { trades } = await getTrades(getFilters());
     renderTable(trades);
@@ -94,20 +101,19 @@ async function load() {
       closed.length ? `<span>${Math.round(wins.length / closed.length * 100)}% win</span>` : '',
     ].join('<span style="color:var(--border2)"> · </span>');
   } catch (err) {
-    $('tradesBody').innerHTML = `<tr><td colspan="11" style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:20px">${err.message}</td></tr>`;
+    $('tradesBody').innerHTML = `<tr><td colspan="12" style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:20px">${err.message}</td></tr>`;
     toast(err.message, 'err');
   }
 }
 
 function renderTable(trades) {
   if (!trades.length) {
-    $('tradesBody').innerHTML = `<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">📭</div>Sin trades con estos filtros</div></td></tr>`;
+    $('tradesBody').innerHTML = `<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">📭</div>Sin trades con estos filtros</div></td></tr>`;
     return;
   }
   $('tradesBody').innerHTML = trades.map((t, i) => {
-    const pnlClass  = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : '';
-    const sideClass = `side-${t.side}`;
-    const hasNotes  = t.notes || t.setup_tag || t.strategy_tag;
+    const pnlClass = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : '';
+    const hasNotes = t.notes || t.setup_tag || t.strategy_tag;
     return `
     <tr class="trade-row" data-id="${t.id}" onclick="openPanel(${JSON.stringify(t).replace(/"/g,'&quot;')})">
       <td class="td-muted">${page * 50 + i + 1}</td>
@@ -118,6 +124,7 @@ function renderTable(trades) {
       <td class="td-muted">${fmtNum(t.size, 4)}</td>
       <td class="${pnlClass}" style="font-weight:600">${fmtPnl(t.pnl)}</td>
       <td class="td-muted">${t.session || '—'}</td>
+      <td class="td-muted">${fmtHoldTime(t.entry_time, t.exit_time)}</td>
       <td>${t.setup_tag    ? `<span class="td-pill">${t.setup_tag}</span>`    : '<span class="td-muted">—</span>'}</td>
       <td>${t.strategy_tag ? `<span class="td-pill td-pill-blue">${t.strategy_tag}</span>` : '<span class="td-muted">—</span>'}</td>
       <td class="td-muted">${fmtDate(t.entry_time)}</td>
