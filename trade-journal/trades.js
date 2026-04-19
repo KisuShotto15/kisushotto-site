@@ -5,6 +5,8 @@ let page = 0;
 let filterDebounce = null;
 let currentTrade = null;
 const tradesMap = {};
+let currentTags = [];
+let currentScreenshots = [];
 
 // ── Tag definitions ───────────────────────────────────────────────────────────
 const SETUP_TAGS = [
@@ -181,7 +183,6 @@ window.openPanel = function(id) {
 
   const isOpen = card.classList.contains('open');
 
-  // Close any currently open card
   document.querySelectorAll('.tc.open').forEach(c => {
     c.classList.remove('open');
     const d = c.querySelector('.tc-detail');
@@ -189,13 +190,17 @@ window.openPanel = function(id) {
   });
   currentTrade = null;
 
-  if (isOpen) return; // was already open → just collapsed it
+  if (isOpen) return;
 
-  // Open this card
   currentTrade = t;
   card.classList.add('open');
   const detail = card.querySelector('.tc-detail');
   detail.style.display = 'block';
+
+  // Init state
+  currentTags = t.setup_tag ? t.setup_tag.split(',').map(s => s.trim()).filter(Boolean) : [];
+  try { currentScreenshots = JSON.parse(t.strategy_tag || '[]'); } catch { currentScreenshots = []; }
+  if (!Array.isArray(currentScreenshots)) currentScreenshots = [];
 
   const pnlClass = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : '';
   detail.innerHTML = `
@@ -208,37 +213,51 @@ window.openPanel = function(id) {
       <div class="td-stat"><div class="td-stat-label">Sesión</div><div class="td-stat-val">${t.session || '—'}</div></div>
     </div>
     <div class="td-divider"></div>
-    <div class="td-tags-row">
-      <div class="td-tag-section">
-        <div class="panel-section-label">Setup</div>
-        <div class="tag-grid" id="tagSetup"></div>
-      </div>
-      <div class="td-tag-section">
-        <div class="panel-section-label">Estrategia</div>
-        <div class="tag-grid" id="tagStrategy"></div>
-      </div>
-      <div class="td-tag-section">
-        <div class="panel-section-label">Emoción</div>
+    <div class="td-main-grid">
+
+      <!-- Tags + Emotion -->
+      <div class="td-col">
+        <div class="td-section-title">Tags</div>
+        <div class="td-chips" id="tagChips"></div>
+        <div class="td-input-row">
+          <input type="text" id="tagInput" class="td-text-input" placeholder="Add tag…"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addTag()}">
+          <button class="td-add-btn" onclick="addTag()">+</button>
+        </div>
+        <div class="td-section-title" style="margin-top:16px">Emoción</div>
         <div class="tag-grid" id="tagEmotion"></div>
       </div>
+
+      <!-- Notes -->
+      <div class="td-col">
+        <div class="td-section-title">Notes</div>
+        <textarea id="panelNotes" class="panel-textarea td-notes-area" placeholder="Type your notes here…"></textarea>
+      </div>
+
+      <!-- Screenshots -->
+      <div class="td-col">
+        <div class="td-section-title">Screenshots</div>
+        <div class="td-section-hint">Paste a TradingView, Gyazo or Imgur link</div>
+        <div class="td-input-row" style="margin-bottom:10px">
+          <input type="text" id="screenshotInput" class="td-text-input" placeholder="https://…"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addScreenshot()}">
+          <button class="td-add-btn" onclick="addScreenshot()">+</button>
+        </div>
+        <div class="td-screenshot-grid" id="screenshotGrid"></div>
+      </div>
+
     </div>
     <div class="td-divider"></div>
-    <div class="td-bottom-row">
-      <div class="td-score-col">
-        <div class="panel-section-label" style="margin-bottom:8px">Rule Score</div>
+    <div class="td-footer-row">
+      <div>
+        <div class="td-section-title" style="margin-bottom:8px">Rule Score</div>
         <div class="rule-score-row" id="ruleScoreRow"></div>
       </div>
-      <div class="td-notes-col">
-        <div class="panel-section-label" style="margin-bottom:8px">Notas</div>
-        <textarea id="panelNotes" class="panel-textarea" placeholder="Describe el contexto, confluencias, errores…"></textarea>
-      </div>
-      <div class="td-save-col">
-        <button class="btn btn-accent" onclick="savePanel()">Guardar</button>
-      </div>
+      <button class="btn btn-accent" onclick="savePanel()">Guardar</button>
     </div>`;
 
-  renderTagGrid('tagSetup', SETUP_TAGS, t.setup_tag, 'setup');
-  renderTagGrid('tagStrategy', STRATEGY_TAGS, t.strategy_tag, 'strategy');
+  renderChips();
+  renderScreenshots();
   renderEmotionGrid(t.emotion);
   renderRuleScore(t.rule_score);
   $('panelNotes').value = t.notes || '';
@@ -253,6 +272,55 @@ window.closePanel = function() {
     if (d) { d.style.display = 'none'; d.innerHTML = ''; }
   });
   currentTrade = null;
+};
+
+// ── Tag chips ──────────────────────────────────────────────────────────────────
+function renderChips() {
+  const el = $('tagChips');
+  if (!el) return;
+  el.innerHTML = currentTags.map((tag, i) =>
+    `<span class="td-chip">${tag}<button class="td-chip-remove" onclick="removeTag(${i})">×</button></span>`
+  ).join('');
+}
+
+window.addTag = function() {
+  const input = $('tagInput');
+  const val = input.value.trim().toUpperCase();
+  if (!val || currentTags.includes(val)) { input.value = ''; return; }
+  currentTags.push(val);
+  input.value = '';
+  renderChips();
+};
+
+window.removeTag = function(i) {
+  currentTags.splice(i, 1);
+  renderChips();
+};
+
+// ── Screenshots ────────────────────────────────────────────────────────────────
+function renderScreenshots() {
+  const el = $('screenshotGrid');
+  if (!el) return;
+  el.innerHTML = currentScreenshots.map((url, i) => `
+    <div class="td-screenshot">
+      <img src="${url}" alt="screenshot" onerror="this.parentElement.querySelector('.td-ss-err').style.display='flex';this.style.display='none'">
+      <div class="td-ss-err" style="display:none">${url.length > 40 ? url.slice(0,40)+'…' : url}</div>
+      <button class="td-screenshot-remove" onclick="removeScreenshot(${i})">×</button>
+    </div>`).join('');
+}
+
+window.addScreenshot = function() {
+  const input = $('screenshotInput');
+  const url = input.value.trim();
+  if (!url) return;
+  currentScreenshots.push(url);
+  input.value = '';
+  renderScreenshots();
+};
+
+window.removeScreenshot = function(i) {
+  currentScreenshots.splice(i, 1);
+  renderScreenshots();
 };
 
 function renderTagGrid(containerId, tags, selected, type) {
@@ -313,16 +381,13 @@ window.promptCustom = function(btn, type, existing) {
 window.savePanel = async function() {
   if (!currentTrade) return;
 
-  const getActive = (type) => {
-    const btn = document.querySelector(`.tag-pill.active[data-type="${type}"]`);
-    return btn ? (btn.dataset.val || null) : null;
-  };
+  const emotionBtn = document.querySelector(`.tag-pill.active[data-type="emotion"]`);
   const scoreBtnActive = $('ruleScoreRow').querySelector('.score-btn.active');
 
   const body = {
-    setup_tag:    getActive('setup'),
-    strategy_tag: getActive('strategy'),
-    emotion:      getActive('emotion'),
+    setup_tag:    currentTags.join(',') || null,
+    strategy_tag: currentScreenshots.length ? JSON.stringify(currentScreenshots) : null,
+    emotion:      emotionBtn ? (emotionBtn.dataset.val || null) : null,
     rule_score:   scoreBtnActive ? parseInt(scoreBtnActive.textContent) : null,
     notes:        $('panelNotes').value.trim() || null,
   };
@@ -330,8 +395,9 @@ window.savePanel = async function() {
   try {
     await updateTrade(currentTrade.id, body);
     toast('Trade actualizado');
-    // Update local cache
     currentTrade = { ...currentTrade, ...body };
+    // Update cache so re-opening shows latest data
+    tradesMap[currentTrade.id] = currentTrade;
     load();
   } catch (err) {
     toast(err.message, 'err');
