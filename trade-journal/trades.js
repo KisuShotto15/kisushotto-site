@@ -37,6 +37,12 @@ function toast(msg, type = 'ok') {
 function fmtDate(ts) {
   return new Date(ts * 1000).toLocaleString('es', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
 }
+function fmtShortDate(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString('en', { month:'short', day:'numeric' }) + ' ' +
+         d.toLocaleTimeString('en', { hour:'2-digit', minute:'2-digit', hour12:false });
+}
 function fmtNum(v, dec = 4) {
   const n = parseFloat(v);
   return isNaN(n) ? '—' : n.toFixed(dec);
@@ -85,10 +91,10 @@ window.nextPage = function() { page++; load(); };
 
 // ── Load & render ─────────────────────────────────────────────────────────────
 async function load() {
-  $('tradesBody').innerHTML = `<tr><td colspan="12"><div class="loading">Cargando…</div></td></tr>`;
+  $('tradesBody').innerHTML = `<div class="loading">Cargando…</div>`;
   try {
     const { trades } = await getTrades(getFilters());
-    renderTable(trades);
+    renderCards(trades);
     $('pageInfo').textContent = `Página ${page + 1}`;
     $('btnPrev').disabled = page === 0;
 
@@ -101,34 +107,65 @@ async function load() {
       closed.length ? `<span>${Math.round(wins.length / closed.length * 100)}% win</span>` : '',
     ].join('<span style="color:var(--border2)"> · </span>');
   } catch (err) {
-    $('tradesBody').innerHTML = `<tr><td colspan="12" style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:20px">${err.message}</td></tr>`;
+    $('tradesBody').innerHTML = `<div style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:20px">${err.message}</div>`;
     toast(err.message, 'err');
   }
 }
 
-function renderTable(trades) {
+function renderCards(trades) {
   if (!trades.length) {
-    $('tradesBody').innerHTML = `<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">📭</div>Sin trades con estos filtros</div></td></tr>`;
+    $('tradesBody').innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div>Sin trades con estos filtros</div>`;
     return;
   }
-  $('tradesBody').innerHTML = trades.map((t, i) => {
-    const pnlClass = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : '';
-    const hasNotes = t.notes || t.setup_tag || t.strategy_tag;
+  $('tradesBody').innerHTML = trades.map(t => {
+    const isWin  = t.pnl > 0;
+    const isLoss = t.pnl < 0;
+    const pnlClass  = isWin ? 'pos' : isLoss ? 'neg' : 'neu';
+    const isLong    = t.side === 'long' || t.side === 'buy';
+    const sideClass = isLong ? 'pos' : 'neg';
+    const sideArrow = isLong ? '↗' : '↘';
+    const sideLabel = t.side.charAt(0).toUpperCase() + t.side.slice(1);
+    const iconChar  = t.symbol.replace(/USDT|USDC|BTC|PERP/g, '').charAt(0) || t.symbol.charAt(0);
+
+    let pctChange = 'neu';
+    let pctText   = '—';
+    if (t.entry_price && t.exit_price && t.entry_price !== 0) {
+      const pct = (t.exit_price - t.entry_price) / t.entry_price * 100;
+      pctText   = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+      pctChange = pct >= 0 ? 'pos' : 'neg';
+    }
+
+    const tJson = JSON.stringify(t).replace(/"/g, '&quot;');
     return `
-    <tr class="trade-row" data-id="${t.id}" onclick="openPanel(${JSON.stringify(t).replace(/"/g,'&quot;')})">
-      <td class="td-muted">${page * 50 + i + 1}</td>
-      <td class="td-symbol">${t.symbol}${hasNotes ? ' <span class="row-dot"></span>' : ''}</td>
-      <td><span class="side-badge side-badge-${t.side}">${t.side.toUpperCase()}</span></td>
-      <td>${fmtNum(t.entry_price, 4)}</td>
-      <td class="td-muted">${t.exit_price != null ? fmtNum(t.exit_price, 4) : '—'}</td>
-      <td class="td-muted">${fmtNum(t.size, 4)}</td>
-      <td class="${pnlClass}" style="font-weight:600">${fmtPnl(t.pnl)}</td>
-      <td class="td-muted">${t.session || '—'}</td>
-      <td class="td-muted">${fmtHoldTime(t.entry_time, t.exit_time)}</td>
-      <td>${t.setup_tag    ? `<span class="td-pill">${t.setup_tag}</span>`    : '<span class="td-muted">—</span>'}</td>
-      <td>${t.strategy_tag ? `<span class="td-pill td-pill-blue">${t.strategy_tag}</span>` : '<span class="td-muted">—</span>'}</td>
-      <td class="td-muted">${fmtDate(t.entry_time)}</td>
-    </tr>`;
+    <div class="tc ${isWin ? 'tc-win' : isLoss ? 'tc-loss' : ''}" data-id="${t.id}" onclick="openPanel(${tJson})">
+      <div class="tc-body">
+        <div class="tc-symbol-col">
+          <div class="tc-icon ${sideClass}">${iconChar}</div>
+          <div class="tc-symbol-info">
+            <div class="tc-symbol">${t.symbol}${t.notes || t.setup_tag ? ' <span class="row-dot"></span>' : ''}</div>
+            <div class="tc-exchange">${t.exchange || ''}${t.session ? ' · ' + t.session : ''}</div>
+          </div>
+        </div>
+        <div class="tc-side-col">
+          <span class="tc-arrow ${sideClass}">${sideArrow}</span>
+          <span class="tc-side-label ${sideClass}">${sideLabel}</span>
+        </div>
+        <div class="tc-times-col">
+          <span>${fmtShortDate(t.entry_time)}</span>
+          <span class="tc-time-sep">→</span>
+          <span>${t.exit_time ? fmtShortDate(t.exit_time) : '—'}</span>
+        </div>
+        <div class="tc-prices-col">
+          <span class="tc-price">${fmtNum(t.entry_price, 2)} → ${t.exit_price != null ? fmtNum(t.exit_price, 2) : '—'}</span>
+          <span class="tc-price-change ${pctChange}">${pctText}</span>
+        </div>
+        <div class="tc-pnl-col">
+          <span class="tc-pnl-badge ${pnlClass}">${fmtPnl(t.pnl)} USDT</span>
+        </div>
+        <div class="tc-duration-col">${fmtHoldTime(t.entry_time, t.exit_time)}</div>
+        <div class="tc-chevron">›</div>
+      </div>
+    </div>`;
   }).join('');
 }
 
