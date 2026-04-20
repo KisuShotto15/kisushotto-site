@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Dark rounded background -->
+  <rect width="100" height="100" rx="22" fill="#0a0b0e"/>
+
+  <!-- Outer hexagon (pointy-top, r=38) -->
+  <!-- Top:(50,12) TR:(83,31) BR:(83,69) Bot:(50,88) BL:(17,69) TL:(17,31) -->
+
+  <!-- Spokes: outer vertex → inner vertex (r=20) -->
+  <!-- Inner: Top:(50,30) TR:(67,40) BR:(67,60) Bot:(50,70) BL:(33,60) TL:(33,40) -->
+  <line x1="50" y1="12" x2="50" y2="30" stroke="#00ffa8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="83" y1="31" x2="67" y2="40" stroke="#00ffa8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="83" y1="69" x2="67" y2="60" stroke="#00ffa8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="50" y1="88" x2="50" y2="70" stroke="#00ffa8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="17" y1="69" x2="33" y2="60" stroke="#00ffa8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="17" y1="31" x2="33" y2="40" stroke="#00ffa8" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- Inner 3 diagonals (isometric cube axes) -->
+  <line x1="50" y1="30" x2="50" y2="70" stroke="#00ffa8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="67" y1="40" x2="33" y2="60" stroke="#00ffa8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="33" y1="40" x2="67" y2="60" stroke="#00ffa8" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- Inner hexagon outline -->
+  <polygon points="50,30 67,40 67,60 50,70 33,60 33,40"
+    fill="none" stroke="#00ffa8" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- Outer hexagon outline -->
+  <polygon points="50,12 83,31 83,69 50,88 17,69 17,31"
+    fill="none" stroke="#00ffa8" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <!-- Center ring + dot -->
+  <circle cx="50" cy="50" r="7" fill="none" stroke="#00ffa8" stroke-width="2.2"/>
+  <circle cx="50" cy="50" r="3" fill="#00ffa8"/>
+
+  <!-- Outer vertex dots -->
+  <circle cx="50" cy="12" r="3.5" fill="#00ffa8"/>
+  <circle cx="83" cy="31" r="3.5" fill="#00ffa8"/>
+  <circle cx="83" cy="69" r="3.5" fill="#00ffa8"/>
+  <circle cx="50" cy="88" r="3.5" fill="#00ffa8"/>
+  <circle cx="17" cy="69" r="3.5" fill="#00ffa8"/>
+  <circle cx="17" cy="31" r="3.5" fill="#00ffa8"/>
+</svg>
