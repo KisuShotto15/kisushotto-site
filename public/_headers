@@ -1,2 +1,11 @@
 /sw.js
   Cache-Control: no-cache, no-store, must-revalidate
+
+/images/*.svg
+  Cache-Control: no-cache, must-revalidate
+
+/images/*.ico
+  Cache-Control: no-cache, must-revalidate
+
+/images/*.png
+  Cache-Control: no-cache, must-revalidate
