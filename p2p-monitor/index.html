@@ -1378,7 +1378,7 @@ async function botCycle() {
              a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold);
     });
 
-    var above = competitors.filter(function(a) { return a.price > BOT.currentPrice; });
+    var above = competitors.filter(function(a) { return a.price > BOT.currentPrice && a.price <= BOT.ceiling; });
     var below = competitors.filter(function(a) { return a.price < BOT.currentPrice; });
 
     var targetPrice = null;
@@ -1445,9 +1445,6 @@ async function botCycle() {
     var msg = arrow + ' ' + BOT.currentPrice.toFixed(3) + ' → ' + targetPrice.toFixed(3) + ' Bs  |  ' + reason;
     botLog(msg, targetPrice > BOT.currentPrice ? '#1D9E75' : '#5dade2');
     botSetStatus('✓ Repriciado', '#1D9E75');
-
-    // Telegram
-    sendTelegram('🤖 <b>Auto-Repricing</b>\n' + msg);
 
   } catch(e) {
     botSetStatus('Error: ' + e.message, '#E24B4A');
