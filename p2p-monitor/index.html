@@ -1424,28 +1424,34 @@ async function botInitialCycle() {
       return;
     }
 
+    botLog('⚡ Mi nick: "' + BOT.myNick + '" | Precio actual: ' + BOT.currentPrice.toFixed(3) + ' | Techo: ' + BOT.ceiling.toFixed(3), '#484f58');
     var market      = mapAds(await fetchTier(BOT.myMinLimit, 3));
     var competitors = market.filter(function(a) {
       return a.merchant !== BOT.myNick &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
              a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold);
     });
+    botLog('⚡ Mercado: ' + market.length + ' anuncios | Competidores (mismo límite+BdV): ' + competitors.length, '#484f58');
+
     // Todos los competidores bajo el techo, arriba del precio actual (sin límite de gap)
     var above = competitors.filter(function(a) { return a.price > BOT.currentPrice && a.price <= BOT.ceiling; });
     var below = competitors.filter(function(a) { return a.price < BOT.currentPrice; });
+    botLog('⚡ Arriba del techo ignorados: ' + competitors.filter(function(a){ return a.price > BOT.ceiling; }).length + ' | En rango: arriba=' + above.length + ' abajo=' + below.length, '#484f58');
 
     var targetPrice = null;
     if (above.length > 0) {
       above.sort(function(a, b) { return b.price - a.price; });
       targetPrice = above[0].price + BOT_CFG.increment;
+      botLog('⚡ Referencia: ' + above[0].merchant + ' @ ' + above[0].price.toFixed(3) + ' → target ' + targetPrice.toFixed(3), '#484f58');
     } else if (below.length > 0) {
       below.sort(function(a, b) { return b.price - a.price; });
       var proposed = below[0].price + BOT_CFG.increment;
       if (proposed < BOT.currentPrice) targetPrice = proposed;
+      botLog('⚡ Ya soy #1 — ajuste abajo vs ' + below[0].merchant + ' @ ' + below[0].price.toFixed(3), '#484f58');
     }
 
     if (targetPrice === null) { botLog('⚡ Inicial: posición óptima', '#1D9E75'); return; }
-    if (targetPrice > BOT.ceiling) targetPrice = BOT.ceiling;
+    if (targetPrice > BOT.ceiling) { botLog('⚡ Target clamped al techo: ' + targetPrice.toFixed(3) + ' → ' + BOT.ceiling.toFixed(3), '#F0B90B'); targetPrice = BOT.ceiling; }
     if (Math.abs(targetPrice - BOT.currentPrice) < 0.001) { botLog('⚡ Inicial: sin cambio necesario', '#1D9E75'); return; }
 
     await botUpdatePrice(BOT.adNumber, targetPrice);
@@ -1522,13 +1528,13 @@ async function botToggle() {
     botSetStatus('Posicionando...', '#F0B90B');
     await botInitialCycle();
 
-    // 3. Arrancar ciclo normal
+    // 3. Arrancar ciclo normal — esperar 5s para que Binance propague el reprice inicial
     BOT.appliedMinLimit = 0;
     BOT.running = true;
     BOT.lastReprice = 0;
     botSetStatus('Iniciando...', '#F0B90B');
-    botCycle();
     BOT.timer = setInterval(botCycle, 30000);
+    setTimeout(function() { if (BOT.running) botCycle(); }, 5000);
   }
 }
 
