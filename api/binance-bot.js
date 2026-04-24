@@ -114,6 +114,6 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: 'Unknown path' });
   }
 
-  const data = await r.json();
-  res.status(r.ok ? 200 : 502).json(data);
+  const data = await r.json().catch(() => ({ error: 'invalid JSON from Binance' }));
+  res.status(200).json(data);
 }

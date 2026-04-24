@@ -1503,12 +1503,9 @@ async function botToggle() {
     document.getElementById('bot-live').style.display = 'grid';
     botLog('— Bot iniciado —', '#F0B90B');
 
-    // 1. Reprice inicial ANTES de activar el anuncio
-    botSetStatus('Posicionando...', '#F0B90B');
     if (!BOT.adNumber && BOT_CFG.adNo) BOT.adNumber = BOT_CFG.adNo;
-    await botInitialCycle();
 
-    // 2. Activar el anuncio en Binance
+    // 1. Activar el anuncio primero (botInitialCycle necesita el ad LIVE para leerlo)
     botSetStatus('Activando anuncio...', '#F0B90B');
     try {
       if (BOT.adNumber) {
@@ -1522,6 +1519,10 @@ async function botToggle() {
     } catch(e) {
       botLog('⚠ No se pudo activar el anuncio: ' + e.message, '#F6465D');
     }
+
+    // 2. Reprice inicial (sin gap) — el ad ya está LIVE
+    botSetStatus('Posicionando...', '#F0B90B');
+    await botInitialCycle();
 
     // 3. Arrancar ciclo normal
     BOT.appliedMinLimit = 0;
