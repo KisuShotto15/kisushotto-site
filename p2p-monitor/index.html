@@ -587,6 +587,28 @@ input:focus {
         <span id="bot-cfg-st" style="font-size:14px;color:#555"></span>
       </div>
 
+      <!-- Control manual -->
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Control manual</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:13px;color:var(--text-3)">Precio (Bs)</div>
+            <div style="display:flex;gap:4px">
+              <input type="number" id="manual-price" placeholder="ej. 628.50" min="1" step="0.001" style="width:100%;text-align:left">
+              <button class="btn btn-sm" onclick="manualSetPrice()" title="Aplicar precio" style="flex-shrink:0;font-size:13px;padding:4px 8px">✓</button>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:13px;color:var(--text-3)">Cantidad (USDT)</div>
+            <div style="display:flex;gap:4px">
+              <input type="number" id="manual-qty" placeholder="ej. 500" min="1" step="1" style="width:100%;text-align:left">
+              <button class="btn btn-sm" onclick="manualSetQty()" title="Aplicar cantidad" style="flex-shrink:0;font-size:13px;padding:4px 8px">✓</button>
+            </div>
+          </div>
+        </div>
+        <div id="manual-st" style="font-size:13px;color:var(--text-3);margin-top:4px;min-height:16px"></div>
+      </div>
+
       <!-- Log -->
       <div style="margin-top:10px">
         <div style="font-size:14px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Log de reprecio</div>
@@ -1193,6 +1215,42 @@ async function botGetMyAd() {
               || a.status === 'LIVE' || a.adStatus === 1;
     return isBuy && isUsdt && isVes && isLive;
   }) || null;
+}
+
+async function manualSetPrice() {
+  var price = parseFloat(document.getElementById('manual-price').value);
+  var st = document.getElementById('manual-st');
+  if (!price || price <= 0) { st.textContent = 'Ingresa un precio válido'; st.style.color = 'var(--red)'; return; }
+  var adNo = BOT.adNumber || BOT_CFG.adNo;
+  if (!adNo) { st.textContent = 'Configura el Ad Number primero'; st.style.color = 'var(--red)'; return; }
+  st.textContent = 'Aplicando precio...'; st.style.color = 'var(--text-3)';
+  try {
+    await botUpdatePrice(adNo, price);
+    BOT.currentPrice = price;
+    document.getElementById('bot-cur-price').textContent = price.toFixed(3) + ' Bs';
+    updateTopbarBotPrice(price);
+    botLog('✎ Precio manual → ' + price.toFixed(3) + ' Bs', '#F0B90B');
+    st.textContent = '✓ Precio actualizado'; st.style.color = 'var(--green)';
+  } catch(e) {
+    st.textContent = '✗ ' + e.message; st.style.color = 'var(--red)';
+  }
+}
+
+async function manualSetQty() {
+  var qty = parseFloat(document.getElementById('manual-qty').value);
+  var st = document.getElementById('manual-st');
+  if (!qty || qty <= 0) { st.textContent = 'Ingresa una cantidad válida'; st.style.color = 'var(--red)'; return; }
+  var adNo = BOT.adNumber || BOT_CFG.adNo;
+  if (!adNo) { st.textContent = 'Configura el Ad Number primero'; st.style.color = 'var(--red)'; return; }
+  st.textContent = 'Aplicando cantidad...'; st.style.color = 'var(--text-3)';
+  try {
+    var data = await botCallWorker('/update-quantity', { advNo: adNo, totalAmount: qty });
+    if (data.code && data.code !== '000000') throw new Error(data.message || 'código ' + data.code);
+    botLog('✎ Cantidad manual → ' + qty + ' USDT', '#58A6FF');
+    st.textContent = '✓ Cantidad actualizada'; st.style.color = 'var(--green)';
+  } catch(e) {
+    st.textContent = '✗ ' + e.message; st.style.color = 'var(--red)';
+  }
 }
 
 async function botUpdateMinLimit(adNumber, minAmount) {
