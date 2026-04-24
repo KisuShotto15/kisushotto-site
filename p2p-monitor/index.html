@@ -590,21 +590,16 @@ input:focus {
       <!-- Control manual -->
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
         <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Control manual</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <div style="font-size:13px;color:var(--text-3)">Precio (Bs)</div>
-            <div style="display:flex;gap:4px">
-              <input type="number" id="manual-price" placeholder="ej. 628.50" min="1" step="0.001" style="width:100%;text-align:left">
-              <button class="btn btn-sm" onclick="manualSetPrice()" title="Aplicar precio" style="flex-shrink:0;font-size:13px;padding:4px 8px">✓</button>
-            </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:13px;color:var(--text-3)">Cantidad (USDT)</div>
+          <div style="display:flex;gap:4px">
+            <input type="number" id="manual-qty" placeholder="ej. 500" min="1" step="1" style="flex:1;text-align:left" oninput="updateManualTotal()">
+            <button class="btn btn-sm" onclick="manualSetQty()" title="Aplicar cantidad" style="flex-shrink:0;font-size:13px;padding:4px 10px">✓</button>
           </div>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <div style="font-size:13px;color:var(--text-3)">Cantidad (USDT)</div>
-            <div style="display:flex;gap:4px">
-              <input type="number" id="manual-qty" placeholder="ej. 500" min="1" step="1" style="width:100%;text-align:left">
-              <button class="btn btn-sm" onclick="manualSetQty()" title="Aplicar cantidad" style="flex-shrink:0;font-size:13px;padding:4px 8px">✓</button>
-            </div>
-          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+          <span style="font-size:13px;color:var(--text-3)">Total ≈</span>
+          <span id="manual-total" style="font-size:15px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span>
         </div>
         <div id="manual-st" style="font-size:13px;color:var(--text-3);margin-top:4px;min-height:16px"></div>
       </div>
@@ -1217,23 +1212,11 @@ async function botGetMyAd() {
   }) || null;
 }
 
-async function manualSetPrice() {
-  var price = parseFloat(document.getElementById('manual-price').value);
-  var st = document.getElementById('manual-st');
-  if (!price || price <= 0) { st.textContent = 'Ingresa un precio válido'; st.style.color = 'var(--red)'; return; }
-  var adNo = BOT.adNumber || BOT_CFG.adNo;
-  if (!adNo) { st.textContent = 'Configura el Ad Number primero'; st.style.color = 'var(--red)'; return; }
-  st.textContent = 'Aplicando precio...'; st.style.color = 'var(--text-3)';
-  try {
-    await botUpdatePrice(adNo, price);
-    BOT.currentPrice = price;
-    document.getElementById('bot-cur-price').textContent = price.toFixed(3) + ' Bs';
-    updateTopbarBotPrice(price);
-    botLog('✎ Precio manual → ' + price.toFixed(3) + ' Bs', '#F0B90B');
-    st.textContent = '✓ Precio actualizado'; st.style.color = 'var(--green)';
-  } catch(e) {
-    st.textContent = '✗ ' + e.message; st.style.color = 'var(--red)';
-  }
+function updateManualTotal() {
+  var qty   = parseFloat(document.getElementById('manual-qty').value) || 0;
+  var price = BOT.currentPrice || parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
+  var el    = document.getElementById('manual-total');
+  el.textContent = (qty && price) ? fmt(price * qty) + ' Bs' : '—';
 }
 
 async function manualSetQty() {
@@ -1420,6 +1403,63 @@ async function botCycle() {
   }
 }
 
+async function botInitialCycle() {
+  botLog('⚡ Reprice inicial (sin gap)...', '#F0B90B');
+  try {
+    var ad = await botGetMyAd();
+    if (!ad) { botLog('⚠ Anuncio no encontrado para reprice inicial', '#F0B90B'); return; }
+    BOT.adNumber     = ad.adNumber || ad.advNo;
+    BOT.myNick       = ad.nickName || '';
+    BOT.currentPrice = parseFloat(ad.price);
+    BOT.myMinLimit   = parseFloat(ad.minSingleTransAmount);
+    BOT.ceiling = BOT_CFG.sellPrice * (1 - BOT_CFG.minSpread / 100);
+    document.getElementById('bot-ceiling').textContent    = BOT.ceiling.toFixed(3) + ' Bs';
+    document.getElementById('bot-cur-price').textContent  = BOT.currentPrice.toFixed(3) + ' Bs';
+
+    if (BOT.currentPrice > BOT.ceiling) {
+      await botUpdatePrice(BOT.adNumber, BOT.ceiling);
+      BOT.currentPrice = BOT.ceiling;
+      document.getElementById('bot-cur-price').textContent = BOT.ceiling.toFixed(3) + ' Bs';
+      updateTopbarBotPrice(BOT.ceiling);
+      botLog('⚡ Inicial: sobre techo → ' + BOT.ceiling.toFixed(3) + ' Bs', '#F0B90B');
+      return;
+    }
+
+    var market      = mapAds(await fetchTier(BOT.myMinLimit, 3));
+    var competitors = market.filter(function(a) {
+      return a.merchant !== BOT.myNick &&
+             (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
+             a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold);
+    });
+    // Todos los competidores bajo el techo, arriba del precio actual (sin límite de gap)
+    var above = competitors.filter(function(a) { return a.price > BOT.currentPrice && a.price <= BOT.ceiling; });
+    var below = competitors.filter(function(a) { return a.price < BOT.currentPrice; });
+
+    var targetPrice = null;
+    if (above.length > 0) {
+      above.sort(function(a, b) { return b.price - a.price; });
+      targetPrice = above[0].price + BOT_CFG.increment;
+    } else if (below.length > 0) {
+      below.sort(function(a, b) { return b.price - a.price; });
+      var proposed = below[0].price + BOT_CFG.increment;
+      if (proposed < BOT.currentPrice) targetPrice = proposed;
+    }
+
+    if (targetPrice === null) { botLog('⚡ Inicial: posición óptima', '#1D9E75'); return; }
+    if (targetPrice > BOT.ceiling) targetPrice = BOT.ceiling;
+    if (Math.abs(targetPrice - BOT.currentPrice) < 0.001) { botLog('⚡ Inicial: sin cambio necesario', '#1D9E75'); return; }
+
+    await botUpdatePrice(BOT.adNumber, targetPrice);
+    var arrow = targetPrice > BOT.currentPrice ? '↑' : '↓';
+    botLog('⚡ Inicial: ' + arrow + ' ' + BOT.currentPrice.toFixed(3) + ' → ' + targetPrice.toFixed(3) + ' Bs', '#F0B90B');
+    BOT.currentPrice = targetPrice;
+    document.getElementById('bot-cur-price').textContent = targetPrice.toFixed(3) + ' Bs';
+    updateTopbarBotPrice(targetPrice);
+  } catch(e) {
+    botLog('⚠ Reprice inicial: ' + e.message, '#F6465D');
+  }
+}
+
 async function botToggle() {
   if (BOT.running) {
     // ── STOP ────────────────────────────────────────────
@@ -1460,26 +1500,30 @@ async function botToggle() {
     document.getElementById('bot-toggle').textContent = '⏹ Detener Bot';
     document.getElementById('bot-toggle').style.background = '#E24B4A';
     document.getElementById('bot-live').style.display = 'grid';
-    botSetStatus('Activando anuncio...', '#F0B90B');
     botLog('— Bot iniciado —', '#F0B90B');
 
-    // Activar el anuncio en Binance antes de empezar el ciclo
+    // 1. Reprice inicial ANTES de activar el anuncio
+    botSetStatus('Posicionando...', '#F0B90B');
+    if (!BOT.adNumber && BOT_CFG.adNo) BOT.adNumber = BOT_CFG.adNo;
+    await botInitialCycle();
+
+    // 2. Activar el anuncio en Binance
+    botSetStatus('Activando anuncio...', '#F0B90B');
     try {
-      // Usar adNo configurado directamente — sin llamada extra a /my-ads
-      if (!BOT.adNumber && BOT_CFG.adNo) BOT.adNumber = BOT_CFG.adNo;
       if (BOT.adNumber) {
         var res2 = await botCallWorker('/toggle-ad', { advNo: BOT.adNumber, advStatus: 1 });
         if (res2.code && res2.code !== '000000') throw new Error(res2.message || 'código ' + res2.code);
         if (res2.failList && res2.failList.length) throw new Error(res2.failList[0].errorMsg || 'código ' + res2.failList[0].errorCode);
-        botLog('▶ Anuncio activado en Binance', '#1D9E75');
+        botLog('▶ Anuncio activado', '#1D9E75');
       } else {
-        botLog('⚠ Configura el Ad Number para activar/pausar el anuncio automáticamente', '#F0B90B');
+        botLog('⚠ Configura el Ad Number para activar/pausar automáticamente', '#F0B90B');
       }
     } catch(e) {
       botLog('⚠ No se pudo activar el anuncio: ' + e.message, '#F6465D');
     }
 
-    BOT.appliedMinLimit = 0; // force update on first cycle
+    // 3. Arrancar ciclo normal
+    BOT.appliedMinLimit = 0;
     BOT.running = true;
     BOT.lastReprice = 0;
     botSetStatus('Iniciando...', '#F0B90B');
