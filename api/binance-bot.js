@@ -51,10 +51,10 @@ export default async function handler(req, res) {
     if (!advNo || totalAmount == null) return res.status(400).json({ error: 'advNo y totalAmount requeridos' });
     const detailParams = `adsNo=${encodeURIComponent(advNo)}&timestamp=${timestamp}`;
     const detailQs = `${detailParams}&signature=${sign(detailParams)}`;
-    const detailHeaders = { 'X-MBX-APIKEY': key, 'clientType': 'web' };
+    const detailHeaders = { 'X-MBX-APIKEY': key, 'clientType': 'web', 'Content-Type': 'application/json' };
     const detailRes = await fetch(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
     const detail = await detailRes.json();
-    if (!detailRes.ok || !detail.data) return res.status(502).json({ error: 'getDetailByNo failed', detail });
+    if (!detailRes.ok || !detail.data) return res.status(200).json({ code: 'DETAIL_FAILED', message: 'getDetailByNo: ' + JSON.stringify(detail).substring(0, 200) });
     const ad = detail.data;
     const body = JSON.stringify({
       advNo: String(advNo),

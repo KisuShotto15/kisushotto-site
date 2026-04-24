@@ -1174,8 +1174,9 @@ async function botCallWorker(path, body) {
     headers: { 'Content-Type': 'application/json', 'X-Bot-Token': BOT_CFG.token },
     body: JSON.stringify({ path: path, params: body || {} })
   });
-  if (!r.ok) throw new Error('Worker ' + r.status);
-  return r.json();
+  var data = await r.json().catch(function() { return {}; });
+  if (!r.ok) throw new Error('Worker ' + r.status + (data.error ? ': ' + data.error : ''));
+  return data;
 }
 
 async function botGetMyAd() {
