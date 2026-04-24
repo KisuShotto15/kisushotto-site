@@ -117,7 +117,8 @@ body {
   display: grid;
   grid-template-columns: 1fr 36vw;
   gap: 12px;
-  padding: 10px 12px 16px;
+  padding: 12px 12px 16px;
+  align-items: start;
 }
 @media(max-width:900px){ .layout { grid-template-columns: 1fr; } }
 .col { display: flex; flex-direction: column; gap: 10px; }
@@ -450,45 +451,42 @@ input:focus {
   <div class="alert-list" id="alert-list" style="overflow-y:auto;padding:8px;flex:1"></div>
 </div>
 
-<!-- Full-width: spread hero + stats side by side -->
-<div id="top-section" style="padding:12px 12px 0;display:flex;flex-direction:column;gap:10px">
-
-  <div style="display:grid;grid-template-columns:1fr 200px;gap:10px;align-items:stretch">
-  <div class="spread-hero-full" id="spread-hero">
-    <div class="sh-label">SPREAD ACTUAL BRUTO</div>
-    <div class="sh-pct" id="hero-pct">—</div>
-    <div id="hero-net-wrap" style="display:none;margin-top:4px">
-      <div style="font-size:13px;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase" id="hero-net-lbl">NETO</div>
-      <div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;margin-top:2px" id="hero-net">—</div>
-    </div>
-    <div class="sh-prices">
-      <span class="sh-sell" id="hero-may">—</span>
-      <span class="sh-arrow">→</span>
-      <span class="sh-buy" id="hero-small">—</span>
-    </div>
-    <div>
-      <div id="hero-pill" class="sh-pill opp-no">Sin datos</div>
-    </div>
-    <div style="font-size:14px;color:var(--text-3);margin-top:6px" id="hero-label"></div>
-    <span id="hero-small-lbl" style="display:none"></span>
-  </div>
-
-  <div class="stats" style="height:100%">
-    <div class="sc" style="display:flex;flex-direction:column;justify-content:center"><div class="sc-l">Spread (Bs)</div><div class="sc-v y" id="st-diff">—</div></div>
-    <div class="sc" style="display:flex;flex-direction:column;justify-content:center"><div class="sc-l">Variación 10 min</div><div class="sc-v" id="st-delta">—</div></div>
-  </div>
-  </div>
-
-  <!-- ids ocultos para no romper el JS -->
-  <span id="st-best" style="display:none"></span>
-  <span id="st-count" style="display:none"></span>
-
-</div>
+<!-- ids ocultos para no romper el JS -->
+<span id="st-best" style="display:none"></span>
+<span id="st-count" style="display:none"></span>
 
 <!-- 2-col grid: order book aligned with auto-repricing -->
 <div class="layout">
   <!-- LEFT col -->
   <div class="col">
+
+    <!-- Spread hero (now inside left col) -->
+    <div class="spread-hero-full" id="spread-hero" style="display:flex;flex-direction:row;align-items:stretch;gap:0">
+      <!-- Left: big % + prices + pill -->
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
+        <div class="sh-label">SPREAD ACTUAL BRUTO</div>
+        <div class="sh-pct" id="hero-pct">—</div>
+        <div id="hero-net-wrap" style="display:none;margin-top:4px">
+          <div style="font-size:13px;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase" id="hero-net-lbl">NETO</div>
+          <div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;margin-top:2px" id="hero-net">—</div>
+        </div>
+        <div class="sh-prices">
+          <span class="sh-sell" id="hero-may">—</span>
+          <span class="sh-arrow">→</span>
+          <span class="sh-buy" id="hero-small">—</span>
+        </div>
+        <div>
+          <div id="hero-pill" class="sh-pill opp-no">Sin datos</div>
+        </div>
+        <div style="font-size:14px;color:var(--text-3);margin-top:6px" id="hero-label"></div>
+        <span id="hero-small-lbl" style="display:none"></span>
+      </div>
+      <!-- Right: stats -->
+      <div style="display:flex;flex-direction:column;justify-content:center;gap:10px;padding-left:20px;border-left:1px solid var(--border);min-width:130px">
+        <div><div class="sc-l">Spread (Bs)</div><div class="sc-v y" id="st-diff" style="font-size:22px;font-weight:700">—</div></div>
+        <div><div class="sc-l">Variación 10 min</div><div class="sc-v" id="st-delta" style="font-size:22px;font-weight:700">—</div></div>
+      </div>
+    </div>
 
     <!-- Order book dividido -->
     <div class="panel" style="padding:11px;position:relative">
