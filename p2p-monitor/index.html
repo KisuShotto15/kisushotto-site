@@ -1389,8 +1389,7 @@ async function botCycle() {
       below.sort(function(a, b) { return b.price - a.price; });
       var best = below[0];
       var proposed = best.price + BOT_CFG.increment;
-      // Bug fix #1: condición corregida — mover si hay cualquier ahorro posible
-      if (proposed < BOT.currentPrice) {
+      if (proposed < BOT.currentPrice && (BOT.currentPrice - proposed) <= BOT_CFG.maxGap) {
         targetPrice = proposed;
         reason = '↓ ahorro vs ' + best.merchant + ' @ ' + best.price.toFixed(3);
       }
@@ -1421,9 +1420,11 @@ async function botCycle() {
     await botUpdatePrice(BOT.adNumber, targetPrice);
     BOT.lastReprice = now;
 
-    var arrow = targetPrice > BOT.currentPrice ? '↑' : '↓';
-    var msg = arrow + ' ' + BOT.currentPrice.toFixed(3) + ' → ' + targetPrice.toFixed(3) + ' Bs  |  ' + reason;
-    botLog(msg, targetPrice > BOT.currentPrice ? '#1D9E75' : '#5dade2');
+    var isUp = targetPrice > BOT.currentPrice;
+    var msg = (isUp ? '↑' : '↓') + ' ' + BOT.currentPrice.toFixed(3) + ' → ' + targetPrice.toFixed(3) + ' Bs  |  ' + reason;
+    BOT.currentPrice = targetPrice;
+    document.getElementById('bot-cur-price').textContent = targetPrice.toFixed(3) + ' Bs';
+    botLog(msg, isUp ? '#1D9E75' : '#5dade2');
     botSetStatus('✓ Repriciado', '#1D9E75');
     updateTopbarBotPrice(targetPrice);
 
