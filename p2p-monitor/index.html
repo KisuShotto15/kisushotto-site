@@ -1202,7 +1202,7 @@ async function botCallWorker(path, body) {
   return data;
 }
 
-async function botGetMyAd() {
+async function botGetMyAd(allowPaused) {
   var data = await botCallWorker('/my-ads');
   var ads = Array.isArray(data.data) ? data.data
           : Array.isArray(data.data && data.data.data) ? data.data.data
@@ -1219,7 +1219,7 @@ async function botGetMyAd() {
     if (!byId) throw new Error('Ad ' + BOT_CFG.adNo + ' no encontrado en la lista');
     var isLiveById = byId.advStatus === 'LIVE' || byId.advStatus === 'ONLINE' || byId.advStatus === 1
                   || byId.status === 'LIVE' || byId.adStatus === 1;
-    if (!isLiveById) return null; // pausado manualmente
+    if (!isLiveById && !allowPaused) return null; // pausado manualmente
     // Detectar fondos insuficientes: menos de 100 USDT no permite editar precio
     var surplusUsdt = parseFloat(byId.surplusAmount || byId.tradableQuantity || byId.remainQuantity || 0);
     if (surplusUsdt > 0 && surplusUsdt < 100) byId.__noFunds = true;
@@ -1335,8 +1335,6 @@ async function botCycle() {
       return;
     }
     BOT.adNumber   = ad.adNumber || ad.advNo;
-    BOT.myNick     = ad.nickName || (ad.advertiserVo && ad.advertiserVo.nickName) || (ad.advertiser && ad.advertiser.nickName) || '';
-    if (!BOT.myNick) botLog('⚠ Nick no detectado — campos: ' + Object.keys(ad).join(', '), '#F0B90B');
     // Precio: confiar en currentPrice si fue actualizado en este ciclo; si no, leer del ad
     if (!BOT.currentPrice) BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit = parseFloat(ad.minSingleTransAmount);
@@ -1352,7 +1350,6 @@ async function botCycle() {
     // 2. Mercado público — 3 páginas para no perder competidores profundos
     botSetStatus('Analizando mercado...', '#F0B90B');
     var market = mapAds(await fetchTier(BOT.myMinLimit, 3));
-    botLog('📊 raw mercado: ' + market.length + ' (badge+BdV)', '#484f58');
 
     // 3. Competidores: badge + BancoDeVenezuela, límite mínimo ≤ mío + umbral
     var competitors = market.filter(function(a) {
@@ -1436,13 +1433,12 @@ async function botCycle() {
   }
 }
 
-async function botInitialCycle() {
-  botLog('⚡ Reprice inicial (sin gap)...', '#F0B90B');
+async function botInitialCycle(allowPaused) {
+  botLog('⚡ Posicionando...', '#F0B90B');
   try {
-    var ad = await botGetMyAd();
+    var ad = await botGetMyAd(allowPaused);
     if (!ad) { botLog('⚠ Anuncio no encontrado para reprice inicial', '#F0B90B'); return; }
     BOT.adNumber     = ad.adNumber || ad.advNo;
-    BOT.myNick       = ad.nickName || (ad.advertiserVo && ad.advertiserVo.nickName) || (ad.advertiser && ad.advertiser.nickName) || '';
     BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit   = parseFloat(ad.minSingleTransAmount);
     BOT.ceiling = BOT_CFG.sellPrice * (1 - BOT_CFG.minSpread / 100);
@@ -1458,34 +1454,28 @@ async function botInitialCycle() {
       return;
     }
 
-    botLog('⚡ Mi nick: "' + BOT.myNick + '" | Precio actual: ' + BOT.currentPrice.toFixed(3) + ' | Techo: ' + BOT.ceiling.toFixed(3), '#484f58');
     var market      = mapAds(await fetchTier(BOT.myMinLimit, 3));
     var competitors = market.filter(function(a) {
       return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
              a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold);
     });
-    botLog('⚡ Mercado: ' + market.length + ' anuncios | Competidores (mismo límite+BdV): ' + competitors.length, '#484f58');
 
-    // Todos los competidores bajo el techo, arriba del precio actual (sin límite de gap)
     var above = competitors.filter(function(a) { return a.price > BOT.currentPrice && a.price <= BOT.ceiling; });
     var below = competitors.filter(function(a) { return a.price < BOT.currentPrice; });
-    botLog('⚡ Arriba del techo ignorados: ' + competitors.filter(function(a){ return a.price > BOT.ceiling; }).length + ' | En rango: arriba=' + above.length + ' abajo=' + below.length, '#484f58');
 
     var targetPrice = null;
     if (above.length > 0) {
       above.sort(function(a, b) { return b.price - a.price; });
       targetPrice = above[0].price + BOT_CFG.increment;
-      botLog('⚡ Referencia: ' + above[0].merchant + ' @ ' + above[0].price.toFixed(3) + ' → target ' + targetPrice.toFixed(3), '#484f58');
     } else if (below.length > 0) {
       below.sort(function(a, b) { return b.price - a.price; });
       var proposed = below[0].price + BOT_CFG.increment;
       if (proposed < BOT.currentPrice) targetPrice = proposed;
-      botLog('⚡ Ya soy #1 — ajuste abajo vs ' + below[0].merchant + ' @ ' + below[0].price.toFixed(3), '#484f58');
     }
 
     if (targetPrice === null) { botLog('⚡ Inicial: posición óptima', '#1D9E75'); return; }
-    if (targetPrice > BOT.ceiling) { botLog('⚡ Target clamped al techo: ' + targetPrice.toFixed(3) + ' → ' + BOT.ceiling.toFixed(3), '#F0B90B'); targetPrice = BOT.ceiling; }
+    if (targetPrice > BOT.ceiling) targetPrice = BOT.ceiling;
     if (Math.abs(targetPrice - BOT.currentPrice) < 0.001) { botLog('⚡ Inicial: sin cambio necesario', '#1D9E75'); return; }
 
     await botUpdatePrice(BOT.adNumber, targetPrice);
@@ -1545,22 +1535,23 @@ async function botToggle() {
 
     if (!BOT.adNumber && BOT_CFG.adNo) BOT.adNumber = BOT_CFG.adNo;
 
-    // 1. Activar el anuncio primero (botInitialCycle necesita el ad LIVE para leerlo)
-    botSetStatus('Activando anuncio...', '#F0B90B');
-    try {
-      if (BOT.adNumber) {
-        var res2 = await botCallWorker('/toggle-ad', { advNo: BOT.adNumber, advStatus: 1 });
-        if (res2.code && res2.code !== '000000') throw new Error(res2.message || 'código ' + res2.code);
-        if (res2.failList && res2.failList.length) throw new Error(res2.failList[0].errorMsg || 'código ' + res2.failList[0].errorCode);
-        botLog('▶ Anuncio activado', '#1D9E75');
-      } else {
-        botLog('⚠ Configura el Ad Number para activar/pausar automáticamente', '#F0B90B');
+    // 1. Leer el anuncio (aún PAUSADO) para obtener adNumber y datos actuales
+    if (!BOT.adNumber) {
+      botSetStatus('Leyendo anuncio...', '#F0B90B');
+      try {
+        var adPre = await botGetMyAd(true);
+        if (adPre) {
+          BOT.adNumber   = adPre.adNumber || adPre.advNo;
+          BOT.myMinLimit = parseFloat(adPre.minSingleTransAmount);
+        } else {
+          botLog('⚠ Configura el Ad Number para activar/pausar automáticamente', '#F0B90B');
+        }
+      } catch(e) {
+        botLog('⚠ No se pudo leer el anuncio: ' + e.message, '#F6465D');
       }
-    } catch(e) {
-      botLog('⚠ No se pudo activar el anuncio: ' + e.message, '#F6465D');
     }
 
-    // 2. Aplicar límite mínimo antes del reprice inicial (si está configurado)
+    // 2. Aplicar límite mínimo mientras el anuncio está PAUSADO
     BOT.appliedMinLimit = 0;
     if (BOT_CFG.minLimit > 0 && BOT.adNumber) {
       botSetStatus('Aplicando límite mínimo...', '#F0B90B');
@@ -1573,14 +1564,27 @@ async function botToggle() {
       }
     }
 
-    // 3. Reprice inicial (sin gap) — el ad ya está LIVE con el límite correcto
+    // 3. Reprice inicial mientras el anuncio está PAUSADO (Binance permite editar precio en pausa)
     botSetStatus('Posicionando...', '#F0B90B');
-    await botInitialCycle();
+    await botInitialCycle(true);
+
+    // 4. Activar el anuncio
+    botSetStatus('Activando anuncio...', '#F0B90B');
+    try {
+      if (BOT.adNumber) {
+        var res2 = await botCallWorker('/toggle-ad', { advNo: BOT.adNumber, advStatus: 1 });
+        if (res2.code && res2.code !== '000000') throw new Error(res2.message || 'código ' + res2.code);
+        if (res2.failList && res2.failList.length) throw new Error(res2.failList[0].errorMsg || 'código ' + res2.failList[0].errorCode);
+        botLog('▶ Anuncio activado', '#1D9E75');
+      }
+    } catch(e) {
+      botLog('⚠ No se pudo activar el anuncio: ' + e.message, '#F6465D');
+    }
+
     BOT.running = true;
     BOT.lastReprice = 0;
-    botSetStatus('Iniciando...', '#F0B90B');
+    botSetStatus('✓ Bot activo', '#1D9E75');
     BOT.timer = setInterval(botCycle, 30000);
-    setTimeout(function() { if (BOT.running) botCycle(); }, 5000);
   }
 }
 
