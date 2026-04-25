@@ -562,6 +562,7 @@ input:focus {
         <div class="cfg-row"><span>Worker URL</span><input type="text" id="cfg-bot-url" value="https://kisushotto-site.vercel.app/api/binance-bot" style="width:140px;font-size:13px"></div>
         <div class="cfg-row"><span>Bot Token</span><input type="password" id="cfg-bot-token" placeholder="mibot2024"></div>
         <div class="cfg-row"><span>Ad Number</span><input type="text" id="cfg-bot-adno" placeholder="12855611..." style="font-size:13px"></div>
+        <div class="cfg-row"><span>Mi nick (Binance)</span><input type="text" id="cfg-bot-nick" placeholder="キスショット" style="font-size:13px"></div>
         <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
           <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Telegram</div>
         </div>
@@ -1132,13 +1133,15 @@ var BOT_CFG = {
   limitThreshold: 10000,
   sellPrice: 0,
   minSpread: 0.5,
-  minLimit: 0
+  minLimit: 0,
+  myNick: ''
 };
 
 function saveBotConfig() {
   BOT_CFG.url            = document.getElementById('cfg-bot-url').value.trim();
   BOT_CFG.token          = document.getElementById('cfg-bot-token').value.trim();
   BOT_CFG.adNo           = document.getElementById('cfg-bot-adno').value.trim();
+  BOT_CFG.myNick         = document.getElementById('cfg-bot-nick').value.trim();
   BOT_CFG.increment      = parseFloat(document.getElementById('cfg-bot-inc').value)     || 0.001;
   BOT_CFG.maxGap         = parseFloat(document.getElementById('cfg-bot-gap').value)     || 1.0;
   BOT_CFG.limitThreshold = parseFloat(document.getElementById('cfg-bot-thr').value)     || 10000;
@@ -1165,6 +1168,7 @@ function loadBotConfig() {
     document.getElementById('cfg-bot-url').value      = BOT_CFG.url;
     document.getElementById('cfg-bot-token').value    = BOT_CFG.token;
     document.getElementById('cfg-bot-adno').value     = BOT_CFG.adNo || '';
+    document.getElementById('cfg-bot-nick').value     = BOT_CFG.myNick || '';
     document.getElementById('cfg-bot-inc').value      = BOT_CFG.increment;
     document.getElementById('cfg-bot-gap').value      = BOT_CFG.maxGap;
     document.getElementById('cfg-bot-thr').value      = BOT_CFG.limitThreshold;
@@ -1352,7 +1356,7 @@ async function botCycle() {
 
     // 3. Competidores: badge + BancoDeVenezuela, límite mínimo ≤ mío + umbral
     var competitors = market.filter(function(a) {
-      return a.merchant !== BOT.myNick &&
+      return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
              a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold);
     });
@@ -1457,7 +1461,7 @@ async function botInitialCycle() {
     botLog('⚡ Mi nick: "' + BOT.myNick + '" | Precio actual: ' + BOT.currentPrice.toFixed(3) + ' | Techo: ' + BOT.ceiling.toFixed(3), '#484f58');
     var market      = mapAds(await fetchTier(BOT.myMinLimit, 3));
     var competitors = market.filter(function(a) {
-      return a.merchant !== BOT.myNick &&
+      return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
              a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold);
     });
