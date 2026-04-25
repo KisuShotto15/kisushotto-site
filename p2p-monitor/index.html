@@ -1456,7 +1456,7 @@ async function botInitialCycle(allowPaused) {
       return;
     }
 
-    var market      = mapAds(await fetchTier(BOT.myMinLimit, 3));
+    var market      = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3));
     var competitors = market.filter(function(a) {
       return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
