@@ -1356,7 +1356,6 @@ async function botCycle() {
       return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
              a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold) &&
-             a.minVES >= (BOT.myMinLimit - BOT_CFG.limitThreshold) &&
              a.avail >= 150;
     });
 
@@ -1462,7 +1461,6 @@ async function botInitialCycle(allowPaused) {
       return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
              a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold) &&
-             a.minVES >= (BOT.myMinLimit - BOT_CFG.limitThreshold) &&
              a.avail >= 150;
     });
 
