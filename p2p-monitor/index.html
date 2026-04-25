@@ -121,6 +121,8 @@ body {
   align-items: start;
 }
 @media(max-width:900px){ .layout { grid-template-columns: 1fr; } }
+.hero-stats { display:flex; flex-direction:row; justify-content:center; gap:24px; padding-left:20px; border-left:1px solid var(--border); }
+@media(max-width:900px){ .hero-stats { flex-direction:column; gap:10px; min-width:130px; } }
 .col { display: flex; flex-direction: column; gap: 10px; }
 
 /* ── Panels ─────────────────────────────────────────── */
@@ -482,9 +484,9 @@ input:focus {
         <span id="hero-small-lbl" style="display:none"></span>
       </div>
       <!-- Right: stats -->
-      <div style="display:flex;flex-direction:column;justify-content:center;gap:10px;padding-left:20px;border-left:1px solid var(--border);min-width:130px">
-        <div><div class="sc-l">Spread (Bs)</div><div class="sc-v y" id="st-diff" style="font-size:22px;font-weight:700">—</div></div>
-        <div><div class="sc-l">Variación 10 min</div><div class="sc-v" id="st-delta" style="font-size:22px;font-weight:700">—</div></div>
+      <div class="hero-stats">
+        <div style="display:flex;flex-direction:column;justify-content:center"><div class="sc-l">Spread (Bs)</div><div class="sc-v y" id="st-diff" style="font-size:22px;font-weight:700">—</div></div>
+        <div style="display:flex;flex-direction:column;justify-content:center"><div class="sc-l">Variación 10 min</div><div class="sc-v" id="st-delta" style="font-size:22px;font-weight:700">—</div></div>
       </div>
     </div>
 
