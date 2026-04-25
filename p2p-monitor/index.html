@@ -1331,7 +1331,8 @@ async function botCycle() {
       return;
     }
     BOT.adNumber   = ad.adNumber || ad.advNo;
-    BOT.myNick     = ad.nickName || '';
+    BOT.myNick     = ad.nickName || (ad.advertiserVo && ad.advertiserVo.nickName) || (ad.advertiser && ad.advertiser.nickName) || '';
+    if (!BOT.myNick) botLog('⚠ Nick no detectado — campos: ' + Object.keys(ad).join(', '), '#F0B90B');
     // Precio: confiar en currentPrice si fue actualizado en este ciclo; si no, leer del ad
     if (!BOT.currentPrice) BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit = parseFloat(ad.minSingleTransAmount);
@@ -1437,7 +1438,7 @@ async function botInitialCycle() {
     var ad = await botGetMyAd();
     if (!ad) { botLog('⚠ Anuncio no encontrado para reprice inicial', '#F0B90B'); return; }
     BOT.adNumber     = ad.adNumber || ad.advNo;
-    BOT.myNick       = ad.nickName || '';
+    BOT.myNick       = ad.nickName || (ad.advertiserVo && ad.advertiserVo.nickName) || (ad.advertiser && ad.advertiser.nickName) || '';
     BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit   = parseFloat(ad.minSingleTransAmount);
     BOT.ceiling = BOT_CFG.sellPrice * (1 - BOT_CFG.minSpread / 100);
