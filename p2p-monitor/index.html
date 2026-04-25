@@ -121,8 +121,12 @@ body {
   align-items: start;
 }
 @media(max-width:900px){ .layout { grid-template-columns: 1fr; } }
-.hero-stats { display:flex; flex-direction:row; justify-content:center; gap:24px; padding-left:20px; border-left:1px solid var(--border); }
-@media(max-width:900px){ .hero-stats { flex-direction:column; gap:10px; min-width:130px; } }
+.hero-stats { display:flex; flex-direction:column; justify-content:center; gap:10px; padding-left:20px; border-left:1px solid var(--border); min-width:130px; }
+.hero-main { display:flex; flex-direction:row; align-items:center; gap:0; flex:1; }
+.hero-cell { display:flex; flex-direction:column; justify-content:center; padding:0 20px; }
+.hero-cell + .hero-cell { border-left:1px solid var(--border); }
+.hero-cell:first-child { padding-left:0; }
+@media(max-width:900px){ .hero-main { flex-direction:column; align-items:flex-start; gap:8px; } .hero-cell { padding:0; border-left:none !important; } }
 .col { display: flex; flex-direction: column; gap: 10px; }
 
 /* ── Panels ─────────────────────────────────────────── */
@@ -464,30 +468,43 @@ input:focus {
 
     <!-- Spread hero (now inside left col) -->
     <div class="spread-hero-full" id="spread-hero" style="display:flex;flex-direction:row;align-items:stretch;gap:0">
-      <!-- Left: big % + prices + pill -->
-      <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
-        <div class="sh-label">SPREAD ACTUAL BRUTO</div>
-        <div class="sh-pct" id="hero-pct">—</div>
-        <div id="hero-net-wrap" style="display:none;margin-top:4px">
+      <div class="hero-main">
+        <!-- Spread bruto -->
+        <div class="hero-cell">
+          <div class="sh-label">SPREAD BRUTO</div>
+          <div class="sh-pct" id="hero-pct" style="font-size:42px">—</div>
+        </div>
+        <!-- Neto (solo si hay comisión) -->
+        <div class="hero-cell" id="hero-net-wrap" style="display:none">
           <div style="font-size:13px;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase" id="hero-net-lbl">NETO</div>
-          <div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;margin-top:2px" id="hero-net">—</div>
+          <div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1" id="hero-net">—</div>
         </div>
-        <div class="sh-prices">
-          <span class="sh-sell" id="hero-may">—</span>
-          <span class="sh-arrow">→</span>
-          <span class="sh-buy" id="hero-small">—</span>
+        <!-- Precios -->
+        <div class="hero-cell">
+          <div class="sh-label">PRECIOS</div>
+          <div class="sh-prices" style="margin-top:4px">
+            <span class="sh-sell" id="hero-may">—</span>
+            <span class="sh-arrow">→</span>
+            <span class="sh-buy" id="hero-small">—</span>
+          </div>
         </div>
-        <div>
+        <!-- Spread Bs -->
+        <div class="hero-cell">
+          <div class="sc-l">SPREAD (BS)</div>
+          <div class="sc-v y" id="st-diff" style="font-size:22px;font-weight:700;margin-top:2px">—</div>
+        </div>
+        <!-- Variación 10 min -->
+        <div class="hero-cell">
+          <div class="sc-l">VAR. 10 MIN</div>
+          <div class="sc-v" id="st-delta" style="font-size:22px;font-weight:700;margin-top:2px">—</div>
+        </div>
+        <!-- Pill + diff -->
+        <div class="hero-cell" style="flex:1">
           <div id="hero-pill" class="sh-pill opp-no">Sin datos</div>
+          <div style="font-size:13px;color:var(--text-3);margin-top:6px" id="hero-label"></div>
         </div>
-        <div style="font-size:14px;color:var(--text-3);margin-top:6px" id="hero-label"></div>
-        <span id="hero-small-lbl" style="display:none"></span>
       </div>
-      <!-- Right: stats -->
-      <div class="hero-stats">
-        <div style="display:flex;flex-direction:column;justify-content:center"><div class="sc-l">Spread (Bs)</div><div class="sc-v y" id="st-diff" style="font-size:22px;font-weight:700">—</div></div>
-        <div style="display:flex;flex-direction:column;justify-content:center"><div class="sc-l">Variación 10 min</div><div class="sc-v" id="st-delta" style="font-size:22px;font-weight:700">—</div></div>
-      </div>
+      <span id="hero-small-lbl" style="display:none"></span>
     </div>
 
     <!-- Order book dividido -->
