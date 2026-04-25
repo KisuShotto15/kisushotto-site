@@ -1560,12 +1560,22 @@ async function botToggle() {
       botLog('⚠ No se pudo activar el anuncio: ' + e.message, '#F6465D');
     }
 
-    // 2. Reprice inicial (sin gap) — el ad ya está LIVE
+    // 2. Aplicar límite mínimo antes del reprice inicial (si está configurado)
+    BOT.appliedMinLimit = 0;
+    if (BOT_CFG.minLimit > 0 && BOT.adNumber) {
+      botSetStatus('Aplicando límite mínimo...', '#F0B90B');
+      try {
+        await botUpdateMinLimit(BOT.adNumber, BOT_CFG.minLimit);
+        BOT.appliedMinLimit = BOT_CFG.minLimit;
+        botLog('📏 Límite mínimo → ' + fmtM(BOT_CFG.minLimit) + ' VES', '#8b949e');
+      } catch(e) {
+        botLog('⚠ Límite mínimo: ' + e.message, '#F6465D');
+      }
+    }
+
+    // 3. Reprice inicial (sin gap) — el ad ya está LIVE con el límite correcto
     botSetStatus('Posicionando...', '#F0B90B');
     await botInitialCycle();
-
-    // 3. Arrancar ciclo normal — esperar 5s para que Binance propague el reprice inicial
-    BOT.appliedMinLimit = 0;
     BOT.running = true;
     BOT.lastReprice = 0;
     botSetStatus('Iniciando...', '#F0B90B');
