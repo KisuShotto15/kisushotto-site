@@ -1309,6 +1309,8 @@ async function botCycle() {
       try {
         await botUpdateMinLimit(BOT.adNumber, BOT_CFG.minLimit);
         BOT.appliedMinLimit = BOT_CFG.minLimit;
+        BOT.myMinLimit = BOT_CFG.minLimit;
+        BOT.cachedAd = null;
         botLog('📏 Límite mínimo → ' + fmtM(BOT_CFG.minLimit) + ' VES', '#8b949e');
       } catch(e) {
         botLog('⚠ Límite mínimo: ' + e.message, '#F6465D');
@@ -1447,15 +1449,6 @@ async function botInitialCycle(allowPaused) {
     document.getElementById('bot-ceiling').textContent    = BOT.ceiling.toFixed(3) + ' Bs';
     document.getElementById('bot-cur-price').textContent  = BOT.currentPrice.toFixed(3) + ' Bs';
 
-    if (BOT.currentPrice > BOT.ceiling) {
-      await botUpdatePrice(BOT.adNumber, BOT.ceiling);
-      BOT.currentPrice = BOT.ceiling;
-      document.getElementById('bot-cur-price').textContent = BOT.ceiling.toFixed(3) + ' Bs';
-      updateTopbarBotPrice(BOT.ceiling);
-      botLog('⚡ Inicial: sobre techo → ' + BOT.ceiling.toFixed(3) + ' Bs', '#F0B90B');
-      return;
-    }
-
     var market      = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3));
     var competitors = market.filter(function(a) {
       return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
@@ -1464,8 +1457,16 @@ async function botInitialCycle(allowPaused) {
              a.avail >= 150;
     });
 
+    // above: competidores bajo el techo (sin límite de gap — reprice inicial)
     var above = competitors.filter(function(a) { return a.price > BOT.currentPrice && a.price <= BOT.ceiling; });
     var below = competitors.filter(function(a) { return a.price < BOT.currentPrice; });
+
+    // Si el precio actual ya supera el techo, todos los competidores válidos están "abajo"
+    // Recalcular above con referencia al techo si estamos sobre él
+    if (BOT.currentPrice > BOT.ceiling) {
+      above = competitors.filter(function(a) { return a.price <= BOT.ceiling; });
+      below = [];
+    }
 
     var targetPrice = null;
     if (above.length > 0) {
