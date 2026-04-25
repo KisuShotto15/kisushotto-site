@@ -1349,7 +1349,7 @@ async function botCycle() {
 
     // 2. Mercado público — 3 páginas para no perder competidores profundos
     botSetStatus('Analizando mercado...', '#F0B90B');
-    var market = mapAds(await fetchTier(BOT.myMinLimit, 3));
+    var market = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3));
 
     // 3. Competidores: badge + BancoDeVenezuela, límite mínimo ≤ mío + umbral
     var competitors = market.filter(function(a) {
