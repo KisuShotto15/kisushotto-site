@@ -1355,7 +1355,8 @@ async function botCycle() {
     var competitors = market.filter(function(a) {
       return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
-             a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold);
+             a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold) &&
+             a.avail >= 150;
     });
 
     var above = competitors.filter(function(a) { return a.price > BOT.currentPrice && a.price <= BOT.ceiling; });
@@ -1459,7 +1460,8 @@ async function botInitialCycle(allowPaused) {
     var competitors = market.filter(function(a) {
       return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
-             a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold);
+             a.minVES <= (BOT.myMinLimit + BOT_CFG.limitThreshold) &&
+             a.avail >= 150;
     });
 
     var above = competitors.filter(function(a) { return a.price > BOT.currentPrice && a.price <= BOT.ceiling; });
