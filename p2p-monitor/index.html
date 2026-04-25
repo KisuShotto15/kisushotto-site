@@ -1389,7 +1389,7 @@ async function botCycle() {
       below.sort(function(a, b) { return b.price - a.price; });
       var best = below[0];
       var proposed = best.price + BOT_CFG.increment;
-      if (proposed < BOT.currentPrice && (BOT.currentPrice - proposed) <= BOT_CFG.maxGap) {
+      if (proposed < BOT.currentPrice) {
         targetPrice = proposed;
         reason = '↓ ahorro vs ' + best.merchant + ' @ ' + best.price.toFixed(3);
       }
