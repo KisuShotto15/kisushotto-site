@@ -1118,7 +1118,9 @@ var BOT = {
   cycles: 0,
   appliedMinLimit: 0,
   sessMax: null,
-  sessMin: null
+  sessMin: null,
+  cachedAd: null,
+  cachedAdAt: 0
 };
 
 var BOT_CFG = {
@@ -1309,22 +1311,30 @@ async function botCycle() {
       }
     }
 
-    botSetStatus('Consultando anuncio...', '#F0B90B');
-
-    // 1. Mi anuncio actual
-    var ad = await botGetMyAd();
+    // 1. Mi anuncio actual — usar cache si tiene menos de 2 min
+    var ad;
+    var now = Date.now();
+    if (BOT.cachedAd && (now - BOT.cachedAdAt) < 120000) {
+      ad = BOT.cachedAd;
+    } else {
+      botSetStatus('Consultando anuncio...', '#F0B90B');
+      ad = await botGetMyAd();
+      if (ad) { BOT.cachedAd = ad; BOT.cachedAdAt = now; }
+    }
     if (!ad) {
+      BOT.cachedAd = null;
       botSetStatus('⏸ Anuncio pausado — esperando...', '#555');
       return;
     }
     if (ad.__noFunds) {
       botSetStatus('💸 Fondos insuficientes (<100 USDT)', '#E24B4A');
-      return; // no intentar reprice
+      return;
     }
-    BOT.adNumber     = ad.adNumber || ad.advNo;
-    BOT.myNick       = ad.nickName || '';
-    BOT.currentPrice = parseFloat(ad.price);
-    BOT.myMinLimit   = parseFloat(ad.minSingleTransAmount);
+    BOT.adNumber   = ad.adNumber || ad.advNo;
+    BOT.myNick     = ad.nickName || '';
+    // Precio: confiar en currentPrice si fue actualizado en este ciclo; si no, leer del ad
+    if (!BOT.currentPrice) BOT.currentPrice = parseFloat(ad.price);
+    BOT.myMinLimit = parseFloat(ad.minSingleTransAmount);
 
     // Calcular techo desde precio de venta configurado
     if (!BOT_CFG.sellPrice) {
@@ -1492,6 +1502,8 @@ async function botToggle() {
     BOT.timer = null;
     BOT.basePrice = null;
     BOT.ceiling = null;
+    BOT.cachedAd = null;
+    BOT.cachedAdAt = 0;
 
     document.getElementById('bot-toggle').textContent = '▶ Iniciar Bot';
     document.getElementById('bot-toggle').style.background = '';

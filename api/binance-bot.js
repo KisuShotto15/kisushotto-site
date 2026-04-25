@@ -49,7 +49,30 @@ export default async function handler(req, res) {
   } else if (path === '/update-quantity') {
     const { advNo, totalAmount } = params || {};
     if (!advNo || totalAmount == null) return res.status(400).json({ error: 'advNo y totalAmount requeridos' });
-    const body = JSON.stringify({ advNo: String(advNo), initAmount: Number(totalAmount) });
+    const detailParams = `adsNo=${encodeURIComponent(advNo)}&timestamp=${timestamp}`;
+    const detailQs = `${detailParams}&signature=${sign(detailParams)}`;
+    const detailHeaders = { 'X-MBX-APIKEY': key, 'clientType': 'web' };
+    const detailRes = await fetch(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
+    const detail = await detailRes.json();
+    if (!detailRes.ok || !detail.data) return res.status(200).json({ code: 'DETAIL_FAILED', message: JSON.stringify(detail).substring(0, 200) });
+    const ad = detail.data;
+    const body = JSON.stringify({
+      advNo: String(advNo),
+      asset: ad.asset,
+      tradeType: ad.tradeType,
+      fiatUnit: ad.fiatUnit,
+      priceType: ad.priceType,
+      price: ad.price,
+      priceFloatingRatio: ad.priceFloatingRatio,
+      initAmount: Number(totalAmount),
+      minSingleTransAmount: ad.minSingleTransAmount,
+      maxSingleTransAmount: ad.maxSingleTransAmount,
+      payTimeLimit: ad.payTimeLimit,
+      tradeMethods: ad.tradeMethods || [],
+      remarks: ad.remarks || '',
+      autoReplyMsg: ad.autoReplyMsg || '',
+      advStatus: ad.advStatus,
+    });
     r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
   } else if (path === '/update-limit') {
     const { advNo, minSingleTransAmount } = params || {};
