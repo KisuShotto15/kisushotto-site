@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KS / Hub</title>
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#09090d">
+<meta name="theme-color" content="#08080c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,18 +16,16 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:       #09090d;
-  --surface:  #0e0e14;
-  --border:   rgba(255,255,255,0.06);
-  --border-h: rgba(255,255,255,0.13);
-  --text:     #dddde8;
-  --muted:    #44445a;
-  --radius:   16px;
+  --bg:       #08080c;
+  --surface:  #0d0d12;
+  --border:   rgba(255,255,255,0.07);
+  --border-h: rgba(255,255,255,0.15);
+  --text:     #e2e2ed;
+  --muted:    #3a3a52;
+  --radius:   18px;
 }
 
-html {
-  font-size: 20px;
-}
+html { font-size: 20px; }
 html, body {
   height: 100%;
   background: var(--bg);
@@ -36,13 +34,15 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Subtle dot grid — pure CSS, zero JS */
+/* Mesh gradient background */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% -5%, rgba(99,102,241,0.10) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 40% at 0% 110%, rgba(16,185,129,0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 40% at 110% 100%, rgba(245,158,11,0.07) 0%, transparent 55%);
   pointer-events: none;
   z-index: 0;
 }
@@ -50,9 +50,12 @@ body::before {
 .page {
   position: relative;
   z-index: 1;
-  max-width: 1600px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 28px 32px 80px;
+  padding: 40px 40px 60px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Header ── */
@@ -60,29 +63,24 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 80px;
+  margin-bottom: 48px;
   opacity: 0;
   animation: fadeUp 0.5s ease forwards 0.05s;
 }
 
-.logo {
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  color: var(--text);
-}
-.logo em {
-  font-style: normal;
-  color: #f59e0b;
+.logo img {
+  height: 36px;
+  width: auto;
+  display: block;
 }
 
 .status {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   color: var(--muted);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
 }
 .dot {
@@ -95,11 +93,11 @@ header {
 
 /* ── Section label ── */
 .label {
-  font-size: 0.7rem;
-  letter-spacing: 0.18em;
+  font-size: 0.62rem;
+  letter-spacing: 0.20em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 28px;
+  margin-bottom: 20px;
   opacity: 0;
   animation: fadeUp 0.5s ease forwards 0.15s;
 }
@@ -108,7 +106,7 @@ header {
 .grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
   opacity: 0;
   animation: fadeUp 0.5s ease forwards 0.25s;
 }
@@ -118,48 +116,51 @@ header {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 48px 20px 36px;
+  aspect-ratio: 1;
   text-decoration: none;
   color: var(--text);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  justify-content: center;
+  gap: 18px;
   position: relative;
-  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, transform 0.18s, box-shadow 0.2s;
   will-change: transform;
 }
 
 .card:hover {
-  border-color: var(--c, var(--border-h));
+  border-color: color-mix(in srgb, var(--c, white) 60%, transparent);
   transform: translateY(-4px);
-  box-shadow: 0 20px 48px rgba(0,0,0,0.5), 0 0 0 1px var(--c, transparent);
+  box-shadow: 0 24px 56px rgba(0,0,0,0.55), 0 0 0 1px color-mix(in srgb, var(--c, transparent) 40%, transparent);
 }
 
 .card.dim {
-  opacity: 0.35;
+  opacity: 0.30;
   pointer-events: none;
 }
 
 .icon {
-  font-size: 3.4rem;
+  font-size: 3rem;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 88px;
-  height: 88px;
-  border-radius: 20px;
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
   background: rgba(255,255,255,0.04);
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.18s;
+  flex-shrink: 0;
 }
 
 .card:hover .icon {
-  background: color-mix(in srgb, var(--c, transparent) 12%, rgba(255,255,255,0.04));
+  background: color-mix(in srgb, var(--c, transparent) 14%, rgba(255,255,255,0.04));
+  transform: scale(1.06);
 }
 
 .name {
-  font-size: 0.9rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   text-align: center;
@@ -168,41 +169,26 @@ header {
 
 .soon {
   position: absolute;
-  top: 14px;
-  right: 14px;
-  font-size: 0.52rem;
-  letter-spacing: 0.1em;
+  top: 12px;
+  right: 12px;
+  font-size: 0.48rem;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--muted);
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 3px 7px;
-}
-
-/* ── Footer ── */
-footer {
-  margin-top: 80px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.68rem;
-  color: var(--muted);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0;
-  animation: fadeUp 0.5s ease forwards 0.4s;
+  padding: 3px 6px;
 }
 
 /* ── Animations ── */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes blink {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.25; }
+  50%       { opacity: 0.2; }
 }
 
 /* ── Responsive ── */
@@ -210,12 +196,11 @@ footer {
   .grid { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 600px) {
-  .page { padding: 24px 20px 64px; }
-  header { margin-bottom: 56px; }
-  .logo { font-size: 1.6rem; }
+  .page { padding: 28px 20px 48px; }
+  header { margin-bottom: 36px; }
+  .logo img { height: 28px; }
   .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .icon { font-size: 2.6rem; width: 72px; height: 72px; }
-  .card { padding: 36px 16px 28px; gap: 16px; }
+  .icon { width: 64px; height: 64px; font-size: 2.4rem; }
 }
 </style>
 </head>
@@ -224,7 +209,7 @@ footer {
 <div class="page">
 
   <header>
-    <div class="logo">KS<em>.</em></div>
+    <div class="logo"><img src="/images/KS.png" alt="KS"></div>
     <div class="status"><span class="dot"></span>online</div>
   </header>
 
@@ -233,27 +218,27 @@ footer {
   <div class="grid">
 
     <a href="https://portfolio.kisushotto.com" class="card" style="--c:#f59e0b">
-      <div class="icon" style="background:#f3f3f3;padding:0;overflow:hidden"><img src="/images/portfolio-logo.png" style="width:100%;height:100%;object-fit:cover;border-radius:20px;display:block"></div>
+      <div class="icon" style="background:#f3f3f3;padding:0;overflow:hidden"><img src="/images/portfolio-logo.png" style="width:100%;height:100%;object-fit:cover;border-radius:18px;display:block"></div>
       <span class="name">Portfolio</span>
     </a>
 
     <a href="https://kisushotto.com/p2p-monitor" class="card" style="--c:#10b981">
-      <div class="icon" style="background:#0a0b0e;padding:0;overflow:hidden"><img src="/images/p2p-icon.svg" style="width:100%;height:100%;object-fit:cover;border-radius:20px;display:block"></div>
+      <div class="icon" style="background:#0a0b0e;padding:0;overflow:hidden"><img src="/images/p2p-icon.svg" style="width:100%;height:100%;object-fit:cover;border-radius:18px;display:block"></div>
       <span class="name">P2P Monitor</span>
     </a>
 
     <a href="https://kisushotto.com/trade-journal/" class="card" style="--c:#35c8f1">
-      <div class="icon" style="background:#0a0b0e;padding:0;overflow:hidden"><img src="/images/tj-icon.svg" style="width:100%;height:100%;object-fit:cover;border-radius:20px;display:block"></div>
+      <div class="icon" style="background:#0a0b0e;padding:0;overflow:hidden"><img src="/images/tj-icon.svg" style="width:100%;height:100%;object-fit:cover;border-radius:18px;display:block"></div>
       <span class="name">Trade Journal</span>
     </a>
 
     <a href="https://kisushotto.com/nutrition" class="card" style="--c:#a3e635">
-      <div class="icon" style="background:#1a1a1f;padding:0;overflow:hidden"><img src="/images/nutrition-icon.svg" style="width:100%;height:100%;object-fit:cover;border-radius:20px;display:block"></div>
+      <div class="icon" style="background:#1a1a1f;padding:0;overflow:hidden"><img src="/images/nutrition-icon.svg" style="width:100%;height:100%;object-fit:cover;border-radius:18px;display:block"></div>
       <span class="name">Nutrition</span>
     </a>
 
     <a href="https://kisushotto.com/body-metrics/" class="card" style="--c:#3b82f6">
-      <div class="icon" style="background:#0a0b0e;padding:0;overflow:hidden"><img src="/images/bm-icon.svg" style="width:100%;height:100%;object-fit:cover;border-radius:20px;display:block"></div>
+      <div class="icon" style="background:#0a0b0e;padding:0;overflow:hidden"><img src="/images/bm-icon.svg" style="width:100%;height:100%;object-fit:cover;border-radius:18px;display:block"></div>
       <span class="name">Body Metrics</span>
     </a>
 
@@ -275,11 +260,6 @@ footer {
     </a>
 
   </div>
-
-  <footer>
-    <span>kisushotto · hub</span>
-    <span>v0.1</span>
-  </footer>
 
 </div>
 
