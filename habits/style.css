@@ -196,6 +196,15 @@ body::before {
   .stats-strip { grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .stat-block { padding: 14px 10px; }
   .panel-body { padding: 18px 20px 28px; }
+
+  /* Streak badge: absolute bottom-right corner on mobile */
+  .habit-row { padding-bottom: 28px; }
+  .habit-streak {
+    position: absolute;
+    bottom: 7px; right: 10px;
+    font-size: 12px;
+    padding: 2px 8px;
+  }
 }
 
 /* ── Cards ── */
