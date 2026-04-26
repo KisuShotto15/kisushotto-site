@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
 <title>KS / Hub</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#08080c">
@@ -16,11 +17,12 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  color-scheme: dark;
   --bg: #08080c;
   --text: #e2e2ed;
   --muted: #3a3a52;
   --radius: 28px;
-  --icon: 170px;
+  --icon: 190px;
 }
 
 html { font-size: 16px; }
@@ -32,7 +34,6 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Mesh gradient — no z-index so it doesn't create isolated stacking context */
 body::before {
   content: '';
   position: fixed;
@@ -44,12 +45,11 @@ body::before {
   pointer-events: none;
 }
 
-/* No z-index on .page — prevents stacking context isolation that breaks mix-blend-mode */
 .page {
   position: relative;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 48px 60px 80px;
+  padding: 56px 60px 56px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -60,12 +60,11 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 72px;
+  margin-bottom: 64px;
   opacity: 0;
-  animation: fadeUp 0.5s ease forwards 0.05s;
+  animation: fadeUp 0.45s ease forwards 0.05s;
 }
 
-/* Clip to circle to remove star, screen blend to remove black bg */
 .logo {
   width: 48px;
   height: 48px;
@@ -103,10 +102,8 @@ header {
 .grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  row-gap: 52px;
-  opacity: 0;
-  animation: fadeUp 0.5s ease forwards 0.2s;
+  gap: 20px;
+  row-gap: 56px;
 }
 
 /* ── App item ── */
@@ -119,14 +116,22 @@ header {
   gap: 16px;
   position: relative;
   transition: transform 0.18s ease;
+  /* staggered entrance */
+  opacity: 0;
+  animation: fadeUp 0.4s ease forwards;
 }
+.app:nth-child(1) { animation-delay: 0.12s; }
+.app:nth-child(2) { animation-delay: 0.18s; }
+.app:nth-child(3) { animation-delay: 0.24s; }
+.app:nth-child(4) { animation-delay: 0.30s; }
+.app:nth-child(5) { animation-delay: 0.36s; }
+.app:nth-child(6) { animation-delay: 0.42s; }
+.app:nth-child(7) { animation-delay: 0.48s; }
+.app:nth-child(8) { animation-delay: 0.54s; }
 
 .app:hover { transform: translateY(-7px); }
-
-.app.dim {
-  opacity: 0.28;
-  pointer-events: none;
-}
+.app.dim { opacity: 0.28; pointer-events: none; }
+.app.dim { animation: fadeUp 0.4s ease forwards 0.54s; }
 
 .icon {
   width: var(--icon);
@@ -135,16 +140,18 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 5rem;
+  font-size: 5.4rem;
   line-height: 1;
   background: #141419;
   overflow: hidden;
   flex-shrink: 0;
   transition: box-shadow 0.22s ease, transform 0.18s ease;
+  /* prevent browser dark-mode from inverting icon backgrounds */
+  color-scheme: light dark;
 }
 
 .app:hover .icon {
-  box-shadow: 0 24px 56px rgba(0,0,0,0.65), 0 0 0 1px color-mix(in srgb, var(--c, white) 30%, transparent);
+  box-shadow: 0 28px 64px rgba(0,0,0,0.7), 0 0 0 1px color-mix(in srgb, var(--c, white) 30%, transparent);
   transform: scale(1.05);
 }
 
@@ -154,6 +161,7 @@ header {
   object-fit: cover;
   border-radius: var(--radius);
   display: block;
+  color-scheme: light dark;
 }
 
 .name {
@@ -161,15 +169,20 @@ header {
   font-weight: 500;
   letter-spacing: -0.01em;
   text-align: center;
-  color: rgba(255,255,255,0.78);
+  color: rgba(255,255,255,0.70);
+  transition: color 0.18s ease;
+}
+
+.app:hover .name {
+  color: color-mix(in srgb, var(--c, white) 80%, rgba(255,255,255,0.85));
 }
 
 .soon {
   position: absolute;
   top: 10px;
-  right: calc(50% - var(--icon) / 2 - 4px);
-  transform: translateX(100%);
-  font-size: 0.52rem;
+  right: calc(50% - var(--icon) / 2 - 2px);
+  transform: translateX(100%) translateX(4px);
+  font-size: 0.50rem;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--muted);
@@ -181,7 +194,7 @@ header {
 
 /* ── Animations ── */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(18px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes blink {
@@ -191,23 +204,23 @@ header {
 
 /* ── Responsive ── */
 @media (max-width: 1100px) {
-  :root { --icon: 140px; }
-  .page { padding: 40px 40px 64px; }
+  :root { --icon: 155px; }
+  .page { padding: 48px 40px 48px; }
 }
 @media (max-width: 800px) {
-  :root { --icon: 110px; --radius: 24px; }
-  .grid { grid-template-columns: repeat(3, 1fr); row-gap: 40px; }
-  .page { padding: 32px 28px 56px; }
-  .name { font-size: 0.9rem; }
+  :root { --icon: 130px; --radius: 24px; }
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 24px; row-gap: 44px; }
+  .page { padding: 40px 32px 40px; }
+  .name { font-size: 0.95rem; }
 }
-@media (max-width: 520px) {
-  :root { --icon: 80px; --radius: 20px; }
-  .page { padding: 24px 16px 48px; }
+@media (max-width: 480px) {
+  :root { --icon: 140px; --radius: 22px; }
+  .page { padding: 28px 20px 28px; }
   header { margin-bottom: 44px; }
-  .logo { width: 36px; height: 36px; }
-  .grid { grid-template-columns: repeat(4, 1fr); gap: 8px; row-gap: 28px; }
-  .name { font-size: 0.72rem; }
-  .icon { font-size: 3rem; }
+  .logo { width: 38px; height: 38px; }
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 16px; row-gap: 36px; }
+  .name { font-size: 0.88rem; }
+  .icon { font-size: 4.5rem; }
 }
 </style>
 </head>
