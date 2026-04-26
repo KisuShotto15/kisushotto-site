@@ -64,7 +64,7 @@ export default async function handler(req, res) {
       priceType: ad.priceType,
       price: ad.price,
       priceFloatingRatio: ad.priceFloatingRatio,
-      initAmount: String(parseFloat(totalAmount).toFixed(8)),
+      initAmount: String((parseFloat(ad.initAmount) - parseFloat(ad.surplusAmount || 0) + parseFloat(totalAmount)).toFixed(8)),
       minSingleTransAmount: ad.minSingleTransAmount,
       maxSingleTransAmount: ad.maxSingleTransAmount,
       payTimeLimit: ad.payTimeLimit,
@@ -74,8 +74,6 @@ export default async function handler(req, res) {
       advStatus: ad.advStatus,
     });
     r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
-    const binanceData = await r.json().catch(() => ({ error: 'invalid JSON' }));
-    return res.status(200).json({ ...binanceData, _debug: { adInitAmount: ad.initAmount, adSurplusAmount: ad.surplusAmount, adAdvStatus: ad.advStatus, sentInitAmount: String(parseFloat(totalAmount).toFixed(8)) } });
   } else if (path === '/update-limit') {
     const { advNo, minSingleTransAmount } = params || {};
     if (!advNo || minSingleTransAmount == null) return res.status(400).json({ error: 'advNo y minSingleTransAmount requeridos' });
