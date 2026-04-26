@@ -181,6 +181,7 @@ function renderToday() {
       <div class="habit-row ${done_ ? 'done' : ''} ${notDue_ ? 'not-due' : ''}"
            style="--habit-color:${color}"
            onclick="${notDue_ ? '' : `onHabitClick('${h.id}')`}">
+        <div class="habit-pill"></div>
         <div class="habit-check"></div>
         <span class="habit-emoji">${h.emoji || '✓'}</span>
         <div class="habit-info">
