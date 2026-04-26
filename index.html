@@ -49,10 +49,7 @@ body::before {
   position: relative;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 56px 60px 56px;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+  padding: 56px 60px;
 }
 
 /* ── Header ── */
@@ -165,8 +162,8 @@ header {
 }
 
 .name {
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: 1.05rem;
+  font-weight: 600;
   letter-spacing: -0.01em;
   text-align: center;
   color: rgba(255,255,255,0.70);
@@ -211,7 +208,7 @@ header {
   :root { --icon: 130px; --radius: 24px; }
   .grid { grid-template-columns: repeat(2, 1fr); gap: 24px; row-gap: 44px; }
   .page { padding: 40px 32px 40px; }
-  .name { font-size: 0.95rem; }
+  .name { font-size: 1rem; }
 }
 @media (max-width: 480px) {
   :root { --icon: 140px; --radius: 22px; }
@@ -219,7 +216,7 @@ header {
   header { margin-bottom: 44px; }
   .logo { width: 38px; height: 38px; }
   .grid { grid-template-columns: repeat(2, 1fr); gap: 16px; row-gap: 36px; }
-  .name { font-size: 0.88rem; }
+  .name { font-size: 0.92rem; }
   .icon { font-size: 4.5rem; }
 }
 </style>
@@ -246,7 +243,7 @@ header {
     </a>
 
     <a href="https://kisushotto.com/trade-journal/" class="app" style="--c:#35c8f1">
-      <div class="icon" style="background:#0a0b0e"><img src="/images/tj-icon.svg" alt="Trade Journal"></div>
+      <div class="icon" style="background:#111c26"><img src="/images/tj-icon.svg" alt="Trade Journal"></div>
       <span class="name">Trade Journal</span>
     </a>
 
