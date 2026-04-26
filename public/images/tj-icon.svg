@@ -1,29 +1,45 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Dark rounded background -->
-  <rect width="100" height="100" rx="22" fill="#0a0b0e"/>
+<svg width="100%" viewBox="0 0 110 110" role="img" xmlns="http://www.w3.org/2000/svg" style="">
+  <title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Trade Journal app icon</title>
+  <desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Dark rounded square icon showing an open journal with three bullish candlestick bars in teal-green</desc>
 
-  <!-- Book outer frame -->
-  <rect x="14" y="22" width="72" height="56" rx="4"
-    fill="none" stroke="#35c8f1" stroke-width="2.2" stroke-linejoin="round"/>
+  <rect width="100" height="100" rx="22" fill="#0a0b0e" style="fill:rgb(10, 11, 14);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Book: x:18..82, y:20..80 -->
+  <rect x="18" y="20" width="64" height="60" rx="3" fill="none" stroke="#00d4aa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="fill:none;stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:2.2px;stroke-linecap:round;stroke-linejoin:round;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
   <!-- Spine -->
-  <line x1="30" y1="22" x2="30" y2="78"
-    stroke="#35c8f1" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="50" y1="20" x2="50" y2="80" stroke="#00d4aa" stroke-width="2.2" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:2.2px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
-  <!-- Horizontal rules inside book -->
-  <line x1="30" y1="32" x2="83" y2="32" stroke="#35c8f1" stroke-width="1.1" opacity="0.35"/>
-  <line x1="30" y1="68" x2="83" y2="68" stroke="#35c8f1" stroke-width="1.1" opacity="0.35"/>
+  <!-- Left page tint -->
+  <rect x="19" y="21" width="30" height="58" rx="1" fill="#00d4aa" fill-opacity="0.04" style="fill:rgb(0, 212, 170);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
-  <!-- Candlestick 1 — bearish (hollow) -->
-  <line x1="44" y1="37" x2="44" y2="65" stroke="#35c8f1" stroke-width="1.8" stroke-linecap="round"/>
-  <rect x="40" y="43" width="8" height="14" rx="1.5"
-    fill="none" stroke="#35c8f1" stroke-width="1.8"/>
+  <!-- Journal lines — left page, consistent margin: x:24..44 -->
+  <line x1="24" y1="36" x2="44" y2="36" stroke="#00d4aa" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.4" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.2px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="24" y1="44" x2="44" y2="44" stroke="#00d4aa" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.4" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.2px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="24" y1="52" x2="44" y2="52" stroke="#00d4aa" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.4" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.2px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="24" y1="60" x2="38" y2="60" stroke="#00d4aa" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.4" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.2px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
-  <!-- Candlestick 2 — bullish (filled) -->
-  <line x1="57" y1="35" x2="57" y2="64" stroke="#35c8f1" stroke-width="1.8" stroke-linecap="round"/>
-  <rect x="53" y="40" width="8" height="16" rx="1.5" fill="#35c8f1"/>
+  <!--
+    Right page safe area: x:54..78, y:26..74 (6px margin from spine and right wall, 6px from top/bottom)
+    3 candles, body width=5, gap between centers=8: centers at x=57, 65, 73
+    Bodies step upward: tallest on right. Wicks stay within y:28..72
+    Candle 1 (small): body y:55..62, top wick y:51..55, bottom wick y:62..66
+    Candle 2 (medium): body y:48..58, top wick y:44..48, bottom wick y:58..63
+    Candle 3 (tall): body y:40..55, top wick y:36..40, bottom wick y:55..60
+  -->
 
-  <!-- Candlestick 3 — bullish tall (filled) -->
-  <line x1="70" y1="34" x2="70" y2="63" stroke="#35c8f1" stroke-width="1.8" stroke-linecap="round"/>
-  <rect x="66" y="38" width="8" height="18" rx="1.5" fill="#35c8f1"/>
+  <!-- Candle 1: small bullish — center x=57 -->
+  <line x1="57" y1="51" x2="57" y2="55" stroke="#00d4aa" stroke-width="1.8" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.8px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="54.5" y="55" width="5" height="8" rx="0.8" fill="#00d4aa" stroke="#00d4aa" stroke-width="1.8" style="fill:rgb(0, 212, 170);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.8px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="57" y1="63" x2="57" y2="67" stroke="#00d4aa" stroke-width="1.8" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.8px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Candle 2: medium bullish — center x=65 -->
+  <line x1="65" y1="44" x2="65" y2="48" stroke="#00d4aa" stroke-width="1.8" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.8px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="62.5" y="48" width="5" height="11" rx="0.8" fill="#00d4aa" stroke="#00d4aa" stroke-width="1.8" style="fill:rgb(0, 212, 170);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.8px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="65" y1="59" x2="65" y2="63" stroke="#00d4aa" stroke-width="1.8" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.8px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Candle 3: tall bullish — center x=73 -->
+  <line x1="73" y1="37" x2="73" y2="41" stroke="#00d4aa" stroke-width="1.8" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.8px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="70.5" y="41" width="5" height="14" rx="0.8" fill="#00d4aa" stroke="#00d4aa" stroke-width="1.8" style="fill:rgb(0, 212, 170);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.8px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="73" y1="55" x2="73" y2="59" stroke="#00d4aa" stroke-width="1.8" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:rgb(0, 212, 170);color:rgb(255, 255, 255);stroke-width:1.8px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 </svg>
