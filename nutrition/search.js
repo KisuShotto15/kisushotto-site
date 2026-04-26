@@ -2,8 +2,10 @@ const BASE = 'https://api.nal.usda.gov/fdc/v1';
 
 // ── API key stored per profile in localStorage ────────────────────────────────
 
+const ENV_API_KEY = import.meta.env.VITE_USDA_API_KEY || '';
+
 export function getApiKey(profileId) {
-  return localStorage.getItem(`nutrition_apikey_${profileId}`) || '';
+  return localStorage.getItem(`nutrition_apikey_${profileId}`) || ENV_API_KEY;
 }
 
 export function setApiKey(profileId, key) {

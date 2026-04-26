@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Body Metrics</title>
+<link rel="icon" type="image/svg+xml" href="/images/bm-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090d;--surf:#0e0e14;--surf-2:#13131b;
+  --border:rgba(255,255,255,0.07);--border-2:rgba(255,255,255,0.12);
+  --text:#dddde8;--text-2:#8b8ba7;--text-3:#555570;
+  --green:#00d17a;--red:#f6465d;--accent:#3b82f6;
+  --r:12px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:none;outline:none}
+input,select{font-family:inherit;outline:none}
+
+/* ── Topbar ── */
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:100}
+.topbar-icon{width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0}
+.topbar-icon img{width:100%;height:100%;object-fit:cover;display:block}
+.topbar-title{font-size:15px;font-weight:700;letter-spacing:-0.02em}
+.topbar-back{font-size:13px;color:var(--text-2);margin-right:4px;display:flex;align-items:center;gap:4px}
+.topbar-back:hover{color:var(--text)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+/* ── Layout ── */
+.page{max-width:1200px;margin:0 auto;padding:24px 20px 80px}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:800px){.layout{grid-template-columns:1fr}}
+
+/* ── Panel ── */
+.panel{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.ptitle{font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:16px}
+
+/* ── Stat cards ── */
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat-card{background:var(--surf-2);border:1px solid var(--border);border-radius:10px;padding:14px 12px}
+.stat-label{font-size:11px;color:var(--text-2);margin-bottom:6px}
+.stat-val{font-size:22px;font-weight:700;letter-spacing:-0.02em}
+.stat-val.green{color:var(--green)}
+.stat-unit{font-size:13px;font-weight:400;color:var(--text-2);margin-left:2px}
+.stat-delta{font-size:11px;margin-top:4px}
+.stat-delta.up{color:var(--green)}
+.stat-delta.down{color:var(--red)}
+.stat-delta.neutral{color:var(--text-3)}
+
+/* ── Weight chart ── */
+.chart-wrap{height:100px;position:relative;margin-top:4px}
+.chart-wrap svg{width:100%;height:100%;overflow:visible}
+
+/* ── Measurements ── */
+.meas-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.meas-item{background:var(--surf-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center}
+.meas-item .ml{font-size:12px;color:var(--text-2)}
+.meas-item .mv{font-size:14px;font-weight:600}
+
+/* ── PRs table ── */
+.pr-list{display:flex;flex-direction:column;gap:6px}
+.pr-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf-2);border:1px solid var(--border);border-radius:8px}
+.pr-name{flex:1;font-size:13px;font-weight:500}
+.pr-val{font-size:14px;font-weight:700;color:var(--text)}
+.pr-unit{font-size:11px;color:var(--text-2);margin-left:2px}
+.pr-delta{font-size:11px;min-width:52px;text-align:right}
+.pr-delta.up{color:var(--green)}
+.pr-delta.same{color:var(--text-3)}
+
+/* ── Volume stats ── */
+.vol-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;margin-top:4px}
+.vol-card{background:var(--surf-2);border:1px solid var(--border);border-radius:10px;padding:12px}
+.vol-label{font-size:11px;color:var(--text-2);margin-bottom:4px}
+.vol-val{font-size:18px;font-weight:700}
+
+/* ── Volume chart ── */
+.vol-chart{height:60px;position:relative}
+.vol-chart svg{width:100%;height:100%}
+
+/* ── Exercise manager ── */
+.ex-manager{margin-top:16px;border-top:1px solid var(--border);padding-top:14px}
+.ex-manager-title{font-size:11px;color:var(--text-2);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.ex-list{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.ex-item{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 8px;border-radius:6px;background:var(--surf-2)}
+.ex-item .ex-name{flex:1}
+.ex-item .ex-badge{font-size:10px;color:var(--text-3);background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:1px 5px}
+.ex-item .ex-del{color:var(--text-3);font-size:14px;cursor:pointer;padding:0 4px}
+.ex-item .ex-del:hover{color:var(--red)}
+.ex-add-row{display:flex;gap:8px}
+.ex-add-row input{flex:1;background:var(--surf-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text)}
+.ex-add-row input:focus{border-color:var(--accent)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-2)}
+.btn-ghost:hover{border-color:var(--border-2);color:var(--text)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-icon{padding:7px;border-radius:8px;background:var(--surf-2);border:1px solid var(--border);color:var(--text-2)}
+.btn-icon:hover{color:var(--text);border-color:var(--border-2)}
+
+/* ── Empty state ── */
+.empty{text-align:center;padding:32px 16px;color:var(--text-3);font-size:13px}
+
+/* ── Action bar ── */
+.action-bar{display:flex;gap:10px;margin-top:20px}
+
+/* ── Modal ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:var(--surf);border:1px solid var(--border-2);border-radius:16px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between}
+.modal-close{color:var(--text-3);cursor:pointer;font-size:20px;line-height:1}
+.modal-close:hover{color:var(--text)}
+
+/* ── Form ── */
+.form-group{margin-bottom:14px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label{display:block;font-size:12px;color:var(--text-2);margin-bottom:5px}
+.inp{width:100%;background:var(--surf-2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text)}
+.inp:focus{border-color:var(--accent)}
+.inp-sm{padding:6px 10px;font-size:13px}
+select.inp{cursor:pointer}
+.form-hint{font-size:11px;color:var(--text-3);margin-top:4px}
+
+/* ── Session sets ── */
+.sets-header{display:grid;grid-template-columns:1fr 90px 80px 32px;gap:8px;font-size:11px;color:var(--text-3);margin-bottom:6px;padding:0 4px}
+.set-row{display:grid;grid-template-columns:1fr 90px 80px 32px;gap:8px;align-items:center;margin-bottom:6px}
+.set-row .inp{padding:7px 10px}
+.set-del{color:var(--text-3);cursor:pointer;text-align:center;font-size:16px;padding:6px}
+.set-del:hover{color:var(--red)}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surf-2);border:1px solid var(--border-2);border-radius:10px;padding:10px 20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:all .25s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <a href="/" class="topbar-back">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+  </a>
+  <div class="topbar-icon"><img src="/images/bm-icon.svg" onerror="this.style.display='none'"></div>
+  <span class="topbar-title">Body Metrics</span>
+  <div class="topbar-right">
+    <button class="btn btn-primary btn-sm" onclick="openLogComp()">+ Composición</button>
+    <button class="btn btn-ghost btn-sm" onclick="openLogSession()">+ Sesión gym</button>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="page">
+  <div class="layout">
+
+    <!-- LEFT: Composición corporal -->
+    <div>
+      <div class="panel">
+        <div class="ptitle">Composición corporal</div>
+        <div class="stat-row">
+          <div class="stat-card">
+            <div class="stat-label">Peso</div>
+            <div class="stat-val" id="stat-weight">—<span class="stat-unit">kg</span></div>
+            <div class="stat-delta neutral" id="delta-weight">sin datos</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Grasa corp.</div>
+            <div class="stat-val" id="stat-fat">—<span class="stat-unit">%</span></div>
+            <div class="stat-delta neutral" id="delta-fat">sin datos</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Cintura</div>
+            <div class="stat-val" id="stat-waist">—<span class="stat-unit">cm</span></div>
+            <div class="stat-delta neutral" id="delta-waist">sin datos</div>
+          </div>
+        </div>
+        <!-- Weight chart -->
+        <div class="chart-wrap" id="weight-chart-wrap">
+          <div class="empty" id="chart-empty">Registra tu peso para ver el gráfico</div>
+          <svg id="weight-chart" style="display:none"></svg>
+        </div>
+      </div>
+
+      <!-- Medidas adicionales -->
+      <div class="panel" style="margin-top:16px">
+        <div class="ptitle">Medidas</div>
+        <div class="meas-grid" id="meas-grid">
+          <div class="meas-item"><span class="ml">Pecho</span><span class="mv" id="m-chest">— <small style="color:var(--text-3)">cm</small></span></div>
+          <div class="meas-item"><span class="ml">Brazo</span><span class="mv" id="m-arm">— <small style="color:var(--text-3)">cm</small></span></div>
+          <div class="meas-item"><span class="ml">Cadera</span><span class="mv" id="m-hip">— <small style="color:var(--text-3)">cm</small></span></div>
+          <div class="meas-item"><span class="ml">Muslo</span><span class="mv" id="m-thigh">— <small style="color:var(--text-3)">cm</small></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Rendimiento -->
+    <div>
+      <div class="panel">
+        <div class="ptitle">PRs actuales</div>
+        <div class="pr-list" id="pr-list">
+          <div class="empty">Registra sesiones para ver tus PRs</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <div class="ptitle">Volumen semanal</div>
+        <div class="vol-row">
+          <div class="vol-card">
+            <div class="vol-label">Esta semana</div>
+            <div class="vol-val" id="vol-week">— <span style="font-size:12px;color:var(--text-2)">kg</span></div>
+          </div>
+          <div class="vol-card">
+            <div class="vol-label">Sesiones</div>
+            <div class="vol-val" id="vol-sessions">—</div>
+          </div>
+        </div>
+        <div class="vol-chart">
+          <svg id="vol-chart"></svg>
+        </div>
+
+        <!-- Gestión de ejercicios -->
+        <div class="ex-manager">
+          <div class="ex-manager-title">
+            <span>Ejercicios</span>
+            <button class="btn btn-ghost btn-sm" onclick="toggleExManager()">Gestionar</button>
+          </div>
+          <div id="ex-manager-body" style="display:none">
+            <div class="ex-list" id="ex-list"></div>
+            <div class="ex-add-row">
+              <input type="text" id="ex-new-name" placeholder="Nombre del ejercicio" class="inp">
+              <button class="btn btn-primary btn-sm" onclick="addCustomExercise()">+ Agregar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Log composición -->
+<div class="modal-bg" id="modal-comp">
+  <div class="modal">
+    <div class="modal-title">
+      Registrar composición
+      <span class="modal-close" onclick="closeModal('modal-comp')">×</span>
+    </div>
+    <div class="form-group">
+      <label>Fecha</label>
+      <input type="date" id="comp-date" class="inp">
+    </div>
+    <div class="form-row form-group">
+      <div>
+        <label>Peso (kg)</label>
+        <input type="number" id="comp-weight" class="inp" step="0.1" placeholder="83.2">
+      </div>
+      <div>
+        <label>Grasa corp. % <span style="color:var(--text-3)">(opcional)</span></label>
+        <input type="number" id="comp-fat" class="inp" step="0.1" placeholder="18.4">
+      </div>
+    </div>
+    <div style="margin-bottom:12px;font-size:12px;color:var(--text-2);font-weight:600;letter-spacing:0.06em;text-transform:uppercase">Medidas (cm) — opcional</div>
+    <div class="form-row form-group">
+      <div><label>Cintura</label><input type="number" id="comp-waist" class="inp inp-sm" placeholder="88"></div>
+      <div><label>Pecho</label><input type="number" id="comp-chest" class="inp inp-sm" placeholder="102"></div>
+    </div>
+    <div class="form-row form-group">
+      <div><label>Brazo</label><input type="number" id="comp-arm" class="inp inp-sm" placeholder="36"></div>
+      <div><label>Cadera</label><input type="number" id="comp-hip" class="inp inp-sm" placeholder="98"></div>
+    </div>
+    <div class="form-row form-group">
+      <div><label>Muslo</label><input type="number" id="comp-thigh" class="inp inp-sm" placeholder="56"></div>
+      <div></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveComp()">Guardar</button>
+  </div>
+</div>
+
+<!-- Modal: Log sesión gym -->
+<div class="modal-bg" id="modal-session">
+  <div class="modal">
+    <div class="modal-title">
+      Registrar sesión
+      <span class="modal-close" onclick="closeModal('modal-session')">×</span>
+    </div>
+    <div class="form-group">
+      <label>Fecha</label>
+      <input type="date" id="sess-date" class="inp">
+    </div>
+    <div class="sets-header">
+      <span>Ejercicio</span><span>Peso (kg)</span><span>Reps</span><span></span>
+    </div>
+    <div id="sets-container"></div>
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:16px" onclick="addSetRow()">+ Añadir set</button>
+    <button class="btn btn-primary" style="width:100%" onclick="saveSession()">Guardar sesión</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { loadLocal, saveLocal, pull, push } from './sync.js';
+
+// ── State ──────────────────────────────────────────────────────────────────
+const DEFAULT_EXERCISES = [
+  { id: 'squat',    name: 'Sentadilla',    custom: false },
+  { id: 'bench',    name: 'Press Banca',   custom: false },
+  { id: 'deadlift', name: 'Peso Muerto',   custom: false },
+  { id: 'ohp',      name: 'Press Militar', custom: false },
+  { id: 'row',      name: 'Remo Barra',    custom: false },
+  { id: 'pullup',   name: 'Dominadas',     custom: false },
+];
+
+let S = { bodyComp: [], exercises: [...DEFAULT_EXERCISES], sessions: [], lastModified: 0 };
+let pushTimer = null;
+
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function save() {
+  S.lastModified = Date.now();
+  saveLocal(S);
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => push(S), 1500);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+async function init() {
+  const local = loadLocal();
+  if (local) { S = local; render(); }
+  const remote = await pull();
+  if (remote && remote.lastModified > S.lastModified) {
+    S = remote;
+    saveLocal(S);
+    render();
+  }
+}
+
+init();
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  renderComp();
+  renderPRs();
+  renderVolume();
+  renderExList();
+}
+
+function renderComp() {
+  const entries = [...S.bodyComp].sort((a, b) => a.date.localeCompare(b.date));
+  const last = entries[entries.length - 1];
+  const prev = entries[entries.length - 2];
+
+  function setVal(id, val, unit) {
+    document.getElementById(id).innerHTML = val !== undefined && val !== null && val !== ''
+      ? val + `<span class="stat-unit">${unit}</span>` : `—<span class="stat-unit">${unit}</span>`;
+  }
+  function setDelta(id, cur, prv) {
+    const el = document.getElementById(id);
+    if (cur == null || prv == null) { el.textContent = 'sin historial'; el.className = 'stat-delta neutral'; return; }
+    const d = (cur - prv).toFixed(1);
+    el.textContent = (d > 0 ? '+' : '') + d;
+    el.className = 'stat-delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : 'neutral');
+  }
+
+  if (last) {
+    setVal('stat-weight', last.weight, 'kg');
+    setVal('stat-fat', last.fatPct || '—', '%');
+    setVal('stat-waist', last.measurements?.waist || '—', 'cm');
+    setDelta('delta-weight', last.weight, prev?.weight);
+    setDelta('delta-fat', last.fatPct, prev?.fatPct);
+    setDelta('delta-waist', last.measurements?.waist, prev?.measurements?.waist);
+
+    const m = last.measurements || {};
+    document.getElementById('m-chest').innerHTML = (m.chest || '—') + ' <small style="color:var(--text-3)">cm</small>';
+    document.getElementById('m-arm').innerHTML   = (m.arm   || '—') + ' <small style="color:var(--text-3)">cm</small>';
+    document.getElementById('m-hip').innerHTML   = (m.hip   || '—') + ' <small style="color:var(--text-3)">cm</small>';
+    document.getElementById('m-thigh').innerHTML = (m.thigh || '—') + ' <small style="color:var(--text-3)">cm</small>';
+  }
+
+  renderWeightChart(entries);
+}
+
+function renderWeightChart(entries) {
+  const svg = document.getElementById('weight-chart');
+  const empty = document.getElementById('chart-empty');
+  const weights = entries.filter(e => e.weight).slice(-90);
+  if (weights.length < 2) { svg.style.display = 'none'; empty.style.display = ''; return; }
+  svg.style.display = 'block'; empty.style.display = 'none';
+
+  const W = 600, H = 100, pad = 10;
+  const vals = weights.map(e => e.weight);
+  const min = Math.min(...vals) - 1, max = Math.max(...vals) + 1;
+  const x = i => pad + (i / (weights.length - 1)) * (W - 2 * pad);
+  const y = v => H - pad - ((v - min) / (max - min)) * (H - 2 * pad);
+
+  const pts = weights.map((e, i) => `${x(i)},${y(e.weight)}`).join(' ');
+  const area = `${x(0)},${H} ` + pts + ` ${x(weights.length-1)},${H}`;
+
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${area}" fill="url(#wg)"/>
+    <polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${x(weights.length-1)}" cy="${y(vals[vals.length-1])}" r="3.5" fill="#3b82f6"/>
+  `;
+}
+
+function renderPRs() {
+  const el = document.getElementById('pr-list');
+  const prs = computePRs();
+  if (!prs.length) { el.innerHTML = '<div class="empty">Registra sesiones para ver tus PRs</div>'; return; }
+
+  el.innerHTML = prs.map(pr => {
+    const exName = S.exercises.find(e => e.id === pr.exerciseId)?.name || pr.exerciseId;
+    const deltaHtml = pr.isNew
+      ? `<span class="pr-delta up">nuevo PR</span>`
+      : `<span class="pr-delta same">—</span>`;
+    return `<div class="pr-row">
+      <span class="pr-name">${exName}</span>
+      <span class="pr-val">${pr.weight}<span class="pr-unit">kg × ${pr.reps}</span></span>
+      ${deltaHtml}
+    </div>`;
+  }).join('');
+}
+
+function computePRs() {
+  // PR = max weight lifted per exercise (with best reps at that weight)
+  const map = {};
+  for (const sess of S.sessions) {
+    for (const set of sess.sets) {
+      const key = set.exerciseId;
+      if (!map[key] || set.weight > map[key].weight ||
+         (set.weight === map[key].weight && set.reps > map[key].reps)) {
+        map[key] = { exerciseId: key, weight: set.weight, reps: set.reps, date: sess.date };
+      }
+    }
+  }
+  // Sort by exercise order
+  return S.exercises
+    .filter(e => map[e.id])
+    .map(e => ({ ...map[e.id], isNew: false }));
+}
+
+function renderVolume() {
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+  weekStart.setHours(0,0,0,0);
+  const weekStr = weekStart.toISOString().slice(0,10);
+
+  const weekSessions = S.sessions.filter(s => s.date >= weekStr);
+  const weekVol = weekSessions.reduce((acc, s) =>
+    acc + s.sets.reduce((a, set) => a + (set.weight * set.reps), 0), 0);
+
+  document.getElementById('vol-week').innerHTML =
+    weekVol > 0 ? Math.round(weekVol).toLocaleString() + ' <span style="font-size:12px;color:var(--text-2)">kg</span>' : '—';
+  document.getElementById('vol-sessions').textContent = weekSessions.length || '—';
+
+  renderVolChart();
+}
+
+function renderVolChart() {
+  const svg = document.getElementById('vol-chart');
+  // Last 12 weeks
+  const weeks = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now); d.setDate(now.getDate() - now.getDay() - i * 7);
+    weeks.push(d.toISOString().slice(0,10));
+  }
+  const vols = weeks.map((wk, i) => {
+    const nextWk = weeks[i+1] || '9999-99-99';
+    const sess = S.sessions.filter(s => s.date >= wk && s.date < nextWk);
+    return sess.reduce((acc, s) => acc + s.sets.reduce((a, set) => a + (set.weight * set.reps), 0), 0);
+  });
+
+  if (vols.every(v => v === 0)) { svg.innerHTML = ''; return; }
+  const max = Math.max(...vols) || 1;
+  const W = 600, H = 60, bw = Math.floor((W - 24) / 12) - 2;
+
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = vols.map((v, i) => {
+    const bh = Math.max(4, (v / max) * (H - 8));
+    const bx = 12 + i * (bw + 2);
+    const by = H - bh;
+    const isThis = i === 11;
+    return `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="3"
+      fill="${isThis ? '#3b82f6' : 'rgba(59,130,246,0.3)'}"/>`;
+  }).join('');
+}
+
+function renderExList() {
+  const el = document.getElementById('ex-list');
+  el.innerHTML = S.exercises.map(e => `
+    <div class="ex-item">
+      <span class="ex-name">${e.name}</span>
+      ${e.custom ? '' : '<span class="ex-badge">base</span>'}
+      ${e.custom ? `<span class="ex-del" onclick="deleteExercise('${e.id}')">×</span>` : ''}
+    </div>`).join('');
+}
+
+// ── Exercise manager ───────────────────────────────────────────────────────
+window.toggleExManager = function() {
+  const el = document.getElementById('ex-manager-body');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+window.addCustomExercise = function() {
+  const name = document.getElementById('ex-new-name').value.trim();
+  if (!name) return;
+  S.exercises.push({ id: uid(), name, custom: true });
+  document.getElementById('ex-new-name').value = '';
+  save(); renderExList();
+};
+
+window.deleteExercise = function(id) {
+  S.exercises = S.exercises.filter(e => e.id !== id);
+  save(); renderExList(); renderPRs();
+};
+
+// ── Modal: Log composición ─────────────────────────────────────────────────
+window.openLogComp = function() {
+  document.getElementById('comp-date').value = today();
+  document.getElementById('comp-weight').value = '';
+  document.getElementById('comp-fat').value = '';
+  ['waist','chest','arm','hip','thigh'].forEach(k =>
+    document.getElementById('comp-' + k).value = '');
+  openModal('modal-comp');
+};
+
+window.saveComp = function() {
+  const date = document.getElementById('comp-date').value;
+  const weight = parseFloat(document.getElementById('comp-weight').value);
+  if (!date || !weight) { toast('Fecha y peso son obligatorios'); return; }
+
+  const entry = {
+    date,
+    weight,
+    fatPct: parseFloat(document.getElementById('comp-fat').value) || null,
+    measurements: {
+      waist: parseFloat(document.getElementById('comp-waist').value) || null,
+      chest: parseFloat(document.getElementById('comp-chest').value) || null,
+      arm:   parseFloat(document.getElementById('comp-arm').value)   || null,
+      hip:   parseFloat(document.getElementById('comp-hip').value)   || null,
+      thigh: parseFloat(document.getElementById('comp-thigh').value) || null,
+    }
+  };
+
+  // Replace if same date, otherwise push
+  const idx = S.bodyComp.findIndex(e => e.date === date);
+  if (idx >= 0) S.bodyComp[idx] = entry; else S.bodyComp.push(entry);
+  S.bodyComp.sort((a, b) => a.date.localeCompare(b.date));
+
+  save(); closeModal('modal-comp'); renderComp();
+  toast('Composición guardada');
+};
+
+// ── Modal: Log sesión ──────────────────────────────────────────────────────
+window.openLogSession = function() {
+  document.getElementById('sess-date').value = today();
+  document.getElementById('sets-container').innerHTML = '';
+  addSetRow(); addSetRow();
+  openModal('modal-session');
+};
+
+window.addSetRow = function() {
+  const c = document.getElementById('sets-container');
+  const row = document.createElement('div');
+  row.className = 'set-row';
+  row.innerHTML = `
+    <select class="inp set-ex">${S.exercises.map(e =>
+      `<option value="${e.id}">${e.name}</option>`).join('')}</select>
+    <input type="number" class="inp set-kg" placeholder="120" step="0.5" min="0">
+    <input type="number" class="inp set-reps" placeholder="5" min="1">
+    <span class="set-del" onclick="this.parentElement.remove()">×</span>`;
+  c.appendChild(row);
+};
+
+window.saveSession = function() {
+  const date = document.getElementById('sess-date').value;
+  if (!date) { toast('Selecciona una fecha'); return; }
+
+  const rows = document.querySelectorAll('#sets-container .set-row');
+  const sets = [];
+  rows.forEach(row => {
+    const ex = row.querySelector('.set-ex').value;
+    const kg = parseFloat(row.querySelector('.set-kg').value);
+    const reps = parseInt(row.querySelector('.set-reps').value);
+    if (ex && kg > 0 && reps > 0) sets.push({ exerciseId: ex, weight: kg, reps });
+  });
+
+  if (!sets.length) { toast('Agrega al menos un set válido'); return; }
+
+  S.sessions.push({ id: uid(), date, sets });
+  S.sessions.sort((a, b) => a.date.localeCompare(b.date));
+
+  save(); closeModal('modal-session'); renderPRs(); renderVolume();
+  toast('Sesión guardada');
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+window.closeModal = function(id) { document.getElementById(id).classList.remove('open'); };
+
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
+});
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+window.toast = toast;
+</script>
+</body>
+</html>

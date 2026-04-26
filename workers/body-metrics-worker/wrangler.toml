@@ -1,0 +1,7 @@
+name = "body-metrics-worker"
+main = "src/index.js"
+compatibility_date = "2025-04-10"
+
+[[kv_namespaces]]
+binding = "BODY_METRICS_KV"
+id = "ceb343aff5374750abf3519cc2e02f45"

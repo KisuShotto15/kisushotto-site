@@ -1,0 +1,6 @@
+name = "p2p-proxy"
+main = "src/index.js"
+compatibility_date = "2025-04-10"
+
+[vars]
+API_SECRET = "ptk-2025-kisu"
