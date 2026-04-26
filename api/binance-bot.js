@@ -64,7 +64,7 @@ export default async function handler(req, res) {
       priceType: ad.priceType,
       price: ad.price,
       priceFloatingRatio: ad.priceFloatingRatio,
-      initAmount: Number(totalAmount),
+      initAmount: String(parseFloat(totalAmount).toFixed(8)),
       minSingleTransAmount: ad.minSingleTransAmount,
       maxSingleTransAmount: ad.maxSingleTransAmount,
       payTimeLimit: ad.payTimeLimit,
