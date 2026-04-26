@@ -1251,6 +1251,7 @@ async function manualSetQty() {
   st.textContent = 'Aplicando cantidad...'; st.style.color = 'var(--text-3)';
   try {
     var data = await botCallWorker('/update-quantity', { advNo: adNo, totalAmount: qty });
+    if (data._debug) botLog('DEBUG qty: ' + JSON.stringify(data._debug), '#888');
     if (data.code && data.code !== '000000') throw new Error(data.msgDetail || data.msg || data.message || 'código ' + data.code);
     botLog('✎ Cantidad manual → ' + qty + ' USDT', '#58A6FF');
     st.textContent = '✓ Cantidad actualizada'; st.style.color = 'var(--green)';
