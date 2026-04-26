@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Dark rounded background -->
+  <rect width="100" height="100" rx="22" fill="#0a0b0e"/>
+
+  <!-- Book outer frame -->
+  <rect x="14" y="22" width="72" height="56" rx="4"
+    fill="none" stroke="#35c8f1" stroke-width="2.2" stroke-linejoin="round"/>
+
+  <!-- Spine -->
+  <line x1="30" y1="22" x2="30" y2="78"
+    stroke="#35c8f1" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- Horizontal rules inside book -->
+  <line x1="30" y1="32" x2="83" y2="32" stroke="#35c8f1" stroke-width="1.1" opacity="0.35"/>
+  <line x1="30" y1="68" x2="83" y2="68" stroke="#35c8f1" stroke-width="1.1" opacity="0.35"/>
+
+  <!-- Candlestick 1 — bearish (hollow) -->
+  <line x1="44" y1="37" x2="44" y2="65" stroke="#35c8f1" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="40" y="43" width="8" height="14" rx="1.5"
+    fill="none" stroke="#35c8f1" stroke-width="1.8"/>
+
+  <!-- Candlestick 2 — bullish (filled) -->
+  <line x1="57" y1="35" x2="57" y2="64" stroke="#35c8f1" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="53" y="40" width="8" height="16" rx="1.5" fill="#35c8f1"/>
+
+  <!-- Candlestick 3 — bullish tall (filled) -->
+  <line x1="70" y1="34" x2="70" y2="63" stroke="#35c8f1" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="66" y="38" width="8" height="18" rx="1.5" fill="#35c8f1"/>
+</svg>
