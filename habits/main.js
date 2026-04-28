@@ -67,7 +67,7 @@ function isDueOn(habit, dateISO) {
 function freqLabel(habit) {
   if (habit.frequency === 'daily') return 'Diario';
   if (habit.frequency === 'weekly') {
-    const DAYS = ['D','L','M','Mi','J','V','S'];
+    const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const days = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1,2,3,4,5];
     return days.map(d => DAYS[d]).join(' ');
   }
