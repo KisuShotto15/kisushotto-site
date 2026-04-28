@@ -647,7 +647,29 @@ async function init() {
   setupReminders();
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closePanel(); return; }
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const dir = e.key === 'ArrowRight' ? 1 : -1;
+  const cur = new Date((selectedDate || today()) + 'T00:00:00');
+  cur.setDate(cur.getDate() + dir);
+  const next = dateStr(cur.getFullYear(), cur.getMonth() + 1, cur.getDate());
+  if (next > today()) return;
+  const listEl     = document.getElementById('habitList');
+  const exitClass  = dir > 0 ? 'exit-left'       : 'exit-right';
+  const enterClass = dir > 0 ? 'enter-from-right' : 'enter-from-left';
+  listEl.classList.remove('enter-from-right', 'enter-from-left');
+  listEl.classList.add(exitClass);
+  setTimeout(() => {
+    selectDate(next);
+    const nl = document.getElementById('habitList');
+    nl.classList.remove('exit-left', 'exit-right', 'enter-from-right', 'enter-from-left');
+    void nl.offsetWidth;
+    nl.classList.add(enterClass);
+    nl.addEventListener('animationend', () => nl.classList.remove(enterClass), { once: true });
+  }, 185);
+});
 
 // ── Swipe to change day (mobile) ──────────────────────────────────────────────
 (function() {
