@@ -232,6 +232,11 @@ function renderStats() {
 }
 
 // ── Calendar heatmap ──────────────────────────────────────────────────────────
+function isPerfectDay(iso) {
+  const due = habits.filter(h => isDueOn(h, iso));
+  return due.length > 0 && due.every(h => isDone(h.id, iso));
+}
+
 function renderCalendar() {
   const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   $('calMonth').textContent = `${MONTHS[calMonth - 1]} ${calYear}`;
@@ -268,7 +273,7 @@ function renderCalendar() {
     }
 
     cell.title = `${iso}: ${pct !== null ? pct + '%' : 'sin datos'}`;
-    cell.innerHTML = `<span class="cal-cell-num">${d}</span>${pct === 100 ? '<span class="cal-perfect">✦</span>' : ''}`;
+    cell.innerHTML = `<span class="cal-cell-num">${d}</span>${isPerfectDay(iso) ? '<span class="cal-perfect">✦</span>' : ''}`;
     if (iso <= todayISO) {
       cell.style.cursor = 'pointer';
       cell.onclick = () => selectDate(iso);

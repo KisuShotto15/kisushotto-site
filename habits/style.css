@@ -419,10 +419,10 @@ body::before {
   color: rgba(255,255,255,0.3); line-height: 1;
 }
 .cal-perfect {
-  position: absolute; top: 3px; left: 4px;
-  font-size: 9px; line-height: 1;
+  position: absolute; top: 2px; left: 3px;
+  font-size: 13px; line-height: 1;
   color: var(--amber);
-  text-shadow: 0 0 6px rgba(252,211,77,0.7);
+  text-shadow: 0 0 8px rgba(252,211,77,0.9), 0 0 16px rgba(252,211,77,0.4);
 }
 
 /* ── Stats strip ── */
