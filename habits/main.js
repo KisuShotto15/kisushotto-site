@@ -684,10 +684,15 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel()
     const listEl     = document.getElementById('habitList');
     const exitClass  = dx < 0 ? 'exit-left'       : 'exit-right';
     const enterClass = dx < 0 ? 'enter-from-right' : 'enter-from-left';
+    listEl.classList.remove('enter-from-right', 'enter-from-left');
     listEl.classList.add(exitClass);
     setTimeout(() => {
       selectDate(next);
-      document.getElementById('habitList').classList.add(enterClass);
+      const nl = document.getElementById('habitList');
+      nl.classList.remove('exit-left', 'exit-right', 'enter-from-right', 'enter-from-left');
+      void nl.offsetWidth; // force reflow so animation restarts
+      nl.classList.add(enterClass);
+      nl.addEventListener('animationend', () => nl.classList.remove(enterClass), { once: true });
     }, 185);
   }, { passive: true });
 })();
