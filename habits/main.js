@@ -641,4 +641,23 @@ async function init() {
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
 
+// ── Swipe to change day (mobile) ──────────────────────────────────────────────
+(function() {
+  let x0 = null;
+  const el = document.querySelector('.habits-layout > div');
+  if (!el) return;
+  el.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    x0 = null;
+    if (Math.abs(dx) < 50) return;
+    const cur = new Date((selectedDate || today()) + 'T00:00:00');
+    const dir = dx < 0 ? 1 : -1; // swipe left = next day, right = prev day
+    cur.setDate(cur.getDate() + dir);
+    const next = dateStr(cur.getFullYear(), cur.getMonth() + 1, cur.getDate());
+    if (next <= today()) selectDate(next);
+  }, { passive: true });
+})();
+
 init();
