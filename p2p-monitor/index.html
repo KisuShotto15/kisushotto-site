@@ -339,6 +339,25 @@ input[type=text] {
   text-align: right;
 }
 input[type=number] { width: 135px; }
+.num-stepper { display: flex; align-items: center; }
+.num-stepper input[type=number] { width: 100px; border-radius: 0; border-left: none; border-right: none; text-align: center; }
+.stp-btn {
+  width: 32px; height: 34px;
+  background: var(--surf-2); border: 1px solid var(--border-2);
+  color: var(--text-2); font-size: 18px; line-height: 1;
+  cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s;
+  user-select: none; -webkit-user-select: none;
+}
+.stp-btn:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); }
+.stp-btn:last-child  { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+.stp-btn:hover { background: var(--gold-d); color: var(--gold); }
+.stp-btn:active { opacity: 0.7; }
+@media (max-width: 600px) {
+  .stp-btn { width: 36px; height: 38px; font-size: 20px; }
+  .num-stepper input[type=number] { width: 80px; }
+}
 input[type=password],
 input[type=text]   { width: 140px; text-align: left; }
 input:focus {
@@ -592,12 +611,12 @@ input:focus {
       </div>
 
       <!-- Config bot (campos visibles) -->
-      <div class="cfg-row"><span>Límite mínimo (VES)</span><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="1000" step="1000"></div>
-      <div class="cfg-row"><span>Incremento (Bs)</span><input type="number" id="cfg-bot-inc" value="0.001" min="0.001" step="0.001"></div>
-      <div class="cfg-row"><span>Gap máx. para seguir (Bs)</span><input type="number" id="cfg-bot-gap" value="1.0" min="0.1" step="0.1"></div>
-      <div class="cfg-row"><span>Umbral límites (VES)</span><input type="number" id="cfg-bot-thr" value="10000" min="1000" step="1000"></div>
-      <div class="cfg-row"><span>Precio de venta (Bs)</span><input type="number" id="cfg-bot-sell" placeholder="ej. 640" min="1" step="0.001" oninput="botUpdateCeiling()"></div>
-      <div class="cfg-row"><span>Spread mínimo (%)</span><input type="number" id="cfg-bot-spread" value="0.5" min="0.1" max="10" step="0.1" oninput="botUpdateCeiling()"></div>
+      <div class="cfg-row"><span>Límite mínimo (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
+      <div class="cfg-row"><span>Incremento (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',-1)">−</button><input type="number" id="cfg-bot-inc" value="0.001" min="0.001" step="0.001"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',1)">+</button></div></div>
+      <div class="cfg-row"><span>Gap máx. para seguir (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',-1)">−</button><input type="number" id="cfg-bot-gap" value="1.0" min="0.1" step="0.1"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',1)">+</button></div></div>
+      <div class="cfg-row"><span>Umbral límites (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" value="10000" min="1000" step="1000"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
+      <div class="cfg-row"><span>Precio de venta (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="ej. 640" min="1" step="0.001" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
+      <div class="cfg-row"><span>Spread mínimo (%)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" value="0.5" min="0.1" max="10" step="0.1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
       <div class="cfg-row"><span style="color:#777;font-size:14px">Techo calculado</span><span id="cfg-bot-ceil-display" style="color:#E24B4A;font-weight:700;font-size:16px">—</span></div>
       <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
         <button class="btn btn-gold" style="flex:1" onclick="saveBotConfig()">Guardar</button>
@@ -1135,6 +1154,17 @@ var BOT_CFG = {
   minLimit: 0,
   myNick: ''
 };
+
+function stepInput(id, dir) {
+  const el = document.getElementById(id);
+  const step = parseFloat(el.step) || 1;
+  const min  = el.min !== '' ? parseFloat(el.min) : -Infinity;
+  const max  = el.max !== '' ? parseFloat(el.max) :  Infinity;
+  const cur  = parseFloat(el.value) || 0;
+  const dec  = (step.toString().split('.')[1] || '').length;
+  el.value   = Math.max(min, Math.min(max, parseFloat((cur + dir * step).toFixed(dec))));
+  el.dispatchEvent(new Event('input'));
+}
 
 function saveBotConfig() {
   BOT_CFG.url            = document.getElementById('cfg-bot-url').value.trim();
