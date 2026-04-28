@@ -1,8 +1,0 @@
-app = "p2p-bot-kisu"
-primary_region = "mia"
-
-[build]
-  dockerfile = "Dockerfile"
-
-[env]
-  BOT_INTERVAL = "30"

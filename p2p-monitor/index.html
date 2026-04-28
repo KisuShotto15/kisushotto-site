@@ -626,17 +626,6 @@ input:focus {
         <span id="bot-cfg-st" style="font-size:14px;color:#555"></span>
       </div>
 
-      <!-- Cloud bot -->
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase">☁ Bot en la nube</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span id="cloud-status" style="font-size:13px;color:#555">—</span>
-            <button id="cloud-toggle" class="btn btn-sm" onclick="cloudBotToggle()" style="min-width:80px">Activar</button>
-          </div>
-        </div>
-        <div style="font-size:12px;color:var(--text-3)">Guardar config la envía a la nube. El toggle activa/pausa Fly.io.</div>
-      </div>
 
       <!-- Control manual -->
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
@@ -1202,62 +1191,6 @@ function saveBotConfig() {
   st.textContent = '✓ Guardado'; st.style.color = '#1D9E75';
   var tgSt = document.getElementById('tg-st');
   if (tgSt) { tgSt.textContent = (TG.token && TG.chatId) ? '✓' : ''; }
-  // Sync config to cloud KV
-  cloudSaveConfig();
-}
-
-// ── Cloud bot (Fly.io + CF KV) ────────────────────────────────────────────────
-var CLOUD_KV = 'https://p2p-bot-worker.efrenalejandro2010.workers.dev';
-var CLOUD_TOKEN = '151322';
-
-async function cloudKV(path, body) {
-  var opts = { headers: { Authorization: 'Bearer ' + CLOUD_TOKEN } };
-  if (body !== undefined) {
-    opts.method = 'POST';
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
-  }
-  var r = await fetch(CLOUD_KV + path, opts);
-  return r.json().catch(function() { return {}; });
-}
-
-async function cloudSaveConfig() {
-  try {
-    await cloudKV('/config', BOT_CFG);
-  } catch(e) { /* silencioso, no bloquear el flujo */ }
-}
-
-async function cloudBotToggle() {
-  var btn = document.getElementById('cloud-toggle');
-  var st  = document.getElementById('cloud-status');
-  var cur = btn.dataset.enabled === '1';
-  var next = !cur;
-  btn.disabled = true;
-  try {
-    await cloudKV('/enabled', next);
-    btn.dataset.enabled = next ? '1' : '0';
-    btn.textContent     = next ? 'Pausar' : 'Activar';
-    btn.style.background = next ? 'var(--red)' : '';
-    st.textContent  = next ? '● Activo' : '○ Pausado';
-    st.style.color  = next ? '#1D9E75' : '#555';
-  } catch(e) {
-    st.textContent = '✗ Error'; st.style.color = 'var(--red)';
-  }
-  btn.disabled = false;
-}
-
-async function cloudLoadStatus() {
-  try {
-    var d = await cloudKV('/enabled');
-    var enabled = d.data === true || d.data === 1 || d.data === 'true';
-    var btn = document.getElementById('cloud-toggle');
-    var st  = document.getElementById('cloud-status');
-    btn.dataset.enabled  = enabled ? '1' : '0';
-    btn.textContent      = enabled ? 'Pausar' : 'Activar';
-    btn.style.background = enabled ? 'var(--red)' : '';
-    st.textContent = enabled ? '● Activo' : '○ Pausado';
-    st.style.color = enabled ? '#1D9E75' : '#555';
-  } catch(e) { /* sin conexion, ignorar */ }
 }
 
 function loadBotConfig() {
@@ -1599,6 +1532,7 @@ async function botToggle() {
     BOT.running = false;
     clearInterval(BOT.timer);
     BOT.timer = null;
+    keepAwakeStop();
     BOT.basePrice = null;
     BOT.ceiling = null;
     BOT.cachedAd = null;
@@ -1689,7 +1623,30 @@ async function botToggle() {
     BOT.lastReprice = 0;
     botSetStatus('✓ Bot activo', '#1D9E75');
     BOT.timer = setInterval(botCycle, 30000);
+    keepAwakeStart();
   }
+}
+
+// ── Keep-awake: audio silencioso para que el OS no suspenda el tab ────────────
+var _kaCtx = null, _kaNode = null;
+function keepAwakeStart() {
+  try {
+    if (_kaCtx) return;
+    _kaCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc  = _kaCtx.createOscillator();
+    var gain = _kaCtx.createGain();
+    gain.gain.value = 0.001;
+    osc.connect(gain);
+    gain.connect(_kaCtx.destination);
+    osc.start();
+    _kaNode = osc;
+  } catch(e) {}
+}
+function keepAwakeStop() {
+  try {
+    if (_kaNode) { _kaNode.stop(); _kaNode = null; }
+    if (_kaCtx)  { _kaCtx.close(); _kaCtx  = null; }
+  } catch(e) {}
 }
 
 // ── Telegram ──────────────────────────────────────────
@@ -1762,7 +1719,7 @@ function toast(msg) {
   document.body.appendChild(t); setTimeout(function() { t.remove(); }, 2500);
 }
 
-loadConfig(); loadTgConfig(); loadBotConfig(); updNotifSt(); renderAlerts(); cloudLoadStatus();
+loadConfig(); loadTgConfig(); loadBotConfig(); updNotifSt(); renderAlerts();
 renderOB('ob-may',   [], 'best');
 renderOB('ob-small', [], 'best-buy');
 </script>
