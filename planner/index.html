@@ -109,8 +109,8 @@ body::before {
 /* ── Content ── */
 .content {
   position: relative; z-index: 1;
-  padding: 20px 20px 80px;
-  max-width: 860px; margin: 0 auto;
+  padding: 28px 32px 80px;
+  max-width: 1200px; margin: 0 auto;
 }
 
 /* ── Goal card ── */
@@ -126,8 +126,8 @@ body::before {
 
 /* ── Node row ── */
 .node-row {
-  display: flex; align-items: center; gap: 7px;
-  padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
   transition: background 0.12s;
   border-radius: 0;
 }
@@ -152,21 +152,21 @@ body::before {
 
 .ntitle {
   flex: 1; text-align: left; background: none; border: none;
-  color: var(--text); font-size: 13.5px; font-weight: 500;
+  color: var(--text); font-size: 18.5px; font-weight: 500;
   cursor: pointer; padding: 0; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: color 0.12s;
 }
 .ntitle:hover { color: var(--amethyst); }
-.ntitle.d0 { font-size: 14.5px; font-weight: 650; }
+.ntitle.d0 { font-size: 19.5px; font-weight: 650; }
 
 .npct {
-  font-size: 11px; color: var(--muted); font-weight: 500; flex-shrink: 0;
+  font-size: 13px; color: var(--muted); font-weight: 500; flex-shrink: 0;
 }
 
 .nstat {
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
-  padding: 3px 9px; border-radius: 999px; cursor: pointer;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 4px 10px; border-radius: 999px; cursor: pointer;
   flex-shrink: 0; transition: opacity 0.15s; text-transform: uppercase;
   white-space: nowrap;
 }
@@ -194,8 +194,8 @@ body::before {
 .menu-btn:hover { color: var(--text); background: rgba(255,255,255,0.07); }
 
 .node-due {
-  font-size: 11px; color: var(--muted);
-  padding: 0 12px 5px; display: flex; align-items: center; gap: 4px;
+  font-size: 13px; color: var(--muted);
+  padding: 0 16px 6px; display: flex; align-items: center; gap: 4px;
 }
 
 /* ── Children ── */
@@ -205,12 +205,12 @@ body::before {
 /* ── Goal footer ── */
 .goal-footer {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px 10px 36px;
+  padding: 10px 16px 12px 40px;
   border-top: 1px solid var(--border);
 }
 .btn-add {
   background: none; border: 1px solid var(--border); color: var(--muted);
-  border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer;
+  border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer;
   transition: color 0.12s, border-color 0.12s;
 }
 .btn-add:hover { color: var(--text); border-color: var(--muted); }
@@ -218,7 +218,7 @@ body::before {
 .btn-ai {
   background: linear-gradient(135deg, rgba(124,106,247,0.12), rgba(191,148,255,0.08));
   border: 1px solid rgba(167,139,250,0.22); color: var(--violet);
-  border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer;
+  border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer;
   display: flex; align-items: center; gap: 5px; transition: opacity 0.15s;
 }
 .btn-ai:hover { opacity: 0.8; }
