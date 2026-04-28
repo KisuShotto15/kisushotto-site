@@ -268,7 +268,7 @@ function renderCalendar() {
     }
 
     cell.title = `${iso}: ${pct !== null ? pct + '%' : 'sin datos'}`;
-    cell.innerHTML = `<span class="cal-cell-num">${d}</span>`;
+    cell.innerHTML = `<span class="cal-cell-num">${d}</span>${pct === 100 ? '<span class="cal-perfect">✦</span>' : ''}`;
     if (iso <= todayISO) {
       cell.style.cursor = 'pointer';
       cell.onclick = () => selectDate(iso);
