@@ -1,0 +1,7 @@
+name = "p2p-bot-worker"
+main = "src/index.js"
+compatibility_date = "2025-04-10"
+
+[[kv_namespaces]]
+binding = "P2P_BOT_KV"
+id = "4a2433d009004803a7a264bf5033c5db"

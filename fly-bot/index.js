@@ -1,23 +1,13 @@
 // P2P Repricing Bot — Fly.io worker
-// Config via environment variables (fly secrets set ...)
+// Config lives in Cloudflare KV (editable from the browser monitor)
 
-const CFG = {
-  url:            process.env.BOT_URL            || 'https://kisushotto-site.vercel.app/api/binance-bot',
-  token:          process.env.BOT_TOKEN          || '',
-  adNo:           process.env.BOT_AD_NO          || '',
-  myNick:         process.env.BOT_NICK           || '',
-  increment:      parseFloat(process.env.BOT_INCREMENT)        || 0.001,
-  maxGap:         parseFloat(process.env.BOT_MAX_GAP)          || 1.0,
-  limitThreshold: parseFloat(process.env.BOT_LIMIT_THRESHOLD)  || 10000,
-  sellPrice:      parseFloat(process.env.BOT_SELL_PRICE)       || 0,
-  minSpread:      parseFloat(process.env.BOT_MIN_SPREAD)       || 0.5,
-  minLimit:       parseFloat(process.env.BOT_MIN_LIMIT)        || 0,
-  interval:       parseInt(process.env.BOT_INTERVAL)           || 30,
-};
+const KV_URL   = 'https://p2p-bot-worker.efrenalejandro2010.workers.dev';
+const KV_TOKEN = '151322';
 
 const PROXY         = 'https://kisushotto-site.vercel.app/api/p2p-search';
 const VERCEL_SECRET = 'ptk-2025-kisu';
 
+// Runtime state (resets on process restart, not persisted)
 const BOT = {
   currentPrice:    0,
   adNumber:        null,
@@ -29,9 +19,36 @@ const BOT = {
   cycles:          0,
 };
 
+// Config loaded from KV — refreshed every 2 minutes
+let CFG = null;
+let cfgLoadedAt = 0;
+
 function log(msg) {
   const ts = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   console.log(`[${ts}] ${msg}`);
+}
+
+async function kvGet(path) {
+  const r = await fetch(KV_URL + path, {
+    headers: { Authorization: `Bearer ${KV_TOKEN}` },
+  });
+  if (!r.ok) throw new Error('KV GET ' + path + ' → ' + r.status);
+  const { data } = await r.json();
+  return data;
+}
+
+async function loadConfig() {
+  const data = await kvGet('/config');
+  if (!data) throw new Error('Sin config en KV — guarda la config desde el monitor primero');
+  CFG = data;
+  cfgLoadedAt = Date.now();
+  log('Config cargada: sell=' + CFG.sellPrice + ' spread=' + CFG.minSpread +
+      '% gap=' + CFG.maxGap + ' minLimit=' + CFG.minLimit);
+}
+
+async function isEnabled() {
+  const flag = await kvGet('/enabled');
+  return flag === true || flag === 1 || flag === 'true' || flag === '1';
 }
 
 async function botCallWorker(path, body) {
@@ -120,6 +137,17 @@ async function botUpdateMinLimit(adNumber, minAmount) {
 
 async function botCycle() {
   BOT.cycles++;
+
+  // Recargar config de KV cada 2 minutos
+  if (!CFG || Date.now() - cfgLoadedAt > 120_000) {
+    try { await loadConfig(); } catch(e) { log('Config: ' + e.message); return; }
+  }
+
+  // Verificar flag enabled
+  try {
+    if (!await isEnabled()) { log('Bot pausado (desactivado desde el monitor)'); return; }
+  } catch(e) { log('Flag: ' + e.message); }
+
   try {
     // Actualizar limite minimo si cambio en config
     if (CFG.minLimit > 0 && CFG.minLimit !== BOT.appliedMinLimit && BOT.adNumber) {
@@ -129,9 +157,7 @@ async function botCycle() {
         BOT.myMinLimit      = CFG.minLimit;
         BOT.cachedAd        = null;
         log('Limite minimo → ' + CFG.minLimit + ' VES');
-      } catch(e) {
-        log('⚠ Limite: ' + e.message);
-      }
+      } catch(e) { log('Limite: ' + e.message); }
     }
 
     // Anuncio con cache de 2 min
@@ -144,14 +170,14 @@ async function botCycle() {
       if (ad) { BOT.cachedAd = ad; BOT.cachedAdAt = now; }
     }
 
-    if (!ad)            { log('Anuncio pausado — esperando'); return; }
-    if (ad.__noFunds)   { log('Fondos insuficientes (<100 USDT)'); return; }
+    if (!ad)          { log('Anuncio pausado — esperando'); return; }
+    if (ad.__noFunds) { log('Fondos insuficientes (<100 USDT)'); return; }
 
     BOT.adNumber   = ad.adNumber || ad.advNo;
     if (!BOT.currentPrice) BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit = parseFloat(ad.minSingleTransAmount);
 
-    if (!CFG.sellPrice) throw new Error('Configura BOT_SELL_PRICE');
+    if (!CFG.sellPrice) throw new Error('BOT_SELL_PRICE no configurado');
     BOT.ceiling = CFG.sellPrice * (1 - CFG.minSpread / 100);
 
     // Mercado
@@ -209,11 +235,22 @@ async function botCycle() {
   }
 }
 
-// Arranque
-if (!CFG.token)     { console.error('ERROR: BOT_TOKEN no configurado'); process.exit(1); }
-if (!CFG.sellPrice) { console.error('ERROR: BOT_SELL_PRICE no configurado'); process.exit(1); }
+async function main() {
+  log('Fly.io bot iniciado — cargando config desde KV...');
+  // Cargar config inicial, reintentar si falla
+  let attempts = 0;
+  while (!CFG) {
+    try {
+      await loadConfig();
+    } catch(e) {
+      attempts++;
+      log('Intento ' + attempts + ' fallido: ' + e.message + ' — reintentando en 10s');
+      await new Promise(r => setTimeout(r, 10_000));
+    }
+  }
+  log('Listo. Intervalo: 30s');
+  await botCycle();
+  setInterval(botCycle, 30_000);
+}
 
-log('Bot iniciado — intervalo: ' + CFG.interval + 's | adNo: ' + (CFG.adNo || 'auto') +
-    ' | sell: ' + CFG.sellPrice + ' | spread: ' + CFG.minSpread + '% | gap: ' + CFG.maxGap);
-
-botCycle().then(() => setInterval(botCycle, CFG.interval * 1000));
+main();
