@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="22" fill="#0f0f1a"/>
+  <!-- Outer ring -->
+  <circle cx="50" cy="50" r="37" fill="none" stroke="#3a2f6a" stroke-width="2"/>
+  <!-- Middle ring -->
+  <circle cx="50" cy="50" r="26" fill="none" stroke="#7c6af7" stroke-width="2.8"/>
+  <!-- Inner ring -->
+  <circle cx="50" cy="50" r="14" fill="none" stroke="#bf94ff" stroke-width="3.2"/>
+  <!-- Center dot -->
+  <circle cx="50" cy="50" r="5.5" fill="#bf94ff"/>
+  <!-- Arrow shaft from upper-right -->
+  <line x1="76" y1="24" x2="58" y2="42" stroke="#f0b90b" stroke-width="2.8" stroke-linecap="round"/>
+  <!-- Arrow head -->
+  <path d="M76,24 L67,27 L73,33 Z" fill="#f0b90b"/>
+</svg>

@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>Goal Planner</title>
+<link rel="icon" type="image/svg+xml" href="/images/planner-icon.svg">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  color-scheme: dark;
+  --bg:       #09090e;
+  --surface:  #111118;
+  --card:     #13131c;
+  --border:   #242436;
+  --text:     #ece9ff;
+  --text2:    #a0a0c0;
+  --muted:    #5a5a78;
+  --violet:   #a78bfa;
+  --amethyst: #bf94ff;
+  --grape:    #9061ea;
+  --green:    #10b981;
+  --amber:    #f0b90b;
+  --red:      #ef4444;
+  --r:        12px;
+}
+
+html, body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% -5%, rgba(124,106,247,0.14) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 0% 100%, rgba(144,97,234,0.09) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* ── Topbar ── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 20px; height: 56px;
+  background: rgba(9,9,14,0.88);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-back {
+  display: inline-flex; align-items: center;
+  text-decoration: none; flex-shrink: 0;
+  border-radius: 8px; overflow: hidden;
+  transition: opacity 0.15s;
+}
+.topbar-back:hover { opacity: 0.7; }
+.topbar-back img { display: block; }
+.topbar-title {
+  font-size: 15px; font-weight: 700; letter-spacing: -0.02em;
+}
+.topbar-spacer { flex: 1; }
+.btn-new {
+  background: linear-gradient(135deg, var(--grape), var(--amethyst));
+  color: #fff; border: none; border-radius: 999px;
+  padding: 7px 16px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: opacity 0.15s; flex-shrink: 0;
+}
+.btn-new:hover { opacity: 0.82; }
+
+/* ── Focus banner ── */
+.focus-banner {
+  display: flex; align-items: center; gap: 12px;
+  margin: 16px 20px 0;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, rgba(124,106,247,0.1), rgba(191,148,255,0.06));
+  border: 1px solid rgba(167,139,250,0.22);
+  border-radius: var(--r);
+}
+.fb-label {
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--amethyst); font-weight: 700; flex-shrink: 0;
+}
+.fb-title {
+  font-size: 14px; font-weight: 600; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fb-bar {
+  width: 80px; height: 5px;
+  background: rgba(255,255,255,0.08); border-radius: 999px;
+  overflow: hidden; flex-shrink: 0;
+}
+.fb-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--violet), var(--amethyst));
+  border-radius: 999px; transition: width 0.3s;
+}
+.fb-pct {
+  font-size: 12px; color: var(--amethyst); font-weight: 600;
+  min-width: 30px; flex-shrink: 0;
+}
+
+/* ── Content ── */
+.content {
+  position: relative; z-index: 1;
+  padding: 20px 20px 80px;
+  max-width: 860px; margin: 0 auto;
+}
+
+/* ── Goal card ── */
+.goal-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  margin-bottom: 12px;
+  overflow: visible;
+  transition: border-color 0.15s;
+}
+.goal-card:hover { border-color: rgba(167,139,250,0.18); }
+
+/* ── Node row ── */
+.node-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 12px;
+  transition: background 0.12s;
+  border-radius: 0;
+}
+.node-row:hover { background: rgba(139,92,246,0.05); }
+
+.chevron {
+  width: 20px; height: 20px;
+  border: none; background: none; color: var(--muted);
+  cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; padding: 0;
+  transition: color 0.12s;
+}
+.chevron:hover { color: var(--text); }
+.chevron svg { transition: transform 0.18s; }
+.chevron.rot svg { transform: rotate(-90deg); }
+.chevron.hidden-op { visibility: hidden; }
+
+.dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+
+.ntitle {
+  flex: 1; text-align: left; background: none; border: none;
+  color: var(--text); font-size: 13.5px; font-weight: 500;
+  cursor: pointer; padding: 0; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: color 0.12s;
+}
+.ntitle:hover { color: var(--amethyst); }
+.ntitle.d0 { font-size: 14.5px; font-weight: 650; }
+
+.npct {
+  font-size: 11px; color: var(--muted); font-weight: 500; flex-shrink: 0;
+}
+
+.nstat {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 3px 9px; border-radius: 999px; cursor: pointer;
+  flex-shrink: 0; transition: opacity 0.15s; text-transform: uppercase;
+  white-space: nowrap;
+}
+.nstat:hover { opacity: 0.72; }
+.nstat.s-todo         { background: rgba(90,90,120,0.22); color: var(--muted); }
+.nstat.s-in-progress  { background: rgba(240,185,11,0.14); color: var(--amber); }
+.nstat.s-done         { background: rgba(16,185,129,0.14); color: var(--green); }
+
+.pin-btn {
+  width: 26px; height: 26px; border: none; background: none;
+  color: var(--muted); cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; transition: color 0.12s;
+}
+.pin-btn:hover { color: var(--amber); }
+.pin-btn.pinned { color: var(--amber); }
+
+.menu-btn {
+  width: 26px; height: 26px; border: none; background: none;
+  color: var(--muted); cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; font-size: 15px; font-weight: 800;
+  letter-spacing: -1px; transition: color 0.12s, background 0.12s;
+}
+.menu-btn:hover { color: var(--text); background: rgba(255,255,255,0.07); }
+
+.node-due {
+  font-size: 11px; color: var(--muted);
+  padding: 0 12px 5px; display: flex; align-items: center; gap: 4px;
+}
+
+/* ── Children ── */
+.kids { border-top: 1px solid rgba(255,255,255,0.04); }
+.kid-wrap { border-top: 1px solid rgba(255,255,255,0.025); }
+
+/* ── Goal footer ── */
+.goal-footer {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px 10px 36px;
+  border-top: 1px solid var(--border);
+}
+.btn-add {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.btn-add:hover { color: var(--text); border-color: var(--muted); }
+
+.btn-ai {
+  background: linear-gradient(135deg, rgba(124,106,247,0.12), rgba(191,148,255,0.08));
+  border: 1px solid rgba(167,139,250,0.22); color: var(--violet);
+  border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 5px; transition: opacity 0.15s;
+}
+.btn-ai:hover { opacity: 0.8; }
+.btn-ai.loading { opacity: 0.45; pointer-events: none; }
+
+/* ── Inline add ── */
+.inline-add {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-top: 1px solid var(--border);
+}
+.inline-input {
+  flex: 1; background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); padding: 7px 11px; font-size: 13px; outline: none;
+  transition: border-color 0.15s;
+}
+.inline-input:focus { border-color: var(--violet); }
+.btn-iadd {
+  background: var(--grape); color: #fff; border: none;
+  border-radius: 8px; padding: 7px 13px; font-size: 12px;
+  font-weight: 600; cursor: pointer;
+}
+.btn-icancel {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 8px; padding: 7px 10px; font-size: 12px; cursor: pointer;
+}
+
+/* ── Context menu ── */
+.ctx-menu {
+  position: fixed; z-index: 1000;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); box-shadow: 0 10px 40px rgba(0,0,0,0.55);
+  min-width: 165px; padding: 4px; display: none;
+}
+.ctx-menu.open { display: block; }
+.ctx-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px; font-size: 13px; color: var(--text2);
+  cursor: pointer; border-radius: 8px; transition: background 0.1s, color 0.1s;
+}
+.ctx-item:hover { background: rgba(255,255,255,0.07); color: var(--text); }
+.ctx-item.del { color: var(--red); }
+.ctx-item.del:hover { background: rgba(239,68,68,0.1); }
+.ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* ── Detail panel ── */
+.detail-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.38);
+  z-index: 200; display: none;
+}
+.detail-overlay.on { display: block; }
+.detail-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 380px;
+  max-width: 100vw;
+  background: var(--surface); border-left: 1px solid var(--border);
+  z-index: 201; display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform 0.24s ease;
+}
+.detail-panel.on { transform: translateX(0); }
+.dp-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.dp-head h3 {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--muted);
+}
+.dp-close {
+  width: 28px; height: 28px; border: none; background: none;
+  color: var(--muted); cursor: pointer; font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; transition: color 0.12s;
+}
+.dp-close:hover { color: var(--text); }
+.dp-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+
+.dp-field label {
+  display: block; font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin-bottom: 7px;
+}
+.dp-input {
+  width: 100%; background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); padding: 10px 13px; font-size: 14px;
+  font-weight: 600; outline: none; transition: border-color 0.15s;
+}
+.dp-input:focus { border-color: var(--violet); }
+
+.dp-status-row { display: flex; gap: 7px; }
+.dp-status-btn {
+  flex: 1; border: 1px solid var(--border); background: none;
+  border-radius: 8px; padding: 8px 4px; font-size: 10.5px;
+  font-weight: 700; text-transform: uppercase; cursor: pointer;
+  color: var(--muted); transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.dp-status-btn.on-todo       { background: rgba(90,90,120,0.25); border-color: var(--muted); color: var(--text2); }
+.dp-status-btn.on-in-progress{ background: rgba(240,185,11,0.15); border-color: var(--amber); color: var(--amber); }
+.dp-status-btn.on-done       { background: rgba(16,185,129,0.15); border-color: var(--green); color: var(--green); }
+
+.dp-date {
+  width: 100%; background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); padding: 9px 13px; font-size: 13px;
+  outline: none; color-scheme: dark; transition: border-color 0.15s;
+}
+.dp-date:focus { border-color: var(--violet); }
+
+.dp-prog-row { display: flex; align-items: center; gap: 10px; }
+.dp-prog-bar {
+  flex: 1; height: 6px; background: rgba(255,255,255,0.08);
+  border-radius: 999px; overflow: hidden;
+}
+.dp-prog-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--violet), var(--amethyst));
+  border-radius: 999px; transition: width 0.3s;
+}
+.dp-prog-pct { font-size: 13px; font-weight: 700; color: var(--amethyst); min-width: 34px; text-align: right; }
+
+.dp-notes {
+  width: 100%; background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); padding: 10px 13px; font-size: 13px;
+  outline: none; resize: vertical; min-height: 100px;
+  font-family: inherit; line-height: 1.55; transition: border-color 0.15s;
+}
+.dp-notes:focus { border-color: var(--violet); }
+
+/* ── Modal ── */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 300; display: none; backdrop-filter: blur(4px);
+}
+.modal-bg.on { display: flex; align-items: center; justify-content: center; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 24px;
+  width: min(480px, calc(100vw - 36px));
+  animation: popIn 0.18s ease;
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.modal h2 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+.modal-inp {
+  width: 100%; background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); padding: 11px 14px; font-size: 15px;
+  outline: none; margin-bottom: 14px; transition: border-color 0.15s;
+}
+.modal-inp:focus { border-color: var(--violet); }
+.modal-footer { display: flex; gap: 8px; justify-content: flex-end; }
+.btn-cancel {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 999px; padding: 9px 18px; font-size: 13px; cursor: pointer;
+}
+.btn-create {
+  background: linear-gradient(135deg, var(--grape), var(--amethyst));
+  border: none; color: #fff; border-radius: 999px;
+  padding: 9px 22px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  text-align: center; padding: 80px 20px; color: var(--muted);
+}
+.es-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.35; }
+.es-p { font-size: 15px; margin-bottom: 22px; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .content { padding: 14px 12px 80px; }
+  .focus-banner { margin: 12px 12px 0; }
+  .detail-panel { width: 100vw; }
+  .btn-ai span { display: none; }
+  .topbar { padding: 0 14px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="https://kisushotto.com" class="topbar-back" title="Hub">
+    <img src="/images/planner-icon.svg" width="28" height="28" alt="Planner">
+  </a>
+  <span class="topbar-title">Goal Planner</span>
+  <div class="topbar-spacer"></div>
+  <button class="btn-new" onclick="openNewGoal()">+ Goal</button>
+</div>
+
+<div class="focus-banner" id="focus-banner" hidden>
+  <span class="fb-label">⭐ Focus</span>
+  <span class="fb-title" id="fb-title"></span>
+  <div class="fb-bar"><div class="fb-fill" id="fb-fill" style="width:0%"></div></div>
+  <span class="fb-pct" id="fb-pct">0%</span>
+</div>
+
+<div class="content" id="content"></div>
+
+<!-- Context menu -->
+<div class="ctx-menu" id="ctx-menu"></div>
+
+<!-- Detail panel -->
+<div class="detail-overlay" id="dp-overlay" onclick="closeDetail()"></div>
+<div class="detail-panel" id="dp-panel">
+  <div class="dp-head">
+    <h3 id="dp-heading">Details</h3>
+    <button class="dp-close" onclick="closeDetail()">×</button>
+  </div>
+  <div class="dp-body">
+    <div class="dp-field">
+      <label>Title</label>
+      <input class="dp-input" id="dp-title" type="text" oninput="dpTitleChange()" placeholder="Title…">
+    </div>
+    <div class="dp-field">
+      <label>Status</label>
+      <div class="dp-status-row">
+        <button class="dp-status-btn" id="dsb-todo"        onclick="dpStatus('todo')">Todo</button>
+        <button class="dp-status-btn" id="dsb-in-progress" onclick="dpStatus('in-progress')">In Progress</button>
+        <button class="dp-status-btn" id="dsb-done"        onclick="dpStatus('done')">Done</button>
+      </div>
+    </div>
+    <div class="dp-field">
+      <label>Due Date</label>
+      <input class="dp-date" id="dp-date" type="date" onchange="dpDateChange()">
+    </div>
+    <div class="dp-field">
+      <label>Progress</label>
+      <div class="dp-prog-row">
+        <div class="dp-prog-bar"><div class="dp-prog-fill" id="dp-prog-fill" style="width:0%"></div></div>
+        <span class="dp-prog-pct" id="dp-prog-pct">0%</span>
+      </div>
+    </div>
+    <div class="dp-field">
+      <label>Notes</label>
+      <textarea class="dp-notes" id="dp-notes" oninput="dpNotesChange()" placeholder="Notes, links, context…"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- New goal modal -->
+<div class="modal-bg" id="modal-bg" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>New Goal</h2>
+    <input class="modal-inp" id="modal-inp" type="text" placeholder="What do you want to achieve?"
+           onkeydown="if(event.key==='Enter')createGoal();if(event.key==='Escape')closeModal()">
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-create" onclick="createGoal()">Create Goal</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { loadLocal, saveLocal, pull, push } from './sync.js';
+
+// ── State ──────────────────────────────────────────────
+let S = { goals: [], lastModified: 0 };
+let pushTimer = null;
+let addParentId = null;   // which node is getting a new child
+let detailId = null;
+let ctxId = null;
+
+// ── Utilities ──────────────────────────────────────────
+const uuid = () => crypto.randomUUID();
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const $ = id => document.getElementById(id);
+
+function newNode(title) {
+  return { id: uuid(), title, notes: '', status: 'todo', dueDate: null, pinned: false, collapsed: false, children: [], createdAt: Date.now() };
+}
+
+// ── Tree helpers ────────────────────────────────────────
+function find(id, arr) {
+  arr = arr || S.goals;
+  for (const n of arr) {
+    if (n.id === id) return n;
+    if (n.children.length) { const f = find(id, n.children); if (f) return f; }
+  }
+}
+
+function del(id, arr) {
+  arr = arr || S.goals;
+  const i = arr.findIndex(n => n.id === id);
+  if (i !== -1) { arr.splice(i, 1); return true; }
+  return arr.some(n => del(id, n.children));
+}
+
+function pct(node) {
+  if (!node.children.length) return node.status === 'done' ? 100 : node.status === 'in-progress' ? 40 : 0;
+  return Math.round(node.children.reduce((s, c) => s + pct(c), 0) / node.children.length);
+}
+
+// ── Persistence ─────────────────────────────────────────
+function save() {
+  S.lastModified = Date.now();
+  saveLocal(S);
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => push(S), 1500);
+}
+
+// ── Status helpers ──────────────────────────────────────
+const SL = { 'todo': 'Todo', 'in-progress': 'In Progress', 'done': 'Done' };
+const SD = { 'todo': 'rgba(90,90,120,0.9)', 'in-progress': 'rgba(240,185,11,0.95)', 'done': 'rgba(16,185,129,0.95)' };
+
+// ── Render ──────────────────────────────────────────────
+function render() {
+  // Focus banner
+  const pinned = S.goals.find(g => g.pinned);
+  const fb = $('focus-banner');
+  if (pinned) {
+    const p = pct(pinned);
+    $('fb-title').textContent = pinned.title;
+    $('fb-fill').style.width = p + '%';
+    $('fb-pct').textContent = p + '%';
+    fb.hidden = false;
+  } else {
+    fb.hidden = true;
+  }
+
+  const c = $('content');
+  if (!S.goals.length) {
+    c.innerHTML = `<div class="empty-state">
+      <div class="es-icon">🎯</div>
+      <p class="es-p">No goals yet. Create your first one.</p>
+      <button class="btn-create" onclick="openNewGoal()">+ New Goal</button>
+    </div>`;
+    return;
+  }
+
+  c.innerHTML = S.goals.map(g => `<div class="goal-card">${renderTree(g, 0)}</div>`).join('');
+
+  // Focus input if inline add is active
+  if (addParentId) {
+    const el = $('ii-' + addParentId);
+    if (el) { el.focus(); }
+  }
+}
+
+function renderTree(node, depth) {
+  const kids = node.children;
+  const hasKids = kids.length > 0;
+  const p = hasKids ? pct(node) : null;
+  const ind = 12 + depth * 22;
+  const isRoot = depth === 0;
+
+  const chevronCls = `chevron${hasKids ? '' : ' hidden-op'}${!hasKids || node.collapsed ? ' rot' : ''}`;
+  // only rotate if collapsed and has kids
+  const chevronClass = hasKids ? `chevron${node.collapsed ? ' rot' : ''}` : 'chevron hidden-op';
+
+  let html = `
+    <div class="node-row" style="padding-left:${ind}px">
+      <button class="${chevronClass}" onclick="toggleCol('${node.id}')">
+        <svg width="12" height="12" viewBox="0 0 12 12">
+          <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <span class="dot" style="background:${SD[node.status]}"></span>
+      <button class="ntitle d${depth}" onclick="openDetail('${node.id}')">${esc(node.title)}</button>
+      ${p !== null ? `<span class="npct">${p}%</span>` : ''}
+      <span class="nstat s-${node.status}" onclick="cycleStatus('${node.id}')">${SL[node.status]}</span>
+      ${isRoot ? `
+        <button class="pin-btn${node.pinned ? ' pinned' : ''}" onclick="pinGoal('${node.id}')" title="Pin as focus">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="${node.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </button>` : ''}
+      <button class="menu-btn" onclick="openCtx(event,'${node.id}',${isRoot})">···</button>
+    </div>
+    ${node.dueDate ? `<div class="node-due" style="padding-left:${ind+28}px">📅 ${node.dueDate}</div>` : ''}`;
+
+  if (!node.collapsed) {
+    if (hasKids) {
+      html += `<div class="kids">`;
+      for (const c of kids) {
+        html += `<div class="kid-wrap">${renderTree(c, depth + 1)}</div>`;
+      }
+      if (addParentId === node.id) html += renderInlineAdd(node.id, ind + 22);
+      html += `</div>`;
+    } else if (addParentId === node.id) {
+      html += renderInlineAdd(node.id, ind);
+    }
+
+    if (isRoot) {
+      html += `
+        <div class="goal-footer">
+          <button class="btn-add" onclick="startAdd('${node.id}')">＋ Add step</button>
+          <button class="btn-ai" id="ai-${node.id}" onclick="doAI('${node.id}')">✨ <span>Suggest with AI</span></button>
+        </div>`;
+    }
+  }
+
+  return html;
+}
+
+function renderInlineAdd(parentId, indent) {
+  return `
+    <div class="inline-add" style="padding-left:${indent}px">
+      <input class="inline-input" id="ii-${parentId}" type="text" placeholder="Step title…"
+             onkeydown="inlineKey(event,'${parentId}')">
+      <button class="btn-iadd" onclick="confirmAdd('${parentId}')">Add</button>
+      <button class="btn-icancel" onclick="cancelAdd()">×</button>
+    </div>`;
+}
+
+// ── Interactions ────────────────────────────────────────
+function toggleCol(id) {
+  const n = find(id); if (!n) return;
+  n.collapsed = !n.collapsed;
+  save(); render();
+}
+
+function cycleStatus(id) {
+  const n = find(id); if (!n) return;
+  const order = ['todo', 'in-progress', 'done'];
+  n.status = order[(order.indexOf(n.status) + 1) % 3];
+  save(); render();
+  if (detailId === id) refreshDetail();
+}
+
+function pinGoal(id) {
+  S.goals.forEach(g => { g.pinned = g.id === id ? !g.pinned : false; });
+  save(); render();
+}
+
+// ── Inline add ──────────────────────────────────────────
+function startAdd(parentId) {
+  addParentId = parentId;
+  render();
+}
+
+function cancelAdd() {
+  addParentId = null; render();
+}
+
+function confirmAdd(parentId) {
+  const el = $('ii-' + parentId);
+  const title = el ? el.value.trim() : '';
+  if (!title) { cancelAdd(); return; }
+  const parent = find(parentId);
+  if (!parent) return;
+  parent.children.push(newNode(title));
+  parent.collapsed = false;
+  addParentId = null;
+  save(); render();
+}
+
+function inlineKey(e, parentId) {
+  if (e.key === 'Enter') confirmAdd(parentId);
+  if (e.key === 'Escape') cancelAdd();
+}
+
+// ── New goal modal ────────────────────────────────────────
+function openNewGoal() {
+  $('modal-bg').classList.add('on');
+  setTimeout(() => $('modal-inp').focus(), 60);
+}
+function closeModal() {
+  $('modal-bg').classList.remove('on');
+  $('modal-inp').value = '';
+}
+function createGoal() {
+  const title = $('modal-inp').value.trim();
+  if (!title) return;
+  S.goals.push(newNode(title));
+  save(); render(); closeModal();
+}
+
+// ── Context menu ──────────────────────────────────────────
+let ctxIsRoot = false;
+
+function openCtx(e, id, isRoot) {
+  e.stopPropagation();
+  ctxId = id; ctxIsRoot = isRoot;
+  const m = $('ctx-menu');
+  m.innerHTML = `
+    <div class="ctx-item" onclick="ctxEdit()">✏️ Edit</div>
+    <div class="ctx-item" onclick="ctxAddChild()">＋ Add step</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="ctxStat('todo')">○ Set Todo</div>
+    <div class="ctx-item" onclick="ctxStat('in-progress')">◑ In Progress</div>
+    <div class="ctx-item" onclick="ctxStat('done')">● Done</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item del" onclick="ctxDel()">🗑 Delete</div>`;
+  m.classList.add('open');
+
+  const r = e.currentTarget.getBoundingClientRect();
+  let top = r.bottom + 4, left = r.right - 168;
+  if (left < 8) left = 8;
+  if (top + 220 > window.innerHeight) top = r.top - 224;
+  m.style.top = top + 'px'; m.style.left = left + 'px';
+
+  setTimeout(() => document.addEventListener('click', closeCtx, { once: true }), 10);
+}
+
+function closeCtx() { $('ctx-menu').classList.remove('open'); }
+
+function ctxEdit() {
+  closeCtx(); openDetail(ctxId);
+  setTimeout(() => { const t = $('dp-title'); if (t) { t.focus(); t.select(); } }, 260);
+}
+function ctxAddChild() { closeCtx(); startAdd(ctxId); }
+function ctxStat(s) {
+  closeCtx();
+  const n = find(ctxId); if (!n) return;
+  n.status = s; save(); render();
+  if (detailId === ctxId) refreshDetail();
+}
+function ctxDel() {
+  closeCtx();
+  if (!confirm('Delete this item and all its sub-steps?')) return;
+  if (detailId === ctxId) closeDetail();
+  del(ctxId); save(); render();
+}
+
+// ── Detail panel ───────────────────────────────────────────
+function openDetail(id) {
+  detailId = id;
+  refreshDetail();
+  $('dp-overlay').classList.add('on');
+  $('dp-panel').classList.add('on');
+}
+
+function closeDetail() {
+  detailId = null;
+  $('dp-overlay').classList.remove('on');
+  $('dp-panel').classList.remove('on');
+}
+
+function refreshDetail() {
+  const n = find(detailId); if (!n) return;
+  const p = pct(n);
+  $('dp-heading').textContent = n.children.length ? 'Goal / Step' : 'Step';
+  $('dp-title').value = n.title;
+  $('dp-date').value = n.dueDate || '';
+  $('dp-notes').value = n.notes || '';
+  $('dp-prog-fill').style.width = p + '%';
+  $('dp-prog-pct').textContent = p + '%';
+  ['todo', 'in-progress', 'done'].forEach(s => {
+    $('dsb-' + s).className = 'dp-status-btn' + (n.status === s ? ' on-' + s : '');
+  });
+}
+
+function dpTitleChange() {
+  const n = find(detailId); if (!n) return;
+  n.title = $('dp-title').value;
+  save(); render();
+}
+function dpDateChange() {
+  const n = find(detailId); if (!n) return;
+  n.dueDate = $('dp-date').value || null;
+  save(); render();
+}
+function dpNotesChange() {
+  const n = find(detailId); if (!n) return;
+  n.notes = $('dp-notes').value;
+  save();
+}
+function dpStatus(s) {
+  const n = find(detailId); if (!n) return;
+  n.status = s; save(); render(); refreshDetail();
+}
+
+// ── AI Suggest ─────────────────────────────────────────────
+async function doAI(goalId) {
+  const goal = find(goalId); if (!goal) return;
+  const btn = $('ai-' + goalId);
+  if (btn) btn.classList.add('loading');
+  try {
+    const r = await fetch('/api/claude-suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goalTitle: goal.title, existingSteps: goal.children.map(c => c.title) })
+    });
+    if (!r.ok) throw new Error('API ' + r.status);
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    if (Array.isArray(data.steps)) {
+      data.steps.forEach(t => { if (t && typeof t === 'string') goal.children.push(newNode(t.trim())); });
+      goal.collapsed = false;
+      save(); render();
+    }
+  } catch (e) {
+    alert('AI suggestion failed: ' + e.message + '\n\nMake sure ANTHROPIC_API_KEY is set in Vercel.');
+  } finally {
+    const b = $('ai-' + goalId);
+    if (b) b.classList.remove('loading');
+  }
+}
+
+// ── Init ────────────────────────────────────────────────────
+async function init() {
+  const local = loadLocal();
+  if (local) { S = local; render(); }
+
+  const remote = await pull();
+  if (remote && remote.lastModified > S.lastModified) {
+    S = remote; saveLocal(S); render();
+  }
+
+  if (!local && !remote) render();
+}
+
+// Expose globals for inline onclick handlers
+Object.assign(window, {
+  openNewGoal, closeModal, createGoal,
+  toggleCol, cycleStatus, pinGoal,
+  startAdd, cancelAdd, confirmAdd, inlineKey,
+  openCtx, ctxEdit, ctxAddChild, ctxStat, ctxDel,
+  openDetail, closeDetail, dpTitleChange, dpDateChange, dpNotesChange, dpStatus,
+  doAI
+});
+
+init();
+</script>
+</body>
+</html>

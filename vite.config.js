@@ -14,6 +14,7 @@ export default defineConfig({
         habits:         resolve(__dirname, 'habits/index.html'),
         p2pMonitor:     resolve(__dirname, 'p2p-monitor/index.html'),
         bodyMetrics:    resolve(__dirname, 'body-metrics/index.html'),
+        planner:        resolve(__dirname, 'planner/index.html'),
       }
     }
   }

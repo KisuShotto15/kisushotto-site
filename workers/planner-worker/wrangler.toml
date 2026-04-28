@@ -1,0 +1,7 @@
+name = "planner-worker"
+main = "src/index.js"
+compatibility_date = "2025-04-10"
+
+[[kv_namespaces]]
+binding = "PLANNER_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"

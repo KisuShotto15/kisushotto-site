@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
     "lightweight-charts": "^4.2.0"
   },
   "devDependencies": {
