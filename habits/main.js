@@ -179,6 +179,7 @@ function renderToday() {
 
     return `
       <div class="habit-row ${done_ ? 'done' : ''} ${notDue_ ? 'not-due' : ''}"
+           data-hid="${h.id}"
            style="--habit-color:${color}"
            onclick="${notDue_ ? '' : `onHabitClick('${h.id}')`}">
         <div class="habit-pill"></div>
@@ -300,6 +301,10 @@ window.onHabitClick = async function(id) {
   const wasDone = isDone(id, t);
   setLocal(id, t, wasDone ? null : 1);
   renderToday();
+  if (!wasDone) {
+    const check = document.querySelector(`[data-hid="${id}"] .habit-check`);
+    if (check) { check.classList.add('pop'); check.addEventListener('animationend', () => check.classList.remove('pop'), { once: true }); }
+  }
 
   try {
     await toggleComplete({ habit_id: id, date: t });
@@ -632,6 +637,9 @@ async function init() {
   }
 
   renderToday();
+  const listEl = document.getElementById('habitList');
+  listEl.classList.add('entering');
+  setTimeout(() => listEl.classList.remove('entering'), 700);
   renderManage();
   renderCalendar();
   renderStats();
@@ -643,14 +651,30 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel()
 
 // ── Swipe to change day (mobile) ──────────────────────────────────────────────
 (function() {
-  let x0 = null;
+  let x0 = null, y0 = null, locked = false;
   const el = document.querySelector('.habits-layout > div');
   if (!el) return;
-  el.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
-  el.addEventListener('touchend', e => {
+
+  el.addEventListener('touchstart', e => {
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+    locked = false;
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
     if (x0 === null) return;
+    const dx = e.touches[0].clientX - x0;
+    const dy = e.touches[0].clientY - y0;
+    if (!locked && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+      locked = true;
+    }
+    if (locked) e.preventDefault();
+  }, { passive: false });
+
+  el.addEventListener('touchend', e => {
+    if (x0 === null || !locked) { x0 = y0 = null; locked = false; return; }
     const dx = e.changedTouches[0].clientX - x0;
-    x0 = null;
+    x0 = y0 = null; locked = false;
     if (Math.abs(dx) < 50) return;
     const cur = new Date((selectedDate || today()) + 'T00:00:00');
     const dir = dx < 0 ? 1 : -1;
@@ -658,8 +682,8 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel()
     const next = dateStr(cur.getFullYear(), cur.getMonth() + 1, cur.getDate());
     if (next > today()) return;
     const listEl     = document.getElementById('habitList');
-    const exitClass  = dx < 0 ? 'exit-left'        : 'exit-right';
-    const enterClass = dx < 0 ? 'enter-from-right'  : 'enter-from-left';
+    const exitClass  = dx < 0 ? 'exit-left'       : 'exit-right';
+    const enterClass = dx < 0 ? 'enter-from-right' : 'enter-from-left';
     listEl.classList.add(exitClass);
     setTimeout(() => {
       selectDate(next);

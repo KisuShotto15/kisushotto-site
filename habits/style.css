@@ -661,26 +661,26 @@ body::before {
 .habits-layout > div:first-child { animation: fadeUp 0.42s ease both 0.16s; }
 .habits-layout > div:last-child  { animation: fadeUp 0.42s ease both 0.22s; }
 
-/* Staggered habit rows */
+/* Staggered habit rows — only on first load (.entering added by JS once) */
 @keyframes rowIn { from { opacity: 0; transform: translateY(10px); } }
-.habit-list .habit-row                  { animation: rowIn 0.26s ease both; }
-.habit-list .habit-row:nth-child(1)     { animation-delay: 0.03s; }
-.habit-list .habit-row:nth-child(2)     { animation-delay: 0.08s; }
-.habit-list .habit-row:nth-child(3)     { animation-delay: 0.13s; }
-.habit-list .habit-row:nth-child(4)     { animation-delay: 0.18s; }
-.habit-list .habit-row:nth-child(5)     { animation-delay: 0.23s; }
-.habit-list .habit-row:nth-child(6)     { animation-delay: 0.28s; }
-.habit-list .habit-row:nth-child(7)     { animation-delay: 0.33s; }
-.habit-list .habit-row:nth-child(n+8)   { animation-delay: 0.38s; }
+.habit-list.entering .habit-row                { animation: rowIn 0.26s ease both; }
+.habit-list.entering .habit-row:nth-child(1)   { animation-delay: 0.03s; }
+.habit-list.entering .habit-row:nth-child(2)   { animation-delay: 0.08s; }
+.habit-list.entering .habit-row:nth-child(3)   { animation-delay: 0.13s; }
+.habit-list.entering .habit-row:nth-child(4)   { animation-delay: 0.18s; }
+.habit-list.entering .habit-row:nth-child(5)   { animation-delay: 0.23s; }
+.habit-list.entering .habit-row:nth-child(6)   { animation-delay: 0.28s; }
+.habit-list.entering .habit-row:nth-child(7)   { animation-delay: 0.33s; }
+.habit-list.entering .habit-row:nth-child(n+8) { animation-delay: 0.38s; }
 
-/* Check pop on complete */
+/* Check pop — applied by JS on specific element only */
 @keyframes checkPop {
   0%   { transform: scale(1); }
   35%  { transform: scale(1.3); }
   65%  { transform: scale(0.9); }
   100% { transform: scale(1); }
 }
-.habit-row.done .habit-check { animation: checkPop 0.25s ease; }
+.habit-check.pop { animation: checkPop 0.25s ease; }
 
 /* ── Swipe slide transitions ── */
 @keyframes exitLeft       { to   { transform: translateX(-40px); opacity: 0; } }
