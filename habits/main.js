@@ -653,10 +653,18 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel()
     x0 = null;
     if (Math.abs(dx) < 50) return;
     const cur = new Date((selectedDate || today()) + 'T00:00:00');
-    const dir = dx < 0 ? 1 : -1; // swipe left = next day, right = prev day
+    const dir = dx < 0 ? 1 : -1;
     cur.setDate(cur.getDate() + dir);
     const next = dateStr(cur.getFullYear(), cur.getMonth() + 1, cur.getDate());
-    if (next <= today()) selectDate(next);
+    if (next > today()) return;
+    const listEl     = document.getElementById('habitList');
+    const exitClass  = dx < 0 ? 'exit-left'        : 'exit-right';
+    const enterClass = dx < 0 ? 'enter-from-right'  : 'enter-from-left';
+    listEl.classList.add(exitClass);
+    setTimeout(() => {
+      selectDate(next);
+      document.getElementById('habitList').classList.add(enterClass);
+    }, 185);
   }, { passive: true });
 })();
 
