@@ -415,6 +415,9 @@ function openEditor(n) {
   State.editing = JSON.parse(JSON.stringify(n));
   const e = State.editing;
 
+  // Push history entry so Android back button closes editor instead of exiting
+  history.pushState({ modal: 'editor' }, '');
+
   lockBodyScroll();
   $('#editor').hidden = false;
   const card = $('#editor .editor-card');
@@ -603,7 +606,7 @@ async function commitEditor() {
   renderGrid();
 }
 
-function closeEditor() {
+function closeEditor(fromPopState = false) {
   if (State.editing) {
     syncChecklistFromDom();
     const addInp = $('#ed-checklist-list .ed-check-add input');
@@ -617,6 +620,8 @@ function closeEditor() {
     }
     commitEditor();
   }
+  // If not triggered by back button, pop the history entry we pushed
+  if (!fromPopState && history.state?.modal === 'editor') history.back();
   $('#editor').hidden = true;
   $('#ed-checklist-list').contentEditable = 'inherit';
   State.editing = null;
@@ -986,17 +991,18 @@ function hidePopups() {
 // ── settings drawer ──────────────────────────────────────────────────────────
 function bindDrawer() {
   $('#btn-settings').addEventListener('click', () => {
+    history.pushState({ modal: 'drawer' }, '');
     lockBodyScroll();
     $('#drawer').hidden = false;
   });
   $$('#drawer [data-close-drawer]').forEach(el => el.addEventListener('click', () => {
-    $('#drawer').hidden = true;
-    unlockBodyScroll();
+    if (history.state?.modal === 'drawer') history.back();
+    else { $('#drawer').hidden = true; unlockBodyScroll(); }
   }));
   $$('#drawer .drawer-item[data-view]').forEach(b => b.addEventListener('click', (e) => {
     setView(e.currentTarget.dataset.view);
-    $('#drawer').hidden = true;
-    unlockBodyScroll();
+    if (history.state?.modal === 'drawer') history.back();
+    else { $('#drawer').hidden = true; unlockBodyScroll(); }
   }));
   $('#drawer-cat-add').addEventListener('click', async () => {
     const inp = $('#drawer-cat-name');
@@ -1127,6 +1133,30 @@ function bindUI() {
         openLightbox(img.src);
       }
     });
+  });
+
+  // ── Android back button / browser back gesture ───────────────────────────
+  // We push history states when opening modals; popstate fires when user goes back.
+  window.addEventListener('popstate', (e) => {
+    const modal = e.state?.modal;
+    if (modal === 'editor') {
+      // Close editor without triggering another history.back()
+      closeEditor(true);
+      return;
+    }
+    if (modal === 'drawer') {
+      $('#drawer').hidden = true;
+      unlockBodyScroll();
+      return;
+    }
+    // Close any open popup (bottom-sheets on mobile)
+    const anyPopup = $$('.popup').some(p => !p.hidden);
+    if (anyPopup) {
+      hidePopups();
+      // Re-push so the next back still works (we consumed this one)
+      return;
+    }
+    // Nothing open — let the browser navigate normally (app will close/go back)
   });
 }
 
