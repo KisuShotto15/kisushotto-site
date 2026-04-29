@@ -1,6 +1,7 @@
 /* notes/style.css — minimalist Google Keep-inspired dark theme */
 
 :root {
+  color-scheme: dark;
   --bg:        #09090e;
   --surface:   #111118;
   --card:      #16161f;
@@ -36,7 +37,7 @@ html, body {
 body {
   min-height: 100vh;
   padding-top: 64px;
-  padding-bottom: 80px;
+  padding-bottom: 100px;
 }
 
 body::before {
@@ -359,11 +360,41 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   padding: 6px 4px;
 }
 .ed-check-row input[type=checkbox] {
+  appearance: none;
+  -webkit-appearance: none;
   width: 18px; height: 18px;
   flex: 0 0 auto;
   margin-top: 2px;
-  accent-color: var(--accent);
+  border: 2px solid var(--muted);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
   user-select: none; -webkit-user-select: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ed-check-row input[type=checkbox]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ed-check-row input[type=checkbox]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px; top: 0;
+  width: 7px; height: 11px;
+  border: 2px solid #1a1100;
+  border-top: none; border-left: none;
+  transform: rotate(45deg);
+}
+.editor-card.colored .ed-check-row input[type=checkbox] {
+  border-color: rgba(0,0,0,0.35);
+}
+.editor-card.colored .ed-check-row input[type=checkbox]:checked {
+  background: rgba(0,0,0,0.45);
+  border-color: rgba(0,0,0,0.45);
+}
+.editor-card.colored .ed-check-row input[type=checkbox]:checked::after {
+  border-color: rgba(255,255,255,0.9);
 }
 .ed-check-text {
   flex: 1;
@@ -371,20 +402,37 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   padding: 0;
   line-height: 1.5;
   font-size: 15px;
-  border-bottom: 1px solid transparent;
   outline: none;
   word-break: break-word;
   white-space: pre-wrap;
   cursor: text;
 }
-.ed-check-text:focus { border-bottom-color: var(--border-2); }
 .ed-check-row.done .ed-check-text { text-decoration: line-through; color: var(--muted); }
-.ed-check-row .btn-icon {
+.drag-handle {
+  flex: 0 0 auto;
+  color: var(--muted);
+  cursor: grab;
+  display: flex; align-items: center;
+  padding: 0 2px;
+  opacity: 0.4;
+  touch-action: none;
+  user-select: none; -webkit-user-select: none;
+}
+.ed-check-row:hover .drag-handle { opacity: 0.8; }
+.drag-handle:active { cursor: grabbing; }
+.ed-check-row.drag-over { border-top: 2px solid var(--accent); }
+.ed-check-row .row-del {
   width: 28px; height: 28px;
   font-size: 14px;
   border: none;
+  background: transparent;
+  opacity: 0;
+  transition: opacity 0.15s;
   user-select: none; -webkit-user-select: none;
 }
+.ed-check-row:hover .row-del,
+.ed-check-row:focus-within .row-del { opacity: 0.7; }
+.ed-check-row .row-del:hover { opacity: 1; }
 .ed-check-add {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 4px;
@@ -415,27 +463,37 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   color: white;
 }
 
-/* Bottom create bar */
-.bottom-create-bar {
+/* Floating action button */
+.fab {
+  position: fixed;
+  bottom: 28px; right: 20px;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #1a1100;
+  border: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 70;
+  touch-action: manipulation;
+  transition: transform 0.15s, background 0.15s;
+}
+.fab:hover { background: var(--accent-2); transform: scale(1.06); }
+.fab:active { transform: scale(0.94); }
+
+/* Selection bar */
+.select-bar {
   position: fixed; bottom: 0; left: 0; right: 0;
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 16px 20px;
-  background: rgba(9,9,14,0.92);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border);
-  z-index: 70;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--card);
+  border-top: 1px solid var(--border-2);
+  z-index: 75;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.4);
 }
-.bcb-input {
-  flex: 1;
-  padding: 10px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border-2);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 14px;
-  cursor: pointer;
-}
-.bcb-actions { display: flex; gap: 6px; }
+.select-bar[hidden] { display: none; }
+#select-count { flex: 1; font-size: 14px; color: var(--muted2); }
+.select-danger { color: var(--danger) !important; border-color: var(--danger) !important; }
 
 /* Editor toolbar layout */
 .ed-toolbar {
@@ -555,6 +613,48 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
+  min-width: 220px;
+}
+
+/* Multi-select card styles */
+.nc-select-wrap {
+  position: absolute; top: 6px; left: 6px;
+  display: none;
+  z-index: 2;
+}
+.nc-select-wrap input[type=checkbox] {
+  width: 20px; height: 20px;
+  cursor: pointer;
+  accent-color: var(--accent);
+  appearance: none;
+  -webkit-appearance: none;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+  background: rgba(9,9,14,0.7);
+  position: relative;
+}
+.nc-select-wrap input[type=checkbox]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.nc-select-wrap input[type=checkbox]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px; top: 0;
+  width: 7px; height: 11px;
+  border: 2px solid #1a1100;
+  border-top: none; border-left: none;
+  transform: rotate(45deg);
+}
+/* Show checkbox on hover (web) */
+@media (hover: hover) {
+  .note-card:hover .nc-select-wrap { display: block; }
+}
+/* Show all checkboxes in select mode */
+body.select-mode .nc-select-wrap { display: block; }
+.note-card.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .color-swatch {
   width: 36px; height: 36px;
@@ -726,7 +826,7 @@ body.modal-open {
 @media (max-width: 640px) {
   body {
     padding-top: 56px;
-    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
   }
   .topbar {
     padding-left: 56px;
@@ -841,9 +941,13 @@ body.modal-open {
     width: 100vw;
   }
 
-  /* Net banner safe area */
+  /* Net banner + FAB safe area */
   .net-banner {
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+  .fab {
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    right: max(20px, env(safe-area-inset-right, 20px));
   }
 
   /* Category strip safe area */

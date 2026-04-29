@@ -29,6 +29,8 @@ const State = {
   editing: null,        // note being edited
   attachUrls: {},       // attId -> object URL
   pinPending: null,     // resolver fn while PIN modal open
+  selected: new Set(),  // selected note IDs for multi-select
+  selectMode: false,
 };
 
 let saveTimer = null;
@@ -311,6 +313,7 @@ function noteCardHtml(n) {
 
   return `
     <article class="${cls}" ${style} data-id="${n.id}" onclick="">
+      <label class="nc-select-wrap" onclick="event.stopPropagation()"><input type="checkbox" class="nc-select-cb" data-id="${n.id}" onclick=""></label>
       ${n.pinned ? '<span class="nc-pin">📌</span>' : ''}
       ${n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : ''}
       ${imgs}
@@ -341,10 +344,36 @@ function renderGrid() {
   $('#others-title').textContent = title;
   $('#empty-state').hidden = !!notes.length;
 
-  // Wire card clicks
+  // Wire card clicks + long-press select
+  let longPressTimer = null;
   $$('.note-card').forEach(card => {
+    // Long-press to enter select mode (mobile)
+    card.addEventListener('touchstart', () => {
+      longPressTimer = setTimeout(() => {
+        enterSelectMode();
+        toggleSelect(card.dataset.id);
+      }, 550);
+    }, { passive: true });
+    card.addEventListener('touchend',  () => clearTimeout(longPressTimer));
+    card.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+
     card.addEventListener('click', (ev) => {
-      if (ev.target.matches('input[type="checkbox"]')) {
+      // Multi-select checkbox
+      if (ev.target.matches('.nc-select-cb')) {
+        ev.stopPropagation();
+        if (!State.selectMode) enterSelectMode();
+        toggleSelect(ev.target.dataset.id);
+        ev.target.checked = State.selected.has(ev.target.dataset.id);
+        return;
+      }
+      if (State.selectMode) {
+        toggleSelect(card.dataset.id);
+        const cb = card.querySelector('.nc-select-cb');
+        if (cb) cb.checked = State.selected.has(card.dataset.id);
+        if (State.selected.size === 0) exitSelectMode();
+        return;
+      }
+      if (ev.target.matches('input[type="checkbox"].nc-checklist-line, .nc-checklist-line input[type="checkbox"]')) {
         ev.stopPropagation();
         const chkLine = ev.target.closest('.nc-checklist-line');
         if (!chkLine) return;
@@ -394,16 +423,52 @@ function render() {
   renderGrid();
 }
 
+// ── multi-select ─────────────────────────────────────────────────────────────
+function enterSelectMode() {
+  State.selectMode = true;
+  document.body.classList.add('select-mode');
+  updateSelectBar();
+}
+
+function exitSelectMode() {
+  State.selectMode = false;
+  State.selected.clear();
+  document.body.classList.remove('select-mode');
+  $$('.note-card').forEach(c => c.classList.remove('selected'));
+  const bar = $('#select-bar');
+  if (bar) bar.hidden = true;
+}
+
+function toggleSelect(id) {
+  if (State.selected.has(id)) State.selected.delete(id);
+  else State.selected.add(id);
+  const card = $(`.note-card[data-id="${id}"]`);
+  if (card) card.classList.toggle('selected', State.selected.has(id));
+  updateSelectBar();
+}
+
+function updateSelectBar() {
+  const bar = $('#select-bar');
+  const count = $('#select-count');
+  if (!bar) return;
+  if (State.selected.size === 0 && State.selectMode) {
+    bar.hidden = true;
+    return;
+  }
+  bar.hidden = !State.selectMode;
+  if (count) count.textContent = `${State.selected.size} seleccionada${State.selected.size !== 1 ? 's' : ''}`;
+}
+
 // ── view state ───────────────────────────────────────────────────────────────
 function setView(v) {
+  if (State.selectMode) exitSelectMode();
   State.view = v;
   render();
 }
 
 // ── card click → editor or PIN ───────────────────────────────────────────────
 async function openCard(n) {
-  const me = getUserEmail();
-  if (n.locked && n.owner_email === me && !isSessionUnlocked()) {
+  if (n.locked && !isSessionUnlocked()) {
     const ok = await promptUnlock();
     if (!ok) return;
   }
@@ -487,6 +552,20 @@ function syncChecklistFromDom() {
   });
 }
 
+function reorderChecklist(srcId, targetId) {
+  const e = State.editing;
+  if (!e) return;
+  syncChecklistFromDom();
+  const items = e.checklist_items;
+  const srcIdx = items.findIndex(x => x.id === srcId);
+  const tgtIdx = items.findIndex(x => x.id === targetId);
+  if (srcIdx === -1 || tgtIdx === -1 || srcIdx === tgtIdx) return;
+  const [moved] = items.splice(srcIdx, 1);
+  items.splice(tgtIdx, 0, moved);
+  renderChecklist();
+  scheduleSave();
+}
+
 function renderChecklist() {
   const root = $('#ed-checklist-list');
   if (!root) return;
@@ -501,6 +580,12 @@ function renderChecklist() {
     const row = document.createElement('div');
     row.className = `ed-check-row ${it.done ? 'done' : ''}`;
     row.dataset.id = it.id;
+    row.draggable = true;
+
+    const handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.contentEditable = 'false';
+    handle.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';
@@ -512,15 +597,15 @@ function renderChecklist() {
     txt.textContent = it.text || '';
 
     const del = document.createElement('button');
-    del.className = 'btn-icon';
+    del.className = 'btn-icon row-del';
     del.title = 'Eliminar';
-    del.textContent = '×';
     del.contentEditable = 'false';
+    del.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
 
     chk.addEventListener('change', () => { it.done = chk.checked; row.classList.toggle('done', chk.checked); scheduleSave(); });
     del.addEventListener('click', () => { e.checklist_items = e.checklist_items.filter(x => x.id !== it.id); renderChecklist(); scheduleSave(); });
 
-    row.append(chk, txt, del);
+    row.append(handle, chk, txt, del);
     root.appendChild(row);
   }
 
@@ -538,11 +623,64 @@ function renderChecklist() {
     renderChecklist();
     scheduleSave();
     const newAddInp = root.querySelector('.ed-check-add input');
-    if (newAddInp) newAddInp.focus();
+    if (newAddInp) {
+      newAddInp.focus();
+      setTimeout(() => newAddInp.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+    }
   };
   addInp.addEventListener('keydown', ev => { if (ev.key === 'Enter') doAdd(); });
   addBtn.addEventListener('click', doAdd);
   root.appendChild(add);
+
+  // ── Drag-and-drop (mouse + touch) ──────────────────────────────────────
+  let dragSrcId = null;
+
+  root.querySelectorAll('.ed-check-row').forEach(row => {
+    // Mouse drag
+    row.addEventListener('dragstart', ev => {
+      dragSrcId = row.dataset.id;
+      ev.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragover', ev => {
+      ev.preventDefault();
+      root.querySelectorAll('.ed-check-row').forEach(r => r.classList.remove('drag-over'));
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop', ev => {
+      ev.preventDefault();
+      row.classList.remove('drag-over');
+      if (dragSrcId && dragSrcId !== row.dataset.id) reorderChecklist(dragSrcId, row.dataset.id);
+      dragSrcId = null;
+    });
+  });
+
+  // Touch drag on handle
+  root.querySelectorAll('.drag-handle').forEach(handle => {
+    let touchDragId = null;
+    handle.addEventListener('touchstart', ev => {
+      touchDragId = handle.closest('.ed-check-row')?.dataset.id;
+      ev.preventDefault();
+    }, { passive: false });
+    handle.addEventListener('touchmove', ev => {
+      if (!touchDragId) return;
+      ev.preventDefault();
+      const touch = ev.touches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const targetRow = el?.closest('.ed-check-row');
+      root.querySelectorAll('.ed-check-row').forEach(r => r.classList.remove('drag-over'));
+      if (targetRow && targetRow.dataset.id !== touchDragId) targetRow.classList.add('drag-over');
+    }, { passive: false });
+    handle.addEventListener('touchend', ev => {
+      if (!touchDragId) return;
+      const touch = ev.changedTouches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const targetRow = el?.closest('.ed-check-row');
+      root.querySelectorAll('.ed-check-row').forEach(r => r.classList.remove('drag-over'));
+      if (targetRow && targetRow.dataset.id !== touchDragId) reorderChecklist(touchDragId, targetRow.dataset.id);
+      touchDragId = null;
+    }, { passive: false });
+  });
 }
 
 function renderAttachments() {
@@ -948,7 +1086,11 @@ function bindEditorActions() {
       renderChecklist();
       scheduleSave();
       const rows = cl.querySelectorAll('.ed-check-text');
-      if (rows[idx + 1]) { rows[idx + 1].focus(); placeCursorAtEnd(rows[idx + 1]); }
+      if (rows[idx + 1]) {
+        rows[idx + 1].focus();
+        placeCursorAtEnd(rows[idx + 1]);
+        setTimeout(() => rows[idx + 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+      }
     }
   });
 }
@@ -1154,6 +1296,33 @@ function bindUI() {
   bindEditorActions();
   bindDrawer();
 
+  // Selection bar
+  $('#select-cancel')?.addEventListener('click', () => exitSelectMode());
+  $('#select-archive')?.addEventListener('click', async () => {
+    for (const id of State.selected) {
+      const n = State.notes.find(x => x.id === id);
+      if (!n) continue;
+      n.archived = true;
+      n.last_modified = Date.now();
+      await saveNoteLocal(n);
+    }
+    exitSelectMode();
+    render();
+  });
+  $('#select-delete')?.addEventListener('click', async () => {
+    if (!confirm(`¿Mover ${State.selected.size} nota(s) a la papelera?`)) return;
+    for (const id of State.selected) {
+      const n = State.notes.find(x => x.id === id);
+      if (!n) continue;
+      n.trashed_at = Date.now();
+      n.last_modified = Date.now();
+      await saveNoteLocal(n);
+      try { await apiTrashNote(id); } catch {}
+    }
+    exitSelectMode();
+    render();
+  });
+
   // Lightbox
   $('#lightbox-bg').addEventListener('click', closeLightbox);
   $('#lightbox-img').addEventListener('click', closeLightbox);
@@ -1177,27 +1346,23 @@ function bindUI() {
   });
 
   // ── Android back button / browser back gesture ───────────────────────────
-  // We push history states when opening modals; popstate fires when user goes back.
-  window.addEventListener('popstate', (e) => {
-    const modal = e.state?.modal;
-    if (modal === 'editor') {
-      // Close editor without triggering another history.back()
+  // Check what's actually open in DOM (not history state) to avoid re-open bugs
+  window.addEventListener('popstate', () => {
+    if (!$('#editor').hidden) {
       closeEditor(true);
       return;
     }
-    if (modal === 'drawer') {
+    if (!$('#drawer').hidden) {
       $('#drawer').hidden = true;
       unlockBodyScroll();
       return;
     }
-    // Close any open popup (bottom-sheets on mobile)
     const anyPopup = $$('.popup').some(p => !p.hidden);
     if (anyPopup) {
       hidePopups();
-      // Re-push so the next back still works (we consumed this one)
+      history.pushState(null, ''); // restore entry so next back still works
       return;
     }
-    // Nothing open — let the browser navigate normally (app will close/go back)
   });
 }
 

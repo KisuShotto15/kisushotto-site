@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0a0a10">
+<meta name="color-scheme" content="dark">
 <title>Notas — KS</title>
 <link rel="icon" type="image/svg+xml" href="/images/notes-icon.svg">
 <link rel="manifest" href="/manifest.json">
@@ -17,7 +18,6 @@
 
 <div class="topbar">
   <div class="brand">
-    <img src="/images/notes-icon.svg" alt="" width="22" height="22">
     <span>Notas</span>
   </div>
   <div class="search-wrap">
@@ -25,14 +25,14 @@
   </div>
   <div class="topbar-actions">
     
-    <button class="btn-icon" id="btn-settings" title="Ajustes" onclick="">⚙️</button>
+    <button class="btn-icon" id="btn-settings" title="Ajustes" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
   </div>
 </div>
 
 <div class="cat-strip" id="cat-strip">
   <button class="cat-pill active" data-cat="all" onclick="">Todas</button>
-  <button class="cat-pill" data-cat="shared" onclick="">📥 Compartidas</button>
-  <button class="cat-pill" data-cat="locked" onclick="">🔒 Protegidas</button>
+  <button class="cat-pill" data-cat="shared" onclick="">Compartidas</button>
+  <button class="cat-pill" data-cat="locked" onclick="">Protegidas</button>
   <span class="cat-divider"></span>
   <span id="cat-list-anchor"></span>
   <button class="cat-pill add" id="btn-cat-new" title="Nueva categoría" onclick="">+</button>
@@ -53,13 +53,15 @@
   </section>
 </main>
 
-<div class="bottom-create-bar">
-  <div class="bcb-input" onclick="window.NotesApp.openNew()">Crear una nota...</div>
-  <div class="bcb-actions">
-    <button class="btn-icon" id="btn-new-checklist" title="Nueva lista" onclick="window.NotesApp.openNew('checklist')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg></button>
-    <button class="btn-icon" id="btn-new-audio" title="Nueva nota de audio" onclick="window.NotesApp.openNew('audio')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg></button>
-    <button class="btn-icon" id="btn-new-image" title="Nueva nota con imagen" onclick="window.NotesApp.openNew('image')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></button>
-  </div>
+<button class="fab" id="fab-new" title="Nueva nota" onclick="window.NotesApp.openNew()">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+</button>
+
+<div class="select-bar" id="select-bar" hidden>
+  <span id="select-count"></span>
+  <button class="btn-ghost" id="select-archive">Archivar</button>
+  <button class="btn-ghost select-danger" id="select-delete">Eliminar</button>
+  <button class="btn-icon" id="select-cancel">✕</button>
 </div>
 
 
@@ -73,7 +75,6 @@
       <div class="ed-toolbar-right">
         <button class="btn-icon" id="ed-pin" title="Fijar" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
         <button class="btn-icon" id="ed-reminder" title="Recordatorio" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
-        <button class="btn-icon" id="ed-color" title="Color" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg></button>
         <button class="btn-icon" id="ed-more" title="Más opciones" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
       </div>
     </div>
@@ -90,6 +91,7 @@
       <div class="ed-undo-redo">
         <button class="btn-icon" id="ed-undo" title="Deshacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg></button>
         <button class="btn-icon" id="ed-redo" title="Rehacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg></button>
+        <button class="btn-icon" id="ed-color" title="Color" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22C6.49 22 2 17.51 2 12S6.49 2 12 2s10 4.04 10 9c0 3.31-2.69 6-6 6h-1.77c-.28 0-.5.22-.5.5 0 .12.04.23.1.32.34.43.56.95.56 1.68A2.5 2.5 0 0 1 12 22z"></path><circle cx="8.5" cy="13.5" r="1.5" fill="currentColor"></circle><circle cx="15.5" cy="13.5" r="1.5" fill="currentColor"></circle><circle cx="12" cy="9.5" r="1.5" fill="currentColor"></circle></svg></button>
       </div>
     </div>
 
@@ -123,13 +125,19 @@
   <div class="color-grid">
     <button class="color-swatch" data-color=""           style="background:transparent;border:1px dashed #555" onclick="">∅</button>
     <button class="color-swatch" data-color="#fbbf24"    style="background:#fbbf24" onclick=""></button>
-    <button class="color-swatch" data-color="#f87171"    style="background:#f87171" onclick=""></button>
     <button class="color-swatch" data-color="#fb923c"    style="background:#fb923c" onclick=""></button>
-    <button class="color-swatch" data-color="#a3e635"    style="background:#a3e635" onclick=""></button>
-    <button class="color-swatch" data-color="#34d399"    style="background:#34d399" onclick=""></button>
-    <button class="color-swatch" data-color="#60a5fa"    style="background:#60a5fa" onclick=""></button>
-    <button class="color-swatch" data-color="#a78bfa"    style="background:#a78bfa" onclick=""></button>
+    <button class="color-swatch" data-color="#fdba74"    style="background:#fdba74" onclick=""></button>
+    <button class="color-swatch" data-color="#f87171"    style="background:#f87171" onclick=""></button>
+    <button class="color-swatch" data-color="#fda4af"    style="background:#fda4af" onclick=""></button>
     <button class="color-swatch" data-color="#f472b6"    style="background:#f472b6" onclick=""></button>
+    <button class="color-swatch" data-color="#a78bfa"    style="background:#a78bfa" onclick=""></button>
+    <button class="color-swatch" data-color="#c4b5fd"    style="background:#c4b5fd" onclick=""></button>
+    <button class="color-swatch" data-color="#60a5fa"    style="background:#60a5fa" onclick=""></button>
+    <button class="color-swatch" data-color="#7dd3fc"    style="background:#7dd3fc" onclick=""></button>
+    <button class="color-swatch" data-color="#34d399"    style="background:#34d399" onclick=""></button>
+    <button class="color-swatch" data-color="#86efac"    style="background:#86efac" onclick=""></button>
+    <button class="color-swatch" data-color="#a3e635"    style="background:#a3e635" onclick=""></button>
+    <button class="color-swatch" data-color="#6ee7b7"    style="background:#6ee7b7" onclick=""></button>
   </div>
 </div>
 
@@ -187,9 +195,9 @@
       <button class="btn-icon" data-close-drawer onclick="">✕</button>
     </header>
     <nav class="drawer-nav">
-      <button class="drawer-item" data-view="all" onclick="">📝 Todas</button>
-      <button class="drawer-item" data-view="archive" onclick="">📦 Archivo</button>
-      <button class="drawer-item" data-view="trash" onclick="">🗑️ Papelera</button>
+      <button class="drawer-item" data-view="all" onclick="">Todas</button>
+      <button class="drawer-item" data-view="archive" onclick="">Archivo</button>
+      <button class="drawer-item" data-view="trash" onclick="">Papelera</button>
       <hr>
       <div class="drawer-section">Categorías</div>
       <div id="drawer-cat-list"></div>
@@ -199,9 +207,9 @@
       </div>
       <hr>
       <div class="drawer-section">Seguridad</div>
-      <button class="drawer-item" id="drawer-set-pin" onclick="">🔢 Configurar PIN</button>
-      <button class="drawer-item" id="drawer-webauthn" onclick="">👆 Registrar huella / Face ID</button>
-      <button class="drawer-item" id="drawer-test-push" onclick="">🔔 Activar notificaciones push</button>
+      <button class="drawer-item" id="drawer-set-pin" onclick="">Configurar PIN</button>
+      <button class="drawer-item" id="drawer-webauthn" onclick="">Registrar huella / Face ID</button>
+      <button class="drawer-item" id="drawer-test-push" onclick="">Activar notificaciones push</button>
       <hr>
       <div class="drawer-section">Cuenta</div>
       <div class="drawer-row" id="drawer-user"></div>
