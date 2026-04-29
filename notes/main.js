@@ -1105,7 +1105,7 @@ function bindUI() {
     State.search = e.target.value;
     renderGrid();
   });
-  $('#btn-new').addEventListener('click', openNew);
+  $('#btn-new')?.addEventListener('click', openNew);
 
   $$('.cat-pill[data-cat]').forEach(p => p.addEventListener('click', () => setView(p.dataset.cat)));
   $('#btn-cat-new').addEventListener('click', () => {
