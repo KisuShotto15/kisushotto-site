@@ -40,6 +40,11 @@ async function init() {
     return;
   }
 
+  // ── BIND UI FIRST — must run before any async that can throw ──────────
+  // This guarantees buttons/modals always respond even if IDB or network fails
+  // (Brave Shields can block IndexedDB, breaking all async below)
+  bindUI();
+
   // SW
   if ('serviceWorker' in navigator) {
     try { await navigator.serviceWorker.register('/sw.js'); } catch {}
@@ -49,9 +54,14 @@ async function init() {
   updateNetBanner(navigator.onLine);
   onConnectionChange(updateNetBanner);
 
-  // Local-first
-  await loadFromIDB();
-  render();
+  // Local-first — wrapped in try/catch because IDB may be blocked (Brave Shields)
+  try {
+    await loadFromIDB();
+    render();
+  } catch (e) {
+    console.warn('IndexedDB load failed (Brave Shields?)', e);
+    render(); // render empty state so the UI is usable
+  }
 
   // Network
   try {
@@ -68,8 +78,6 @@ async function init() {
     if (!navigator.onLine) return;
     try { await pull(); await loadFromIDB(); render(); } catch {}
   }, 30000);
-
-  bindUI();
 
   // Open note from query param (push notification deep-link)
   const params = new URLSearchParams(location.search);

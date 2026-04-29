@@ -80,14 +80,22 @@ export async function flushQueue() {
 }
 
 export async function saveNoteLocal(note) {
-  await idb.put('notes', note);
-  await idb.enqueue({ type: 'note', id: note.id });
+  try {
+    await idb.put('notes', note);
+    await idb.enqueue({ type: 'note', id: note.id });
+  } catch (e) {
+    console.warn('IDB write failed (Brave Shields?)', e);
+  }
   pushQueueDebounced();
 }
 
 export async function saveCategoryLocal(cat) {
-  await idb.put('categories', cat);
-  await idb.enqueue({ type: 'category', id: cat.id });
+  try {
+    await idb.put('categories', cat);
+    await idb.enqueue({ type: 'category', id: cat.id });
+  } catch (e) {
+    console.warn('IDB write failed (Brave Shields?)', e);
+  }
   pushQueueDebounced();
 }
 
