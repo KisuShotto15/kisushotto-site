@@ -407,12 +407,15 @@ function renderChecklist() {
     row.className = `ed-check-row ${it.done ? 'done' : ''}`;
     row.innerHTML = `
       <input type="checkbox" ${it.done ? 'checked' : ''}>
-      <input type="text" value="${escapeHtmlAttr(it.text || '')}">
+      <textarea rows="1">${escapeHtml(it.text || '')}</textarea>
       <button class="btn-icon" title="Eliminar">×</button>
     `;
-    const [chk, txt, del] = row.querySelectorAll('input,button');
+    const chk = row.querySelector('input[type=checkbox]');
+    const txt = row.querySelector('textarea');
+    const del = row.querySelector('button');
+    autoGrow(txt);
     chk.addEventListener('change', () => { it.done = chk.checked; row.classList.toggle('done', chk.checked); scheduleSave(); });
-    txt.addEventListener('input',  () => { it.text = txt.value; scheduleSave(); });
+    txt.addEventListener('input',  () => { it.text = txt.value; autoGrow(txt); scheduleSave(); });
     del.addEventListener('click',  () => { e.checklist_items = e.checklist_items.filter(x => x.id !== it.id); renderChecklist(); scheduleSave(); });
     root.appendChild(row);
   }
