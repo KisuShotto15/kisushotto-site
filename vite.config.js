@@ -15,6 +15,7 @@ export default defineConfig({
         p2pMonitor:     resolve(__dirname, 'p2p-monitor/index.html'),
         bodyMetrics:    resolve(__dirname, 'body-metrics/index.html'),
         planner:        resolve(__dirname, 'planner/index.html'),
+        notes:          resolve(__dirname, 'notes/index.html'),
       }
     }
   }

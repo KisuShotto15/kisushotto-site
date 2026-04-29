@@ -1,0 +1,27 @@
+name = "notes-worker"
+main = "src/index.js"
+compatibility_date = "2025-04-10"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "notes-db"
+database_id = "dca76353-c498-4f75-85da-9568244b29a7"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "notes-attachments"
+
+[[kv_namespaces]]
+binding = "PUSH_KV"
+id = "cf380b2236474d458eaaf9f0a4b37b10"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+TOKEN = "151322"
+VAPID_SUBJECT = "mailto:efrenalejandro2010@gmail.com"
+
+# Set as secrets via:
+#   wrangler secret put VAPID_PUBLIC
+#   wrangler secret put VAPID_PRIVATE_JWK   (full JWK JSON: {"kty":"EC","crv":"P-256","d":"...","x":"...","y":"..."})

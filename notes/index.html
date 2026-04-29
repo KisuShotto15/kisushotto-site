@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a10">
+<title>Notas — KS</title>
+<link rel="icon" type="image/svg+xml" href="/images/notes-icon.svg">
+<link rel="manifest" href="/manifest.json">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<a href="https://kisushotto.com" class="hub-back" title="Volver al Hub">
+  <img src="/images/notes-icon.svg" alt="Notas" width="28" height="28">
+</a>
+
+<div class="topbar">
+  <div class="brand">
+    <img src="/images/notes-icon.svg" alt="" width="22" height="22">
+    <span>Notas</span>
+  </div>
+  <div class="search-wrap">
+    <input type="search" id="search" placeholder="Buscar..." autocomplete="off">
+  </div>
+  <div class="topbar-actions">
+    <button class="btn-pri" id="btn-new">+ Nueva</button>
+    <button class="btn-icon" id="btn-settings" title="Ajustes">⚙️</button>
+  </div>
+</div>
+
+<div class="cat-strip" id="cat-strip">
+  <button class="cat-pill active" data-cat="all">Todas</button>
+  <button class="cat-pill" data-cat="shared">📥 Compartidas</button>
+  <button class="cat-pill" data-cat="locked">🔒 Protegidas</button>
+  <span class="cat-divider"></span>
+  <span id="cat-list-anchor"></span>
+  <button class="cat-pill add" id="btn-cat-new" title="Nueva categoría">+</button>
+</div>
+
+<main id="main">
+  <section id="pinned-section" class="grid-section" hidden>
+    <h2>📌 Fijadas</h2>
+    <div class="masonry" id="grid-pinned"></div>
+  </section>
+  <section id="others-section" class="grid-section">
+    <h2 id="others-title">Notas</h2>
+    <div class="masonry" id="grid-others"></div>
+    <div class="empty" id="empty-state" hidden>
+      <p>No hay notas aquí.</p>
+      <button class="btn-pri" onclick="window.NotesApp.openNew()">Crear la primera</button>
+    </div>
+  </section>
+</main>
+
+<!-- Editor modal -->
+<div class="modal" id="editor" hidden>
+  <div class="modal-bg" data-close></div>
+  <div class="modal-card editor-card">
+    <div class="ed-toolbar">
+      <button class="btn-icon" id="ed-pin"        title="Fijar">📌</button>
+      <button class="btn-icon" id="ed-color"      title="Color">🎨</button>
+      <button class="btn-icon" id="ed-categories" title="Categorías">🏷️</button>
+      <button class="btn-icon" id="ed-image"      title="Imagen">📷</button>
+      <button class="btn-icon" id="ed-audio"      title="Audio">🎙️</button>
+      <button class="btn-icon" id="ed-checklist"  title="Lista">☑️</button>
+      <button class="btn-icon" id="ed-reminder"   title="Recordatorio">⏰</button>
+      <button class="btn-icon" id="ed-share"      title="Compartir">👥</button>
+      <button class="btn-icon" id="ed-lock"       title="Proteger">🔒</button>
+      <button class="btn-icon" id="ed-archive"    title="Archivar">📦</button>
+      <button class="btn-icon" id="ed-delete"     title="Eliminar">🗑️</button>
+      <span class="ed-status" id="ed-status"></span>
+      <button class="btn-pri" id="ed-close" data-close>Listo</button>
+    </div>
+    <div class="ed-meta" id="ed-meta"></div>
+    <input class="ed-title" id="ed-title" placeholder="Título" maxlength="200">
+    <div class="ed-body-wrap">
+      <textarea class="ed-body" id="ed-body" placeholder="Escribe..."></textarea>
+      <div class="ed-checklist" id="ed-checklist-list" hidden></div>
+    </div>
+    <div class="ed-attachments" id="ed-attachments"></div>
+  </div>
+</div>
+
+<!-- Color picker mini-popup -->
+<div class="popup" id="popup-color" hidden>
+  <div class="color-grid">
+    <button class="color-swatch" data-color=""           style="background:transparent;border:1px dashed #555">∅</button>
+    <button class="color-swatch" data-color="#fbbf24"    style="background:#fbbf24"></button>
+    <button class="color-swatch" data-color="#f87171"    style="background:#f87171"></button>
+    <button class="color-swatch" data-color="#fb923c"    style="background:#fb923c"></button>
+    <button class="color-swatch" data-color="#a3e635"    style="background:#a3e635"></button>
+    <button class="color-swatch" data-color="#34d399"    style="background:#34d399"></button>
+    <button class="color-swatch" data-color="#60a5fa"    style="background:#60a5fa"></button>
+    <button class="color-swatch" data-color="#a78bfa"    style="background:#a78bfa"></button>
+    <button class="color-swatch" data-color="#f472b6"    style="background:#f472b6"></button>
+  </div>
+</div>
+
+<!-- Categories assigner popup -->
+<div class="popup" id="popup-cats" hidden>
+  <div class="popup-title">Categorías</div>
+  <div id="popup-cats-list"></div>
+  <div class="popup-foot">
+    <input type="text" id="popup-new-cat" placeholder="Nueva categoría">
+    <button class="btn-pri" id="popup-new-cat-btn">+</button>
+  </div>
+</div>
+
+<!-- Reminder popup -->
+<div class="popup" id="popup-reminder" hidden>
+  <div class="popup-title">Recordatorio</div>
+  <input type="datetime-local" id="popup-reminder-input">
+  <div class="popup-foot">
+    <button class="btn-ghost" id="popup-reminder-clear">Quitar</button>
+    <button class="btn-pri"   id="popup-reminder-save">Guardar</button>
+  </div>
+</div>
+
+<!-- Share popup -->
+<div class="popup" id="popup-share" hidden>
+  <div class="popup-title">Compartir</div>
+  <div id="popup-share-list"></div>
+  <div class="popup-foot">
+    <input type="email" id="popup-share-email" placeholder="email@ejemplo.com">
+    <button class="btn-pri" id="popup-share-add">+</button>
+  </div>
+</div>
+
+<!-- PIN unlock modal -->
+<div class="modal" id="pin-modal" hidden>
+  <div class="modal-bg"></div>
+  <div class="modal-card pin-card">
+    <h3 id="pin-title">Desbloquear</h3>
+    <p id="pin-msg" class="pin-msg">Ingresa tu PIN</p>
+    <input type="password" id="pin-input" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="••••">
+    <div class="pin-actions">
+      <button class="btn-ghost" id="pin-cancel">Cancelar</button>
+      <button class="btn-pri"   id="pin-submit">Continuar</button>
+    </div>
+    <button class="btn-link" id="pin-biometric" hidden>Usar huella / Face ID</button>
+  </div>
+</div>
+
+<!-- Settings drawer -->
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-bg" data-close-drawer></div>
+  <aside class="drawer-card">
+    <header class="drawer-head">
+      <h2>Ajustes</h2>
+      <button class="btn-icon" data-close-drawer>✕</button>
+    </header>
+    <nav class="drawer-nav">
+      <button class="drawer-item" data-view="all">📝 Todas</button>
+      <button class="drawer-item" data-view="archive">📦 Archivo</button>
+      <button class="drawer-item" data-view="trash">🗑️ Papelera</button>
+      <hr>
+      <div class="drawer-section">Categorías</div>
+      <div id="drawer-cat-list"></div>
+      <div class="drawer-row">
+        <input type="text" id="drawer-cat-name" placeholder="Nueva categoría">
+        <button class="btn-pri" id="drawer-cat-add">+</button>
+      </div>
+      <hr>
+      <div class="drawer-section">Seguridad</div>
+      <button class="drawer-item" id="drawer-set-pin">🔢 Configurar PIN</button>
+      <button class="drawer-item" id="drawer-webauthn">👆 Registrar huella / Face ID</button>
+      <button class="drawer-item" id="drawer-test-push">🔔 Activar notificaciones push</button>
+      <hr>
+      <div class="drawer-section">Cuenta</div>
+      <div class="drawer-row" id="drawer-user"></div>
+    </nav>
+  </aside>
+</div>
+
+<!-- Set-PIN modal -->
+<div class="modal" id="setpin-modal" hidden>
+  <div class="modal-bg" data-close-setpin></div>
+  <div class="modal-card pin-card">
+    <h3>Configurar PIN</h3>
+    <p class="pin-msg">4 a 8 dígitos. Se usará para abrir notas protegidas.</p>
+    <input type="password" id="setpin-input" inputmode="numeric" maxlength="8" placeholder="PIN">
+    <input type="password" id="setpin-input2" inputmode="numeric" maxlength="8" placeholder="Confirmar">
+    <div class="pin-actions">
+      <button class="btn-ghost" data-close-setpin>Cancelar</button>
+      <button class="btn-pri"   id="setpin-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-image" accept="image/*" hidden>
+
+<div class="net-banner" id="net-banner" hidden>Sin conexión — los cambios se sincronizarán al volver</div>
+
+<script type="module" src="./main.js"></script>
+</body>
+</html>
