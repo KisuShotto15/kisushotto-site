@@ -135,6 +135,8 @@ input, textarea, select {
   flex: 0 0 auto;
 }
 .btn-icon:hover { background: var(--card); }
+.btn-icon.active { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.35); }
+.btn-icon.active:hover { background: rgba(255,255,255,0.18); }
 
 /* Categories strip */
 .cat-strip {
@@ -253,8 +255,10 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   font-size: 14px; color: var(--muted2);
   margin-bottom: 3px;
 }
-.nc-checklist-line input { pointer-events: none; }
+.nc-checklist-line input { cursor: pointer; }
 .nc-checklist-line.done { color: var(--muted); text-decoration: line-through; }
+.note-card.colored .nc-checklist-line { color: rgba(0,0,0,0.8); }
+.note-card.colored .nc-checklist-line.done { color: rgba(0,0,0,0.4); }
 .nc-image-thumb {
   width: 100%;
   border-radius: var(--r-sm);
@@ -311,6 +315,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   width: 34px; height: 34px;
   font-size: 15px;
 }
+#ed-color.active { border-color: rgba(255,255,255,0.55); }
 .ed-status {
   flex: 1;
   font-size: 12px;

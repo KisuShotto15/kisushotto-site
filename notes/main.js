@@ -215,8 +215,8 @@ function noteCardHtml(n) {
     body = `<div class="nc-body" style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span class="nc-locked">🔒</span> Nota protegida</div>`;
   } else if (n.type === 'checklist') {
     const items = (n.checklist_items || []).slice(0, 8);
-    body = `<div class="nc-body">` + items.map(it =>
-      `<div class="nc-checklist-line ${it.done ? 'done' : ''}"><input type="checkbox" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
+    body = `<div class="nc-body">` + items.map((it, idx) =>
+      `<div class="nc-checklist-line ${it.done ? 'done' : ''}" data-idx="${idx}"><input type="checkbox" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
     ).join('') + (items.length < (n.checklist_items?.length || 0) ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">+${(n.checklist_items?.length || 0) - items.length} más</div>` : '') + `</div>`;
   } else {
     body = `<div class="nc-body">${escapeHtml(n.body || '').slice(0, 600)}</div>`;
@@ -270,7 +270,23 @@ function renderGrid() {
 
   // Wire card clicks
   $$('.note-card').forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (ev) => {
+      const chkLine = ev.target.closest('.nc-checklist-line');
+      if (chkLine) {
+        ev.stopPropagation();
+        const n = State.notes.find(x => x.id === card.dataset.id);
+        if (!n || !n.checklist_items) return;
+        const idx = parseInt(chkLine.dataset.idx, 10);
+        const item = n.checklist_items[idx];
+        if (!item) return;
+        item.done = !item.done;
+        n.last_modified = Date.now();
+        saveNoteLocal(n);
+        chkLine.classList.toggle('done', item.done);
+        const chk = chkLine.querySelector('input[type="checkbox"]');
+        if (chk) chk.checked = item.done;
+        return;
+      }
       const n = State.notes.find(x => x.id === card.dataset.id);
       if (n) openCard(n);
     });
@@ -356,6 +372,21 @@ function updateEditorMeta() {
     if (c) tags.push(`<span class="ed-meta-tag" style="border-color:${c.color}">${escapeHtml(c.name)}</span>`);
   }
   $('#ed-meta').innerHTML = tags.join('');
+
+  // Active states on toolbar buttons
+  const btn = id => document.getElementById(id);
+  btn('ed-pin')?.classList.toggle('active', !!e.pinned);
+  btn('ed-lock')?.classList.toggle('active', !!e.locked);
+  btn('ed-archive')?.classList.toggle('active', !!e.archived);
+  btn('ed-reminder')?.classList.toggle('active', !!e.reminder_at);
+  btn('ed-share')?.classList.toggle('active', !!(e.shares?.length));
+  btn('ed-categories')?.classList.toggle('active', !!(e.categories?.length));
+  const colorBtn = btn('ed-color');
+  if (colorBtn) {
+    colorBtn.classList.toggle('active', !!e.color);
+    colorBtn.style.background = e.color || '';
+  }
+  btn('ed-checklist')?.classList.toggle('active', e.type === 'checklist');
 }
 
 function renderChecklist() {
