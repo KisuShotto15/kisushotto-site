@@ -371,23 +371,20 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   margin-top: 2px;
   accent-color: var(--accent);
 }
-.ed-check-row textarea {
+.ed-check-text {
   flex: 1;
   min-width: 0;
   padding: 0;
-  resize: none;
-  overflow: hidden;
   line-height: 1.5;
   font-size: 15px;
   border-bottom: 1px solid transparent;
+  outline: none;
+  word-break: break-word;
+  white-space: pre-wrap;
+  cursor: text;
 }
-.ed-check-row textarea:focus {
-  border-bottom-color: var(--border-2);
-}
-.ed-check-row.done textarea {
-  text-decoration: line-through;
-  color: var(--muted);
-}
+.ed-check-text:focus { border-bottom-color: var(--border-2); }
+.ed-check-row.done .ed-check-text { text-decoration: line-through; color: var(--muted); }
 .ed-check-row .btn-icon {
   width: 28px; height: 28px;
   font-size: 14px;
@@ -631,14 +628,15 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
 }
 
 /* Editor colored state */
-.editor-card.colored { color: #1a1100; }
-.editor-card.colored #ed-title,
-.editor-card.colored #ed-body,
-.editor-card.colored textarea { color: #1a1100; }
-.editor-card.colored .ed-check-row textarea,
-.editor-card.colored .ed-check-row.done textarea { color: rgba(0,0,0,0.45); }
-.editor-card.colored .ed-status { color: rgba(0,0,0,0.5); }
+.editor-card.colored,
+.editor-card.colored input,
+.editor-card.colored textarea,
+.editor-card.colored [contenteditable] { color: #1a1100; }
+.editor-card.colored .ed-check-row.done .ed-check-text { color: rgba(0,0,0,0.45); }
+.editor-card.colored .ed-status,
+.editor-card.colored ::placeholder { color: rgba(0,0,0,0.45); }
 .editor-card.colored .btn-icon { border-color: rgba(0,0,0,0.2); color: #1a1100; }
+.editor-card.colored .ed-meta-tag { background: rgba(0,0,0,0.12); color: #1a1100; }
 
 /* Net banner */
 .net-banner {

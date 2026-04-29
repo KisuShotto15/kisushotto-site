@@ -97,6 +97,15 @@ function autoGrow(el) {
   el.style.height = el.scrollHeight + 'px';
 }
 
+function placeCursorAtEnd(el) {
+  const range = document.createRange();
+  const sel = window.getSelection();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 function updateNetBanner(online) {
   const el = $('#net-banner');
   if (!el) return;
@@ -411,22 +420,36 @@ function renderChecklist() {
   const e = State.editing;
   if (!e) return;
   const items = e.checklist_items || [];
-  for (const it of items) {
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
     const row = document.createElement('div');
     row.className = `ed-check-row ${it.done ? 'done' : ''}`;
     row.innerHTML = `
       <input type="checkbox" ${it.done ? 'checked' : ''}>
-      <textarea rows="1">${escapeHtml(it.text || '')}</textarea>
+      <div class="ed-check-text" contenteditable="true" spellcheck="true"></div>
       <button class="btn-icon" title="Eliminar">×</button>
     `;
     const chk = row.querySelector('input[type=checkbox]');
-    const txt = row.querySelector('textarea');
+    const txt = row.querySelector('.ed-check-text');
     const del = row.querySelector('button');
+    txt.textContent = it.text || '';
     chk.addEventListener('change', () => { it.done = chk.checked; row.classList.toggle('done', chk.checked); scheduleSave(); });
-    txt.addEventListener('input',  () => { it.text = txt.value; autoGrow(txt); scheduleSave(); });
+    txt.addEventListener('input',  () => { it.text = txt.innerText.replace(/\n$/, ''); scheduleSave(); });
+    txt.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && !ev.shiftKey) {
+        ev.preventDefault();
+        const v = txt.innerText.replace(/\n$/, '');
+        it.text = v;
+        e.checklist_items.splice(i + 1, 0, { id: crypto.randomUUID(), text: '', done: false, order: i + 1 });
+        renderChecklist();
+        scheduleSave();
+        // Focus the new item
+        const rows = root.querySelectorAll('.ed-check-text');
+        if (rows[i + 1]) { rows[i + 1].focus(); placeCursorAtEnd(rows[i + 1]); }
+      }
+    });
     del.addEventListener('click',  () => { e.checklist_items = e.checklist_items.filter(x => x.id !== it.id); renderChecklist(); scheduleSave(); });
     root.appendChild(row);
-    autoGrow(txt); // must be after DOM insertion so scrollHeight is accurate
   }
   // add row
   const add = document.createElement('div');

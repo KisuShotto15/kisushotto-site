@@ -18,6 +18,10 @@ export async function pull() {
       await idb.put('notes', n);
     }
   }
+  if (since === 0) {
+    // Full sync: replace all categories to remove orphans from stale imports
+    await idb.clear('categories');
+  }
   for (const c of data.categories || []) {
     await idb.put('categories', c);
   }
