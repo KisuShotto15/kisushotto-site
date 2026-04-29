@@ -94,7 +94,7 @@ async function migrate(env) {
 }
 
 // ── Auth helpers (PIN + WebAuthn) ────────────────────────────────────────────
-async function pbkdf2(password, saltB64, iters = 120000) {
+async function pbkdf2(password, saltB64, iters = 100000) {
   const enc = new TextEncoder();
   const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
   const key = await crypto.subtle.importKey(
@@ -202,9 +202,9 @@ async function fetchNotesForUser(env, email, since = 0) {
   const sharedRes = await env.DB.prepare(
     `SELECT n.* FROM notes n
      JOIN note_shares s ON s.note_id = n.id
-     WHERE s.shared_with_email = ? AND n.last_modified >= ?
+     WHERE s.shared_with_email = ? AND (n.last_modified >= ? OR s.shared_at >= ?)
      ORDER BY n.last_modified DESC`
-  ).bind(email, since).all();
+  ).bind(email, since, since).all();
 
   const all = [...(ownRes.results || []), ...(sharedRes.results || [])];
   if (!all.length) return [];

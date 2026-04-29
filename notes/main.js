@@ -86,6 +86,12 @@ async function loadFromIDB() {
   State.notes.sort((a, b) => (b.last_modified || 0) - (a.last_modified || 0));
 }
 
+function openLightbox(src) {
+  $('#lightbox-img').src = src;
+  $('#lightbox').hidden = false;
+}
+function closeLightbox() { $('#lightbox').hidden = true; }
+
 function autoGrow(el) {
   el.style.height = 'auto';
   el.style.height = el.scrollHeight + 'px';
@@ -108,7 +114,7 @@ function getCurrentNotes() {
     if (n.trashed_at)    return false;
     if (v === 'archive') return !!n.archived;
     if (n.archived)      return false;
-    if (v === 'shared')  return n.owner_email !== me;
+    if (v === 'shared')  return n.owner_email !== me || (n.shares?.length > 0);
     if (v === 'locked')  return !!n.locked && n.owner_email === me;
     if (v.startsWith('cat:')) {
       const id = v.slice(4);
@@ -348,6 +354,9 @@ function openEditor(n) {
   const e = State.editing;
 
   $('#editor').hidden = false;
+  const card = $('#editor .editor-card');
+  card.style.background = e.color || '';
+  card.classList.toggle('colored', !!e.color);
   $('#ed-title').value = e.title || '';
   $('#ed-body').value  = e.body || '';
   autoGrow($('#ed-body'));
@@ -639,6 +648,10 @@ function bindEditorActions() {
   $$('#popup-color .color-swatch').forEach(s => {
     s.addEventListener('click', () => {
       State.editing.color = s.dataset.color || null;
+      const c = State.editing.color;
+      const ec = $('#editor .editor-card');
+      ec.style.background = c || '';
+      ec.classList.toggle('colored', !!c);
       hidePopups();
       scheduleSave();
       updateEditorMeta();
@@ -946,6 +959,28 @@ function bindUI() {
 
   bindEditorActions();
   bindDrawer();
+
+  // Lightbox
+  $('#lightbox-bg').addEventListener('click', closeLightbox);
+  $('#lightbox-img').addEventListener('click', closeLightbox);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  // Image clicks — editor attachments (delegated)
+  $('#ed-attachments').addEventListener('click', e => {
+    const img = e.target.closest('img[data-att]');
+    if (img && img.src) { e.stopPropagation(); openLightbox(img.src); }
+  });
+
+  // Image clicks — note cards (delegated on grid)
+  $$('#grid-pinned, #grid-others').forEach(grid => {
+    grid.addEventListener('click', e => {
+      const img = e.target.closest('img.nc-image-thumb');
+      if (img && img.src && !img.src.endsWith('#')) {
+        e.stopPropagation();
+        openLightbox(img.src);
+      }
+    });
+  });
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

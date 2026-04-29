@@ -611,6 +611,35 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
 }
 .drawer-cat-row .drawer-cat-name { flex: 1; }
 
+/* Lightbox */
+#lightbox {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+}
+#lightbox[hidden] { display: none; }
+#lightbox-bg {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.88);
+  cursor: zoom-out;
+}
+#lightbox-img {
+  position: relative;
+  max-width: 95vw; max-height: 92vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.8);
+}
+
+/* Editor colored state */
+.editor-card.colored { color: #1a1100; }
+.editor-card.colored #ed-title,
+.editor-card.colored #ed-body,
+.editor-card.colored textarea { color: #1a1100; }
+.editor-card.colored .ed-check-row textarea,
+.editor-card.colored .ed-check-row.done textarea { color: rgba(0,0,0,0.45); }
+.editor-card.colored .ed-status { color: rgba(0,0,0,0.5); }
+.editor-card.colored .btn-icon { border-color: rgba(0,0,0,0.2); color: #1a1100; }
+
 /* Net banner */
 .net-banner {
   position: fixed; bottom: 16px; left: 50%;
