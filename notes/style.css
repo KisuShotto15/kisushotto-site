@@ -364,7 +364,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 .ed-check-row input[type=checkbox] {
   width: 18px; height: 18px;
   flex: 0 0 auto;
-  margin-top: 3px;
+  margin-top: 2px;
   accent-color: var(--accent);
 }
 .ed-check-row textarea {

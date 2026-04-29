@@ -413,11 +413,11 @@ function renderChecklist() {
     const chk = row.querySelector('input[type=checkbox]');
     const txt = row.querySelector('textarea');
     const del = row.querySelector('button');
-    autoGrow(txt);
     chk.addEventListener('change', () => { it.done = chk.checked; row.classList.toggle('done', chk.checked); scheduleSave(); });
     txt.addEventListener('input',  () => { it.text = txt.value; autoGrow(txt); scheduleSave(); });
     del.addEventListener('click',  () => { e.checklist_items = e.checklist_items.filter(x => x.id !== it.id); renderChecklist(); scheduleSave(); });
     root.appendChild(row);
+    autoGrow(txt); // must be after DOM insertion so scrollHeight is accurate
   }
   // add row
   const add = document.createElement('div');
