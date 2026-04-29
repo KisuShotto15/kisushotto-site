@@ -629,14 +629,14 @@ function closeEditor(fromPopState = false) {
   hidePopups();
 }
 
-function openNew() {
+function openNew(type) {
   const me = getUserEmail();
   const n = {
     id: crypto.randomUUID(),
     owner_email: me,
     title: '',
     body: '',
-    type: 'text',
+    type: (type === 'checklist') ? 'checklist' : 'text',
     checklist_items: [],
     color: null,
     pinned: false,
@@ -654,6 +654,9 @@ function openNew() {
   State.notes.unshift(n);
   saveNoteLocal(n);
   openEditor(n);
+  // Trigger media immediately for audio/image shortcuts
+  if (type === 'audio') setTimeout(() => $('#ed-audio')?.click(), 100);
+  if (type === 'image') setTimeout(() => $('#ed-image')?.click(), 100);
 }
 
 // ── PIN unlock prompt ────────────────────────────────────────────────────────
@@ -713,27 +716,65 @@ function bindEditorActions() {
   $('#ed-checklist').addEventListener('click', () => {
     const e = State.editing;
     if (e.type === 'checklist') {
-      // convert back to text
-      const txt = (e.checklist_items || []).map(it => `${it.done ? '[x]' : '[ ]'} ${it.text}`).join('\n');
-      e.body = (e.body ? e.body + '\n' : '') + txt;
+      syncChecklistFromDom();
+      const txt = (e.checklist_items || []).map(it => it.text).join('\n');
+      e.body = txt;
       e.type = 'text';
       e.checklist_items = [];
+      $('#ed-body').value = e.body;
+      autoGrow($('#ed-body'));
     } else {
+      // Sync textarea before converting so we don't lose unsaved text
+      e.body = $('#ed-body').value;
       e.type = 'checklist';
-      if (!e.checklist_items?.length && e.body) {
-        e.checklist_items = e.body.split('\n').filter(l => l.trim()).map(l => ({
+      const lines = e.body.split('\n').filter(l => l.trim());
+      if (lines.length) {
+        e.checklist_items = lines.map(l => ({
           id: crypto.randomUUID(),
           text: l.replace(/^\[\s?[xX]?\s?\]\s*/, ''),
           done: /^\[\s?[xX]\s?\]/.test(l),
           order: 0,
         }));
-        e.body = '';
+      } else if (!e.checklist_items?.length) {
+        e.checklist_items = [];
       }
+      e.body = '';
     }
     $('#ed-body').hidden = e.type === 'checklist';
     $('#ed-checklist-list').hidden = e.type !== 'checklist';
+    hidePopups();
     renderChecklist();
     scheduleSave();
+  });
+
+  // More options menu (⋮)
+  $('#ed-more').addEventListener('click', (ev) => {
+    showPopupAt('#popup-more', ev.currentTarget);
+  });
+
+  // Add menu (+)
+  $('#ed-add').addEventListener('click', (ev) => {
+    showPopupAt('#popup-add', ev.currentTarget);
+  });
+
+  // Undo / redo
+  $('#ed-undo').addEventListener('click', () => {
+    const el = document.activeElement;
+    if (el && (el.isContentEditable || el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
+      document.execCommand('undo');
+    } else {
+      $('#ed-body').focus();
+      document.execCommand('undo');
+    }
+  });
+  $('#ed-redo').addEventListener('click', () => {
+    const el = document.activeElement;
+    if (el && (el.isContentEditable || el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
+      document.execCommand('redo');
+    } else {
+      $('#ed-body').focus();
+      document.execCommand('redo');
+    }
   });
   $('#ed-delete').addEventListener('click', async () => {
     if (!confirm('¿Mover a la papelera?')) return;
@@ -1106,7 +1147,7 @@ function bindUI() {
   // Click outside popups
   document.addEventListener('click', (e) => {
     if (e.target.closest('.popup')) return;
-    if (e.target.closest('#ed-color, #ed-categories, #ed-share, #ed-reminder')) return;
+    if (e.target.closest('#ed-color, #ed-categories, #ed-share, #ed-reminder, #ed-more, #ed-add')) return;
     hidePopups();
   });
 

@@ -128,16 +128,16 @@ input, textarea, select {
 .btn-icon {
   width: 38px; height: 38px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: transparent;
+  background: var(--surface);
   border: 1px solid var(--border-2);
   border-radius: 999px;
   font-size: 17px;
   padding: 0;
   flex: 0 0 auto;
 }
-.btn-icon:hover { background: var(--card); }
-.btn-icon.active { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.35); }
-.btn-icon.active:hover { background: rgba(255,255,255,0.18); }
+.btn-icon:hover { background: var(--card2); }
+.btn-icon.active { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.40); }
+.btn-icon.active:hover { background: rgba(255,255,255,0.20); }
 
 /* Categories strip */
 .cat-strip {
@@ -314,14 +314,6 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   gap: 12px;
   padding: 14px;
 }
-.ed-toolbar {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  align-items: center;
-}
-.ed-toolbar .btn-icon {
-  width: 34px; height: 34px;
-  font-size: 15px;
-}
 #ed-color.active { border-color: rgba(255,255,255,0.55); }
 .ed-status {
   flex: 1;
@@ -422,6 +414,71 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   border-radius: 50%;
   color: white;
 }
+
+/* Bottom create bar */
+.bottom-create-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px 20px;
+  background: rgba(9,9,14,0.92);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  z-index: 70;
+}
+.bcb-input {
+  flex: 1;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.bcb-actions { display: flex; gap: 6px; }
+
+/* Editor toolbar layout */
+.ed-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ed-toolbar-right {
+  display: flex; gap: 4px; align-items: center;
+  margin-left: auto;
+}
+.ed-toolbar .btn-icon {
+  width: 36px; height: 36px;
+  font-size: 15px;
+}
+
+/* Editor bottom bar */
+.ed-bottom-bar {
+  display: flex; align-items: center;
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--border);
+  gap: 4px;
+}
+.ed-undo-redo { display: flex; gap: 4px; margin-left: auto; }
+
+/* Popup menu (labeled items) */
+.popup-menu {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 4px 0;
+}
+.popup-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+.popup-menu-item:hover { background: var(--card); }
+.popup-menu-item svg { flex: 0 0 auto; color: var(--muted2); }
 
 /* Popups (anchored small dialogs) */
 .popup {
