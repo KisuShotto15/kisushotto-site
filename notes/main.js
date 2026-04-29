@@ -276,9 +276,10 @@ function renderGrid() {
   // Wire card clicks
   $$('.note-card').forEach(card => {
     card.addEventListener('click', (ev) => {
-      const chkLine = ev.target.closest('.nc-checklist-line');
-      if (chkLine) {
+      if (ev.target.matches('input[type="checkbox"]')) {
         ev.stopPropagation();
+        const chkLine = ev.target.closest('.nc-checklist-line');
+        if (!chkLine) return;
         const n = State.notes.find(x => x.id === card.dataset.id);
         if (!n || !n.checklist_items) return;
         const idx = parseInt(chkLine.dataset.idx, 10);
@@ -288,8 +289,7 @@ function renderGrid() {
         n.last_modified = Date.now();
         saveNoteLocal(n);
         chkLine.classList.toggle('done', item.done);
-        const chk = chkLine.querySelector('input[type="checkbox"]');
-        if (chk) chk.checked = item.done;
+        ev.target.checked = item.done;
         return;
       }
       const n = State.notes.find(x => x.id === card.dataset.id);
@@ -501,7 +501,19 @@ async function commitEditor() {
 }
 
 function closeEditor() {
-  if (State.editing) commitEditor();
+  if (State.editing) {
+    // Flush any pending text in the "add item" input before saving
+    const addInp = $('#ed-checklist-list .ed-check-add input');
+    if (addInp && addInp.value.trim()) {
+      const e = State.editing;
+      e.checklist_items = (e.checklist_items || []).concat([{
+        id: crypto.randomUUID(), text: addInp.value.trim(), done: false,
+        order: (e.checklist_items?.length || 0),
+      }]);
+      addInp.value = '';
+    }
+    commitEditor();
+  }
   $('#editor').hidden = true;
   State.editing = null;
 }

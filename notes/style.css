@@ -253,11 +253,15 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 .nc-shared { font-size: 11px; color: var(--accent); }
 .nc-locked { font-size: 14px; }
 .nc-checklist-line {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: flex-start; gap: 6px;
   font-size: 14px; color: var(--muted2);
   margin-bottom: 3px;
 }
-.nc-checklist-line input { cursor: pointer; }
+.nc-checklist-line input[type=checkbox] {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  cursor: pointer;
+}
 .nc-checklist-line.done { color: var(--muted); text-decoration: line-through; }
 .note-card.colored .nc-checklist-line { color: rgba(0,0,0,0.8); }
 .note-card.colored .nc-checklist-line.done { color: rgba(0,0,0,0.4); }
