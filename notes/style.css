@@ -695,7 +695,8 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
 .editor-card.colored .ed-check-row.done .ed-check-text { color: rgba(0,0,0,0.45); }
 .editor-card.colored .ed-status,
 .editor-card.colored ::placeholder { color: rgba(0,0,0,0.45); }
-.editor-card.colored .btn-icon { border-color: rgba(0,0,0,0.2); color: #1a1100; }
+.editor-card.colored .btn-icon { background: rgba(0,0,0,0.12); border-color: rgba(0,0,0,0.15); color: #1a1100; }
+.editor-card.colored .btn-icon:hover { background: rgba(0,0,0,0.22); }
 .editor-card.colored .ed-meta-tag { background: rgba(0,0,0,0.12); color: #1a1100; }
 
 /* Net banner */
