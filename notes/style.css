@@ -48,7 +48,8 @@ body::before {
     radial-gradient(ellipse 40% 30% at 0% 100%, rgba(245,158,11,0.06) 0%, transparent 50%);
 }
 
-button { font: inherit; color: inherit; cursor: pointer; }
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+a { touch-action: manipulation; }
 input, textarea, select {
   font: inherit; color: inherit;
   background: transparent;
@@ -370,6 +371,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   flex: 0 0 auto;
   margin-top: 2px;
   accent-color: var(--accent);
+  user-select: none; -webkit-user-select: none;
 }
 .ed-check-text {
   flex: 1;
@@ -389,6 +391,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   width: 28px; height: 28px;
   font-size: 14px;
   border: none;
+  user-select: none; -webkit-user-select: none;
 }
 .ed-check-add {
   display: flex; align-items: center; gap: 10px;
@@ -652,17 +655,153 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
   box-shadow: var(--shadow);
 }
 
+/* Body scroll lock (applied by JS when modals open) */
+body.modal-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  /* JS sets --scroll-y to preserve scroll position */
+  top: var(--scroll-y, 0);
+}
+
 /* Mobile tweaks */
 @media (max-width: 640px) {
-  body { padding-top: 56px; }
-  .topbar { padding-left: 56px; }
-  .hub-back { width: 36px; height: 36px; top: 10px; left: 10px; }
-  .topbar-actions .btn-pri { padding: 9px 12px; }
+  body {
+    padding-top: 56px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+  .topbar {
+    padding-left: 56px;
+    padding-right: calc(8px + env(safe-area-inset-right, 0px));
+  }
+  .hub-back { width: 36px; height: 36px; top: 10px; left: max(10px, env(safe-area-inset-left, 10px)); }
+  .topbar-actions .btn-pri { padding: 9px 12px; font-size: 13px; }
   .search-wrap { max-width: none; }
-  .modal-card { padding: 14px; }
-  .ed-toolbar .btn-icon { width: 32px; height: 32px; font-size: 14px; }
+
+  /* Editor: fullscreen on mobile */
+  .modal {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+  .modal-card {
+    max-width: none;
+    max-height: none;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+    padding: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+  }
+  .editor-card {
+    height: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Toolbar: horizontal scroll on mobile instead of wrap */
+  .ed-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 4px;
+    padding-bottom: 4px;
+    flex-shrink: 0;
+  }
+  .ed-toolbar::-webkit-scrollbar { display: none; }
+  .ed-toolbar .btn-icon {
+    width: 38px; height: 38px;
+    font-size: 15px;
+    flex: 0 0 38px;
+  }
+  #ed-close {
+    position: sticky;
+    right: 0;
+    flex: 0 0 auto;
+    z-index: 2;
+  }
   .ed-status { display: none; }
+
+  /* Editor body fill available space */
+  .ed-body-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ed-body {
+    overflow-y: auto !important;
+    min-height: 120px;
+  }
+  .ed-checklist {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   main { padding: 14px 12px 100px; }
   .masonry { column-width: 160px; column-gap: 10px; }
   .note-card { padding: 12px; }
+
+  /* Popups → bottom sheet on mobile */
+  .popup {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    top: auto;
+    max-width: none;
+    min-width: auto;
+    width: 100%;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    animation: popupSlideUp 0.2s ease-out;
+    max-height: 60vh;
+    max-height: 60dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .popup-bg {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 109;
+  }
+
+  /* PIN modal fullscreen on mobile */
+  .pin-card {
+    max-width: none;
+    border-radius: var(--r-lg);
+    margin: 16px;
+  }
+
+  /* Drawer full width on mobile */
+  .drawer-card {
+    width: 100vw;
+  }
+
+  /* Net banner safe area */
+  .net-banner {
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Category strip safe area */
+  .cat-strip {
+    padding-left: max(16px, env(safe-area-inset-left, 16px));
+    padding-right: max(16px, env(safe-area-inset-right, 16px));
+  }
+}
+
+@keyframes popupSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* Use dvh where available for better mobile support */
+@supports (height: 100dvh) {
+  .modal { height: 100dvh; }
+  body { min-height: 100dvh; }
 }

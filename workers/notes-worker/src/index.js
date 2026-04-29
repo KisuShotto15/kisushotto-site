@@ -91,6 +91,8 @@ async function migrate(env) {
     `CREATE INDEX IF NOT EXISTS idx_att_note ON attachments(note_id)`,
   ];
   for (const s of stmts) await env.DB.prepare(s).run();
+  // Additive migrations (ignore error if column already exists)
+  try { await env.DB.prepare(`ALTER TABLE categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`).run(); } catch {}
 }
 
 // ── Auth helpers (PIN + WebAuthn) ────────────────────────────────────────────
@@ -248,7 +250,7 @@ async function syncPull(request, env, email) {
   await ensureUser(env, email);
   const notes = await fetchNotesForUser(env, email, since);
   const catRes = await env.DB.prepare(
-    `SELECT * FROM categories WHERE owner_email = ? AND updated_at >= ?`
+    `SELECT * FROM categories WHERE owner_email = ? AND updated_at >= ? ORDER BY sort_order ASC, created_at ASC`
   ).bind(email, since).all();
   return json({
     notes,
@@ -272,6 +274,7 @@ async function canEdit(env, noteId, email) {
 async function upsertNote(env, email, n) {
   const existing = await env.DB.prepare(`SELECT last_modified, owner_email FROM notes WHERE id = ?`).bind(n.id).first();
 
+  const serverNow = now();
   if (existing) {
     if (existing.last_modified > (n.last_modified || 0)) {
       return { skipped: true, reason: 'older' };
@@ -293,7 +296,7 @@ async function upsertNote(env, email, n) {
       n.locked ? 1 : 0,
       n.reminder_at || null,
       n.reminder_sent ? 1 : 0,
-      n.last_modified || now(),
+      serverNow,
       n.id
     ).run();
   } else {
@@ -314,8 +317,8 @@ async function upsertNote(env, email, n) {
       n.locked ? 1 : 0,
       n.reminder_at || null,
       n.reminder_sent ? 1 : 0,
-      n.last_modified || now(),
-      n.created_at || now()
+      serverNow,
+      n.created_at || serverNow
     ).run();
   }
 
@@ -334,11 +337,11 @@ async function upsertCategory(env, email, c) {
   if (existing) {
     if (existing.owner_email !== email) return { skipped: true, reason: 'forbidden' };
     if (existing.updated_at > (c.updated_at || 0)) return { skipped: true, reason: 'older' };
-    await env.DB.prepare(`UPDATE categories SET name=?, color=?, updated_at=? WHERE id=?`)
-      .bind(c.name, c.color, c.updated_at || now(), c.id).run();
+    await env.DB.prepare(`UPDATE categories SET name=?, color=?, sort_order=?, updated_at=? WHERE id=?`)
+      .bind(c.name, c.color, c.sort_order ?? existing.sort_order ?? 0, c.updated_at || now(), c.id).run();
   } else {
-    await env.DB.prepare(`INSERT INTO categories (id, owner_email, name, color, created_at, updated_at) VALUES (?,?,?,?,?,?)`)
-      .bind(c.id, email, c.name, c.color, c.created_at || now(), c.updated_at || now()).run();
+    await env.DB.prepare(`INSERT INTO categories (id, owner_email, name, color, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`)
+      .bind(c.id, email, c.name, c.color, c.sort_order ?? 0, c.created_at || now(), c.updated_at || now()).run();
   }
   return { skipped: false };
 }
@@ -367,7 +370,7 @@ async function syncPush(request, env, email) {
   const since = parseInt(body.since || 0, 10);
   const fresh = await fetchNotesForUser(env, email, since);
   const catRes = await env.DB.prepare(
-    `SELECT * FROM categories WHERE owner_email = ? AND updated_at >= ?`
+    `SELECT * FROM categories WHERE owner_email = ? AND updated_at >= ? ORDER BY sort_order ASC, created_at ASC`
   ).bind(email, since).all();
 
   return json({ results, notes: fresh, categories: catRes.results || [], server_time: now() });
@@ -447,8 +450,8 @@ async function updateCategory(catId, request, env, email) {
   if (cat.owner_email !== email) return err('forbidden', 403);
   const b = await request.json();
   const t = now();
-  await env.DB.prepare(`UPDATE categories SET name = COALESCE(?, name), color = COALESCE(?, color), updated_at = ? WHERE id = ?`)
-    .bind(b.name || null, b.color || null, t, catId).run();
+  await env.DB.prepare(`UPDATE categories SET name = COALESCE(?, name), color = COALESCE(?, color), sort_order = COALESCE(?, sort_order), updated_at = ? WHERE id = ?`)
+    .bind(b.name || null, b.color || null, b.sort_order ?? null, t, catId).run();
   return json({ ok: true });
 }
 

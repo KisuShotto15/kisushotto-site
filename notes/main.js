@@ -95,6 +95,26 @@ function closeLightbox() { $('#lightbox').hidden = true; }
 function autoGrow(el) {
   el.style.height = 'auto';
   el.style.height = el.scrollHeight + 'px';
+  // On mobile, ensure textarea stays scrollable when it exceeds viewport
+  if (window.innerWidth <= 640) {
+    el.style.overflow = 'auto';
+  }
+}
+
+function isMobile() { return window.innerWidth <= 640; }
+
+function lockBodyScroll() {
+  const scrollY = window.scrollY;
+  document.body.style.setProperty('--scroll-y', `-${scrollY}px`);
+  document.body.classList.add('modal-open');
+  document.body.dataset.scrollY = scrollY;
+}
+
+function unlockBodyScroll() {
+  const scrollY = parseInt(document.body.dataset.scrollY || '0', 10);
+  document.body.classList.remove('modal-open');
+  document.body.style.removeProperty('--scroll-y');
+  window.scrollTo(0, scrollY);
 }
 
 function placeCursorAtEnd(el) {
@@ -145,12 +165,13 @@ function getCurrentNotes() {
 function renderCategoriesStrip() {
   const anchor = $('#cat-list-anchor');
   if (!anchor) return;
-  // remove any existing dynamic pills (siblings between divider and add btn)
   const wrap = $('#cat-strip');
   wrap.querySelectorAll('.cat-pill[data-cat-id]').forEach(el => el.remove());
 
   const me = getUserEmail();
-  const ownCats = State.categories.filter(c => c.owner_email === me);
+  const ownCats = State.categories.filter(c => c.owner_email === me)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
   for (const c of ownCats) {
     const btn = document.createElement('button');
     btn.className = 'cat-pill';
@@ -163,10 +184,25 @@ function renderCategoriesStrip() {
     anchor.parentNode.insertBefore(btn, anchor);
   }
 
-  // active state for static pills
   $$('.cat-pill[data-cat]').forEach(p => {
     p.classList.toggle('active', p.dataset.cat === State.view);
   });
+}
+
+async function reorderCategory(id, dir) {
+  const me = getUserEmail();
+  const cats = State.categories.filter(c => c.owner_email === me)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const idx = cats.findIndex(c => c.id === id);
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= cats.length) return;
+  [cats[idx].sort_order, cats[swapIdx].sort_order] = [swapIdx, idx];
+  cats[idx].updated_at = Date.now();
+  cats[swapIdx].updated_at = Date.now();
+  await saveCategoryLocal(cats[idx]);
+  await saveCategoryLocal(cats[swapIdx]);
+  renderCategoriesStrip();
+  renderDrawerCats();
 }
 
 function renderDrawerCats() {
@@ -174,7 +210,8 @@ function renderDrawerCats() {
   if (!root) return;
   root.innerHTML = '';
   const me = getUserEmail();
-  const own = State.categories.filter(c => c.owner_email === me);
+  const own = State.categories.filter(c => c.owner_email === me)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   for (const c of own) {
     const row = document.createElement('div');
     row.className = 'drawer-cat-row';
@@ -182,6 +219,8 @@ function renderDrawerCats() {
       <span class="drawer-cat-dot" style="background:${c.color}"></span>
       <input class="drawer-cat-name" value="${escapeHtml(c.name)}" data-id="${c.id}">
       <input type="color" value="${c.color}" data-id="${c.id}" data-field="color">
+      <button class="btn-icon cat-up" data-id="${c.id}" title="Subir">↑</button>
+      <button class="btn-icon cat-dn" data-id="${c.id}" title="Bajar">↓</button>
       <button class="btn-icon" data-del="${c.id}">🗑️</button>
     `;
     root.appendChild(row);
@@ -221,6 +260,12 @@ function renderDrawerCats() {
       renderDrawerCats();
       render();
     });
+  });
+  root.querySelectorAll('button.cat-up').forEach(btn => {
+    btn.addEventListener('click', (e) => reorderCategory(e.currentTarget.dataset.id, -1));
+  });
+  root.querySelectorAll('button.cat-dn').forEach(btn => {
+    btn.addEventListener('click', (e) => reorderCategory(e.currentTarget.dataset.id, +1));
   });
 }
 
@@ -362,6 +407,7 @@ function openEditor(n) {
   State.editing = JSON.parse(JSON.stringify(n));
   const e = State.editing;
 
+  lockBodyScroll();
   $('#editor').hidden = false;
   const card = $('#editor .editor-card');
   card.style.background = e.color || '';
@@ -378,7 +424,10 @@ function openEditor(n) {
   updateEditorMeta();
   $('#ed-status').textContent = '';
 
-  setTimeout(() => $('#ed-title').focus(), 50);
+  setTimeout(() => {
+    // On mobile, don't auto-focus to avoid keyboard popping up immediately
+    if (!isMobile()) $('#ed-title').focus();
+  }, 50);
 }
 
 function updateEditorMeta() {
@@ -413,10 +462,26 @@ function updateEditorMeta() {
   btn('ed-checklist')?.classList.toggle('active', e.type === 'checklist');
 }
 
+function syncChecklistFromDom() {
+  const root = $('#ed-checklist-list');
+  const e = State.editing;
+  if (!root || !e) return;
+  root.querySelectorAll('.ed-check-row').forEach(row => {
+    const id = row.dataset.id;
+    const item = e.checklist_items?.find(x => x.id === id);
+    if (item) {
+      const txt = row.querySelector('.ed-check-text');
+      if (txt) item.text = txt.innerText.replace(/\n$/, '');
+    }
+  });
+}
+
 function renderChecklist() {
   const root = $('#ed-checklist-list');
   if (!root) return;
   root.innerHTML = '';
+  root.contentEditable = 'true';
+  root.spellcheck = true;
   const e = State.editing;
   if (!e) return;
   const items = e.checklist_items || [];
@@ -424,45 +489,43 @@ function renderChecklist() {
     const it = items[i];
     const row = document.createElement('div');
     row.className = `ed-check-row ${it.done ? 'done' : ''}`;
-    row.innerHTML = `
-      <input type="checkbox" ${it.done ? 'checked' : ''}>
-      <div class="ed-check-text" contenteditable="true" spellcheck="true"></div>
-      <button class="btn-icon" title="Eliminar">×</button>
-    `;
-    const chk = row.querySelector('input[type=checkbox]');
-    const txt = row.querySelector('.ed-check-text');
-    const del = row.querySelector('button');
+    row.dataset.id = it.id;
+
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.checked = it.done;
+    chk.contentEditable = 'false';
+
+    const txt = document.createElement('div');
+    txt.className = 'ed-check-text';
     txt.textContent = it.text || '';
+
+    const del = document.createElement('button');
+    del.className = 'btn-icon';
+    del.title = 'Eliminar';
+    del.textContent = '×';
+    del.contentEditable = 'false';
+
     chk.addEventListener('change', () => { it.done = chk.checked; row.classList.toggle('done', chk.checked); scheduleSave(); });
-    txt.addEventListener('input',  () => { it.text = txt.innerText.replace(/\n$/, ''); scheduleSave(); });
-    txt.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter' && !ev.shiftKey) {
-        ev.preventDefault();
-        const v = txt.innerText.replace(/\n$/, '');
-        it.text = v;
-        e.checklist_items.splice(i + 1, 0, { id: crypto.randomUUID(), text: '', done: false, order: i + 1 });
-        renderChecklist();
-        scheduleSave();
-        // Focus the new item
-        const rows = root.querySelectorAll('.ed-check-text');
-        if (rows[i + 1]) { rows[i + 1].focus(); placeCursorAtEnd(rows[i + 1]); }
-      }
-    });
-    del.addEventListener('click',  () => { e.checklist_items = e.checklist_items.filter(x => x.id !== it.id); renderChecklist(); scheduleSave(); });
+    del.addEventListener('click', () => { e.checklist_items = e.checklist_items.filter(x => x.id !== it.id); renderChecklist(); scheduleSave(); });
+
+    row.append(chk, txt, del);
     root.appendChild(row);
   }
-  // add row
+
+  // add row — outside the editing host
   const add = document.createElement('div');
   add.className = 'ed-check-add';
+  add.contentEditable = 'false';
   add.innerHTML = `<input type="text" placeholder="+ Nuevo ítem"><button class="btn-icon">+</button>`;
   const [addInp, addBtn] = add.querySelectorAll('input,button');
   const doAdd = () => {
     const v = addInp.value.trim();
     if (!v) return;
+    syncChecklistFromDom();
     e.checklist_items = (e.checklist_items || []).concat([{ id: crypto.randomUUID(), text: v, done: false, order: (e.checklist_items?.length || 0) }]);
     renderChecklist();
     scheduleSave();
-    // Re-focus add input after DOM rebuild
     const newAddInp = root.querySelector('.ed-check-add input');
     if (newAddInp) newAddInp.focus();
   };
@@ -534,7 +597,7 @@ async function commitEditor() {
 
 function closeEditor() {
   if (State.editing) {
-    // Flush any pending text in the "add item" input before saving
+    syncChecklistFromDom();
     const addInp = $('#ed-checklist-list .ed-check-add input');
     if (addInp && addInp.value.trim()) {
       const e = State.editing;
@@ -547,7 +610,10 @@ function closeEditor() {
     commitEditor();
   }
   $('#editor').hidden = true;
+  $('#ed-checklist-list').contentEditable = 'inherit';
   State.editing = null;
+  unlockBodyScroll();
+  hidePopups();
 }
 
 function openNew() {
@@ -581,6 +647,7 @@ function openNew() {
 async function promptUnlock() {
   return new Promise(async (resolve) => {
     State.pinPending = resolve;
+    lockBodyScroll();
     const modal = $('#pin-modal');
     modal.hidden = false;
     $('#pin-input').value = '';
@@ -595,6 +662,7 @@ async function promptUnlock() {
         if (ok) {
           modal.hidden = true;
           State.pinPending = null;
+          unlockBodyScroll();
           resolve(true);
         }
       } catch {}
@@ -606,6 +674,7 @@ async function promptUnlock() {
 
 function closePinModal(ok) {
   $('#pin-modal').hidden = true;
+  unlockBodyScroll();
   if (State.pinPending) {
     State.pinPending(!!ok);
     State.pinPending = null;
@@ -804,6 +873,30 @@ function bindEditorActions() {
   $('#ed-body').addEventListener('input', () => { autoGrow($('#ed-body')); scheduleSave(); });
   $('#ed-title').addEventListener('blur',  commitEditor);
   $('#ed-body').addEventListener('blur',   commitEditor);
+
+  // Checklist container — bound ONCE here, not inside renderChecklist
+  const cl = $('#ed-checklist-list');
+  cl.addEventListener('input', () => { syncChecklistFromDom(); scheduleSave(); });
+  cl.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && !ev.shiftKey) {
+      ev.preventDefault();
+      const e = State.editing;
+      if (!e) return;
+      syncChecklistFromDom();
+      const sel = window.getSelection();
+      const node = sel?.anchorNode;
+      const row = node?.closest?.('.ed-check-row') || node?.parentElement?.closest?.('.ed-check-row');
+      if (!row) return;
+      const id = row.dataset.id;
+      const idx = e.checklist_items.findIndex(x => x.id === id);
+      if (idx === -1) return;
+      e.checklist_items.splice(idx + 1, 0, { id: crypto.randomUUID(), text: '', done: false, order: idx + 1 });
+      renderChecklist();
+      scheduleSave();
+      const rows = cl.querySelectorAll('.ed-check-text');
+      if (rows[idx + 1]) { rows[idx + 1].focus(); placeCursorAtEnd(rows[idx + 1]); }
+    }
+  });
 }
 
 function renderCategoriesPopup() {
@@ -857,22 +950,45 @@ function renderSharePopup() {
 function showPopupAt(sel, anchor) {
   hidePopups();
   const p = $(sel);
-  const r = anchor.getBoundingClientRect();
-  p.style.top  = `${r.bottom + 6}px`;
-  p.style.left = `${Math.max(8, Math.min(window.innerWidth - 280, r.left))}px`;
+  if (isMobile()) {
+    // On mobile, CSS handles bottom-sheet positioning; just clear inline styles
+    p.style.top = '';
+    p.style.left = '';
+  } else {
+    const r = anchor.getBoundingClientRect();
+    const popupH = 300; // estimated max height
+    let top = r.bottom + 6;
+    // If popup would overflow bottom, show above the anchor
+    if (top + popupH > window.innerHeight) {
+      top = Math.max(8, r.top - popupH - 6);
+    }
+    p.style.top  = `${top}px`;
+    p.style.left = `${Math.max(8, Math.min(window.innerWidth - 280, r.left))}px`;
+  }
   p.hidden = false;
 }
 function hidePopups() {
-  $$('.popup').forEach(p => p.hidden = true);
+  $$('.popup').forEach(p => {
+    p.hidden = true;
+    p.style.top = '';
+    p.style.left = '';
+  });
 }
 
 // ── settings drawer ──────────────────────────────────────────────────────────
 function bindDrawer() {
-  $('#btn-settings').addEventListener('click', () => $('#drawer').hidden = false);
-  $$('#drawer [data-close-drawer]').forEach(el => el.addEventListener('click', () => $('#drawer').hidden = true));
+  $('#btn-settings').addEventListener('click', () => {
+    lockBodyScroll();
+    $('#drawer').hidden = false;
+  });
+  $$('#drawer [data-close-drawer]').forEach(el => el.addEventListener('click', () => {
+    $('#drawer').hidden = true;
+    unlockBodyScroll();
+  }));
   $$('#drawer .drawer-item[data-view]').forEach(b => b.addEventListener('click', (e) => {
     setView(e.currentTarget.dataset.view);
     $('#drawer').hidden = true;
+    unlockBodyScroll();
   }));
   $('#drawer-cat-add').addEventListener('click', async () => {
     const inp = $('#drawer-cat-name');
