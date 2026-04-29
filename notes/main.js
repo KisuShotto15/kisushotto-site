@@ -421,6 +421,9 @@ function renderChecklist() {
     e.checklist_items = (e.checklist_items || []).concat([{ id: crypto.randomUUID(), text: v, done: false, order: (e.checklist_items?.length || 0) }]);
     renderChecklist();
     scheduleSave();
+    // Re-focus add input after DOM rebuild
+    const newAddInp = root.querySelector('.ed-check-add input');
+    if (newAddInp) newAddInp.focus();
   };
   addInp.addEventListener('keydown', ev => { if (ev.key === 'Enter') doAdd(); });
   addBtn.addEventListener('click', doAdd);

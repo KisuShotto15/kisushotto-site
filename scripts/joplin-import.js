@@ -14,11 +14,11 @@
 
 import fs from 'fs';
 import path from 'path';
-import { createReadStream, statSync } from 'fs';
+import { createHash } from 'crypto';
 
 const WORKER_URL = 'https://notes-worker.efrenalejandro2010.workers.dev';
 const TOKEN = '151322';
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 10;
 
 // ── args ─────────────────────────────────────────────────────────────────────
 const [exportDir, userEmail] = process.argv.slice(2);
@@ -100,6 +100,12 @@ function newUUID() {
   return crypto.randomUUID();
 }
 
+// Deterministic UUID from a string (for idempotent re-runs)
+function stableId(str) {
+  const h = createHash('md5').update(str).digest('hex');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20,32)}`;
+}
+
 function parseDate(str) {
   if (!str) return Date.now();
   const d = new Date(str);
@@ -109,7 +115,7 @@ function parseDate(str) {
 // ── upload attachment ─────────────────────────────────────────────────────────
 async function uploadImage(filePath, noteId) {
   if (!fs.existsSync(filePath)) return null;
-  const stat = statSync(filePath);
+  const stat = fs.statSync(filePath);
   if (stat.size > 10 * 1024 * 1024) {
     console.warn(`  ⚠ Imagen muy grande (${(stat.size / 1024 / 1024).toFixed(1)} MB), saltando: ${filePath}`);
     return null;
@@ -119,15 +125,11 @@ async function uploadImage(filePath, noteId) {
   const mimeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp' };
   const mime = mimeMap[ext] || 'image/jpeg';
 
-  const form = new FormData();
-  const blob = new Blob([fs.readFileSync(filePath)], { type: mime });
-  form.append('file', blob, path.basename(filePath));
-  form.append('note_id', noteId);
-
-  const res = await fetch(`${WORKER_URL}/attachments/upload`, {
+  const buf = fs.readFileSync(filePath);
+  const res = await fetch(`${WORKER_URL}/attachments/upload?note_id=${noteId}&type=image`, {
     method: 'POST',
-    headers: headers(),
-    body: form,
+    headers: { ...headers(), 'Content-Type': mime },
+    body: buf,
   });
   if (!res.ok) {
     const txt = await res.text();
@@ -147,6 +149,23 @@ function findResourceFile(resourcesDir, resourceId) {
   return match ? path.join(resourcesDir, match) : null;
 }
 
+// ── collect .md files recursively, skipping _resources ───────────────────────
+function collectMdFiles(dir, base = dir) {
+  const results = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory() && entry.name !== '_resources') {
+      results.push(...collectMdFiles(full, base));
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      // notebook = immediate subfolder name relative to base, or '' if root
+      const rel = path.relative(base, dir);
+      const notebook = rel || '';
+      results.push({ file: full, notebook });
+    }
+  }
+  return results;
+}
+
 // ── main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`\nImportando desde: ${exportDir}`);
@@ -156,16 +175,19 @@ async function main() {
   await apiFetch('/me');
 
   const resourcesDir = path.join(exportDir, '_resources');
-  const mdFiles = fs.readdirSync(exportDir).filter(f => f.endsWith('.md'));
-  console.log(`Notas encontradas: ${mdFiles.length}`);
+  const mdEntries = collectMdFiles(exportDir);
+  console.log(`Notas encontradas: ${mdEntries.length}`);
 
-  // ── 1. Collect all tags → create categories ────────────────────────────────
-  const tagMap = {}; // tag name → category id
+  // ── 1. Collect notebooks + tags → create categories ───────────────────────
+  const tagMap = {}; // name → category id
   const allMeta = [];
-  for (const file of mdFiles) {
-    const raw = fs.readFileSync(path.join(exportDir, file), 'utf8');
+  for (const { file, notebook } of mdEntries) {
+    const raw = fs.readFileSync(file, 'utf8');
     const { meta, body } = parseFrontmatter(raw);
-    allMeta.push({ file, meta, body });
+    allMeta.push({ file, notebook, meta, body });
+    // notebook as category
+    if (notebook && !tagMap[notebook]) tagMap[notebook] = newUUID();
+    // YAML tags as categories too
     for (const tag of (meta.tags || [])) {
       if (!tagMap[tag]) tagMap[tag] = newUUID();
     }
@@ -184,37 +206,37 @@ async function main() {
     console.log(`Categorías a crear: ${categories.length} (${Object.keys(tagMap).join(', ')})`);
   }
 
-  // ── 2. Build notes + upload images ─────────────────────────────────────────
+  // ── 2. Build notes (without uploading images yet) ────────────────────────
   const notes = [];
-  let imgCount = 0;
+  // noteImageMap: noteId → [resourceId, ...]
+  const noteImageMap = new Map();
 
   for (let i = 0; i < allMeta.length; i++) {
-    const { file, meta, body } = allMeta[i];
-    const noteId = newUUID();
+    const { file, notebook, meta, body } = allMeta[i];
+    const noteId = stableId(path.relative(exportDir, file));
     const title = meta.title || path.basename(file, '.md');
     const createdAt = parseDate(meta.created);
-    const lastModified = parseDate(meta.updated || meta.created);
+    const lastModified = Date.now() + i;
 
     process.stdout.write(`\r[${i + 1}/${allMeta.length}] ${title.slice(0, 50).padEnd(50)}`);
 
-    // Detect checklist
     const { type, checklist_items } = parseChecklist(body);
 
-    // Find image references: ![alt](:/resourceId) or ![alt](./_resources/file)
-    const imageRefs = [...body.matchAll(/!\[([^\]]*)\]\(:\/([a-f0-9]+)\)/g)];
-    const attachmentIds = [];
+    // Collect image references (upload after notes exist in D1)
+    const imageMatches = [
+      ...[...body.matchAll(/!\[[^\]]*\]\(:\/([a-f0-9A-Za-z0-9_-]+)\)/g)].map(m => m[1]),
+      ...[...body.matchAll(/!\[[^\]]*\]\([^)]*_resources\/([^)\s]+)\)/g)].map(m => m[1]),
+      ...[...body.matchAll(/<img[^>]+src="[^"]*_resources\/([^"]+)"/g)].map(m => m[1]),
+    ];
+    const uniqueRefs = [...new Set(imageMatches)];
+    if (uniqueRefs.length) noteImageMap.set(noteId, uniqueRefs);
 
-    for (const [, , resourceId] of imageRefs) {
-      const filePath = findResourceFile(resourcesDir, resourceId);
-      if (filePath) {
-        const attId = await uploadImage(filePath, noteId);
-        if (attId) { attachmentIds.push(attId); imgCount++; }
-      }
-    }
-
-    // Strip image refs from body (they'll show as card thumbnails)
     const cleanBody = type === 'text'
-      ? body.replace(/!\[[^\]]*\]\(:\/[a-f0-9]+\)/g, '').trim()
+      ? body
+          .replace(/!\[[^\]]*\]\(:\/[a-f0-9A-Za-z0-9_-]+\)/g, '')
+          .replace(/!\[[^\]]*\]\([^)]*_resources\/[^\s)]+\)/g, '')
+          .replace(/<img[^>]+src="[^"]*_resources\/[^"]+"[^>]*>/g, '')
+          .trim()
       : body;
 
     notes.push({
@@ -223,7 +245,7 @@ async function main() {
       title,
       body: type === 'text' ? cleanBody : null,
       type,
-      checklist_items: checklist_items ? JSON.stringify(checklist_items) : null,
+      checklist_items: checklist_items || null,
       color: null,
       pinned: 0,
       archived: 0,
@@ -233,17 +255,17 @@ async function main() {
       reminder_sent: 0,
       last_modified: lastModified,
       created_at: createdAt,
-      categories: (meta.tags || []).map(t => tagMap[t]).filter(Boolean),
+      categories: [
+        ...(notebook ? [tagMap[notebook]] : []),
+        ...(meta.tags || []).map(t => tagMap[t]),
+      ].filter(Boolean),
     });
   }
 
-  console.log(`\n\nImágenes subidas: ${imgCount}`);
-
-  // ── 3. Sync in batches ─────────────────────────────────────────────────────
-  console.log(`\nSincronizando notas en lotes de ${BATCH_SIZE}...`);
+  // ── 3. Sync notes in batches ───────────────────────────────────────────────
+  console.log(`\n\nSincronizando notas en lotes de ${BATCH_SIZE}...`);
   let synced = 0;
 
-  // Send categories once with first batch
   for (let i = 0; i < notes.length; i += BATCH_SIZE) {
     const batch = notes.slice(i, i + BATCH_SIZE);
     await apiFetch('/sync', {
@@ -256,6 +278,24 @@ async function main() {
     });
     synced += batch.length;
     process.stdout.write(`\r  ${synced}/${notes.length} notas sincronizadas`);
+  }
+
+  // ── 4. Upload images (notes now exist in D1) ───────────────────────────────
+  let imgCount = 0;
+  if (noteImageMap.size) {
+    console.log(`\n\nSubiendo imágenes para ${noteImageMap.size} notas...`);
+    let n = 0;
+    for (const [noteId, refs] of noteImageMap) {
+      n++;
+      process.stdout.write(`\r  nota ${n}/${noteImageMap.size}`);
+      for (const resourceId of refs) {
+        const filePath = findResourceFile(resourcesDir, resourceId);
+        if (filePath) {
+          const attId = await uploadImage(filePath, noteId);
+          if (attId) imgCount++;
+        }
+      }
+    }
   }
 
   console.log(`\n\n✓ Importación completa.`);

@@ -365,11 +365,16 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 }
 .ed-check-row input[type=text] {
   flex: 1;
+  min-width: 0;
   padding: 4px 0;
   border-bottom: 1px solid transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ed-check-row input[type=text]:focus {
   border-bottom-color: var(--border-2);
+  overflow: visible;
+  text-overflow: clip;
 }
 .ed-check-row.done input[type=text] {
   text-decoration: line-through;
