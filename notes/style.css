@@ -203,9 +203,11 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   cursor: pointer;
+  touch-action: manipulation;
   transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
   position: relative;
 }
+.note-card * { cursor: inherit; }
 .note-card:hover {
   border-color: var(--border-2);
   box-shadow: var(--shadow);
@@ -346,7 +348,8 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 .ed-body {
   width: 100%;
   min-height: 220px;
-  resize: vertical;
+  resize: none;
+  overflow: hidden;
   font-size: 15px;
   line-height: 1.55;
   padding: 6px 4px;

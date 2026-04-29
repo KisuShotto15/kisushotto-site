@@ -86,6 +86,11 @@ async function loadFromIDB() {
   State.notes.sort((a, b) => (b.last_modified || 0) - (a.last_modified || 0));
 }
 
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
 function updateNetBanner(online) {
   const el = $('#net-banner');
   if (!el) return;
@@ -237,7 +242,7 @@ function noteCardHtml(n) {
   const reminderBadge = n.reminder_at ? `<span>⏰ ${fmtDate(n.reminder_at)}</span>` : '';
 
   return `
-    <article class="${cls}" ${style} data-id="${n.id}">
+    <article class="${cls}" ${style} data-id="${n.id}" onclick="">
       ${n.pinned ? '<span class="nc-pin">📌</span>' : ''}
       ${n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : ''}
       ${imgs}
@@ -345,6 +350,7 @@ function openEditor(n) {
   $('#editor').hidden = false;
   $('#ed-title').value = e.title || '';
   $('#ed-body').value  = e.body || '';
+  autoGrow($('#ed-body'));
   const isChecklist = e.type === 'checklist';
   $('#ed-body').hidden = isChecklist;
   $('#ed-checklist-list').hidden = !isChecklist;
@@ -744,7 +750,7 @@ function bindEditorActions() {
     if (e.target === e.currentTarget) closeEditor();
   });
   $('#ed-title').addEventListener('input', scheduleSave);
-  $('#ed-body').addEventListener('input',  scheduleSave);
+  $('#ed-body').addEventListener('input', () => { autoGrow($('#ed-body')); scheduleSave(); });
   $('#ed-title').addEventListener('blur',  commitEditor);
   $('#ed-body').addEventListener('blur',   commitEditor);
 }
