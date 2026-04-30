@@ -359,18 +359,15 @@ function renderGrid() {
     card.addEventListener('touchmove', () => clearTimeout(longPressTimer));
 
     card.addEventListener('click', (ev) => {
-      // Multi-select checkbox
-      if (ev.target.matches('.nc-select-cb')) {
+      // Multi-select checkbox or label wrap
+      if (ev.target.closest('.nc-select-wrap')) {
         ev.stopPropagation();
         if (!State.selectMode) enterSelectMode();
-        toggleSelect(ev.target.dataset.id);
-        ev.target.checked = State.selected.has(ev.target.dataset.id);
+        toggleSelect(card.dataset.id);
         return;
       }
       if (State.selectMode) {
         toggleSelect(card.dataset.id);
-        const cb = card.querySelector('.nc-select-cb');
-        if (cb) cb.checked = State.selected.has(card.dataset.id);
         if (State.selected.size === 0) exitSelectMode();
         return;
       }
@@ -394,6 +391,18 @@ function renderGrid() {
       if (n) openCard(n);
     });
   });
+
+  // Restore selection visuals after re-render
+  if (State.selectMode && State.selected.size > 0) {
+    State.selected.forEach(id => {
+      const card = $(`.note-card[data-id="${id}"]`);
+      if (card) {
+        card.classList.add('selected');
+        const cb = card.querySelector('.nc-select-cb');
+        if (cb) cb.checked = true;
+      }
+    });
+  }
 
   // Lazy-load attachments
   $$('img.nc-image-thumb[data-att]').forEach(async img => {
@@ -443,8 +452,13 @@ function exitSelectMode() {
 function toggleSelect(id) {
   if (State.selected.has(id)) State.selected.delete(id);
   else State.selected.add(id);
+  const isNow = State.selected.has(id);
   const card = $(`.note-card[data-id="${id}"]`);
-  if (card) card.classList.toggle('selected', State.selected.has(id));
+  if (card) {
+    card.classList.toggle('selected', isNow);
+    const cb = card.querySelector('.nc-select-cb');
+    if (cb) cb.checked = isNow;
+  }
   updateSelectBar();
 }
 
@@ -579,8 +593,6 @@ function renderChecklist() {
     const row = document.createElement('div');
     row.className = `ed-check-row ${it.done ? 'done' : ''}`;
     row.dataset.id = it.id;
-    row.draggable = true;
-
     const handle = document.createElement('span');
     handle.className = 'drag-handle';
     handle.contentEditable = 'false';
@@ -612,15 +624,17 @@ function renderChecklist() {
 
   // "Nuevo ítem" input row has been removed.
 
-  // ── Drag-and-drop (mouse + touch) ──────────────────────────────────────
+  // ── Drag-and-drop (mouse: only from handle; touch: handle touch events) ──
   let dragSrcId = null;
 
   root.querySelectorAll('.ed-check-row').forEach(row => {
-    // Mouse drag
+    // Mouse drag — only activated when handle is grabbed
     row.addEventListener('dragstart', ev => {
+      if (!row.draggable) { ev.preventDefault(); return; }
       dragSrcId = row.dataset.id;
       ev.dataTransfer.effectAllowed = 'move';
     });
+    row.addEventListener('dragend', () => { row.draggable = false; });
     row.addEventListener('dragover', ev => {
       ev.preventDefault();
       root.querySelectorAll('.ed-check-row').forEach(r => r.classList.remove('drag-over'));
@@ -632,6 +646,10 @@ function renderChecklist() {
       row.classList.remove('drag-over');
       if (dragSrcId && dragSrcId !== row.dataset.id) reorderChecklist(dragSrcId, row.dataset.id);
       dragSrcId = null;
+    });
+    // Enable drag only when mousedown is on the handle
+    row.querySelector('.drag-handle')?.addEventListener('mousedown', () => {
+      row.draggable = true;
     });
   });
 
@@ -724,10 +742,28 @@ async function commitEditor() {
   renderGrid();
 }
 
+function isNoteEmpty(e) {
+  if (!e) return true;
+  if ((e.title || '').trim()) return false;
+  if ((e.body || '').trim()) return false;
+  if ((e.checklist_items || []).some(it => (it.text || '').trim())) return false;
+  if ((e.attachments || []).length) return false;
+  return true;
+}
+
 function closeEditor(fromPopState = false) {
   if (State.editing) {
     syncChecklistFromDom();
-    commitEditor();
+    const e = State.editing;
+    e.title = $('#ed-title')?.value || '';
+    e.body  = $('#ed-body')?.value  || '';
+    if (isNoteEmpty(e)) {
+      State.notes = State.notes.filter(n => n.id !== e.id);
+      idb.del('notes', e.id).catch(() => {});
+      renderGrid();
+    } else {
+      commitEditor();
+    }
   }
   // If not triggered by back button, pop the history entry we pushed
   if (!fromPopState && history.state?.modal === 'editor') history.back();
