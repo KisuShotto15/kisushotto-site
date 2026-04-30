@@ -172,31 +172,46 @@ function getCurrentNotes() {
   });
 }
 
-function renderCategoriesStrip() {
-  const anchor = $('#cat-list-anchor');
-  if (!anchor) return;
-  const wrap = $('#cat-strip');
-  wrap.querySelectorAll('.cat-pill[data-cat-id]').forEach(el => el.remove());
+function renderCategoriesStrip() { renderSidebarNav(); }
 
+function renderSidebarNav() {
+  const list = $('#sidebar-cat-list');
+  if (!list) return;
   const me = getUserEmail();
   const ownCats = State.categories.filter(c => c.owner_email === me)
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
-  for (const c of ownCats) {
-    const btn = document.createElement('button');
-    btn.className = 'cat-pill';
-    btn.dataset.cat = `cat:${c.id}`;
-    btn.dataset.catId = c.id;
-    btn.style.borderColor = c.color;
-    btn.textContent = c.name;
-    if (State.view === `cat:${c.id}`) btn.classList.add('active');
-    btn.addEventListener('click', () => setView(`cat:${c.id}`));
-    anchor.parentNode.insertBefore(btn, anchor);
-  }
+  list.innerHTML = ownCats.map(c => `
+    <button class="sidebar-item${State.view === 'cat:' + c.id ? ' active' : ''}" data-view="cat:${c.id}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path></svg>
+      <span>${escapeHtml(c.name)}</span>
+    </button>
+  `).join('');
 
-  $$('.cat-pill[data-cat]').forEach(p => {
-    p.classList.toggle('active', p.dataset.cat === State.view);
+  list.querySelectorAll('.sidebar-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setView(btn.dataset.view);
+      if (window.innerWidth < 900) closeSidebar();
+    });
   });
+
+  updateSidebarActive();
+}
+
+function updateSidebarActive() {
+  $$('.sidebar-item[data-view]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === State.view);
+  });
+}
+
+function openSidebar() {
+  document.body.classList.add('sidebar-open');
+  $('#sidebar-backdrop').style.display = 'block';
+}
+
+function closeSidebar() {
+  document.body.classList.remove('sidebar-open');
+  $('#sidebar-backdrop').style.display = 'none';
 }
 
 async function reorderCategory(id, dir) {
@@ -314,7 +329,7 @@ function noteCardHtml(n) {
 
   return `
     <article class="${cls}" ${style} data-id="${n.id}" onclick="">
-      <label class="nc-select-wrap" onclick="event.stopPropagation()"><input type="checkbox" class="nc-select-cb" data-id="${n.id}" ${isSelected ? 'checked' : ''} onclick=""></label>
+      <label class="nc-select-wrap"><input type="checkbox" class="nc-select-cb" data-id="${n.id}" ${isSelected ? 'checked' : ''}></label>
       ${n.pinned ? '<span class="nc-pin">📌</span>' : ''}
       ${n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : ''}
       ${imgs}
@@ -478,6 +493,7 @@ function updateSelectBar() {
 function setView(v) {
   if (State.selectMode) exitSelectMode();
   State.view = v;
+  updateSidebarActive();
   render();
 }
 
@@ -765,13 +781,19 @@ function closeEditor(fromPopState = false) {
       commitEditor();
     }
   }
-  // If not triggered by back button, pop the history entry we pushed
   if (!fromPopState && history.state?.modal === 'editor') history.back();
-  $('#editor').hidden = true;
-  $('#ed-checklist-list').contentEditable = 'inherit';
   State.editing = null;
   unlockBodyScroll();
   hidePopups();
+
+  const modal = $('#editor');
+  modal.classList.add('closing');
+  const card = modal.querySelector('.modal-card');
+  card.addEventListener('animationend', () => {
+    modal.classList.remove('closing');
+    modal.hidden = true;
+    $('#ed-checklist-list').contentEditable = 'inherit';
+  }, { once: true });
 }
 
 function openNew(type) {
@@ -1251,23 +1273,24 @@ function bindUI() {
   });
   $('#btn-new')?.addEventListener('click', openNew);
 
-  $$('.cat-pill[data-cat]').forEach(p => p.addEventListener('click', () => setView(p.dataset.cat)));
-  $('#btn-cat-new').addEventListener('click', () => {
-    const name = prompt('Nombre de la categoría');
-    if (!name) return;
-    const cat = {
-      id: crypto.randomUUID(),
-      owner_email: getUserEmail(),
-      name: name.trim(),
-      color: '#fbbf24',
-      created_at: Date.now(),
-      updated_at: Date.now(),
-    };
-    State.categories.push(cat);
-    saveCategoryLocal(cat);
-    apiCreateCat({ id: cat.id, name: cat.name, color: cat.color }).catch(() => {});
-    renderCategoriesStrip();
-    renderDrawerCats();
+  // Sidebar toggle
+  $('#sidebar-toggle')?.addEventListener('click', () => {
+    if (document.body.classList.contains('sidebar-open')) closeSidebar();
+    else openSidebar();
+  });
+  $('#sidebar-backdrop')?.addEventListener('click', () => closeSidebar());
+  // Wire static sidebar nav items (categories are wired in renderSidebarNav)
+  $$('.sidebar-item[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setView(btn.dataset.view);
+      if (window.innerWidth < 900) closeSidebar();
+    });
+  });
+  $('#sidebar-edit-labels')?.addEventListener('click', () => {
+    if (window.innerWidth < 900) closeSidebar();
+    history.pushState({ modal: 'drawer' }, '');
+    lockBodyScroll();
+    $('#drawer').hidden = false;
   });
 
   // PIN modal

@@ -2,8 +2,6 @@
   <title>Body Metrics app icon</title>
   <desc>Dark rounded square icon showing a weight plate with an upward trend line in blue</desc>
 
-  <rect width="100" height="100" rx="22" fill="#0a0b0e"/>
-
   <!-- Weight plate outer ring -->
   <circle cx="50" cy="52" r="26" fill="none" stroke="#3b82f6" stroke-width="2.4"/>
   <!-- Weight plate inner ring -->

@@ -38,6 +38,7 @@ body {
   min-height: 100vh;
   padding-top: 64px;
   padding-bottom: 100px;
+  transition: padding-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body::before {
@@ -60,32 +61,37 @@ input, textarea, select {
 [contenteditable] { outline: none; }
 [contenteditable]:focus { outline: none; }
 
-/* Hub-back */
-.hub-back {
-  position: fixed; top: 14px; left: 14px;
-  width: 40px; height: 40px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  z-index: 80;
-  text-decoration: none;
-}
-.hub-back img { display: block; }
-
 /* Topbar */
 .topbar {
   position: fixed; top: 0; left: 0; right: 0;
-  height: 56px;
-  display: flex; align-items: center; gap: 12px;
-  padding: 8px 16px 8px 64px;
-  background: rgba(9,9,14,0.85);
-  backdrop-filter: blur(12px);
+  height: 64px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px;
+  background: rgba(9,9,14,0.9);
+  backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
   z-index: 70;
 }
-.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-.brand img { display: block; }
+
+.sidebar-toggle {
+  flex: 0 0 auto;
+  background: transparent;
+  border-color: transparent;
+}
+.sidebar-toggle:hover { background: var(--card2); border-color: transparent; }
+
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+  flex: 0 0 auto;
+}
+.brand img { display: block; flex: 0 0 auto; }
+.brand-name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
 
 .search-wrap {
   flex: 1;
@@ -100,7 +106,118 @@ input, textarea, select {
 .search-wrap input { width: 100%; }
 .search-wrap input::placeholder { color: var(--muted); }
 
-.topbar-actions { display: flex; gap: 8px; align-items: center; }
+.topbar-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+:root {
+  --sb-w: 72px;
+  --sb-open: 288px;
+}
+
+.sidebar {
+  position: fixed;
+  top: 64px; left: 0; bottom: 0;
+  width: var(--sb-w);
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  z-index: 65;
+  overflow: hidden;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex; flex-direction: column;
+}
+
+.sidebar-nav {
+  padding: 8px 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.sidebar-nav::-webkit-scrollbar { display: none; }
+
+.sidebar-item {
+  display: flex; align-items: center; gap: 18px;
+  width: 100%;
+  padding: 0 20px 0 25px;
+  height: 48px;
+  background: transparent;
+  border: none;
+  border-radius: 0 24px 24px 0;
+  color: var(--muted2);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  margin-bottom: 2px;
+}
+/* icon center: padding-left 25px + icon 22px/2 = 36px = sb-w/2 = 36px ✓ */
+.sidebar-item svg { flex: 0 0 22px; }
+.sidebar-item span {
+  opacity: 0;
+  transition: opacity 0.12s;
+  overflow: hidden;
+}
+.sidebar-item:hover { background: var(--card2); color: var(--text); }
+.sidebar-item.active {
+  background: rgba(251,191,36,0.12);
+  color: var(--accent);
+  font-weight: 600;
+}
+.sidebar-item.active svg { stroke: var(--accent); }
+.sidebar-item.active:hover { background: rgba(251,191,36,0.18); }
+
+body.sidebar-open .sidebar { width: var(--sb-open); }
+body.sidebar-open .sidebar-item span { opacity: 1; }
+
+.sidebar-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 12px;
+}
+
+.sidebar-cat-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex: 0 0 10px;
+  margin-left: -4px;
+}
+
+.sidebar-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 64;
+  display: none;
+  animation: fadeIn 0.15s ease-out;
+}
+
+/* Desktop: sidebar always visible, pushes content */
+@media (min-width: 900px) {
+  body {
+    padding-left: var(--sb-w);
+    transition: padding-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  body.sidebar-open { padding-left: var(--sb-open); }
+  .sidebar-backdrop { display: none !important; }
+}
+
+/* Mobile: sidebar slides in as overlay */
+@media (max-width: 899px) {
+  .sidebar {
+    top: 0;
+    width: var(--sb-open);
+    transform: translateX(-100%);
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 90;
+  }
+  .sidebar-item span { opacity: 1; }
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+    width: var(--sb-open);
+  }
+  body.sidebar-open .sidebar-backdrop { display: block; }
+}
 
 .btn-pri {
   background: var(--accent);
@@ -141,43 +258,6 @@ input, textarea, select {
 .btn-icon:hover { background: var(--card2); }
 .btn-icon.active { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.40); }
 .btn-icon.active:hover { background: rgba(255,255,255,0.20); }
-
-/* Categories strip */
-.cat-strip {
-  position: sticky; top: 56px;
-  display: flex; gap: 8px;
-  padding: 12px 16px;
-  background: rgba(9,9,14,0.85);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  scrollbar-width: none;
-  z-index: 60;
-}
-.cat-strip::-webkit-scrollbar { display: none; }
-.cat-pill {
-  flex: 0 0 auto;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--muted2);
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.cat-pill.active {
-  background: var(--accent);
-  color: #1a1100;
-  border-color: var(--accent);
-}
-.cat-pill.add { font-size: 16px; padding: 6px 12px; }
-.cat-divider {
-  width: 1px;
-  background: var(--border);
-  margin: 4px 4px;
-  flex: 0 0 auto;
-}
 
 /* Main */
 main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
@@ -817,6 +897,52 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
   box-shadow: var(--shadow);
 }
 
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes editorIn {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes editorOut {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: scale(0.96) translateY(10px); }
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes overlayOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes popupIn {
+  from { opacity: 0; transform: scale(0.94) translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.note-card { animation: cardIn 0.18s ease-out both; }
+
+.modal:not([hidden]) .modal-bg  { animation: overlayIn 0.15s ease-out both; }
+.modal:not([hidden]) .modal-card { animation: editorIn 0.22s cubic-bezier(0.34, 1.3, 0.64, 1) both; }
+
+.modal.closing .modal-bg  { animation: overlayOut 0.15s ease-out both; }
+.modal.closing .modal-card { animation: editorOut 0.17s ease-in both; }
+
+.popup:not([hidden]) { animation: popupIn 0.14s ease-out both; }
+
 /* Body scroll lock (applied by JS when modals open) */
 body.modal-open {
   overflow: hidden;
@@ -829,14 +955,12 @@ body.modal-open {
 /* Mobile tweaks */
 @media (max-width: 640px) {
   body {
-    padding-top: 56px;
+    padding-top: 64px;
     padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
   }
   .topbar {
-    padding-left: 56px;
-    padding-right: calc(8px + env(safe-area-inset-right, 0px));
+    padding: 0 calc(8px + env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 12px));
   }
-  .hub-back { width: 36px; height: 36px; top: 10px; left: max(10px, env(safe-area-inset-left, 10px)); }
   .topbar-actions .btn-pri { padding: 9px 12px; font-size: 13px; }
   .search-wrap { max-width: none; }
 
@@ -954,11 +1078,6 @@ body.modal-open {
     right: max(20px, env(safe-area-inset-right, 20px));
   }
 
-  /* Category strip safe area */
-  .cat-strip {
-    padding-left: max(16px, env(safe-area-inset-left, 16px));
-    padding-right: max(16px, env(safe-area-inset-right, 16px));
-  }
 }
 
 @keyframes popupSlideUp {
