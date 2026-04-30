@@ -755,7 +755,9 @@ async function commitEditor() {
   await saveNoteLocal(e);
   $('#ed-status').textContent = 'Guardado';
   updateEditorMeta();
-  renderGrid();
+  // Don't re-render the grid while the editor is open — it's hidden and
+  // the card animations are jarring on every auto-save keystroke
+  if ($('#editor').hidden) renderGrid();
 }
 
 function isNoteEmpty(e) {
@@ -868,11 +870,11 @@ function closePinModal(ok) {
 function bindEditorActions() {
   $('#ed-pin').addEventListener('click', () => {
     State.editing.pinned = !State.editing.pinned;
-    scheduleSave(); updateEditorMeta(); renderGrid();
+    scheduleSave(); updateEditorMeta();
   });
   $('#ed-lock').addEventListener('click', () => {
     State.editing.locked = !State.editing.locked;
-    scheduleSave(); updateEditorMeta(); renderGrid();
+    scheduleSave(); updateEditorMeta();
   });
   $('#ed-archive').addEventListener('click', () => {
     State.editing.archived = !State.editing.archived;
@@ -1115,6 +1117,23 @@ function bindEditorActions() {
         placeCursorAtEnd(lastRow);
         setTimeout(() => lastRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
       }
+      return;
+    }
+    if (ev.key === 'Backspace' && ev.target.matches('.ed-check-text')) {
+      if (ev.target.textContent !== '') return;
+      ev.preventDefault();
+      const e = State.editing;
+      if (!e) return;
+      const row = ev.target.closest('.ed-check-row');
+      const id = row?.dataset.id;
+      if (!id) return;
+      const idx = (e.checklist_items || []).findIndex(x => x.id === id);
+      e.checklist_items = (e.checklist_items || []).filter(x => x.id !== id);
+      renderChecklist();
+      scheduleSave();
+      const newRows = cl.querySelectorAll('.ed-check-text');
+      const target = newRows[Math.max(0, idx - 1)];
+      if (target) { target.focus(); placeCursorAtEnd(target); }
     }
   });
 }
