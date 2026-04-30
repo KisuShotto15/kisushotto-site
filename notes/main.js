@@ -157,7 +157,7 @@ function getCurrentNotes() {
     if (v === 'archive') return !!n.archived;
     if (n.archived)      return false;
     if (v === 'shared')  return n.owner_email !== me || (n.shares?.length > 0);
-    if (v === 'locked')  return !!n.locked && n.owner_email === me;
+    if (v === 'locked')  return !!n.locked;
     if (v.startsWith('cat:')) {
       const id = v.slice(4);
       return (n.categories || []).includes(id);
@@ -305,7 +305,7 @@ function noteCardHtml(n) {
   const cls = `note-card${colored ? ' colored' : ''}${isSelected ? ' selected' : ''}`;
   const style = colored ? `style="background:${n.color}"` : '';
   let body = '';
-  if (n.locked && n.owner_email === me && !isSessionUnlocked()) {
+  if (n.locked && !isSessionUnlocked()) {
     body = `<div class="nc-body" style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span class="nc-locked">🔒</span> Nota protegida</div>`;
   } else if (n.type === 'checklist') {
     const items = (n.checklist_items || []).slice(0, 8);
@@ -334,8 +334,8 @@ function noteCardHtml(n) {
     <article class="${cls}" ${style} data-id="${n.id}" onclick="">
       <label class="nc-select-wrap"><input type="checkbox" class="nc-select-cb" data-id="${n.id}" ${isSelected ? 'checked' : ''}></label>
       ${n.pinned ? '<span class="nc-pin">📌</span>' : ''}
-      ${n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : ''}
-      ${imgs}
+      ${n.locked && !isSessionUnlocked() ? '' : (n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : '')}
+      ${n.locked && !isSessionUnlocked() ? '' : imgs}
       ${body}
       <div class="nc-meta">${catTags}${sharedBadge}${lockBadge}${reminderBadge}</div>
     </article>
