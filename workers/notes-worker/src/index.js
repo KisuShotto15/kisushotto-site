@@ -249,9 +249,10 @@ async function syncPull(request, env, email) {
   const since = parseInt(url.searchParams.get('since') || '0', 10);
   await ensureUser(env, email);
   const notes = await fetchNotesForUser(env, email, since);
+  // Always return ALL categories — deletes are only visible via absence
   const catRes = await env.DB.prepare(
-    `SELECT * FROM categories WHERE owner_email = ? AND updated_at >= ? ORDER BY sort_order ASC, created_at ASC`
-  ).bind(email, since).all();
+    `SELECT * FROM categories WHERE owner_email = ? ORDER BY sort_order ASC, created_at ASC`
+  ).bind(email).all();
   return json({
     notes,
     categories: catRes.results || [],
@@ -369,9 +370,10 @@ async function syncPush(request, env, email) {
   // Pull all changed records since client's "since" so it gets canonical state
   const since = parseInt(body.since || 0, 10);
   const fresh = await fetchNotesForUser(env, email, since);
+  // Always return ALL categories — deletes are only visible via absence
   const catRes = await env.DB.prepare(
-    `SELECT * FROM categories WHERE owner_email = ? AND updated_at >= ? ORDER BY sort_order ASC, created_at ASC`
-  ).bind(email, since).all();
+    `SELECT * FROM categories WHERE owner_email = ? ORDER BY sort_order ASC, created_at ASC`
+  ).bind(email).all();
 
   return json({ results, notes: fresh, categories: catRes.results || [], server_time: now() });
 }
