@@ -75,10 +75,13 @@ async function init() {
     console.warn('initial sync failed', e);
   }
 
-  // Periodic pull
+  // Periodic pull — skip re-render if editor is open to avoid grid flash
   setInterval(async () => {
     if (!navigator.onLine) return;
-    try { await pull(); await loadFromIDB(); render(); } catch {}
+    try {
+      await pull(); await loadFromIDB();
+      if ($('#editor').hidden) render();
+    } catch {}
   }, 30000);
 
   // Open note from query param (push notification deep-link)
@@ -970,7 +973,7 @@ function bindEditorActions() {
       hidePopups();
       scheduleSave();
       updateEditorMeta();
-      renderGrid();
+      // color change is already visible in the open editor — skip grid rebuild
     });
   });
 
