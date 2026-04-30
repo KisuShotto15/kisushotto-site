@@ -283,7 +283,8 @@ function noteCardHtml(n) {
   const me = getUserEmail();
   const isShared = n.owner_email !== me;
   const colored = !!n.color;
-  const cls = `note-card${colored ? ' colored' : ''}`;
+  const isSelected = State.selected.has(n.id);
+  const cls = `note-card${colored ? ' colored' : ''}${isSelected ? ' selected' : ''}`;
   const style = colored ? `style="background:${n.color}"` : '';
   let body = '';
   if (n.locked && n.owner_email === me && !isSessionUnlocked()) {
@@ -313,7 +314,7 @@ function noteCardHtml(n) {
 
   return `
     <article class="${cls}" ${style} data-id="${n.id}" onclick="">
-      <label class="nc-select-wrap" onclick="event.stopPropagation()"><input type="checkbox" class="nc-select-cb" data-id="${n.id}" onclick=""></label>
+      <label class="nc-select-wrap" onclick="event.stopPropagation()"><input type="checkbox" class="nc-select-cb" data-id="${n.id}" ${isSelected ? 'checked' : ''} onclick=""></label>
       ${n.pinned ? '<span class="nc-pin">📌</span>' : ''}
       ${n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : ''}
       ${imgs}
@@ -570,8 +571,6 @@ function renderChecklist() {
   const root = $('#ed-checklist-list');
   if (!root) return;
   root.innerHTML = '';
-  root.contentEditable = 'true';
-  root.spellcheck = true;
   const e = State.editing;
   if (!e) return;
   const items = e.checklist_items || [];
@@ -594,6 +593,8 @@ function renderChecklist() {
 
     const txt = document.createElement('div');
     txt.className = 'ed-check-text';
+    txt.contentEditable = 'true';
+    txt.spellcheck = true;
     txt.textContent = it.text || '';
 
     const del = document.createElement('button');
@@ -609,28 +610,7 @@ function renderChecklist() {
     root.appendChild(row);
   }
 
-  // add row — outside the editing host
-  const add = document.createElement('div');
-  add.className = 'ed-check-add';
-  add.contentEditable = 'false';
-  add.innerHTML = `<input type="text" placeholder="+ Nuevo ítem"><button class="btn-icon">+</button>`;
-  const [addInp, addBtn] = add.querySelectorAll('input,button');
-  const doAdd = () => {
-    const v = addInp.value.trim();
-    if (!v) return;
-    syncChecklistFromDom();
-    e.checklist_items = (e.checklist_items || []).concat([{ id: crypto.randomUUID(), text: v, done: false, order: (e.checklist_items?.length || 0) }]);
-    renderChecklist();
-    scheduleSave();
-    const newAddInp = root.querySelector('.ed-check-add input');
-    if (newAddInp) {
-      newAddInp.focus();
-      setTimeout(() => newAddInp.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
-    }
-  };
-  addInp.addEventListener('keydown', ev => { if (ev.key === 'Enter') doAdd(); });
-  addBtn.addEventListener('click', doAdd);
-  root.appendChild(add);
+  // "Nuevo ítem" input row has been removed.
 
   // ── Drag-and-drop (mouse + touch) ──────────────────────────────────────
   let dragSrcId = null;
@@ -747,15 +727,6 @@ async function commitEditor() {
 function closeEditor(fromPopState = false) {
   if (State.editing) {
     syncChecklistFromDom();
-    const addInp = $('#ed-checklist-list .ed-check-add input');
-    if (addInp && addInp.value.trim()) {
-      const e = State.editing;
-      e.checklist_items = (e.checklist_items || []).concat([{
-        id: crypto.randomUUID(), text: addInp.value.trim(), done: false,
-        order: (e.checklist_items?.length || 0),
-      }]);
-      addInp.value = '';
-    }
     commitEditor();
   }
   // If not triggered by back button, pop the history entry we pushed
@@ -775,7 +746,7 @@ function openNew(type) {
     title: '',
     body: '',
     type: (type === 'checklist') ? 'checklist' : 'text',
-    checklist_items: [],
+    checklist_items: (type === 'checklist') ? [{ id: crypto.randomUUID(), text: '', done: false, order: 0 }] : [],
     color: null,
     pinned: false,
     archived: false,
@@ -874,7 +845,7 @@ function bindEditorActions() {
           order: 0,
         }));
       } else if (!e.checklist_items?.length) {
-        e.checklist_items = [];
+        e.checklist_items = [{ id: crypto.randomUUID(), text: '', done: false, order: 0 }];
       }
       e.body = '';
     }
@@ -1075,21 +1046,16 @@ function bindEditorActions() {
       const e = State.editing;
       if (!e) return;
       syncChecklistFromDom();
-      const sel = window.getSelection();
-      const node = sel?.anchorNode;
-      const row = node?.closest?.('.ed-check-row') || node?.parentElement?.closest?.('.ed-check-row');
-      if (!row) return;
-      const id = row.dataset.id;
-      const idx = e.checklist_items.findIndex(x => x.id === id);
-      if (idx === -1) return;
-      e.checklist_items.splice(idx + 1, 0, { id: crypto.randomUUID(), text: '', done: false, order: idx + 1 });
+      e.checklist_items = e.checklist_items || [];
+      e.checklist_items.push({ id: crypto.randomUUID(), text: '', done: false, order: e.checklist_items.length });
       renderChecklist();
       scheduleSave();
       const rows = cl.querySelectorAll('.ed-check-text');
-      if (rows[idx + 1]) {
-        rows[idx + 1].focus();
-        placeCursorAtEnd(rows[idx + 1]);
-        setTimeout(() => rows[idx + 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+      if (rows.length > 0) {
+        const lastRow = rows[rows.length - 1];
+        lastRow.focus();
+        placeCursorAtEnd(lastRow);
+        setTimeout(() => lastRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
       }
     }
   });
@@ -1298,6 +1264,49 @@ function bindUI() {
 
   // Selection bar
   $('#select-cancel')?.addEventListener('click', () => exitSelectMode());
+  $('#select-pin')?.addEventListener('click', async () => {
+    // Determine target pinned state (if any selected is unpinned, pin all; else unpin all)
+    let anyUnpinned = false;
+    for (const id of State.selected) {
+      const n = State.notes.find(x => x.id === id);
+      if (n && !n.pinned) anyUnpinned = true;
+    }
+    for (const id of State.selected) {
+      const n = State.notes.find(x => x.id === id);
+      if (!n) continue;
+      n.pinned = anyUnpinned;
+      n.last_modified = Date.now();
+      await saveNoteLocal(n);
+    }
+    exitSelectMode();
+    render();
+  });
+  $('#select-cats')?.addEventListener('click', (ev) => {
+    // For bulk categories we can just set State.editing to a dummy object 
+    // to reuse the popup, then intercept the change. But a simpler way:
+    // Just prompt for category or redirect to a modal. Since we don't have
+    // a bulk category UI built-in easily without rewriting renderCategoriesPopup,
+    // let's create a small custom popup or use prompt for now to assign by name.
+    // Actually, for now, let's just use a prompt since it's an edge case 
+    // or tell user it's implemented. Let's make a real bulk categories function.
+    const name = prompt('Escribe el nombre de la categoría para agregar a la selección:');
+    if (!name) return;
+    const cat = State.categories.find(c => c.name.toLowerCase() === name.trim().toLowerCase());
+    if (cat) {
+      for (const id of State.selected) {
+        const n = State.notes.find(x => x.id === id);
+        if (n) {
+          n.categories = n.categories || [];
+          if (!n.categories.includes(cat.id)) n.categories.push(cat.id);
+          saveNoteLocal(n);
+        }
+      }
+      exitSelectMode();
+      render();
+    } else {
+      alert('Categoría no encontrada. Por favor créala primero.');
+    }
+  });
   $('#select-archive')?.addEventListener('click', async () => {
     for (const id of State.selected) {
       const n = State.notes.find(x => x.id === id);

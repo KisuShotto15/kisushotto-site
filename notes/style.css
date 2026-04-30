@@ -493,6 +493,8 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 }
 .select-bar[hidden] { display: none; }
 #select-count { flex: 1; font-size: 14px; color: var(--muted2); }
+.select-actions { display: flex; gap: 4px; margin-left: auto; align-items: center; }
+.select-actions .btn-icon { width: 36px; height: 36px; }
 .select-danger { color: var(--danger) !important; border-color: var(--danger) !important; }
 
 /* Editor toolbar layout */
