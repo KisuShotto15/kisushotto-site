@@ -1263,15 +1263,15 @@ function openBulkCatsModal() {
   const me = getUserEmail();
   const own = State.categories.filter(c => c.owner_email === me);
   if (!own.length) {
-    list.innerHTML = '<p style="color:var(--muted);font-size:13px">No tienes categorías aún.</p>';
+    list.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:8px 0">No tienes categorías aún.</p>';
   }
   for (const c of own) {
     const lbl = document.createElement('label');
-    lbl.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 4px;cursor:pointer';
+    lbl.className = 'bulk-cat-row';
     const allHave = [...State.selected].every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id));
-    lbl.innerHTML = `<input type="checkbox" ${allHave ? 'checked' : ''} data-id="${c.id}">
+    lbl.innerHTML = `<input type="checkbox" ${allHave ? 'checked' : ''}>
       <span class="drawer-cat-dot" style="background:${c.color}"></span>
-      <span style="font-size:15px">${escapeHtml(c.name)}</span>`;
+      <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
       for (const nid of State.selected) {
         const n = State.notes.find(x => x.id === nid);
@@ -1476,7 +1476,16 @@ function bindUI() {
   // Lightbox
   $('#lightbox-bg').addEventListener('click', closeLightbox);
   $('#lightbox-img').addEventListener('click', closeLightbox);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (!$('#lightbox-modal').hidden) { closeLightbox(); return; }
+    if (!$('#bulk-cats-modal').hidden) { closeBulkCatsModal(); return; }
+    if (!$('#confirm-modal').hidden) { $('#confirm-cancel').click(); return; }
+    if (!$('#pin-modal').hidden) { $('#pin-cancel').click(); return; }
+    if ($$('.popup').some(p => !p.hidden)) { hidePopups(); return; }
+    if (State.selectMode) { exitSelectMode(); return; }
+    if (!$('#editor').hidden) { closeEditor(); return; }
+  });
 
   // Image clicks — editor attachments (delegated)
   $('#ed-attachments').addEventListener('click', e => {
