@@ -595,7 +595,7 @@ function updateEditorMeta() {
   if (e.archived)    tags.push('<span class="ed-meta-tag">📦 Archivada</span>');
   if (e.reminder_at) tags.push(`<span class="ed-meta-tag">⏰ ${fmtDate(e.reminder_at)}</span>`);
   if (e.shares?.length) tags.push(`<span class="ed-meta-tag shared">👥 ${e.shares.length} compartido(s)</span>`);
-  if (e.color)       tags.push(`<span class="ed-meta-tag" style="background:${e.color};color:#1a1100">🎨</span>`);
+  if (e.color)       tags.push(`<span class="ed-meta-tag" style="background:${e.color};color:var(--text)">🎨</span>`);
   for (const cid of (e.categories || [])) {
     const c = State.categories.find(x => x.id === cid);
     if (c) tags.push(`<span class="ed-meta-tag" style="border-color:${c.color}">${escapeHtml(c.name)}</span>`);
@@ -1036,7 +1036,7 @@ function bindEditorActions() {
       id: crypto.randomUUID(),
       owner_email: getUserEmail(),
       name,
-      color: '#fbbf24',
+      color: '#4a4515',
       created_at: Date.now(),
       updated_at: Date.now(),
     };
@@ -1287,7 +1287,7 @@ function bindDrawer() {
       id: crypto.randomUUID(),
       owner_email: getUserEmail(),
       name,
-      color: '#fbbf24',
+      color: '#4a4515',
       created_at: Date.now(),
       updated_at: Date.now(),
     };
