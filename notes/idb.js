@@ -82,10 +82,15 @@ export async function setMeta(key, value) {
 export async function enqueue(item) {
   return put('queue', { ...item, queued_at: Date.now() });
 }
-export async function dequeueAll() {
-  const items = await getAll('queue');
-  await clear('queue');
-  return items;
+export async function peekQueue() {
+  return getAll('queue');
+}
+export async function dequeueIds(ids) {
+  if (!ids.length) return;
+  const t = await tx('queue', 'readwrite');
+  const store = t.objectStore('queue');
+  ids.forEach(id => store.delete(id));
+  return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
 }
 export async function queueSize() {
   const items = await getAll('queue');

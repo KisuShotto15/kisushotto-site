@@ -43,10 +43,9 @@ export async function flushQueue() {
   if (!isOnline()) return;
   pushing = true;
   try {
-    const items = await idb.dequeueAll();
+    const items = await idb.peekQueue(); // read without removing — safe on failure
     if (!items.length) return;
 
-    // Re-read latest local copies for upsert
     const noteIds = new Set();
     const catIds = new Set();
     for (const it of items) {
@@ -68,6 +67,9 @@ export async function flushQueue() {
     const since = (await idb.getMeta('lastSyncedAt')) || 0;
     const result = await apiSyncPush({ notes, categories, since });
 
+    // Push succeeded — now remove exactly these items from the queue
+    await idb.dequeueIds(items.map(i => i.id));
+
     // Apply server-canonical state back into IDB
     for (const n of result.notes || []) {
       await idb.put('notes', n);
@@ -77,7 +79,8 @@ export async function flushQueue() {
     }
     if (result.server_time) await idb.setMeta('lastSyncedAt', result.server_time);
   } catch (e) {
-    console.warn('flushQueue failed', e);
+    console.warn('flushQueue failed — will retry on next flush', e);
+    // Items remain in queue; next flushQueue call will retry them
   } finally {
     pushing = false;
   }

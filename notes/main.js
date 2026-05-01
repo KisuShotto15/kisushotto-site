@@ -818,6 +818,8 @@ function isNoteEmpty(e) {
 }
 
 function closeEditor(fromPopState = false) {
+  clearTimeout(saveTimer);
+  saveTimer = null;
   if (State.editing) {
     syncChecklistFromDom();
     const e = State.editing;
