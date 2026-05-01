@@ -1036,7 +1036,7 @@ function bindEditorActions() {
       id: crypto.randomUUID(),
       owner_email: getUserEmail(),
       name,
-      color: '#4a4515',
+      color: '#5B3082',
       created_at: Date.now(),
       updated_at: Date.now(),
     };
@@ -1287,7 +1287,7 @@ function bindDrawer() {
       id: crypto.randomUUID(),
       owner_email: getUserEmail(),
       name,
-      color: '#4a4515',
+      color: '#5B3082',
       created_at: Date.now(),
       updated_at: Date.now(),
     };
