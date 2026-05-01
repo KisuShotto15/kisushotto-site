@@ -1,10 +1,10 @@
 // notes/auth.js — PIN modal + WebAuthn helpers.
-// Session unlock keeps locked notes accessible for 10 minutes.
+// Session unlock keeps locked notes accessible for 1 minute.
 
 import { apiSetPin, apiVerifyPin, apiRegWebauthn, apiGetWebauthn } from './api.js';
 
 const SESSION_KEY = 'notes_unlocked_until';
-const SESSION_MS = 10 * 60 * 1000;
+const SESSION_MS = 1 * 60 * 1000;
 
 export function isSessionUnlocked() {
   const until = parseInt(localStorage.getItem(SESSION_KEY) || '0', 10);
