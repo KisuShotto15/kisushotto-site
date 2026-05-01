@@ -75,10 +75,10 @@ input, textarea, select {
 
 .sidebar-toggle {
   flex: 0 0 auto;
-  background: transparent;
-  border-color: transparent;
+  background: transparent !important;
+  border: none !important;
 }
-.sidebar-toggle:hover { background: var(--card2); border-color: transparent; }
+.sidebar-toggle:hover { background: var(--card2) !important; }
 
 .brand {
   display: flex; align-items: center; gap: 10px;
