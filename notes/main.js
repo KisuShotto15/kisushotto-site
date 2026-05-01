@@ -798,6 +798,7 @@ function closeEditor(fromPopState = false) {
     modal.classList.remove('closing');
     modal.hidden = true;
     $('#ed-checklist-list').contentEditable = 'inherit';
+    renderGrid();
   }, { once: true });
 }
 

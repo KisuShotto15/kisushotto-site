@@ -769,13 +769,14 @@ body.select-mode .nc-select-wrap { display: block; }
 .color-swatch {
   width: 36px; height: 36px;
   border-radius: 50%;
-  border: 2px solid transparent;
+  border: none;
   display: flex; align-items: center; justify-content: center;
   font-size: 14px;
-  color: var(--muted);
+  color: #555;
+  box-shadow: none;
 }
-.color-swatch:hover { border-color: var(--border-2); }
-.color-swatch.active { border-color: var(--text); }
+.color-swatch:hover { opacity: 0.8; }
+.color-swatch.active { outline: 2px solid var(--text); outline-offset: 2px; }
 
 /* PIN modal */
 .pin-card {
