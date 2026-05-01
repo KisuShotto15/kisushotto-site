@@ -579,6 +579,32 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 .select-actions .btn-icon { width: 36px; height: 36px; }
 .select-danger { color: var(--danger) !important; border-color: var(--danger) !important; }
 
+/* Editor icon buttons — no background circle */
+.ed-toolbar .btn-icon,
+.ed-bottom-bar .btn-icon {
+  background: transparent;
+  border-color: transparent;
+}
+.ed-toolbar .btn-icon:hover,
+.ed-bottom-bar .btn-icon:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: transparent;
+}
+.ed-toolbar .btn-icon.active,
+.ed-bottom-bar .btn-icon.active {
+  background: rgba(255,255,255,0.12);
+  border-color: transparent;
+}
+.editor-card.colored .ed-toolbar .btn-icon,
+.editor-card.colored .ed-bottom-bar .btn-icon {
+  background: transparent;
+  border-color: transparent;
+}
+.editor-card.colored .ed-toolbar .btn-icon:hover,
+.editor-card.colored .ed-bottom-bar .btn-icon:hover {
+  background: rgba(0,0,0,0.10);
+}
+
 /* Editor toolbar layout */
 .ed-toolbar {
   display: flex;
