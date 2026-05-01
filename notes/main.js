@@ -334,7 +334,7 @@ function noteCardHtml(n) {
   const style = colored ? `style="background:${n.color}"` : '';
   let body = '';
   if (n.locked && !isSessionUnlocked()) {
-    body = `<div class="nc-body" style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span class="nc-locked">🔒</span> Nota protegida</div>`;
+    body = `<div class="nc-body" style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span class="nc-locked"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span> Nota protegida</div>`;
   } else if (n.type === 'checklist') {
     const items = (n.checklist_items || []).slice(0, 8);
     body = `<div class="nc-body">` + items.map((it, idx) =>
@@ -355,7 +355,7 @@ function noteCardHtml(n) {
   const cats = (n.categories || []).map(cid => State.categories.find(c => c.id === cid)).filter(Boolean);
   const catTags = cats.map(c => `<span class="nc-cat-tag">${escapeHtml(c.name)}</span>`).join('');
   const sharedBadge = isShared ? `<span class="nc-shared">📥 Compartida</span>` : '';
-  const lockBadge = n.locked ? `<span class="nc-locked">🔒</span>` : '';
+  const lockBadge = n.locked ? `<span class="nc-locked" style="display:inline-flex;align-items:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>` : '';
   const reminderBadge = n.reminder_at ? `<span>⏰ ${fmtDate(n.reminder_at)}</span>` : '';
 
   return `
@@ -591,7 +591,7 @@ function updateEditorMeta() {
   if (!e) return;
   const tags = [];
   if (e.pinned)      tags.push('<span class="ed-meta-tag">📌 Fijada</span>');
-  if (e.locked)      tags.push('<span class="ed-meta-tag">🔒 Protegida</span>');
+  if (e.locked)      tags.push('<span class="ed-meta-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Protegida</span>');
   if (e.archived)    tags.push('<span class="ed-meta-tag">📦 Archivada</span>');
   if (e.reminder_at) tags.push(`<span class="ed-meta-tag">⏰ ${fmtDate(e.reminder_at)}</span>`);
   if (e.shares?.length) tags.push(`<span class="ed-meta-tag shared">👥 ${e.shares.length} compartido(s)</span>`);

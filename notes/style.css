@@ -11,8 +11,8 @@
   --text:      #ece9ff;
   --muted:     #6f6f8a;
   --muted2:    #a0a0bf;
-  --accent:    #fbbf24;
-  --accent-2:  #f59e0b;
+  --accent:    #8B9CFF;
+  --accent-2:  #4A5294;
   --danger:    #f87171;
   --ok:        #34d399;
   --r-sm:      8px;
@@ -46,8 +46,8 @@ body::before {
   position: fixed; inset: 0;
   pointer-events: none; z-index: -1;
   background:
-    radial-gradient(ellipse 60% 40% at 50% -10%, rgba(251,191,36,0.10) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 30% at 0% 100%, rgba(245,158,11,0.06) 0%, transparent 50%);
+    radial-gradient(ellipse 60% 40% at 50% -10%, rgba(139,156,255,0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 0% 100%, rgba(74,82,148,0.06) 0%, transparent 50%);
 }
 
 button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
