@@ -1194,40 +1194,22 @@ function renderCategoriesPopup() {
   list.innerHTML = '';
   const me = getUserEmail();
   const own = State.categories.filter(c => c.owner_email === me);
-  const bulk = State.bulkCatMode;
   for (const c of own) {
     const lbl = document.createElement('label');
-    const checked = bulk
-      ? [...State.selected].every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id))
-      : (State.editing?.categories || []).includes(c.id);
+    const checked = (State.editing?.categories || []).includes(c.id);
     lbl.innerHTML = `<input type="checkbox" data-id="${c.id}" ${checked ? 'checked' : ''}>
                      <span class="drawer-cat-dot" style="background:${c.color}"></span>
                      <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
       const id = e.target.dataset.id;
-      if (bulk) {
-        for (const nid of State.selected) {
-          const n = State.notes.find(x => x.id === nid);
-          if (!n) continue;
-          n.categories = n.categories || [];
-          if (e.target.checked) {
-            if (!n.categories.includes(id)) n.categories.push(id);
-          } else {
-            n.categories = n.categories.filter(x => x !== id);
-          }
-          n.last_modified = Date.now();
-          saveNoteLocal(n);
-        }
+      State.editing.categories = State.editing.categories || [];
+      if (e.target.checked) {
+        if (!State.editing.categories.includes(id)) State.editing.categories.push(id);
       } else {
-        State.editing.categories = State.editing.categories || [];
-        if (e.target.checked) {
-          if (!State.editing.categories.includes(id)) State.editing.categories.push(id);
-        } else {
-          State.editing.categories = State.editing.categories.filter(x => x !== id);
-        }
-        scheduleSave();
-        updateEditorMeta();
+        State.editing.categories = State.editing.categories.filter(x => x !== id);
       }
+      scheduleSave();
+      updateEditorMeta();
     });
     list.appendChild(lbl);
   }
@@ -1275,13 +1257,47 @@ function showPopupAt(sel, anchor) {
   }
   p.hidden = false;
 }
+function openBulkCatsModal() {
+  const list = $('#bulk-cats-list');
+  list.innerHTML = '';
+  const me = getUserEmail();
+  const own = State.categories.filter(c => c.owner_email === me);
+  if (!own.length) {
+    list.innerHTML = '<p style="color:var(--muted);font-size:13px">No tienes categorías aún.</p>';
+  }
+  for (const c of own) {
+    const lbl = document.createElement('label');
+    lbl.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 4px;cursor:pointer';
+    const allHave = [...State.selected].every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id));
+    lbl.innerHTML = `<input type="checkbox" ${allHave ? 'checked' : ''} data-id="${c.id}">
+      <span class="drawer-cat-dot" style="background:${c.color}"></span>
+      <span style="font-size:15px">${escapeHtml(c.name)}</span>`;
+    lbl.querySelector('input').addEventListener('change', (e) => {
+      for (const nid of State.selected) {
+        const n = State.notes.find(x => x.id === nid);
+        if (!n) continue;
+        n.categories = n.categories || [];
+        if (e.target.checked) { if (!n.categories.includes(c.id)) n.categories.push(c.id); }
+        else { n.categories = n.categories.filter(x => x !== c.id); }
+        n.last_modified = Date.now();
+        saveNoteLocal(n);
+      }
+    });
+    list.appendChild(lbl);
+  }
+  $('#bulk-cats-modal').hidden = false;
+}
+
+function closeBulkCatsModal() {
+  $('#bulk-cats-modal').hidden = true;
+}
+
 function hidePopups() {
   $$('.popup').forEach(p => {
     p.hidden = true;
     p.style.top = '';
     p.style.left = '';
   });
-  State.bulkCatMode = false;
 }
 
 // ── settings drawer ──────────────────────────────────────────────────────────
@@ -1429,11 +1445,9 @@ function bindUI() {
     exitSelectMode();
     render();
   });
-  $('#select-cats')?.addEventListener('click', (ev) => {
-    State.bulkCatMode = true;
-    renderCategoriesPopup();
-    showPopupAt('#popup-cats', ev.currentTarget);
-  });
+  $('#select-cats')?.addEventListener('click', () => openBulkCatsModal());
+  $('#bulk-cats-close')?.addEventListener('click', () => closeBulkCatsModal());
+  $('#bulk-cats-bg')?.addEventListener('click', () => closeBulkCatsModal());
   $('#select-archive')?.addEventListener('click', async () => {
     for (const id of State.selected) {
       const n = State.notes.find(x => x.id === id);
