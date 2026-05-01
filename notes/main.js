@@ -343,14 +343,113 @@ function noteCardHtml(n) {
   `;
 }
 
+function cardHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+let _lpTimer = null;
+function wireCard(card) {
+  card.addEventListener('touchstart', () => {
+    _lpTimer = setTimeout(() => { enterSelectMode(); toggleSelect(card.dataset.id); }, 550);
+  }, { passive: true });
+  card.addEventListener('touchend',  () => clearTimeout(_lpTimer));
+  card.addEventListener('touchmove', () => clearTimeout(_lpTimer));
+  card.addEventListener('click', (ev) => {
+    if (ev.target.closest('.nc-select-wrap')) {
+      ev.stopPropagation();
+      if (!State.selectMode) enterSelectMode();
+      toggleSelect(card.dataset.id);
+      return;
+    }
+    if (State.selectMode) {
+      toggleSelect(card.dataset.id);
+      if (State.selected.size === 0) exitSelectMode();
+      return;
+    }
+    if (ev.target.matches('.nc-checklist-line input[type="checkbox"]')) {
+      ev.stopPropagation();
+      const chkLine = ev.target.closest('.nc-checklist-line');
+      if (!chkLine) return;
+      const n = State.notes.find(x => x.id === card.dataset.id);
+      if (!n || !n.checklist_items) return;
+      const idx = parseInt(chkLine.dataset.idx, 10);
+      const item = n.checklist_items[idx];
+      if (!item) return;
+      item.done = !item.done;
+      n.last_modified = Date.now();
+      saveNoteLocal(n);
+      chkLine.classList.toggle('done', item.done);
+      ev.target.checked = item.done;
+      return;
+    }
+    const n = State.notes.find(x => x.id === card.dataset.id);
+    if (n) openCard(n);
+  });
+}
+
+function patchGrid(container, notes) {
+  const existing = new Map();
+  container.querySelectorAll('.note-card').forEach(el => existing.set(el.dataset.id, el));
+
+  const newIds = new Set(notes.map(n => n.id));
+  existing.forEach((el, id) => { if (!newIds.has(id)) el.remove(); });
+
+  notes.forEach((n, i) => {
+    const html = noteCardHtml(n);
+    const h = String(cardHash(html));
+    let el = existing.get(n.id);
+
+    if (el) {
+      if (el.dataset.rh !== h) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html.trim();
+        const newEl = tmp.firstElementChild;
+        newEl.dataset.rh = h;
+        newEl.style.animation = 'none';
+        el.replaceWith(newEl);
+        wireCard(newEl);
+        existing.set(n.id, newEl);
+        el = newEl;
+      }
+    } else {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html.trim();
+      el = tmp.firstElementChild;
+      el.dataset.rh = h;
+      wireCard(el);
+      existing.set(n.id, el);
+    }
+
+    // Ensure correct DOM order
+    const children = container.children;
+    if (children[i] !== el) container.insertBefore(el, children[i] || null);
+  });
+
+  // Restore attachment srcs (only on cards that are already in DOM)
+  container.querySelectorAll('img.nc-image-thumb[data-att]').forEach(async img => {
+    const id = img.dataset.att;
+    if (!id || img.getAttribute('src')) return;
+    if (State.attachUrls[id]) { img.src = State.attachUrls[id]; return; }
+    try { const url = await apiAttachmentBlobUrl(id); State.attachUrls[id] = url; img.src = url; } catch {}
+  });
+  container.querySelectorAll('audio.nc-audio[data-att]').forEach(async audio => {
+    const id = audio.dataset.att;
+    if (!id || audio.getAttribute('src')) return;
+    if (State.attachUrls[id]) { audio.src = State.attachUrls[id]; return; }
+    try { const url = await apiAttachmentBlobUrl(id); State.attachUrls[id] = url; audio.src = url; } catch {}
+  });
+}
+
 function renderGrid() {
   const notes = getCurrentNotes();
   const pinned = notes.filter(n => n.pinned);
   const others = notes.filter(n => !n.pinned);
 
   $('#pinned-section').hidden = pinned.length === 0 || State.view === 'trash';
-  $('#grid-pinned').innerHTML = pinned.map(noteCardHtml).join('');
-  $('#grid-others').innerHTML = others.map(noteCardHtml).join('');
+  patchGrid($('#grid-pinned'), pinned);
+  patchGrid($('#grid-others'), others);
 
   const titleMap = {
     all: 'Notas', archive: 'Archivo', trash: 'Papelera',
@@ -363,87 +462,6 @@ function renderGrid() {
   }
   $('#others-title').textContent = title;
   $('#empty-state').hidden = !!notes.length;
-
-  // Wire card clicks + long-press select
-  let longPressTimer = null;
-  $$('.note-card').forEach(card => {
-    // Long-press to enter select mode (mobile)
-    card.addEventListener('touchstart', () => {
-      longPressTimer = setTimeout(() => {
-        enterSelectMode();
-        toggleSelect(card.dataset.id);
-      }, 550);
-    }, { passive: true });
-    card.addEventListener('touchend',  () => clearTimeout(longPressTimer));
-    card.addEventListener('touchmove', () => clearTimeout(longPressTimer));
-
-    card.addEventListener('click', (ev) => {
-      // Multi-select checkbox or label wrap
-      if (ev.target.closest('.nc-select-wrap')) {
-        ev.stopPropagation();
-        if (!State.selectMode) enterSelectMode();
-        toggleSelect(card.dataset.id);
-        return;
-      }
-      if (State.selectMode) {
-        toggleSelect(card.dataset.id);
-        if (State.selected.size === 0) exitSelectMode();
-        return;
-      }
-      if (ev.target.matches('input[type="checkbox"].nc-checklist-line, .nc-checklist-line input[type="checkbox"]')) {
-        ev.stopPropagation();
-        const chkLine = ev.target.closest('.nc-checklist-line');
-        if (!chkLine) return;
-        const n = State.notes.find(x => x.id === card.dataset.id);
-        if (!n || !n.checklist_items) return;
-        const idx = parseInt(chkLine.dataset.idx, 10);
-        const item = n.checklist_items[idx];
-        if (!item) return;
-        item.done = !item.done;
-        n.last_modified = Date.now();
-        saveNoteLocal(n);
-        chkLine.classList.toggle('done', item.done);
-        ev.target.checked = item.done;
-        return;
-      }
-      const n = State.notes.find(x => x.id === card.dataset.id);
-      if (n) openCard(n);
-    });
-  });
-
-  // Restore selection visuals after re-render
-  if (State.selectMode && State.selected.size > 0) {
-    State.selected.forEach(id => {
-      const card = $(`.note-card[data-id="${id}"]`);
-      if (card) {
-        card.classList.add('selected');
-        const cb = card.querySelector('.nc-select-cb');
-        if (cb) cb.checked = true;
-      }
-    });
-  }
-
-  // Lazy-load attachments
-  $$('img.nc-image-thumb[data-att]').forEach(async img => {
-    const id = img.dataset.att;
-    if (!id) return;
-    if (State.attachUrls[id]) { img.src = State.attachUrls[id]; return; }
-    try {
-      const url = await apiAttachmentBlobUrl(id);
-      State.attachUrls[id] = url;
-      img.src = url;
-    } catch {}
-  });
-  $$('audio.nc-audio[data-att]').forEach(async audio => {
-    const id = audio.dataset.att;
-    if (!id) return;
-    if (State.attachUrls[id]) { audio.src = State.attachUrls[id]; return; }
-    try {
-      const url = await apiAttachmentBlobUrl(id);
-      State.attachUrls[id] = url;
-      audio.src = url;
-    } catch {}
-  });
 }
 
 function render() {
