@@ -12,19 +12,25 @@ export async function pull() {
   if (!isOnline()) return { offline: true };
   const since = (await idb.getMeta('lastSyncedAt')) || 0;
   const data = await apiSyncPull(since);
+  let changed = false;
   for (const n of data.notes || []) {
     const local = await idb.getOne('notes', n.id);
     if (!local || local.last_modified <= n.last_modified) {
       await idb.put('notes', n);
+      changed = true;
     }
   }
-  // Always replace all categories — server returns full list so deletions are visible
-  await idb.clear('categories');
-  for (const c of data.categories || []) {
-    await idb.put('categories', c);
+  const incomingCats = data.categories || [];
+  const localCats = await idb.getAll('categories');
+  const catsChanged = incomingCats.length !== localCats.length ||
+    incomingCats.some((c, i) => !localCats[i] || localCats[i].updated_at !== c.updated_at);
+  if (catsChanged) {
+    await idb.clear('categories');
+    for (const c of incomingCats) await idb.put('categories', c);
+    changed = true;
   }
   if (data.server_time) await idb.setMeta('lastSyncedAt', data.server_time);
-  return { ok: true };
+  return { ok: true, changed };
 }
 
 export async function pushQueueDebounced() {

@@ -27,6 +27,7 @@ const State = {
   view: 'all',          // 'all' | 'archive' | 'trash' | 'shared' | 'locked' | 'cat:<id>'
   search: '',
   editing: null,        // note being edited
+  editorDirty: false,   // whether note was modified while editor was open
   attachUrls: {},       // attId -> object URL
   pinPending: null,     // resolver fn while PIN modal open
   selected: new Set(),  // selected note IDs for multi-select
@@ -75,12 +76,12 @@ async function init() {
     console.warn('initial sync failed', e);
   }
 
-  // Periodic pull — skip re-render if editor is open to avoid grid flash
+  // Periodic pull — only re-render if server returned new/updated data
   setInterval(async () => {
     if (!navigator.onLine) return;
     try {
-      await pull(); await loadFromIDB();
-      if ($('#editor').hidden) render();
+      const { changed } = await pull();
+      if (changed && $('#editor').hidden) { await loadFromIDB(); render(); }
     } catch {}
   }, 30000);
 
@@ -756,10 +757,9 @@ async function commitEditor() {
   if (idx >= 0) State.notes[idx] = JSON.parse(JSON.stringify(e));
   else State.notes.unshift(JSON.parse(JSON.stringify(e)));
   await saveNoteLocal(e);
+  State.editorDirty = true;
   $('#ed-status').textContent = 'Guardado';
   updateEditorMeta();
-  // Don't re-render the grid while the editor is open — it's hidden and
-  // the card animations are jarring on every auto-save keystroke
   if ($('#editor').hidden) renderGrid();
 }
 
@@ -798,7 +798,7 @@ function closeEditor(fromPopState = false) {
     modal.classList.remove('closing');
     modal.hidden = true;
     $('#ed-checklist-list').contentEditable = 'inherit';
-    renderGrid();
+    if (State.editorDirty) { State.editorDirty = false; renderGrid(); }
   }, { once: true });
 }
 

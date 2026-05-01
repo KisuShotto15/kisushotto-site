@@ -342,9 +342,40 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   margin-bottom: 3px;
 }
 .nc-checklist-line input[type=checkbox] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
   flex: 0 0 auto;
   margin-top: 2px;
+  border: 2px solid var(--muted);
+  border-radius: 4px;
+  background: transparent;
   cursor: pointer;
+  position: relative;
+  transition: background 0.12s, border-color 0.12s;
+}
+.nc-checklist-line input[type=checkbox]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.nc-checklist-line input[type=checkbox]:checked::after {
+  content: '';
+  position: absolute;
+  left: 2px; top: -1px;
+  width: 6px; height: 10px;
+  border: 2px solid #1a1100;
+  border-top: none; border-left: none;
+  transform: rotate(45deg);
+}
+.note-card.colored .nc-checklist-line input[type=checkbox] {
+  border-color: rgba(0,0,0,0.35);
+}
+.note-card.colored .nc-checklist-line input[type=checkbox]:checked {
+  background: rgba(0,0,0,0.45);
+  border-color: rgba(0,0,0,0.45);
+}
+.note-card.colored .nc-checklist-line input[type=checkbox]:checked::after {
+  border-color: rgba(255,255,255,0.9);
 }
 .nc-checklist-line.done { color: var(--muted); text-decoration: line-through; }
 .note-card.colored .nc-checklist-line { color: rgba(0,0,0,0.8); }
