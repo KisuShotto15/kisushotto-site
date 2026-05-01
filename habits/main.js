@@ -1,12 +1,14 @@
 import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats } from './api.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let habits      = [];
-let completions = {};   // { 'YYYY-MM-DD': { habitId: value } }
-let calYear     = 0;
-let calMonth    = 0;    // 1-12
-let calDaily    = {};   // { 'YYYY-MM-DD': pct }
-let editingId   = null;
+let habits        = [];
+let completions   = {};   // { 'YYYY-MM-DD': { habitId: value } }
+let loadedMonths  = new Set();
+let calYear       = 0;
+let calMonth      = 0;    // 1-12
+let calDaily      = {};   // { 'YYYY-MM-DD': pct }
+const calDailyCache = {};  // { 'YYYY-MM': { 'YYYY-MM-DD': pct } }
+let editingId     = null;
 let reminderTimers = [];
 let selectedDate = '';  // '' = today (set in init)
 
@@ -292,8 +294,12 @@ function renderCalendar() {
 }
 
 // ── Habit interactions ────────────────────────────────────────────────────────
-window.selectDate = function(iso) {
+window.selectDate = async function(iso) {
   selectedDate = iso;
+  const m = iso.slice(0, 7);
+  if (!loadedMonths.has(m)) {
+    await loadCompletions(m);
+  }
   renderCalendar();
   renderToday();
 };
@@ -313,6 +319,7 @@ window.onHabitClick = async function(id) {
 
   try {
     await toggleComplete({ habit_id: id, date: t });
+    delete calDailyCache[t.slice(0, 7)];
     await loadCalMonth();
     renderCalendar();
     renderStats();
@@ -335,6 +342,7 @@ window.adjustCount = async function(id, delta) {
 
   try {
     await setComplete({ habit_id: id, date: t, value: newVal });
+    delete calDailyCache[t.slice(0, 7)];
     await loadCalMonth();
     renderCalendar();
     renderStats();
@@ -598,23 +606,29 @@ function setupReminders() {
 }
 
 // ── Data loading ──────────────────────────────────────────────────────────────
-async function loadCompletions() {
-  const t    = today();
-  const from = t.slice(0, 7) + '-01';
-  const to   = t.slice(0, 7) + '-31';
+async function loadCompletions(monthStr) {
+  const m = monthStr || today().slice(0, 7);
+  if (loadedMonths.has(m)) return;
+  loadedMonths.add(m);
+  const from = m + '-01';
+  const to   = m + '-31';
   const { completions: rows } = await getCompletions({ from, to });
-  completions = {};
   for (const r of rows) {
     if (!completions[r.date]) completions[r.date] = {};
     completions[r.date][r.habit_id] = r.value;
   }
 }
 
-async function loadCalMonth() {
+async function loadCalMonth(force = false) {
   const monthStr = `${calYear}-${String(calMonth).padStart(2,'0')}`;
+  if (!force && calDailyCache[monthStr] !== undefined) {
+    calDaily = calDailyCache[monthStr];
+    return;
+  }
   try {
     const { daily } = await getStats({ month: monthStr });
-    calDaily = daily || {};
+    calDailyCache[monthStr] = daily || {};
+    calDaily = calDailyCache[monthStr];
   } catch { calDaily = {}; }
 }
 
@@ -632,8 +646,19 @@ async function init() {
   calMonth     = now.getMonth() + 1;
   selectedDate = today();
 
+  completions  = {};
+  loadedMonths = new Set();
+
+  const currMonth = today().slice(0, 7);
+  const prevDate  = new Date(now.getFullYear(), now.getMonth(), 0);
+  const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
+
   try {
-    const [{ habits: h }] = await Promise.all([getHabits(), loadCompletions()]);
+    const [{ habits: h }] = await Promise.all([
+      getHabits(),
+      loadCompletions(currMonth),
+      loadCompletions(prevMonth),
+    ]);
     habits = h;
     await loadCalMonth();
   } catch (e) {
