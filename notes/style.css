@@ -480,7 +480,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   width: 18px; height: 18px;
   flex: 0 0 auto;
   margin-top: 2px;
-  border: 2px solid var(--muted);
+  border: 2px solid rgba(255,255,255,0.6);
   border-radius: 4px;
   background: transparent;
   cursor: pointer;

@@ -183,7 +183,7 @@ function getCurrentNotes() {
     if (v === 'trash')   return !!n.trashed_at;
     if (n.trashed_at)    return false;
     if (v === 'archive') return !!n.archived;
-    if (n.archived)      return false;
+    if (n.archived && !v.startsWith('cat:')) return false;
     if (v === 'shared')  return n.owner_email !== me || (n.shares?.length > 0);
     if (v === 'locked')  return !!n.locked;
     if (v.startsWith('cat:')) {
@@ -1194,22 +1194,40 @@ function renderCategoriesPopup() {
   list.innerHTML = '';
   const me = getUserEmail();
   const own = State.categories.filter(c => c.owner_email === me);
+  const bulk = State.bulkCatMode;
   for (const c of own) {
     const lbl = document.createElement('label');
-    const checked = (State.editing?.categories || []).includes(c.id);
+    const checked = bulk
+      ? [...State.selected].every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id))
+      : (State.editing?.categories || []).includes(c.id);
     lbl.innerHTML = `<input type="checkbox" data-id="${c.id}" ${checked ? 'checked' : ''}>
                      <span class="drawer-cat-dot" style="background:${c.color}"></span>
                      <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
       const id = e.target.dataset.id;
-      State.editing.categories = State.editing.categories || [];
-      if (e.target.checked) {
-        if (!State.editing.categories.includes(id)) State.editing.categories.push(id);
+      if (bulk) {
+        for (const nid of State.selected) {
+          const n = State.notes.find(x => x.id === nid);
+          if (!n) continue;
+          n.categories = n.categories || [];
+          if (e.target.checked) {
+            if (!n.categories.includes(id)) n.categories.push(id);
+          } else {
+            n.categories = n.categories.filter(x => x !== id);
+          }
+          n.last_modified = Date.now();
+          saveNoteLocal(n);
+        }
       } else {
-        State.editing.categories = State.editing.categories.filter(x => x !== id);
+        State.editing.categories = State.editing.categories || [];
+        if (e.target.checked) {
+          if (!State.editing.categories.includes(id)) State.editing.categories.push(id);
+        } else {
+          State.editing.categories = State.editing.categories.filter(x => x !== id);
+        }
+        scheduleSave();
+        updateEditorMeta();
       }
-      scheduleSave();
-      updateEditorMeta();
     });
     list.appendChild(lbl);
   }
@@ -1263,6 +1281,7 @@ function hidePopups() {
     p.style.top = '';
     p.style.left = '';
   });
+  State.bulkCatMode = false;
 }
 
 // ── settings drawer ──────────────────────────────────────────────────────────
@@ -1411,30 +1430,9 @@ function bindUI() {
     render();
   });
   $('#select-cats')?.addEventListener('click', (ev) => {
-    // For bulk categories we can just set State.editing to a dummy object 
-    // to reuse the popup, then intercept the change. But a simpler way:
-    // Just prompt for category or redirect to a modal. Since we don't have
-    // a bulk category UI built-in easily without rewriting renderCategoriesPopup,
-    // let's create a small custom popup or use prompt for now to assign by name.
-    // Actually, for now, let's just use a prompt since it's an edge case 
-    // or tell user it's implemented. Let's make a real bulk categories function.
-    const name = prompt('Escribe el nombre de la categoría para agregar a la selección:');
-    if (!name) return;
-    const cat = State.categories.find(c => c.name.toLowerCase() === name.trim().toLowerCase());
-    if (cat) {
-      for (const id of State.selected) {
-        const n = State.notes.find(x => x.id === id);
-        if (n) {
-          n.categories = n.categories || [];
-          if (!n.categories.includes(cat.id)) n.categories.push(cat.id);
-          saveNoteLocal(n);
-        }
-      }
-      exitSelectMode();
-      render();
-    } else {
-      alert('Categoría no encontrada. Por favor créala primero.');
-    }
+    State.bulkCatMode = true;
+    renderCategoriesPopup();
+    showPopupAt('#popup-cats', ev.currentTarget);
   });
   $('#select-archive')?.addEventListener('click', async () => {
     for (const id of State.selected) {
