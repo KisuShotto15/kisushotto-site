@@ -478,6 +478,18 @@ body::before {
   </div>
 </div>
 
+<!-- Confirm modal -->
+<div class="modal-bg" id="confirm-bg">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2 id="confirm-title">Confirm</h2>
+    <p id="confirm-msg" style="color: var(--muted); margin-bottom: 20px; font-size: 15px; line-height: 1.5;"></p>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="confirm-cancel">Cancel</button>
+      <button class="btn-create" id="confirm-ok" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);">Delete</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import { loadLocal, saveLocal, pull, push } from './sync.js';
 
@@ -492,6 +504,27 @@ let ctxId = null;
 const uuid = () => crypto.randomUUID();
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const $ = id => document.getElementById(id);
+
+window.customConfirm = function(msg) {
+  return new Promise(resolve => {
+    const bg = $('confirm-bg');
+    const msgEl = $('confirm-msg');
+    const okBtn = $('confirm-ok');
+    const cancelBtn = $('confirm-cancel');
+    
+    msgEl.textContent = msg;
+    bg.classList.add('on');
+    
+    function cleanup() {
+      bg.classList.remove('on');
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+    }
+    
+    okBtn.onclick = () => { cleanup(); resolve(true); };
+    cancelBtn.onclick = () => { cleanup(); resolve(false); };
+  });
+};
 
 function newNode(title) {
   return { id: uuid(), title, notes: '', status: 'todo', dueDate: null, pinned: false, collapsed: false, children: [], createdAt: Date.now() };
@@ -733,9 +766,9 @@ function ctxStat(s) {
   n.status = s; save(); render();
   if (detailId === ctxId) refreshDetail();
 }
-function ctxDel() {
+async function ctxDel() {
   closeCtx();
-  if (!confirm('Delete this item and all its sub-steps?')) return;
+  if (!(await window.customConfirm('Delete this item and all its sub-steps?'))) return;
   if (detailId === ctxId) closeDetail();
   del(ctxId); save(); render();
 }

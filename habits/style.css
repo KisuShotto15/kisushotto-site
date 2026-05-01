@@ -602,6 +602,37 @@ body::before {
 .toast.ok  { border-color: rgba(110,231,183,0.4); color: var(--mint); }
 .toast.err { border-color: rgba(252,165,165,0.4); color: var(--coral); }
 
+/* ── Confirm Modal ── */
+.confirm-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px); z-index: 400; display: flex;
+  align-items: center; justify-content: center; opacity: 0;
+  pointer-events: none; transition: opacity 0.2s;
+}
+.confirm-backdrop.open { opacity: 1; pointer-events: auto; }
+.confirm-modal {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 18px; padding: 24px; width: 320px;
+  max-width: 90vw; text-align: center;
+  transform: scale(0.95) translateY(10px); transition: transform 0.2s;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+.confirm-backdrop.open .confirm-modal { transform: none; }
+.confirm-modal h3 {
+  font-family: 'Bebas Neue', sans-serif; font-size: 24px;
+  letter-spacing: 1px; color: var(--text); margin-bottom: 8px;
+}
+.confirm-modal p {
+  font-family: 'IBM Plex Mono', monospace; font-size: 14px;
+  color: var(--muted2); margin-bottom: 24px;
+}
+.confirm-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+.confirm-actions button {
+  flex: 1;
+}
+
 /* ── Emoji picker ── */
 .ep-e {
   background: transparent; border: 1px solid transparent;

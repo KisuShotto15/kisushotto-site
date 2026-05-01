@@ -173,6 +173,22 @@
   </div>
 </div>
 
+<!-- ── CONFIRM MODAL ──────────────────────────────────────────────── -->
+<div class="modal-backdrop hidden" id="confirmModal" style="z-index: 1000;">
+  <div class="modal modal--sm">
+    <div class="modal-header">
+      <span id="confirm-title">Confirmar</span>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc" id="confirm-msg" style="margin-bottom: 20px; color: var(--text);"></p>
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button class="btn-link" id="confirm-cancel" style="padding: 8px 16px; margin: 0; flex: 1; border: 1px solid var(--border);">Cancelar</button>
+        <button class="btn-accent" id="confirm-ok" style="background: #ef4444; color: white; flex: 1;">Eliminar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="./main.js"></script>
 </body>
 </html>

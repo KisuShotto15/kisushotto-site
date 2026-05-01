@@ -259,6 +259,19 @@
 
 <div class="net-banner" id="net-banner" hidden>Sin conexión — los cambios se sincronizarán al volver</div>
 
+<!-- Custom Confirm modal -->
+<div class="modal" id="confirm-modal" hidden style="z-index: 1000;">
+  <div class="modal-bg" id="confirm-bg"></div>
+  <div class="modal-card pin-card" style="max-width: 320px;">
+    <h3 id="confirm-title">Confirmar</h3>
+    <p id="confirm-msg" class="pin-msg"></p>
+    <div class="pin-actions">
+      <button class="btn-ghost" id="confirm-cancel">Cancelar</button>
+      <button class="btn-pri select-danger" id="confirm-ok" style="background: var(--danger, #ef4444); border-color: var(--danger, #ef4444); color: white;">Aceptar</button>
+    </div>
+  </div>
+</div>
+
 <div id="lightbox" hidden>
   <div id="lightbox-bg"></div>
   <img id="lightbox-img" alt="">

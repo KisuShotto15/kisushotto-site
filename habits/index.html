@@ -250,6 +250,19 @@
 
 <button class="fab" onclick="openPanel(null)" title="Nuevo hábito">+</button>
 <div class="toast" id="toast"></div>
+
+<!-- Confirm Modal -->
+<div class="confirm-backdrop" id="confirm-bg">
+  <div class="confirm-modal">
+    <h3 id="confirm-title">Confirmar</h3>
+    <p id="confirm-msg"></p>
+    <div class="confirm-actions">
+      <button class="btn" id="confirm-cancel">Cancelar</button>
+      <button class="btn btn-danger" id="confirm-ok">Eliminar</button>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="./main.js"></script>
 </body>
 </html>

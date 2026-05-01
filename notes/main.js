@@ -20,6 +20,33 @@ import { ensurePushSubscription } from './push.js';
 const $  = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
 
+window.customConfirm = function(msg, okText = 'Eliminar', cancelText = 'Cancelar') {
+  return new Promise(resolve => {
+    const modal = document.getElementById('confirm-modal');
+    const msgEl = document.getElementById('confirm-msg');
+    const okBtn = document.getElementById('confirm-ok');
+    const cancelBtn = document.getElementById('confirm-cancel');
+    const bg = document.getElementById('confirm-bg');
+    
+    msgEl.textContent = msg;
+    okBtn.textContent = okText;
+    cancelBtn.textContent = cancelText;
+
+    modal.hidden = false;
+    
+    function cleanup() {
+      modal.hidden = true;
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+      bg.onclick = null;
+    }
+    
+    okBtn.onclick = () => { cleanup(); resolve(true); };
+    cancelBtn.onclick = () => { cleanup(); resolve(false); };
+    bg.onclick = () => { cleanup(); resolve(false); };
+  });
+};
+
 const State = {
   user: null,
   notes: [],
@@ -281,7 +308,7 @@ function renderDrawerCats() {
   root.querySelectorAll('button[data-del]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const id = e.currentTarget.dataset.del;
-      if (!confirm('¿Eliminar categoría? Las notas no se borran.')) return;
+      if (!(await window.customConfirm('¿Eliminar categoría? Las notas no se borran.'))) return;
       try { await apiDeleteCat(id); } catch {}
       State.categories = State.categories.filter(c => c.id !== id);
       await idb.del('categories', id);
@@ -745,7 +772,7 @@ function renderAttachments() {
     btn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       const id = btn.dataset.del;
-      if (!confirm('¿Eliminar adjunto?')) return;
+      if (!(await window.customConfirm('¿Eliminar adjunto?'))) return;
       try { await apiDeleteAttachment(id); } catch {}
       e.attachments = e.attachments.filter(a => a.id !== id);
       e.last_modified = Date.now();
@@ -968,7 +995,7 @@ function bindEditorActions() {
     }
   });
   $('#ed-delete').addEventListener('click', async () => {
-    if (!confirm('¿Mover a la papelera?')) return;
+    if (!(await window.customConfirm('¿Mover a la papelera?'))) return;
     const id = State.editing.id;
     State.editing.trashed_at = Date.now();
     State.editing.last_modified = Date.now();
@@ -1419,7 +1446,7 @@ function bindUI() {
     render();
   });
   $('#select-delete')?.addEventListener('click', async () => {
-    if (!confirm(`¿Mover ${State.selected.size} nota(s) a la papelera?`)) return;
+    if (!(await window.customConfirm(`¿Mover ${State.selected.size} nota(s) a la papelera?`))) return;
     for (const id of State.selected) {
       const n = State.notes.find(x => x.id === id);
       if (!n) continue;

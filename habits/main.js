@@ -457,7 +457,7 @@ window.saveHabit = async function() {
 
 window.confirmDelete = async function() {
   if (!editingId) return;
-  if (!confirm('¿Eliminar este hábito?')) return;
+  if (!(await window.customConfirm('¿Eliminar este hábito?'))) return;
   try {
     await deleteHabit(editingId);
     toast('Hábito eliminado');
@@ -725,3 +725,24 @@ document.addEventListener('keydown', e => {
 })();
 
 init();
+
+window.customConfirm = function(msg) {
+  return new Promise(resolve => {
+    const bg = document.getElementById('confirm-bg');
+    const msgEl = document.getElementById('confirm-msg');
+    const okBtn = document.getElementById('confirm-ok');
+    const cancelBtn = document.getElementById('confirm-cancel');
+    
+    msgEl.textContent = msg;
+    bg.classList.add('open');
+    
+    function cleanup() {
+      bg.classList.remove('open');
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+    }
+    
+    okBtn.onclick = () => { cleanup(); resolve(true); };
+    cancelBtn.onclick = () => { cleanup(); resolve(false); };
+  });
+};

@@ -4,6 +4,27 @@ import { searchFoods, getApiKey, setApiKey } from './search.js';
 import { FALLBACK_FOODS } from './data/fallback.js';
 
 // ── Default meals (initial state) ─────────────────────────────────────────────
+window.customConfirm = function(msg) {
+  return new Promise(resolve => {
+    const modal = document.getElementById('confirmModal');
+    const msgEl = document.getElementById('confirm-msg');
+    const okBtn = document.getElementById('confirm-ok');
+    const cancelBtn = document.getElementById('confirm-cancel');
+    
+    msgEl.textContent = msg;
+    modal.classList.remove('hidden');
+    
+    function cleanup() {
+      modal.classList.add('hidden');
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+    }
+    
+    okBtn.onclick = () => { cleanup(); resolve(true); };
+    cancelBtn.onclick = () => { cleanup(); resolve(false); };
+  });
+};
+
 const DEFAULT_MEALS = [
   { id:'m1', name:'Desayuno',  time:'07:00', ingredients:[
     { id:'i1a', name:'Huevos enteros',          fdcId:748967, amountG:200, per100g:{ calories:148, protein:12.6, fat:9.9,  carbs:0.7 } },
@@ -167,10 +188,10 @@ window._addProfile = function() {
   hydrateForm();
 };
 
-window._deleteProfile = function(id) {
+window._deleteProfile = async function(id) {
   const ids = Object.keys(S.profiles);
   if (ids.length <= 1) { alert('No puedes eliminar el único perfil.'); return; }
-  if (!confirm(`¿Eliminar el perfil "${S.profiles[id].name}"?`)) return;
+  if (!(await window.customConfirm(`¿Eliminar el perfil "${S.profiles[id].name}"?`))) return;
   delete S.profiles[id];
   if (S.activeProfile === id) S.activeProfile = Object.keys(S.profiles)[0];
   save();
@@ -217,10 +238,10 @@ window._addDay = function() {
   renderMeals();
 };
 
-window._deleteDay = function(id) {
+window._deleteDay = async function(id) {
   const p = profile();
   if (p.days.length <= 1) { alert('No puedes eliminar el único día.'); return; }
-  if (!confirm(`¿Eliminar "${p.days.find(d => d.id === id)?.label}"?`)) return;
+  if (!(await window.customConfirm(`¿Eliminar "${p.days.find(d => d.id === id)?.label}"?`))) return;
   p.days = p.days.filter(d => d.id !== id);
   if (p.activeDay === id) p.activeDay = p.days[0].id;
   save();
@@ -442,8 +463,8 @@ window._toggleMeal = function(id) {
   if (!open) { body.classList.add('open'); chevron?.classList.add('open'); }
 };
 
-window._deleteMeal = function(id) {
-  if (!confirm('¿Eliminar esta comida?')) return;
+window._deleteMeal = async function(id) {
+  if (!(await window.customConfirm('¿Eliminar esta comida?'))) return;
   day().meals = day().meals.filter(m => m.id !== id);
   save(); renderSummary(); renderMeals();
 };
