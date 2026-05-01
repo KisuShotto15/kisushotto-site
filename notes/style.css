@@ -332,8 +332,10 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 }
 .nc-pin {
   position: absolute; top: 8px; right: 8px;
-  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
 }
+.nc-pin svg { fill: #fff; }
 .nc-shared { font-size: 11px; color: var(--accent); }
 .nc-locked { font-size: 14px; }
 .nc-checklist-line {
@@ -1147,4 +1149,8 @@ body.modal-open {
 @supports (height: 100dvh) {
   .modal { height: 100dvh; }
   body { min-height: 100dvh; }
+}
+#ed-pin.active svg {
+  fill: #fff;
+  stroke: #fff;
 }

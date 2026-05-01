@@ -361,7 +361,7 @@ function noteCardHtml(n) {
   return `
     <article class="${cls}" ${style} data-id="${n.id}" onclick="">
       <label class="nc-select-wrap"><input type="checkbox" class="nc-select-cb" data-id="${n.id}" ${isSelected ? 'checked' : ''}></label>
-      ${n.pinned ? '<span class="nc-pin">📌</span>' : ''}
+      ${n.pinned ? '<span class="nc-pin"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></span>' : ''}
       ${n.locked && !isSessionUnlocked() ? '' : (n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : '')}
       ${n.locked && !isSessionUnlocked() ? '' : imgs}
       ${body}
@@ -590,7 +590,7 @@ function updateEditorMeta() {
   const e = State.editing;
   if (!e) return;
   const tags = [];
-  if (e.pinned)      tags.push('<span class="ed-meta-tag">📌 Fijada</span>');
+  // if (e.pinned)      tags.push('<span class="ed-meta-tag">📌 Fijada</span>');
   if (e.locked)      tags.push('<span class="ed-meta-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Protegida</span>');
   if (e.archived)    tags.push('<span class="ed-meta-tag">📦 Archivada</span>');
   if (e.reminder_at) tags.push(`<span class="ed-meta-tag">⏰ ${fmtDate(e.reminder_at)}</span>`);
