@@ -1478,7 +1478,7 @@ function bindUI() {
   $('#lightbox-img').addEventListener('click', closeLightbox);
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (!$('#lightbox-modal').hidden) { closeLightbox(); return; }
+    if (!$('#lightbox').hidden) { closeLightbox(); return; }
     if (!$('#bulk-cats-modal').hidden) { closeBulkCatsModal(); return; }
     if (!$('#confirm-modal').hidden) { $('#confirm-cancel').click(); return; }
     if (!$('#pin-modal').hidden) { $('#pin-cancel').click(); return; }
