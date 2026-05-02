@@ -404,7 +404,7 @@ function noteCardHtml(n) {
       `<div class="nc-checklist-line ${it.done ? 'done' : ''}" data-idx="${idx}"><input type="checkbox" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
     ).join('') + (items.length < (n.checklist_items?.length || 0) ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">+${(n.checklist_items?.length || 0) - items.length} más</div>` : '') + `</div>`;
   } else {
-    body = `<div class="nc-body">${escapeHtml(n.body || '').slice(0, 600)}</div>`;
+    body = `<div class="nc-body">${escapeHtml(htmlToText(n.body || '')).slice(0, 600)}</div>`;
   }
 
   let imgs = '';
@@ -632,7 +632,7 @@ function openEditor(n) {
   card.style.background = e.color || '';
   card.classList.toggle('colored', !!e.color);
   $('#ed-title').value = e.title || '';
-  $('#ed-body').value  = e.body || '';
+  $('#ed-body').value  = htmlToText(e.body || '');
   autoGrow($('#ed-body'));
   const isChecklist = e.type === 'checklist';
   $('#ed-body').hidden = isChecklist;
@@ -1600,6 +1600,16 @@ function bindUI() {
 // ── helpers ──────────────────────────────────────────────────────────────────
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function htmlToText(str) {
+  if (!str || !str.includes('<')) return str;
+  const div = document.createElement('div');
+  div.innerHTML = str;
+  // Insert newline after each block/list element so items don't merge
+  div.querySelectorAll('li, p, tr, div, br, h1, h2, h3, h4').forEach(el => {
+    el.after(document.createTextNode('\n'));
+  });
+  return div.textContent.replace(/\n{3,}/g, '\n\n').trim();
 }
 function escapeHtmlAttr(s) { return escapeHtml(s); }
 function fmtDate(ms) {
