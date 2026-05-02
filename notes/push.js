@@ -21,11 +21,15 @@ export async function ensurePushSubscription() {
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
     const { key } = await apiVapid();
-    if (!key) throw new Error('VAPID public key no configurada en el servidor');
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(key),
-    });
+    if (!key) throw new Error('VAPID_PUBLIC no configurada en el servidor. Ejecuta: wrangler secret put VAPID_PUBLIC');
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key),
+      });
+    } catch (e) {
+      throw new Error(`Error al suscribir al push service: ${e.message}. Verifica que VAPID_PUBLIC sea una clave EC P-256 válida en base64url.`);
+    }
   }
   await apiSetPush(sub.toJSON());
   return sub;

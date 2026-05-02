@@ -538,11 +538,25 @@ async function signVapidJwt(payload, privateJwk) {
   return `${headB64}.${payB64}.${bytesToB64url(new Uint8Array(sig))}`;
 }
 
+function vapidRawToJwk(privateB64url, publicB64url) {
+  // publicB64url = 87-char base64url of uncompressed P-256 point (0x04 || x || y)
+  const pub = b64urlToBytes(publicB64url);
+  const x = bytesToB64url(pub.slice(1, 33));
+  const y = bytesToB64url(pub.slice(33, 65));
+  return { kty: 'EC', crv: 'P-256', d: privateB64url, x, y };
+}
+
 async function sendWebPush(env, subscription, payload) {
-  if (!env.VAPID_PRIVATE_JWK || !env.VAPID_PUBLIC) return false;
+  const hasPub = !!env.VAPID_PUBLIC;
+  const hasJwk = !!env.VAPID_PRIVATE_JWK;
+  const hasRaw = !!env.VAPID_PRIVATE;
+  if (!hasPub || (!hasJwk && !hasRaw)) return false;
   let privateJwk;
-  try { privateJwk = JSON.parse(env.VAPID_PRIVATE_JWK); }
-  catch { return false; }
+  try {
+    privateJwk = hasJwk
+      ? JSON.parse(env.VAPID_PRIVATE_JWK)
+      : vapidRawToJwk(env.VAPID_PRIVATE, env.VAPID_PUBLIC);
+  } catch { return false; }
   const url = new URL(subscription.endpoint);
   const aud = `${url.protocol}//${url.host}`;
   const exp = Math.floor(Date.now() / 1000) + 12 * 3600;

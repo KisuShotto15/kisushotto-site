@@ -904,15 +904,23 @@ body.select-mode .nc-select-wrap { display: block; }
 hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
 .drawer-cat-row {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px;
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
   font-size: 14px;
 }
+.drawer-cat-row.drag-over { background: var(--card2); outline: 1px dashed var(--border-2); }
 .drawer-cat-dot {
   width: 12px; height: 12px;
   border-radius: 50%;
   flex: 0 0 auto;
 }
-.drawer-cat-row .drawer-cat-name { flex: 1; }
+.drawer-cat-row .drawer-cat-name { flex: 1; min-width: 0; }
+.cat-grip {
+  cursor: grab; color: var(--muted); flex: 0 0 auto;
+  display: flex; align-items: center;
+  touch-action: none;
+}
+.cat-grip:active { cursor: grabbing; }
 
 /* Lightbox */
 #lightbox {

@@ -245,21 +245,25 @@ function closeSidebar() {
   $('#sidebar-backdrop').style.display = 'none';
 }
 
-async function reorderCategory(id, dir) {
+async function reorderCategoryDrag(srcId, targetId) {
+  if (!srcId || !targetId || srcId === targetId) return;
   const me = getUserEmail();
   const cats = State.categories.filter(c => c.owner_email === me)
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-  const idx = cats.findIndex(c => c.id === id);
-  const swapIdx = idx + dir;
-  if (swapIdx < 0 || swapIdx >= cats.length) return;
-  [cats[idx].sort_order, cats[swapIdx].sort_order] = [swapIdx, idx];
-  cats[idx].updated_at = Date.now();
-  cats[swapIdx].updated_at = Date.now();
-  await saveCategoryLocal(cats[idx]);
-  await saveCategoryLocal(cats[swapIdx]);
+  const srcIdx = cats.findIndex(c => c.id === srcId);
+  const tgtIdx = cats.findIndex(c => c.id === targetId);
+  if (srcIdx === -1 || tgtIdx === -1) return;
+  const [moved] = cats.splice(srcIdx, 1);
+  cats.splice(tgtIdx, 0, moved);
+  const t = Date.now();
+  cats.forEach((c, i) => { c.sort_order = i; c.updated_at = t; });
+  await Promise.all(cats.map(c => saveCategoryLocal(c)));
   renderCategoriesStrip();
   renderDrawerCats();
 }
+
+const TRASH_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+const GRIP_SVG  = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>`;
 
 function renderDrawerCats() {
   const root = $('#drawer-cat-list');
@@ -268,60 +272,119 @@ function renderDrawerCats() {
   const me = getUserEmail();
   const own = State.categories.filter(c => c.owner_email === me)
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
   for (const c of own) {
     const row = document.createElement('div');
     row.className = 'drawer-cat-row';
-    row.innerHTML = `
-      <span class="drawer-cat-dot" style="background:${c.color}"></span>
-      <input class="drawer-cat-name" value="${escapeHtml(c.name)}" data-id="${c.id}">
-      <input type="color" value="${c.color}" data-id="${c.id}" data-field="color">
-      <button class="btn-icon cat-up" data-id="${c.id}" title="Subir">↑</button>
-      <button class="btn-icon cat-dn" data-id="${c.id}" title="Bajar">↓</button>
-      <button class="btn-icon" data-del="${c.id}">🗑️</button>
-    `;
-    root.appendChild(row);
-  }
-  root.querySelectorAll('.drawer-cat-name').forEach(inp => {
-    inp.addEventListener('change', async (e) => {
-      const id = e.target.dataset.id;
-      const cat = State.categories.find(c => c.id === id);
+    row.dataset.id = c.id;
+
+    const grip = document.createElement('span');
+    grip.className = 'drag-handle cat-grip';
+    grip.innerHTML = GRIP_SVG;
+
+    const dot = document.createElement('span');
+    dot.className = 'drawer-cat-dot';
+    dot.style.background = c.color;
+
+    const inp = document.createElement('input');
+    inp.className = 'drawer-cat-name';
+    inp.value = c.name;
+    inp.dataset.id = c.id;
+
+    const colorInp = document.createElement('input');
+    colorInp.type = 'color';
+    colorInp.value = c.color;
+    colorInp.dataset.id = c.id;
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-icon';
+    delBtn.dataset.del = c.id;
+    delBtn.innerHTML = TRASH_SVG;
+
+    inp.addEventListener('change', async () => {
+      const cat = State.categories.find(x => x.id === c.id);
       if (!cat) return;
-      cat.name = e.target.value.trim() || cat.name;
+      cat.name = inp.value.trim() || cat.name;
       cat.updated_at = Date.now();
       await saveCategoryLocal(cat);
-      try { await apiUpdateCat(id, { name: cat.name }); } catch {}
+      try { await apiUpdateCat(c.id, { name: cat.name }); } catch {}
       renderCategoriesStrip();
     });
-  });
-  root.querySelectorAll('input[type=color]').forEach(inp => {
-    inp.addEventListener('change', async (e) => {
-      const id = e.target.dataset.id;
-      const cat = State.categories.find(c => c.id === id);
+
+    colorInp.addEventListener('change', async () => {
+      const cat = State.categories.find(x => x.id === c.id);
       if (!cat) return;
-      cat.color = e.target.value;
+      cat.color = colorInp.value;
       cat.updated_at = Date.now();
+      dot.style.background = cat.color;
       await saveCategoryLocal(cat);
-      try { await apiUpdateCat(id, { color: cat.color }); } catch {}
+      try { await apiUpdateCat(c.id, { color: cat.color }); } catch {}
       renderCategoriesStrip();
     });
-  });
-  root.querySelectorAll('button[data-del]').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const id = e.currentTarget.dataset.del;
+
+    delBtn.addEventListener('click', async () => {
       if (!(await window.customConfirm('¿Eliminar categoría? Las notas no se borran.'))) return;
-      try { await apiDeleteCat(id); } catch {}
-      State.categories = State.categories.filter(c => c.id !== id);
-      await idb.del('categories', id);
+      try { await apiDeleteCat(c.id); } catch {}
+      State.categories = State.categories.filter(x => x.id !== c.id);
+      await idb.del('categories', c.id);
       renderCategoriesStrip();
       renderDrawerCats();
       render();
     });
+
+    row.append(grip, dot, inp, colorInp, delBtn);
+    root.appendChild(row);
+  }
+
+  // ── Mouse drag (handle-activated) ───────────────────────────────────────
+  let dragSrcId = null;
+  root.querySelectorAll('.drawer-cat-row').forEach(row => {
+    row.addEventListener('dragstart', ev => {
+      if (!row.draggable) { ev.preventDefault(); return; }
+      dragSrcId = row.dataset.id;
+      ev.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => { row.draggable = false; });
+    row.addEventListener('dragover', ev => {
+      ev.preventDefault();
+      root.querySelectorAll('.drawer-cat-row').forEach(r => r.classList.remove('drag-over'));
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop', ev => {
+      ev.preventDefault();
+      row.classList.remove('drag-over');
+      if (dragSrcId && dragSrcId !== row.dataset.id) reorderCategoryDrag(dragSrcId, row.dataset.id);
+      dragSrcId = null;
+    });
+    row.querySelector('.cat-grip')?.addEventListener('mousedown', () => { row.draggable = true; });
   });
-  root.querySelectorAll('button.cat-up').forEach(btn => {
-    btn.addEventListener('click', (e) => reorderCategory(e.currentTarget.dataset.id, -1));
-  });
-  root.querySelectorAll('button.cat-dn').forEach(btn => {
-    btn.addEventListener('click', (e) => reorderCategory(e.currentTarget.dataset.id, +1));
+
+  // ── Touch drag ──────────────────────────────────────────────────────────
+  root.querySelectorAll('.cat-grip').forEach(handle => {
+    let touchSrcId = null;
+    handle.addEventListener('touchstart', ev => {
+      touchSrcId = handle.closest('.drawer-cat-row')?.dataset.id;
+      ev.preventDefault();
+    }, { passive: false });
+    handle.addEventListener('touchmove', ev => {
+      if (!touchSrcId) return;
+      ev.preventDefault();
+      const touch = ev.touches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const targetRow = el?.closest('.drawer-cat-row');
+      root.querySelectorAll('.drawer-cat-row').forEach(r => r.classList.remove('drag-over'));
+      if (targetRow && targetRow.dataset.id !== touchSrcId) targetRow.classList.add('drag-over');
+    }, { passive: false });
+    handle.addEventListener('touchend', ev => {
+      if (!touchSrcId) return;
+      const touch = ev.changedTouches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const targetRow = el?.closest('.drawer-cat-row');
+      root.querySelectorAll('.drawer-cat-row').forEach(r => r.classList.remove('drag-over'));
+      if (targetRow && targetRow.dataset.id !== touchSrcId) reorderCategoryDrag(touchSrcId, targetRow.dataset.id);
+      touchSrcId = null;
+    }, { passive: false });
   });
 }
 
