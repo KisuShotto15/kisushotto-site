@@ -1431,6 +1431,15 @@ function bindDrawer() {
 
   // current user
   $('#drawer-user').textContent = getUserEmail() || '—';
+
+  $('#drawer-force-sync')?.addEventListener('click', async () => {
+    await idb.setMeta('lastSyncedAt', 0);
+    const { changed } = await pull();
+    State.notes = await idb.getAll('notes');
+    State.categories = await idb.getAll('categories');
+    render();
+    alert(`Sincronización completa: ${State.notes.length} notas cargadas.`);
+  });
 }
 
 // ── search + nav ─────────────────────────────────────────────────────────────
