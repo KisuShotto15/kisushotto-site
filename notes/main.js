@@ -182,10 +182,10 @@ function getCurrentNotes() {
   return State.notes.filter(n => {
     if (v === 'trash')   return !!n.trashed_at;
     if (n.trashed_at)    return false;
-    if (v === 'archive') return !!n.archived;
+    if (v === 'archive') return !!n.archived && !n.locked;
+    if (v === 'locked')  return !!n.locked;
     if (n.archived && !v.startsWith('cat:')) return false;
     if (v === 'shared')  return n.owner_email !== me || (n.shares?.length > 0);
-    if (v === 'locked')  return !!n.locked;
     if (v.startsWith('cat:')) {
       const id = v.slice(4);
       return (n.categories || []).includes(id);
