@@ -450,6 +450,22 @@ input:focus {
   .sc-v { font-size: 18px; }
   .sc-l { font-size: 12px; }
 }
+
+/* ── Buy Section ─────────────────────────────────────── */
+.buy-section-row { display: flex; gap: 10px; align-items: stretch; }
+.buy-ob-wrap { flex: 0 0 63%; background: var(--surf-2); border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+.buy-spread-card { flex: 1; background: var(--surf-1); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.bs-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.bs-lbl { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; white-space: nowrap; }
+.bs-val { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); }
+.bs-val.bs-red { color: #E24B4A; }
+.bs-val-sm { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.ob-side-title.buyads { background: linear-gradient(90deg,rgba(240,185,11,.1),transparent); color: var(--gold); }
+.ob-row.best-buy-asc { background: linear-gradient(90deg,rgba(240,185,11,.07),transparent); }
+@media (max-width: 640px) {
+  .buy-section-row { flex-direction: column; }
+  .buy-ob-wrap { flex: none; width: 100%; }
+}
 </style>
 </head>
 <body>
@@ -545,6 +561,7 @@ input:focus {
         <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="100000" step="100000"></div>
         <div class="cfg-row"><span>Compra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
         <div class="cfg-row"><span>Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
+        <div class="cfg-row"><span>Secc. Compra — mínimo (VES)</span><input type="number" id="cfg-buy-amount" value="2000000" min="100000" step="100000"></div>
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
           <button class="btn btn-gold" style="flex:1" onclick="saveConfig()">Guardar</button>
           <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
@@ -561,6 +578,33 @@ input:focus {
           <div id="label-small" class="ob-side-title smallbuyers">📉 Compra</div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
           <div id="ob-small"></div>
+        </div>
+      </div>
+
+      <!-- Sección Compra (BUY) -->
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div class="ptitle" style="margin-bottom:10px">Sección Compra (Binance Buy)</div>
+        <div class="buy-section-row">
+          <div class="buy-ob-wrap">
+            <div class="ob-side-title buyads">🟡 Comprar USDT</div>
+            <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
+            <div id="ob-buy"></div>
+          </div>
+          <div class="buy-spread-card">
+            <div style="font-size:13px;font-weight:700;color:var(--text-2);margin-bottom:2px">Spread Compra</div>
+            <div class="bs-row"><span class="bs-lbl">BRUTO</span><span class="bs-val" id="bs-pct">—</span></div>
+            <div class="bs-row" id="bs-net-wrap" style="display:none"><span class="bs-lbl" id="bs-net-lbl">NETO</span><span class="bs-val" id="bs-net">—</span></div>
+            <div class="bs-row"><span class="bs-lbl">SPREAD (Bs)</span><span class="bs-val-sm" id="bs-abs">—</span></div>
+            <div class="bs-row" id="bs-abs-net-wrap" style="display:none"><span class="bs-lbl">NETO (Bs)</span><span class="bs-val-sm" id="bs-abs-net">—</span></div>
+            <div style="margin-top:4px;border-top:1px solid var(--border);padding-top:6px">
+              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Ref. Venta</div>
+              <div id="bs-sell-ref" style="font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums">—</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Ref. Compra</div>
+              <div id="bs-buy-ref" style="font-size:13px;color:var(--gold);font-variant-numeric:tabular-nums">—</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -680,7 +724,8 @@ var CFG = {
   weaknessThr: 0.5,
   mayAmount:   2000000,  // Monto a filtrar en sección Mayoristas (VES)
   smallAmount: 59999,    // Monto a filtrar en sección Ref. Compra (VES)
-  commission:  0.0       // Comisión Binance por anuncio (%)
+  commission:  0.0,      // Comisión Binance por anuncio (%)
+  buyAmount:   2000000   // Monto mínimo para Sección Compra (VES)
 };
 
 var PROXY = 'https://kisushotto-site.vercel.app/api/p2p-search';
@@ -693,6 +738,7 @@ var ST = {
   allAds: [],
   mayoristas: [],
   smallAds: [],
+  buyAds: [],
   priceHist: [],   // {ts, price}
   alerts: [],
   lastFetch: null
@@ -754,17 +800,59 @@ function mapAds(raw) {
   }).sort(function(a, b) { return b.price - a.price; });
 }
 
+// ── Sección Compra (BUY) ─────────────────────────────
+async function fetchBuySection() {
+  async function onePage(page) {
+    var body = {
+      asset: 'USDT', fiat: 'VES', merchantCheck: false,
+      page: page, rows: 20, tradeType: 'BUY',
+      transAmount: CFG.buyAmount, payTypes: ['BancoDeVenezuela']
+    };
+    var r = await fetch(PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Secret': VERCEL_SECRET },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var d = await r.json();
+    if (d.error) throw new Error(d.error);
+    return d.data || [];
+  }
+  var results = await Promise.allSettled([onePage(1), onePage(2)]);
+  var raw = results
+    .filter(function(r) { return r.status === 'fulfilled'; })
+    .flatMap(function(r) { return r.value; });
+  return raw.map(function(item) {
+    return {
+      price:   parseFloat(item.adv.price),
+      minVES:  parseFloat(item.adv.minSingleTransAmount),
+      maxVES:  parseFloat(item.adv.maxSingleTransAmount),
+      avail:   parseFloat(item.adv.tradableQuantity),
+      merchant: item.advertiser.nickName,
+      orders:  item.advertiser.monthOrderCount,
+      comp:    Math.round((item.advertiser.monthFinishRate || 0) * 100),
+      badges:  item.advertiser.badges,
+      vipLevel: item.advertiser.vipLevel
+    };
+  }).filter(function(a) {
+    return a.badges && a.badges.length > 0 && a.maxVES >= CFG.buyAmount;
+  }).sort(function(a, b) { return a.price - b.price; })  // ascendente: más barato primero
+    .slice(0, 3);
+}
+
 // ── Ciclo principal ───────────────────────────────────
 async function fetchOnce() {
   document.getElementById('last-update').textContent = 'Cargando...';
   try {
     var results = await Promise.all([
       fetchTier(CFG.mayAmount, 2),
-      fetchTier(CFG.smallAmount, 5)
+      fetchTier(CFG.smallAmount, 5),
+      fetchBuySection()
     ]);
 
     ST.mayoristas = mapAds(results[0]);
     ST.smallAds   = mapAds(results[1]);
+    ST.buyAds     = results[2];
 
     ST.allAds     = ST.mayoristas; // para compatibilidad con historial
 
@@ -822,6 +910,8 @@ function renderAll() {
   renderStats();
   renderOB('ob-may',   ST.mayoristas, 'best');
   renderOB('ob-small', ST.smallAds,   'best-buy');
+  renderBuySection(ST.buyAds);
+  renderBuySpread();
   updateSessionStats();
 }
 
@@ -983,6 +1073,94 @@ function renderOB(id, ads, bestCls) {
     }
   }
   wrap.innerHTML = rows;
+}
+
+// ── Buy Section Render ────────────────────────────────
+function renderBuySection(ads) {
+  var wrap = document.getElementById('ob-buy');
+  if (!wrap) return;
+  var rows = '';
+  for (var i = 0; i < 3; i++) {
+    var ad = ads[i];
+    if (ad) {
+      var cls = 'ob-row' + (i === 0 ? ' best-buy-asc' : '');
+      var rnk = '<span class="rank ' + (i === 0 ? 'n1' : '') + '">' + (i + 1) + '</span>';
+      var lims = fmtM(ad.minVES) + '–' + fmtM(ad.maxVES);
+      var lvlColor = ['','#CD7F32','#A8B8C8','#F0B90B'][ad.vipLevel] || '#F0B90B';
+      var badgeHtml = '';
+      if (ad.badges && ad.badges[0]) {
+        if (ad.badges[0] === 'Block') {
+          badgeHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 100 100" style="margin-left:5px;flex-shrink:0;vertical-align:middle" title="Block vip'+ad.vipLevel+'"><defs><linearGradient id="dg-buy" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#c084fc"/><stop offset="100%" style="stop-color:#7c3aed"/></linearGradient></defs><polygon points="50,5 90,30 90,70 50,95 10,70 10,30" fill="url(#dg-buy)" stroke="#a855f7" stroke-width="3"/><polyline points="32,52 44,64 68,38" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        } else {
+          badgeHtml = '<span style="margin-left:5px;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:'+lvlColor+';color:#000;font-size:13px;font-weight:900;flex-shrink:0;line-height:1" title="PRO vip'+ad.vipLevel+'">✓</span>';
+        }
+      }
+      var availStr = ad.avail >= 1000
+        ? (ad.avail / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
+        : Math.round(ad.avail).toLocaleString('es-VE');
+      rows += '<div class="' + cls + '">' + rnk +
+        '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
+        '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
+        '<span class="price-c y">' + fmt(ad.price) + '</span>' +
+        '<span class="lim-c">' + lims + '</span>' +
+      '</div>';
+    } else {
+      rows += '<div class="ob-row" style="opacity:0.18">' +
+        '<span class="rank">' + (i + 1) + '</span>' +
+        '<span class="merch" style="color:var(--text-3)">—</span>' +
+        '<span class="lim-c">—</span>' +
+        '<span class="price-c">—</span>' +
+        '<span class="lim-c">—</span>' +
+      '</div>';
+    }
+  }
+  wrap.innerHTML = rows;
+}
+
+function renderBuySpread() {
+  var sellPrice = ST.mayoristas[0] ? ST.mayoristas[0].price : null;
+  var buyPrice  = ST.buyAds[0]     ? ST.buyAds[0].price     : null;
+
+  var pctEl      = document.getElementById('bs-pct');
+  var netWrap    = document.getElementById('bs-net-wrap');
+  var netEl      = document.getElementById('bs-net');
+  var netLbl     = document.getElementById('bs-net-lbl');
+  var absEl      = document.getElementById('bs-abs');
+  var absNetWrap = document.getElementById('bs-abs-net-wrap');
+  var absNetEl   = document.getElementById('bs-abs-net');
+  var sellRef    = document.getElementById('bs-sell-ref');
+  var buyRef     = document.getElementById('bs-buy-ref');
+  if (!pctEl) return;
+
+  if (sellRef) sellRef.textContent = sellPrice ? fmt(sellPrice) + ' Bs' : '—';
+  if (buyRef)  buyRef.textContent  = buyPrice  ? fmt(buyPrice)  + ' Bs' : '—';
+
+  if (!sellPrice || !buyPrice) {
+    pctEl.textContent = '—'; pctEl.className = 'bs-val';
+    absEl.textContent = '—';
+    netWrap.style.display = 'none'; absNetWrap.style.display = 'none';
+    return;
+  }
+
+  var spreadAbs    = sellPrice - buyPrice;
+  var spreadPct    = (sellPrice - buyPrice) / sellPrice * 100;
+  var spreadNetPct = spreadPct - CFG.commission;
+  var spreadNetAbs = spreadAbs - (sellPrice * CFG.commission / 100);
+  var isGood = spreadNetPct >= CFG.spreadThr;
+
+  pctEl.textContent = spreadPct.toFixed(3) + '%';
+  pctEl.className   = 'bs-val' + (isGood ? '' : ' bs-red');
+  absEl.textContent = fmt(spreadAbs) + ' Bs';
+
+  if (CFG.commission > 0) {
+    netWrap.style.display = ''; absNetWrap.style.display = '';
+    netEl.textContent     = spreadNetPct.toFixed(3) + '%';
+    netEl.style.color     = isGood ? 'var(--gold)' : '#E24B4A';
+    netLbl.textContent    = 'NETO (−' + CFG.commission + '%)';
+    absNetEl.textContent  = fmt(spreadNetAbs) + ' Bs';
+  } else {
+    netWrap.style.display = 'none'; absNetWrap.style.display = 'none';
+  }
 }
 
 // ── Alertas ───────────────────────────────────────────
@@ -1685,6 +1863,7 @@ function saveConfig() {
   CFG.mayAmount   = parseFloat(document.getElementById('cfg-may-amount').value)   || 2000000;
   CFG.smallAmount = parseFloat(document.getElementById('cfg-small-amount').value) || 59999;
   CFG.commission  = parseFloat(document.getElementById('cfg-commission').value)   || 0;
+  CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   if (ST.running) { clearInterval(ST.timer); ST.timer = setInterval(fetchOnce, CFG.interval * 1000); }
   toast('Guardado');
@@ -1702,6 +1881,7 @@ function loadConfig() {
     document.getElementById('cfg-may-amount').value   = CFG.mayAmount;
     document.getElementById('cfg-small-amount').value = CFG.smallAmount;
     document.getElementById('cfg-commission').value   = CFG.commission;
+    document.getElementById('cfg-buy-amount').value   = CFG.buyAmount;
   } catch(e) {}
 }
 
@@ -1722,6 +1902,8 @@ function toast(msg) {
 loadConfig(); loadTgConfig(); loadBotConfig(); updNotifSt(); renderAlerts();
 renderOB('ob-may',   [], 'best');
 renderOB('ob-small', [], 'best-buy');
+renderBuySection([]);
+renderBuySpread();
 </script>
 </body>
 </html>
