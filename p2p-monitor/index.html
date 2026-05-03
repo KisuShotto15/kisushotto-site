@@ -586,23 +586,24 @@ input:focus {
         <div class="ptitle" style="margin-bottom:10px">Sección Compra (Binance Buy)</div>
         <div class="buy-section-row">
           <div class="buy-ob-wrap">
-            <div class="ob-side-title buyads">🟡 Comprar USDT</div>
+            <div class="ob-side-title buyads">🟡 Vender en el verde</div>
             <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
             <div id="ob-buy"></div>
           </div>
           <div class="buy-spread-card">
-            <div style="font-size:13px;font-weight:700;color:var(--text-2);margin-bottom:2px">Spread Compra</div>
-            <div class="bs-row"><span class="bs-lbl">BRUTO</span><span class="bs-val" id="bs-pct">—</span></div>
-            <div class="bs-row" id="bs-net-wrap" style="display:none"><span class="bs-lbl" id="bs-net-lbl">NETO</span><span class="bs-val" id="bs-net">—</span></div>
-            <div class="bs-row"><span class="bs-lbl">SPREAD (Bs)</span><span class="bs-val-sm" id="bs-abs">—</span></div>
-            <div class="bs-row" id="bs-abs-net-wrap" style="display:none"><span class="bs-lbl">NETO (Bs)</span><span class="bs-val-sm" id="bs-abs-net">—</span></div>
-            <div style="margin-top:4px;border-top:1px solid var(--border);padding-top:6px">
-              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Ref. Venta</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text-2);margin-bottom:4px">Spread Venta</div>
+            <div class="bs-row"><span class="bs-lbl">NETO</span><span class="bs-val" id="bs-net">—</span></div>
+            <div style="margin-top:4px;border-top:1px solid var(--border);padding-top:8px">
+              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Precio venta efectivo</div>
+              <div id="bs-sell-eff" style="font-size:18px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</div>
+            </div>
+            <div style="margin-top:6px">
+              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Ref. verde (merchant #1)</div>
               <div id="bs-sell-ref" style="font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums">—</div>
             </div>
             <div>
-              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Ref. Compra</div>
-              <div id="bs-buy-ref" style="font-size:13px;color:var(--gold);font-variant-numeric:tabular-nums">—</div>
+              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Ref. compradores (#1)</div>
+              <div id="bs-buy-ref" style="font-size:13px;color:var(--text-3);font-variant-numeric:tabular-nums">—</div>
             </div>
           </div>
         </div>
@@ -1118,49 +1119,41 @@ function renderBuySection(ads) {
 }
 
 function renderBuySpread() {
-  var sellPrice = ST.mayoristas[0] ? ST.mayoristas[0].price : null;
-  var buyPrice  = ST.buyAds[0]     ? ST.buyAds[0].price     : null;
+  // sellPrice = precio del verde (merchant vende USDT, usuario compra del usuario aquí)
+  // buyPrice  = precio del libro de compradores (lo que pagarían por USDT si hubiera que reponerlo)
+  var sellPrice = ST.buyAds[0]     ? ST.buyAds[0].price     : null; // Keria23: precio verde
+  var buyPrice  = ST.mayoristas[0] ? ST.mayoristas[0].price : null; // Jorgecamacaro: precio comprador
 
-  var pctEl      = document.getElementById('bs-pct');
-  var netWrap    = document.getElementById('bs-net-wrap');
-  var netEl      = document.getElementById('bs-net');
-  var netLbl     = document.getElementById('bs-net-lbl');
-  var absEl      = document.getElementById('bs-abs');
-  var absNetWrap = document.getElementById('bs-abs-net-wrap');
-  var absNetEl   = document.getElementById('bs-abs-net');
-  var sellRef    = document.getElementById('bs-sell-ref');
-  var buyRef     = document.getElementById('bs-buy-ref');
-  if (!pctEl) return;
-
-  if (sellRef) sellRef.textContent = sellPrice ? fmt(sellPrice) + ' Bs' : '—';
-  if (buyRef)  buyRef.textContent  = buyPrice  ? fmt(buyPrice)  + ' Bs' : '—';
+  var netEl    = document.getElementById('bs-net');
+  var sellEff  = document.getElementById('bs-sell-eff');
+  var sellRef  = document.getElementById('bs-sell-ref');
+  var buyRef   = document.getElementById('bs-buy-ref');
+  if (!netEl) return;
 
   if (!sellPrice || !buyPrice) {
-    pctEl.textContent = '—'; pctEl.className = 'bs-val';
-    absEl.textContent = '—';
-    netWrap.style.display = 'none'; absNetWrap.style.display = 'none';
+    netEl.textContent   = '—'; netEl.className = 'bs-val';
+    if (sellEff) sellEff.textContent = '—';
+    if (sellRef) sellRef.textContent = '—';
+    if (buyRef)  buyRef.textContent  = '—';
     return;
   }
 
-  var spreadAbs    = sellPrice - buyPrice;
-  var spreadPct    = (sellPrice - buyPrice) / sellPrice * 100;
-  var spreadNetPct = spreadPct - CFG.commission;
-  var spreadNetAbs = spreadAbs - (sellPrice * CFG.commission / 100);
-  var isGood = spreadNetPct >= CFG.spreadThr;
+  var c = CFG.commission / 100;
+  // Vendo en el verde: recibo sellPrice, Binance cobra c → recibo efectivo = sellPrice × (1−c)
+  // Compro via libro: costo buyPrice, Binance cobra c → costo efectivo = buyPrice × (1+c)
+  var effectiveSell = sellPrice * (1 - c);
+  var effectiveBuy  = buyPrice  * (1 + c);
+  var netAbs        = effectiveSell - effectiveBuy;
+  var netPct        = netAbs / sellPrice * 100;
+  var isGood        = netPct >= CFG.spreadThr;
 
-  pctEl.textContent = spreadPct.toFixed(3) + '%';
-  pctEl.className   = 'bs-val' + (isGood ? '' : ' bs-red');
-  absEl.textContent = fmt(spreadAbs) + ' Bs';
+  netEl.textContent = netPct.toFixed(3) + '%';
+  netEl.className   = 'bs-val' + (isGood ? '' : ' bs-red');
+  netEl.style.color = '';
 
-  if (CFG.commission > 0) {
-    netWrap.style.display = ''; absNetWrap.style.display = '';
-    netEl.textContent     = spreadNetPct.toFixed(3) + '%';
-    netEl.style.color     = isGood ? 'var(--gold)' : '#E24B4A';
-    netLbl.textContent    = 'NETO (−' + CFG.commission + '%)';
-    absNetEl.textContent  = fmt(spreadNetAbs) + ' Bs';
-  } else {
-    netWrap.style.display = 'none'; absNetWrap.style.display = 'none';
-  }
+  if (sellEff) sellEff.textContent = fmt(effectiveSell) + ' Bs';
+  if (sellRef) sellRef.textContent = fmt(sellPrice) + ' Bs';
+  if (buyRef)  buyRef.textContent  = fmt(buyPrice)  + ' Bs';
 }
 
 // ── Alertas ───────────────────────────────────────────
