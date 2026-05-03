@@ -23,6 +23,8 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+* { -webkit-tap-highlight-color: transparent; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -351,7 +353,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   margin-top: 2px;
   border: 2px solid var(--muted);
   border-radius: 4px;
-  background: transparent;
+  background: var(--card);
   cursor: pointer;
   position: relative;
   transition: background 0.12s, border-color 0.12s;
@@ -484,7 +486,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   margin-top: 2px;
   border: 2px solid rgba(255,255,255,0.6);
   border-radius: 4px;
-  background: transparent;
+  background: var(--card);
   cursor: pointer;
   position: relative;
   user-select: none; -webkit-user-select: none;

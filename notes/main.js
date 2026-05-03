@@ -242,7 +242,47 @@ function openSidebar() {
 
 function closeSidebar() {
   document.body.classList.remove('sidebar-open');
+  const sidebar = $('#sidebar-nav-wrapper') || $('.sidebar');
+  if (sidebar) sidebar.style.transform = '';
   $('#sidebar-backdrop').style.display = 'none';
+}
+
+function initSidebarSwipe() {
+  const sidebar = $('.sidebar');
+  if (!sidebar) return;
+  let startX = 0, startY = 0, dragging = false;
+  const THRESHOLD = 60;
+
+  sidebar.addEventListener('touchstart', e => {
+    if (!document.body.classList.contains('sidebar-open')) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    dragging = false;
+  }, { passive: true });
+
+  sidebar.addEventListener('touchmove', e => {
+    if (!document.body.classList.contains('sidebar-open')) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = Math.abs(e.touches[0].clientY - startY);
+    if (!dragging && dy > 10) return; // vertical scroll, ignore
+    if (dx < 0) {
+      dragging = true;
+      sidebar.style.transition = 'none';
+      sidebar.style.transform = `translateX(${dx}px)`;
+    }
+  }, { passive: true });
+
+  sidebar.addEventListener('touchend', e => {
+    if (!dragging) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    sidebar.style.transition = '';
+    if (dx < -THRESHOLD) {
+      closeSidebar();
+    } else {
+      sidebar.style.transform = 'translateX(0)';
+    }
+    dragging = false;
+  }, { passive: true });
 }
 
 async function reorderCategoryDrag(srcId, targetId) {
@@ -658,7 +698,6 @@ function updateEditorMeta() {
   if (e.archived)    tags.push('<span class="ed-meta-tag">📦 Archivada</span>');
   if (e.reminder_at) tags.push(`<span class="ed-meta-tag">⏰ ${fmtDate(e.reminder_at)}</span>`);
   if (e.shares?.length) tags.push(`<span class="ed-meta-tag shared">👥 ${e.shares.length} compartido(s)</span>`);
-  if (e.color)       tags.push(`<span class="ed-meta-tag" style="background:${e.color};color:var(--text)">🎨</span>`);
   for (const cid of (e.categories || [])) {
     const c = State.categories.find(x => x.id === cid);
     if (c) tags.push(`<span class="ed-meta-tag" style="border-color:${c.color}">${escapeHtml(c.name)}</span>`);
@@ -1497,6 +1536,7 @@ function bindUI() {
 
   bindEditorActions();
   bindDrawer();
+  initSidebarSwipe();
 
   // Selection bar
   $('#select-cancel')?.addEventListener('click', () => exitSelectMode());
