@@ -591,19 +591,19 @@ input:focus {
             <div id="ob-buy"></div>
           </div>
           <div class="buy-spread-card">
-            <div style="font-size:13px;font-weight:700;color:var(--text-2);margin-bottom:4px">Spread Venta</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text-2);margin-bottom:6px">Spread Venta</div>
             <div class="bs-row"><span class="bs-lbl">NETO</span><span class="bs-val" id="bs-net">—</span></div>
-            <div style="margin-top:4px;border-top:1px solid var(--border);padding-top:8px">
-              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Precio venta efectivo</div>
-              <div id="bs-sell-eff" style="font-size:18px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</div>
+            <div class="bs-row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+              <span class="bs-lbl">Precio efectivo</span>
+              <span id="bs-sell-eff" style="font-size:15px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span>
             </div>
-            <div style="margin-top:6px">
-              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Ref. verde (merchant #1)</div>
-              <div id="bs-sell-ref" style="font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums">—</div>
+            <div class="bs-row" style="margin-top:4px">
+              <span class="bs-lbl">Ref. verde</span>
+              <span id="bs-sell-ref" style="font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums">—</span>
             </div>
-            <div>
-              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Ref. compradores (#1)</div>
-              <div id="bs-buy-ref" style="font-size:13px;color:var(--text-3);font-variant-numeric:tabular-nums">—</div>
+            <div class="bs-row">
+              <span class="bs-lbl">Ref. rojo</span>
+              <span id="bs-buy-ref" style="font-size:13px;color:var(--text-3);font-variant-numeric:tabular-nums">—</span>
             </div>
           </div>
         </div>
@@ -1122,7 +1122,7 @@ function renderBuySpread() {
   // sellPrice = precio del verde (merchant vende USDT, usuario compra del usuario aquí)
   // buyPrice  = precio del libro de compradores (lo que pagarían por USDT si hubiera que reponerlo)
   var sellPrice = ST.buyAds[0]     ? ST.buyAds[0].price     : null; // Keria23: precio verde
-  var buyPrice  = ST.mayoristas[0] ? ST.mayoristas[0].price : null; // Jorgecamacaro: precio comprador
+  var buyPrice  = ST.smallAds[0]   ? ST.smallAds[0].price   : null; // sección rojo (compra 30k): precio referencia
 
   var netEl    = document.getElementById('bs-net');
   var sellEff  = document.getElementById('bs-sell-eff');
