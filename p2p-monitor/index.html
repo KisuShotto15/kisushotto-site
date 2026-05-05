@@ -451,6 +451,68 @@ input:focus {
   .sc-l { font-size: 12px; }
 }
 
+/* ── Decision Engine Hero ────────────────────────────── */
+.de-hero {
+  background: var(--surf-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  position: relative;
+  overflow: hidden;
+  transition: all .25s;
+}
+.de-hero::before {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:4px;
+  background: var(--text-3); transition: background .25s;
+}
+.de-hero.de-green-strong::before { background: var(--green); box-shadow: 0 0 14px var(--green); }
+.de-hero.de-green::before        { background: var(--green); }
+.de-hero.de-amber::before        { background: var(--gold); }
+.de-hero.de-gray::before         { background: var(--text-3); }
+.de-hero.de-red::before          { background: var(--red); animation: pulse 1.4s infinite; }
+.de-hero.de-green-strong { background: linear-gradient(90deg, var(--green-d), var(--surf-1) 60%); }
+.de-hero.de-green        { background: linear-gradient(90deg, var(--green-d), var(--surf-1) 70%); }
+.de-hero.de-amber        { background: linear-gradient(90deg, var(--gold-d),  var(--surf-1) 70%); }
+.de-hero.de-red          { background: linear-gradient(90deg, var(--red-d),   var(--surf-1) 70%); }
+.de-score {
+  font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums;
+  line-height: 1; min-width: 76px; text-align: center;
+}
+.de-score.de-c-green-strong, .de-score.de-c-green { color: var(--green); }
+.de-score.de-c-amber { color: var(--gold); }
+.de-score.de-c-red   { color: var(--red);  }
+.de-score.de-c-gray  { color: var(--text-3); }
+.de-mid { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1; }
+.de-label {
+  font-size: 17px; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.de-label.de-c-green-strong, .de-label.de-c-green { color: var(--green); }
+.de-label.de-c-amber { color: var(--gold); }
+.de-label.de-c-red   { color: var(--red);  }
+.de-label.de-c-gray  { color: var(--text-2); }
+.de-reasons { font-size: 14px; color: var(--text-2); line-height: 1.4; }
+.de-reasons .de-pos { color: var(--green); }
+.de-reasons .de-neg { color: var(--red);   }
+.de-reasons .de-sep { color: var(--text-3); margin: 0 6px; }
+.de-rebuy {
+  display:flex; flex-direction:column; align-items:flex-end; gap:2px;
+  padding-left: 14px; border-left: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.de-rebuy-lbl { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:.06em; font-weight:600; }
+.de-rebuy-val { font-size:18px; font-weight:700; color:var(--text); }
+.de-rebuy-conf { font-size:12px; color:var(--text-3); }
+.de-conflicts { font-size:12px; color:var(--gold); margin-top:2px; }
+@media(max-width:900px) {
+  .de-hero { flex-direction:column; align-items:stretch; gap:10px; }
+  .de-rebuy { border-left:none; border-top:1px solid var(--border); padding-left:0; padding-top:8px; align-items:flex-start; }
+  .de-score { text-align:left; }
+}
+
 /* ── Buy Section ─────────────────────────────────────── */
 .buy-section-row { display: flex; gap: 10px; align-items: stretch; }
 .buy-ob-wrap { flex: 0 0 63%; background: var(--surf-2); border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
@@ -502,6 +564,57 @@ input:focus {
 <div class="layout">
   <!-- LEFT col -->
   <div class="col">
+
+    <!-- Decision Engine Hero -->
+    <div class="de-hero de-gray" id="de-hero" style="display:none">
+      <div class="de-score de-c-gray" id="de-score">—</div>
+      <div class="de-mid">
+        <div class="de-label de-c-gray" id="de-label">ESPERANDO</div>
+        <div class="de-reasons" id="de-reasons">Acumulando snapshots…</div>
+        <div class="de-conflicts" id="de-conflicts" style="display:none"></div>
+      </div>
+      <div class="de-rebuy" id="de-rebuy" style="display:none">
+        <div class="de-rebuy-lbl">Rebuy ETA</div>
+        <div class="de-rebuy-val" id="de-rebuy-val">—</div>
+        <div class="de-rebuy-conf" id="de-rebuy-conf">—</div>
+      </div>
+      <button class="btn btn-gold btn-sm" id="de-mark-sold" onclick="openSellModal()" style="display:none;margin-left:8px">✓ Vendí</button>
+    </div>
+
+    <!-- Sell modal -->
+    <div id="sell-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.65);align-items:center;justify-content:center">
+      <div style="background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:18px;width:340px;max-width:90vw">
+        <div style="font-size:16px;font-weight:700;color:var(--gold);margin-bottom:12px">Registrar venta</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <label style="font-size:13px;color:var(--text-2)">Cantidad USDT
+            <input type="number" id="sell-qty" step="1" min="1" style="width:100%;margin-top:4px" placeholder="500"></label>
+          <label style="font-size:13px;color:var(--text-2)">Precio venta (Bs/USDT)
+            <input type="number" id="sell-price" step="0.01" style="width:100%;margin-top:4px"></label>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+          <button class="btn btn-sm" onclick="closeSellModal()">Cancelar</button>
+          <button class="btn btn-gold btn-sm" onclick="confirmSell()">Registrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rebuy modal -->
+    <div id="rebuy-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.65);align-items:center;justify-content:center">
+      <div style="background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:18px;width:340px;max-width:90vw">
+        <div style="font-size:16px;font-weight:700;color:var(--gold);margin-bottom:8px">Recompra trade #<span id="rebuy-tid">—</span></div>
+        <div style="font-size:13px;color:var(--text-3);margin-bottom:12px" id="rebuy-ctx">—</div>
+        <label style="font-size:13px;color:var(--text-2)">Precio recompra (Bs/USDT)
+          <input type="number" id="rebuy-price" step="0.01" style="width:100%;margin-top:4px"></label>
+        <div id="rebuy-preview" style="font-size:13px;color:var(--text-2);margin-top:8px"></div>
+        <div style="display:flex;gap:8px;margin-top:14px;justify-content:space-between">
+          <button class="btn btn-sm" onclick="abandonCurrentTrade()">Abandonar</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm" onclick="closeRebuyModal()">Más tarde</button>
+            <button class="btn btn-gold btn-sm" onclick="confirmRebuy()">Registrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Spread hero (now inside left col) -->
     <div class="spread-hero-full" id="spread-hero" style="display:flex;flex-direction:row;align-items:stretch;gap:0">
@@ -713,9 +826,39 @@ input:focus {
       </div>
     </div>
 
+    <!-- Calibration / Learner -->
+    <div class="panel" id="cal-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="ptitle" style="margin:0">Calibración</div>
+        <button class="btn btn-sm" onclick="refreshCalibration()" title="Actualizar">⟳</button>
+      </div>
+      <div class="session-grid" style="grid-template-columns:repeat(2,1fr)">
+        <div class="sess-item"><div class="sc-l">Trades</div><div class="sc-v" id="cal-n">0</div></div>
+        <div class="sess-item"><div class="sc-l">Win rate</div><div class="sc-v g" id="cal-wr">—</div></div>
+        <div class="sess-item"><div class="sc-l">Net medio</div><div class="sc-v y" id="cal-net">—</div></div>
+        <div class="sess-item"><div class="sc-l">Min recompra</div><div class="sc-v b" id="cal-min">—</div></div>
+      </div>
+      <div id="cal-open" style="margin-top:10px;font-size:13px;color:var(--text-3)"></div>
+      <div id="cal-corr" style="margin-top:10px;font-size:12px;color:var(--text-2);display:none">
+        <div style="font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;font-size:11px;margin-bottom:6px">Correlaciones (feature → win)</div>
+        <div id="cal-corr-list"></div>
+      </div>
+      <div id="cal-suggestions" style="margin-top:10px;display:none">
+        <div style="font-weight:700;color:var(--gold);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Sugerencias de pesos</div>
+        <div id="cal-sug-list" style="font-size:13px;color:var(--text-2)"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-sm" onclick="runBacktest()">Backtest</button>
+          <button class="btn btn-gold btn-sm" onclick="applyLearnerSuggestions()">Aplicar</button>
+        </div>
+        <div id="cal-backtest" style="margin-top:8px;font-size:12px;color:var(--text-2);display:none"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
+<script src="decision-engine.js"></script>
+<script src="decision-journal.js"></script>
 <script>
 // ── Config ────────────────────────────────────────────
 var CFG = {
@@ -730,6 +873,7 @@ var CFG = {
 };
 
 var PROXY = 'https://kisushotto-site.vercel.app/api/p2p-search';
+var HIST_API = 'https://kisushotto-site.vercel.app/api/p2p-history';
 var VERCEL_SECRET = 'ptk-2025-kisu';
 
 // ── Estado ───────────────────────────────────────────
@@ -742,7 +886,10 @@ var ST = {
   buyAds: [],
   priceHist: [],   // {ts, price}
   alerts: [],
-  lastFetch: null
+  lastFetch: null,
+  deHistory: [],   // Decision Engine snapshots (ring buffer)
+  deDecision: null,
+  deFastTimer: null
 };
 
 var COOLDOWN = {};
@@ -866,6 +1013,7 @@ async function fetchOnce() {
 
     ST.lastFetch = new Date();
     renderAll();
+    runDecisionEngine();
     checkAlerts();
     var emptyNote = (!ST.mayoristas.length && !ST.smallAds.length) ? ' — sin anuncios en rango' : '';
     document.getElementById('last-update').textContent = 'Actualizado ' + ST.lastFetch.toLocaleTimeString('es-VE') + emptyNote;
@@ -1892,7 +2040,294 @@ function toast(msg) {
   document.body.appendChild(t); setTimeout(function() { t.remove(); }, 2500);
 }
 
+// ── Decision Engine integration ──────────────────────
+ST.deLastFeatures = null;
+function runDecisionEngine() {
+  if (!window.DE) return;
+  DE.pushSnapshot(ST.deHistory, ST);
+  var F = DE.computeFeatures(ST, ST.deHistory);
+  var S = DE.score(F);
+  ST.deDecision = DE.decide(F, S);
+  ST.deLastFeatures = F;
+  renderDecisionHero(ST.deDecision, F);
+  if (window.DJ && ST.deDecision && ST.deDecision.score != null) {
+    DJ.recordDecision(ST.deDecision, F);
+  }
+  enrichRebuyDisplay();
+  checkOpenTradesPrompt();
+}
+
+// ── Sell modal ───────────────────────────────────────
+function openSellModal() {
+  if (!ST.deDecision) return;
+  var qtyEl = document.getElementById('sell-qty');
+  var prEl  = document.getElementById('sell-price');
+  if (!qtyEl.value) qtyEl.value = '';
+  prEl.value = ST.mayoristas[0] ? ST.mayoristas[0].price.toFixed(2) : '';
+  document.getElementById('sell-modal').style.display = 'flex';
+  setTimeout(function(){ qtyEl.focus(); }, 50);
+}
+function closeSellModal() {
+  document.getElementById('sell-modal').style.display = 'none';
+}
+function confirmSell() {
+  var qty   = parseFloat(document.getElementById('sell-qty').value);
+  var price = parseFloat(document.getElementById('sell-price').value);
+  if (!qty || qty <= 0 || !price || price <= 0) { toast('Cantidad/precio inválido'); return; }
+  if (!window.DJ) { toast('Journal no disponible'); return; }
+  DJ.createTrade(ST.deDecision, ST.deLastFeatures, qty, price).then(function(id) {
+    closeSellModal();
+    toast('Trade #' + id + ' registrado');
+    refreshCalibration();
+  });
+}
+
+// ── Rebuy modal ──────────────────────────────────────
+var CURRENT_REBUY_TRADE = null;
+function checkOpenTradesPrompt() {
+  if (!window.DJ) return;
+  if (document.getElementById('rebuy-modal').style.display === 'flex') return;
+  DJ.openTrades().then(function(open) {
+    var now = Date.now();
+    var due = open.find(function(t) {
+      return (now - t.ts) >= 5 * 60000 && (!t.promptedAt || (now - t.promptedAt) >= 5 * 60000);
+    });
+    if (due) openRebuyModal(due);
+  });
+}
+function openRebuyModal(trade) {
+  CURRENT_REBUY_TRADE = trade;
+  document.getElementById('rebuy-tid').textContent = trade.id;
+  var elapsed = Math.round((Date.now() - trade.ts) / 60000);
+  var ctx = 'Vendiste ' + trade.qty + ' USDT @ ' + trade.sellPrice.toFixed(2) + ' Bs · hace ' + elapsed + ' min';
+  document.getElementById('rebuy-ctx').textContent = ctx;
+  var bestBuy = ST.buyAds && ST.buyAds[0] ? ST.buyAds[0].price : null;
+  var prEl = document.getElementById('rebuy-price');
+  prEl.value = bestBuy ? bestBuy.toFixed(2) : '';
+  prEl.oninput = updateRebuyPreview;
+  updateRebuyPreview();
+  document.getElementById('rebuy-modal').style.display = 'flex';
+  DJ.updateTrade(trade.id, { promptedAt: Date.now() });
+}
+function updateRebuyPreview() {
+  if (!CURRENT_REBUY_TRADE) return;
+  var price = parseFloat(document.getElementById('rebuy-price').value);
+  var prev = document.getElementById('rebuy-preview');
+  if (!price || price <= 0) { prev.textContent = ''; return; }
+  var t = CURRENT_REBUY_TRADE;
+  var grossPct = (t.sellPrice - price) / price;
+  var netPct = grossPct - DJ.FEE_BUY;
+  var color = netPct >= DJ.SUCCESS_NET ? 'var(--green)' : netPct >= 0 ? 'var(--gold)' : 'var(--red)';
+  var lbl = netPct >= DJ.SUCCESS_NET ? '✓ WIN' : netPct >= 0 ? '~ NEUTRO' : '✗ LOSS';
+  prev.innerHTML = '<span style="color:'+color+';font-weight:700">'+lbl+'</span> · neto '
+                 + (netPct*100).toFixed(2) + '% · profit '
+                 + (t.qty * t.sellPrice * (grossPct - DJ.FEE_BUY)).toFixed(0) + ' Bs';
+}
+function closeRebuyModal() {
+  document.getElementById('rebuy-modal').style.display = 'none';
+  CURRENT_REBUY_TRADE = null;
+}
+function confirmRebuy() {
+  if (!CURRENT_REBUY_TRADE) return;
+  var price = parseFloat(document.getElementById('rebuy-price').value);
+  if (!price || price <= 0) { toast('Precio inválido'); return; }
+  DJ.recordRebuy(CURRENT_REBUY_TRADE.id, price).then(function(success) {
+    closeRebuyModal();
+    toast('Trade cerrado: ' + success);
+    refreshCalibration();
+  });
+}
+function abandonCurrentTrade() {
+  if (!CURRENT_REBUY_TRADE) return;
+  DJ.abandonTrade(CURRENT_REBUY_TRADE.id, 'user_abandon').then(function() {
+    closeRebuyModal();
+    toast('Trade abandonado');
+    refreshCalibration();
+  });
+}
+
+// ── Calibration panel ────────────────────────────────
+function refreshCalibration() {
+  if (!window.DJ) return;
+  DJ.stats().then(function(st) {
+    document.getElementById('cal-n').textContent = st.n;
+    document.getElementById('cal-wr').textContent = st.winRate == null ? '—' : (st.winRate*100).toFixed(0) + '%';
+    document.getElementById('cal-net').textContent = st.n ? (st.avgNetPct*100).toFixed(2) + '%' : '—';
+    document.getElementById('cal-min').textContent = st.n ? st.avgMinutesToRebuy.toFixed(1) + 'm' : '—';
+    var openEl = document.getElementById('cal-open');
+    openEl.textContent = st.openCount > 0 ? st.openCount + ' trade(s) abiertos' : '';
+
+    var corrEl  = document.getElementById('cal-corr');
+    var listEl  = document.getElementById('cal-corr-list');
+    var keys = Object.keys(st.correlations || {});
+    if (keys.length) {
+      corrEl.style.display = '';
+      listEl.innerHTML = keys
+        .sort(function(a,b){ return Math.abs(st.correlations[b]) - Math.abs(st.correlations[a]); })
+        .map(function(k){
+          var v = st.correlations[k];
+          var c = v > 0.15 ? 'var(--green)' : v < -0.15 ? 'var(--red)' : 'var(--text-3)';
+          return '<div style="display:flex;justify-content:space-between;padding:2px 0">'
+               + '<span>'+k+'</span><span style="color:'+c+';font-variant-numeric:tabular-nums">'+v.toFixed(2)+'</span></div>';
+        }).join('');
+    } else corrEl.style.display = 'none';
+
+    var sugEl = document.getElementById('cal-suggestions');
+    var sugList = document.getElementById('cal-sug-list');
+    if (st.suggestions && st.suggestions.length) {
+      sugEl.style.display = '';
+      sugList.innerHTML = st.suggestions.map(function(s){
+        var arrow = s.suggested > s.current ? '↑' : '↓';
+        return '<div>'+s.feature+': '+s.current+' → <strong>'+s.suggested+'</strong> '+arrow+' (IR '+s.ir.toFixed(2)+')</div>';
+      }).join('');
+      window._lastSuggestions = st.suggestions;
+    } else { sugEl.style.display = 'none'; window._lastSuggestions = null; }
+  });
+}
+function applyLearnerSuggestions() {
+  if (!window._lastSuggestions || !window.DJ) return;
+  DJ.applySuggestions(window._lastSuggestions);
+  toast('Pesos actualizados');
+  refreshCalibration();
+}
+
+function runBacktest() {
+  if (!window.DJ || !window.DE) return;
+  var box = document.getElementById('cal-backtest');
+  box.style.display = '';
+  box.textContent = 'Calculando…';
+
+  var current = JSON.parse(JSON.stringify(DE.WEIGHTS));
+  var proposed = JSON.parse(JSON.stringify(DE.WEIGHTS));
+  if (window._lastSuggestions) {
+    window._lastSuggestions.forEach(function (s) { proposed[s.weightKey] = s.suggested; });
+  }
+
+  Promise.all([DJ.backtest(null), DJ.backtest(proposed)]).then(function (res) {
+    var a = res[0], b = res[1];
+    if (!a || a.insufficient) { box.innerHTML = 'Necesitas ≥5 trades cerrados (' + (a ? a.n : 0) + ').'; return; }
+    var same = JSON.stringify(current) === JSON.stringify(proposed);
+    var html = '<div style="font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;font-size:11px;margin-bottom:4px">Backtest (n=' + a.n + ')</div>';
+    html += '<div>Win rate global: <strong>' + (a.winRate * 100).toFixed(0) + '%</strong> · top-Q: <strong>' + (a.topQuartileWinRate * 100).toFixed(0) + '%</strong></div>';
+    html += '<div>Score↔Net: Pearson ' + a.scoreNetPearson.toFixed(2) + ' · Spearman ' + a.scoreNetSpearman.toFixed(2) + '</div>';
+    html += '<div style="margin-top:4px;color:var(--text-3);font-size:11px">Buckets win-rate:';
+    Object.keys(a.bucketWinRate).forEach(function (k) {
+      var v = a.bucketWinRate[k];
+      html += ' ' + k + ':' + (v == null ? '—' : Math.round(v * 100) + '%');
+    });
+    html += '</div>';
+    if (!same) {
+      var d = ((b.topQuartileWinRate - a.topQuartileWinRate) * 100);
+      var color = d > 0 ? 'var(--green)' : d < 0 ? 'var(--red)' : 'var(--text-3)';
+      html += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">Con sugerencias: top-Q win <strong style="color:'+color+'">' + (b.topQuartileWinRate * 100).toFixed(0) + '%</strong> (Δ ' + (d >= 0 ? '+' : '') + d.toFixed(0) + 'pp)</div>';
+    }
+    box.innerHTML = html;
+  });
+}
+
+// Probabilistic rebuy ETA: enrich hero rebuy line with historical median when available
+function enrichRebuyDisplay() {
+  if (!window.DJ || !ST.deDecision || !ST.deDecision.rebuy) return;
+  DJ.rebuyDistribution().then(function (d) {
+    if (!d) return;
+    var r = ST.deDecision.rebuy;
+    var p5  = d.probs.find(function(x){ return x.k === 5; });
+    var p12 = d.probs.find(function(x){ return x.k === 12; });
+    var note = 'mediana hist ' + d.medianMin.toFixed(0) + 'm';
+    if (p5 && p12) {
+      note = 'P(≤5m)=' + Math.round(p5.p*100) + '% · P(≤12m)=' + Math.round(p12.p*100) + '%';
+    }
+    var conf = document.getElementById('de-rebuy-conf');
+    if (conf) conf.textContent = note;
+  });
+}
+
+function fastEventTick() {
+  if (!window.DE || !ST.deHistory.length) return;
+  var last = ST.deHistory[ST.deHistory.length - 1];
+  if (Date.now() - last.ts > 90000) return;
+  // recompute lightly with current ST as "live" snapshot, no push
+  var ephemeral = ST.deHistory.slice();
+  ephemeral.push(DE.buildSnapshot(ST));
+  var F = DE.computeFeatures(ST, ephemeral);
+  if (!F || F.degraded) return;
+  if (F.events.rapidDeplete || F.events.priceDropTop) {
+    var S = DE.score(F);
+    var D = DE.decide(F, S);
+    if (!ST.deDecision || D.label !== ST.deDecision.label || Math.abs((D.score||0) - (ST.deDecision.score||0)) >= 8) {
+      ST.deDecision = D;
+      renderDecisionHero(D, F);
+      addAlert('info', 'Decision update', D.label + ' · score ' + (D.score == null ? '—' : D.score));
+    }
+  }
+}
+
+function renderDecisionHero(D, F) {
+  var hero = document.getElementById('de-hero');
+  if (!D) { hero.style.display = 'none'; return; }
+  hero.style.display = 'flex';
+  var color = D.color || 'gray';
+  hero.className = 'de-hero de-' + color;
+
+  var scoreEl = document.getElementById('de-score');
+  scoreEl.textContent = (D.score == null ? '—' : D.score);
+  scoreEl.className = 'de-score de-c-' + color;
+
+  var lblEl = document.getElementById('de-label');
+  lblEl.textContent = D.label;
+  lblEl.className = 'de-label de-c-' + color;
+
+  var rEl = document.getElementById('de-reasons');
+  var posHtml = (D.reasons.pos || []).map(function(s){ return '<span class="de-pos">+ ' + esc(s) + '</span>'; }).join('<span class="de-sep">·</span>');
+  var negHtml = (D.reasons.neg || []).map(function(s){ return '<span class="de-neg">− ' + esc(s) + '</span>'; }).join('<span class="de-sep">·</span>');
+  var html = '';
+  if (posHtml) html += posHtml;
+  if (posHtml && negHtml) html += '<span class="de-sep">|</span>';
+  if (negHtml) html += negHtml;
+  rEl.innerHTML = html || '<span style="color:var(--text-3)">Sin señales</span>';
+
+  var cEl = document.getElementById('de-conflicts');
+  if (D.conflicts && D.conflicts.length) {
+    cEl.style.display = '';
+    cEl.textContent = '⚠ ' + D.conflicts.join(' · ');
+  } else cEl.style.display = 'none';
+
+  var rb = document.getElementById('de-rebuy');
+  if (D.rebuy) {
+    rb.style.display = '';
+    document.getElementById('de-rebuy-val').textContent = D.rebuy.min + '–' + D.rebuy.max + ' min';
+    document.getElementById('de-rebuy-conf').textContent = 'conf ' + Math.round(D.rebuy.conf * 100) + '%';
+  } else rb.style.display = 'none';
+
+  var btn = document.getElementById('de-mark-sold');
+  var sellable = D.label === 'STRONG SELL' || D.label === 'SELL' || D.label === 'PARTIAL SELL';
+  btn.style.display = sellable ? '' : 'none';
+}
+
+// ── Server-side history hydration ────────────────────
+async function hydrateServerHistory() {
+  if (ST.deHistory.length > 0) return;
+  try {
+    var from = Date.now() - 60 * 60 * 1000; // last 60 min
+    var r = await fetch(HIST_API + '?from=' + from + '&limit=60', {
+      headers: { 'X-Api-Secret': VERCEL_SECRET }
+    });
+    if (!r.ok) return;
+    var d = await r.json();
+    if (!d.snapshots || !d.snapshots.length) return;
+    ST.deHistory = d.snapshots.slice(-30); // engine cap
+    document.getElementById('last-update').textContent =
+      'Hidratado ' + d.snapshots.length + ' snaps del servidor';
+  } catch (e) { /* silent: client falls back to local-only history */ }
+}
+
+// Start fast event tick + open trades poll
+if (!ST.deFastTimer) ST.deFastTimer = setInterval(fastEventTick, 15000);
+setInterval(checkOpenTradesPrompt, 60000);
+hydrateServerHistory();
+
 loadConfig(); loadTgConfig(); loadBotConfig(); updNotifSt(); renderAlerts();
+if (window.DJ) refreshCalibration();
 renderOB('ob-may',   [], 'best');
 renderOB('ob-small', [], 'best-buy');
 renderBuySection([]);

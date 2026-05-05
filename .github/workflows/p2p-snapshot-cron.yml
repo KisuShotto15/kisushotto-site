@@ -1,0 +1,33 @@
+name: P2P Snapshot Cron
+
+# GitHub Actions cron is best-effort and can drift several minutes
+# during peak load. For tighter cadence, switch to a Pro Vercel cron.
+on:
+  schedule:
+    - cron: '*/2 * * * *'   # every 2 minutes
+  workflow_dispatch:        # allow manual trigger
+
+concurrency:
+  group: p2p-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Trigger snapshot
+        env:
+          ENDPOINT: ${{ secrets.SNAPSHOT_ENDPOINT }}   # e.g. https://kisushotto-site.vercel.app/api/p2p-snapshot
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$ENDPOINT" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Missing SNAPSHOT_ENDPOINT or CRON_SECRET secret" >&2
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/out -w '%{http_code}' \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -X POST "$ENDPOINT")
+          echo "HTTP $code"
+          cat /tmp/out
+          [ "$code" = "200" ] || exit 1
