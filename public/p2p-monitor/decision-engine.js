@@ -82,10 +82,9 @@
   // ── Filters ─────────────────────────────────────────
   function isMajor(a, rank) {
     return rank < 10
-      && a.avail   >= 20000
-      && a.minVES  >= 2000000
+      && a.avail  >= 20000
+      && a.minVES >= 2000000
       && a.badges && a.badges.length > 0
-      && (a.comp == null || a.comp >= 95)
       && !isFlicker(a.merchant);
   }
 
