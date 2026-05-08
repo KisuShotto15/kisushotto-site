@@ -127,13 +127,16 @@ async function loadFromIDB() {
   State.notes.sort((a, b) => (b.last_modified || 0) - (a.last_modified || 0));
 }
 
+let _lightboxClosedAt = 0;
 function openLightbox(src) {
+  if (Date.now() - _lightboxClosedAt < 450) return;
   $('#lightbox-img').src = src;
   $('#lightbox').hidden = false;
   history.pushState({ modal: 'lightbox' }, '');
 }
 function closeLightbox(fromPopState = false) {
   if ($('#lightbox').hidden) return;
+  _lightboxClosedAt = Date.now();
   $('#lightbox').hidden = true;
   if (!fromPopState && history.state?.modal === 'lightbox') history.back();
 }
