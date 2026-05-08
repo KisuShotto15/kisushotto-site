@@ -130,8 +130,13 @@ async function loadFromIDB() {
 function openLightbox(src) {
   $('#lightbox-img').src = src;
   $('#lightbox').hidden = false;
+  history.pushState({ modal: 'lightbox' }, '');
 }
-function closeLightbox() { $('#lightbox').hidden = true; }
+function closeLightbox(fromPopState = false) {
+  if ($('#lightbox').hidden) return;
+  $('#lightbox').hidden = true;
+  if (!fromPopState && history.state?.modal === 'lightbox') history.back();
+}
 
 function autoGrow(el) {
   el.style.height = 'auto';
@@ -449,8 +454,8 @@ function noteCardHtml(n) {
 
   let imgs = '';
   if (n.attachments?.length) {
-    const firstImg = n.attachments.find(a => a.type === 'image');
-    if (firstImg) imgs += `<img class="nc-image-thumb" data-att="${firstImg.id}" alt="" loading="lazy">`;
+    const imgAtts = n.attachments.filter(a => a.type === 'image');
+    if (imgAtts.length) imgs += `<div class="nc-imgs-row">${imgAtts.map(a => `<img class="nc-image-thumb" data-att="${a.id}" alt="" loading="lazy">`).join('')}</div>`;
     const audios = n.attachments.filter(a => a.type === 'audio');
     for (const a of audios) imgs += `<audio class="nc-audio" controls preload="none" data-att="${a.id}"></audio>`;
   }
@@ -1260,16 +1265,18 @@ function bindEditorActions() {
       if (!e) return;
       syncChecklistFromDom();
       e.checklist_items = e.checklist_items || [];
-      e.checklist_items.push({ id: crypto.randomUUID(), text: '', done: false, order: e.checklist_items.length });
+      const curRow = ev.target.closest?.('.ed-check-row');
+      const curId = curRow?.dataset.id;
+      const curIdx = curId ? e.checklist_items.findIndex(x => x.id === curId) : -1;
+      const newItem = { id: crypto.randomUUID(), text: '', done: false, order: 0 };
+      if (curIdx >= 0) e.checklist_items.splice(curIdx + 1, 0, newItem);
+      else e.checklist_items.push(newItem);
+      e.checklist_items.forEach((it, i) => { it.order = i; });
       renderChecklist();
       scheduleSave();
       const rows = cl.querySelectorAll('.ed-check-text');
-      if (rows.length > 0) {
-        const lastRow = rows[rows.length - 1];
-        lastRow.focus();
-        placeCursorAtEnd(lastRow);
-        setTimeout(() => lastRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
-      }
+      const target = rows[Math.max(0, curIdx + 1)];
+      if (target) { target.focus(); placeCursorAtEnd(target); setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50); }
       return;
     }
     if (ev.key === 'Backspace' && ev.target.matches('.ed-check-text')) {
@@ -1288,6 +1295,25 @@ function bindEditorActions() {
       const target = newRows[Math.max(0, idx - 1)];
       if (target) { target.focus(); placeCursorAtEnd(target); }
     }
+  });
+  // Mobile: beforeinput fires more reliably than keydown for backspace on virtual keyboard
+  cl.addEventListener('beforeinput', (ev) => {
+    if (ev.inputType !== 'deleteContentBackward') return;
+    if (!ev.target.matches('.ed-check-text')) return;
+    if (ev.target.textContent !== '') return;
+    ev.preventDefault();
+    const e = State.editing;
+    if (!e) return;
+    const row = ev.target.closest('.ed-check-row');
+    const id = row?.dataset.id;
+    if (!id) return;
+    const idx = (e.checklist_items || []).findIndex(x => x.id === id);
+    e.checklist_items = (e.checklist_items || []).filter(x => x.id !== id);
+    renderChecklist();
+    scheduleSave();
+    const newRows = cl.querySelectorAll('.ed-check-text');
+    const target = newRows[Math.max(0, idx - 1)];
+    if (target) { target.focus(); placeCursorAtEnd(target); }
   });
 }
 
@@ -1619,6 +1645,10 @@ function bindUI() {
   // ── Android back button / browser back gesture ───────────────────────────
   // Check what's actually open in DOM (not history state) to avoid re-open bugs
   window.addEventListener('popstate', () => {
+    if (!$('#lightbox').hidden) {
+      closeLightbox(true);
+      return;
+    }
     if (!$('#editor').hidden) {
       closeEditor(true);
       return;
