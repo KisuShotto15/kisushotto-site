@@ -1,0 +1,16 @@
+{
+  "name": "KS Trade Journal",
+  "short_name": "Trade",
+  "id": "/trade-journal/",
+  "start_url": "/trade-journal/",
+  "scope": "/trade-journal/",
+  "display": "standalone",
+  "background_color": "#111c26",
+  "theme_color": "#111c26",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/images/tj-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

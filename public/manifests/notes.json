@@ -1,0 +1,16 @@
+{
+  "name": "KS Notas",
+  "short_name": "Notas",
+  "id": "/notes/",
+  "start_url": "/notes/",
+  "scope": "/notes/",
+  "display": "standalone",
+  "background_color": "#111114",
+  "theme_color": "#111114",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/images/notes-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

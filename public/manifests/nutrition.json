@@ -1,0 +1,16 @@
+{
+  "name": "KS Nutrition",
+  "short_name": "Nutrition",
+  "id": "/nutrition/",
+  "start_url": "/nutrition/",
+  "scope": "/nutrition/",
+  "display": "standalone",
+  "background_color": "#1a1a1f",
+  "theme_color": "#1a1a1f",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/images/nutrition-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
