@@ -686,7 +686,7 @@ function renderFoodResult(food) {
   </div>`;
 }
 
-window._selectFood = async function(encoded) {
+window._selectFood = function(encoded) {
   try { pendingFood = JSON.parse(decodeURIComponent(encoded)); }
   catch { return; }
   document.getElementById('amountWrap').classList.remove('hidden');
@@ -695,16 +695,6 @@ window._selectFood = async function(encoded) {
   document.getElementById('ingredientAmount').focus();
   document.getElementById('searchResults').innerHTML = '';
   document.getElementById('searchInput').value = '';
-  // Foundation foods often return 0 macros in search; fetch full detail to fix
-  if (pendingFood.fdcId && pendingFood.per100g && pendingFood.per100g.calories === 0) {
-    const key = getApiKey(S.activeProfile);
-    if (key) {
-      try {
-        const detail = await getFoodDetail(pendingFood.fdcId, key);
-        pendingFood.per100g = detail;
-      } catch { /* keep search data */ }
-    }
-  }
 };
 
 window._confirmIngredient = function() {
