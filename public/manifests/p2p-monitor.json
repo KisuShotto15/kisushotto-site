@@ -1,7 +1,7 @@
 {
   "name": "KS P2P Monitor",
   "short_name": "P2P",
-  "id": "/p2p-monitor/",
+  "id": "ks-p2p-monitor",
   "start_url": "/p2p-monitor/",
   "scope": "/p2p-monitor/",
   "display": "standalone",

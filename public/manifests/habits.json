@@ -1,7 +1,7 @@
 {
   "name": "KS Habits",
   "short_name": "Habits",
-  "id": "/habits/",
+  "id": "ks-habits",
   "start_url": "/habits/",
   "scope": "/habits/",
   "display": "standalone",

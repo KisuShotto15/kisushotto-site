@@ -1,7 +1,7 @@
 {
   "name": "KS Trade Journal",
   "short_name": "Trade",
-  "id": "/trade-journal/",
+  "id": "ks-trade-journal",
   "start_url": "/trade-journal/",
   "scope": "/trade-journal/",
   "display": "standalone",

@@ -1,7 +1,7 @@
 {
   "name": "KS Notas",
   "short_name": "Notas",
-  "id": "/notes/",
+  "id": "ks-notes",
   "start_url": "/notes/",
   "scope": "/notes/",
   "display": "standalone",

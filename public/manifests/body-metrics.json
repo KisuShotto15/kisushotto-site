@@ -1,7 +1,7 @@
 {
   "name": "KS Body Metrics",
   "short_name": "Body",
-  "id": "/body-metrics/",
+  "id": "ks-body-metrics",
   "start_url": "/body-metrics/",
   "scope": "/body-metrics/",
   "display": "standalone",

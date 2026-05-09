@@ -1,7 +1,7 @@
 {
   "name": "KS Nutrition",
   "short_name": "Nutrition",
-  "id": "/nutrition/",
+  "id": "ks-nutrition",
   "start_url": "/nutrition/",
   "scope": "/nutrition/",
   "display": "standalone",

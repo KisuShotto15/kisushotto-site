@@ -1,7 +1,7 @@
 {
   "name": "KS Goal Planner",
   "short_name": "Planner",
-  "id": "/planner/",
+  "id": "ks-planner",
   "start_url": "/planner/",
   "scope": "/planner/",
   "display": "standalone",
