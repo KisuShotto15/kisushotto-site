@@ -1,6 +1,14 @@
 /sw.js
   Cache-Control: no-cache, no-store, must-revalidate
 
+/manifest.json
+  Content-Type: application/manifest+json
+  Cache-Control: no-cache, must-revalidate
+
+/manifests/*.json
+  Content-Type: application/manifest+json
+  Cache-Control: no-cache, must-revalidate
+
 /images/*.svg
   Cache-Control: no-cache, must-revalidate
 
