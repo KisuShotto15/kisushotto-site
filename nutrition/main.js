@@ -697,7 +697,7 @@ window._selectFood = async function(encoded) {
   document.getElementById('searchInput').value = '';
   // Foundation foods often return 0 macros in search; fetch full detail to fix
   if (pendingFood.fdcId && pendingFood.per100g && pendingFood.per100g.calories === 0) {
-    const key = getApiKey(S.activeProfileId);
+    const key = getApiKey(S.activeProfile);
     if (key) {
       try {
         const detail = await getFoodDetail(pendingFood.fdcId, key);
