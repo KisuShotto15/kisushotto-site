@@ -10,151 +10,219 @@
 <link rel="icon" type="image/svg+xml" href="/images/nutrition-favicon.svg">
 <link rel="manifest" href="/manifests/nutrition.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./style.css">
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 </head>
 <body>
-<div class="container">
+<div class="app">
 
-  <!-- HEADER -->
-  <div class="header">
-    <a href="/" class="back-link">← hub</a>
-    <div class="header-label">// protocolo diario</div>
-    <h1>PERFECT<br><span>NUTRITION</span></h1>
-  </div>
+  <!-- ── TOP BAR ──────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <a href="#" class="back-link">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      <span>hub</span>
+    </a>
+    <div class="topbar-spacer"></div>
+    <div class="profiles-bar" id="profilesBar"></div>
+    <button class="ghost-btn" onclick="window._openApiKeyModal()" title="USDA API key">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      <span>API key</span>
+    </button>
+  </header>
 
-  <!-- PROFILE BAR -->
-  <div class="profiles-bar" id="profilesBar"></div>
-
-  <!-- TDEE PANEL -->
-  <div class="tdee-panel">
-    <div class="tdee-toggle" onclick="window._toggleTDEE()">
-      <div class="section-title" style="margin:0">calculadora tdee</div>
-      <span class="chevron" id="tdeeChevron">▼</span>
-    </div>
-    <div class="tdee-body" id="tdeeBody" style="display:none">
-      <div class="tdee-form">
-        <div class="tdee-row">
-          <div class="tdee-field">
-            <label>Peso (kg)</label>
-            <input type="number" id="tdeeWeight" placeholder="75" oninput="window._updateTDEE()">
-          </div>
-          <div class="tdee-field">
-            <label>Altura (cm)</label>
-            <input type="number" id="tdeeHeight" placeholder="175" oninput="window._updateTDEE()">
-          </div>
-          <div class="tdee-field">
-            <label>Edad</label>
-            <input type="number" id="tdeeAge" placeholder="25" oninput="window._updateTDEE()">
-          </div>
-          <div class="tdee-field">
-            <label>Género</label>
-            <select id="tdeeGender" onchange="window._updateTDEE()">
-              <option value="male">Hombre</option>
-              <option value="female">Mujer</option>
-            </select>
-          </div>
-        </div>
-        <div class="tdee-row">
-          <div class="tdee-field tdee-field--wide">
-            <label>Nivel de actividad</label>
-            <select id="tdeeActivity" onchange="window._updateTDEE()">
-              <option value="1.2">Sedentario (sin ejercicio)</option>
-              <option value="1.375">Ligero (1–3 días/sem)</option>
-              <option value="1.55">Moderado (3–5 días/sem)</option>
-              <option value="1.725">Activo (6–7 días/sem)</option>
-              <option value="1.9">Muy activo (2×/día)</option>
-            </select>
-          </div>
-          <div class="tdee-field">
-            <label>Meta</label>
-            <select id="tdeeGoal" onchange="window._updateTDEE()">
-              <option value="deficit">Déficit</option>
-              <option value="maintenance">Mantenimiento</option>
-              <option value="surplus">Volumen</option>
-            </select>
-          </div>
-          <div class="tdee-field" id="goalPctField">
-            <label>Ajuste (%)</label>
-            <input type="number" id="tdeeGoalPct" value="15" min="5" max="50" oninput="window._updateTDEE()">
-          </div>
-        </div>
-        <div id="tdeeResults"></div>
+  <!-- ── HERO DASHBOARD ───────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero-head">
+      <div class="hero-kicker">PROTOCOLO DIARIO</div>
+      <h1 class="hero-title">Nutrition</h1>
+      <div class="hero-meta" id="heroMeta">
+        <span id="heroDate"></span>
       </div>
     </div>
+
+    <div class="days-bar" id="daysBar"></div>
+
+    <div class="summary-bar" id="summaryBar"></div>
+  </section>
+
+  <!-- ── MAIN GRID ────────────────────────────────────────────────── -->
+  <div class="main-grid">
+
+    <!-- LEFT — MEALS COLUMN -->
+    <main class="meals-col">
+      <div class="section-head">
+        <h2 class="section-title">Comidas del día</h2>
+        <button class="ghost-btn ghost-btn--accent" onclick="window._addMeal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          <span>Nueva comida</span>
+        </button>
+      </div>
+      <div class="meals" id="mealsContainer"></div>
+    </main>
+
+    <!-- RIGHT — SIDE COLUMN -->
+    <aside class="side-col">
+
+      <!-- TDEE PANEL -->
+      <div class="panel tdee-panel">
+        <div class="tdee-toggle" onclick="window._toggleTDEE()">
+          <div class="panel-head">
+            <span class="panel-eyebrow">CALCULADORA</span>
+            <h3 class="panel-title">TDEE & Target</h3>
+          </div>
+          <span class="chevron" id="tdeeChevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+        </div>
+        <div class="tdee-body" id="tdeeBody" style="display:none">
+          <div class="tdee-form">
+            <div class="tdee-row">
+              <div class="tdee-field">
+                <label>Peso (kg)</label>
+                <input type="number" id="tdeeWeight" placeholder="75" oninput="window._updateTDEE()">
+              </div>
+              <div class="tdee-field">
+                <label>Altura (cm)</label>
+                <input type="number" id="tdeeHeight" placeholder="175" oninput="window._updateTDEE()">
+              </div>
+            </div>
+            <div class="tdee-row">
+              <div class="tdee-field">
+                <label>Edad</label>
+                <input type="number" id="tdeeAge" placeholder="25" oninput="window._updateTDEE()">
+              </div>
+              <div class="tdee-field">
+                <label>Género</label>
+                <select id="tdeeGender" onchange="window._updateTDEE()">
+                  <option value="male">Hombre</option>
+                  <option value="female">Mujer</option>
+                </select>
+              </div>
+            </div>
+            <div class="tdee-row">
+              <div class="tdee-field tdee-field--wide">
+                <label>Nivel de actividad</label>
+                <select id="tdeeActivity" onchange="window._updateTDEE()">
+                  <option value="1.2">Sedentario (sin ejercicio)</option>
+                  <option value="1.375">Ligero (1–3 días/sem)</option>
+                  <option value="1.55">Moderado (3–5 días/sem)</option>
+                  <option value="1.725">Activo (6–7 días/sem)</option>
+                  <option value="1.9">Muy activo (2×/día)</option>
+                </select>
+              </div>
+            </div>
+            <div class="tdee-row">
+              <div class="tdee-field">
+                <label>Meta</label>
+                <select id="tdeeGoal" onchange="window._updateTDEE()">
+                  <option value="deficit">Déficit</option>
+                  <option value="maintenance">Mantenimiento</option>
+                  <option value="surplus">Volumen</option>
+                </select>
+              </div>
+              <div class="tdee-field" id="goalPctField">
+                <label>Ajuste (%)</label>
+                <input type="number" id="tdeeGoalPct" value="15" min="5" max="50" oninput="window._updateTDEE()">
+              </div>
+            </div>
+            <div id="tdeeResults"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API HINT -->
+      <div class="api-hint">
+        <div class="api-hint-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        </div>
+        <div class="api-hint-text">
+          La búsqueda USDA requiere una API key gratuita.
+          <button class="link-btn" onclick="window._openApiKeyModal()">Configurar</button>
+        </div>
+      </div>
+
+    </aside>
   </div>
 
-  <!-- SUMMARY BAR (dynamic) -->
-  <div class="summary-bar" id="summaryBar"></div>
+  <!-- ── MICRONUTRIENTES ──────────────────────────────────────────── -->
+  <section class="micros-section">
+    <div class="section-head">
+      <h2 class="section-title">Cobertura de micronutrientes</h2>
+      <span class="section-note">Estimado sobre el plan base</span>
+    </div>
+    <div class="micros-list">
+      <div class="micro-row" data-status="ok"   data-pct="110"><div class="micro-name">Vitamina A</div><div class="micro-source">Huevos · Auyama · Zanahoria</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:100%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">110<span>%</span></div><div class="micro-status">Cubierto</div></div>
+      <div class="micro-row" data-status="warn" data-pct="45"><div class="micro-name">Vitamina D</div><div class="micro-source">Sardinas · Huevos · Sol</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:45%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">45<span>%</span></div><div class="micro-status">Bajo</div></div>
+      <div class="micro-row" data-status="sup"  data-pct="220"><div class="micro-name">Vitamina B12</div><div class="micro-source">Sardinas · Pollo · Huevos</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:100%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">220<span>%</span></div><div class="micro-status">Óptimo</div></div>
+      <div class="micro-row" data-status="ok"   data-pct="140"><div class="micro-name">Vitamina C</div><div class="micro-source">Brócoli · Tomate · Limón</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:100%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">140<span>%</span></div><div class="micro-status">Cubierto</div></div>
+      <div class="micro-row" data-status="ok"   data-pct="95"><div class="micro-name">Hierro</div><div class="micro-source">Sardinas · Pollo · Vegetales</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:95%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">95<span>%</span></div><div class="micro-status">Cubierto</div></div>
+      <div class="micro-row" data-status="ok"   data-pct="90"><div class="micro-name">Calcio</div><div class="micro-source">Queso blanco · Sardinas</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:90%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">90<span>%</span></div><div class="micro-status">Cubierto</div></div>
+      <div class="micro-row" data-status="sup"  data-pct="180"><div class="micro-name">Omega-3 (EPA/DHA)</div><div class="micro-source">Sardinas</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:100%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">180<span>%</span></div><div class="micro-status">Óptimo</div></div>
+      <div class="micro-row" data-status="ok"   data-pct="105"><div class="micro-name">Potasio</div><div class="micro-source">Aguacate · Pollo · Brócoli</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:100%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">105<span>%</span></div><div class="micro-status">Cubierto</div></div>
+      <div class="micro-row" data-status="warn" data-pct="60"><div class="micro-name">Magnesio</div><div class="micro-source">Vegetales verdes · Sardinas</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:60%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">60<span>%</span></div><div class="micro-status">Bajo</div></div>
+      <div class="micro-row" data-status="ok"   data-pct="115"><div class="micro-name">Zinc</div><div class="micro-source">Pollo · Huevos · Sardinas</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:100%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">115<span>%</span></div><div class="micro-status">Cubierto</div></div>
+      <div class="micro-row" data-status="sup"  data-pct="165"><div class="micro-name">Colina</div><div class="micro-source">Huevos (yema)</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:100%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">165<span>%</span></div><div class="micro-status">Óptimo</div></div>
+      <div class="micro-row" data-status="ok"   data-pct="130"><div class="micro-name">Vitamina K2</div><div class="micro-source">Queso · Huevos</div><div class="micro-bar"><div class="micro-bar-fill" style="--pct:100%"></div><div class="micro-bar-mark"></div></div><div class="micro-pct">130<span>%</span></div><div class="micro-status">Cubierto</div></div>
+    </div>
+  </section>
 
-  <!-- MEALS -->
-  <div class="section-title" style="margin-top:0">
-    comidas del día
-    <button class="btn-add-meal" onclick="window._addMeal()">+ comida</button>
-  </div>
-  <div class="days-bar" id="daysBar"></div>
-  <div class="meals" id="mealsContainer"></div>
+  <!-- ── REGLAS ──────────────────────────────────────────────────── -->
+  <section class="rules-section">
+    <div class="section-head">
+      <h2 class="section-title">Reglas del protocolo</h2>
+    </div>
+    <div class="rules-grid">
+      <div class="rule-card"><div class="rule-num">01</div><h4 class="rule-title">Calorías desde grasa, no carbos</h4><p class="rule-text">Para subir calorías sin inflar los carbos, sube primero aceite, aguacate o más huevos.</p></div>
+      <div class="rule-card"><div class="rule-num">02</div><h4 class="rule-title">Muslo &gt; Pechuga</h4><p class="rule-text">El muslo con piel es más económico, más sabroso y más rico en grasa y micronutrientes.</p></div>
+      <div class="rule-card"><div class="rule-num">03</div><h4 class="rule-title">Sardinas: irremplazables</h4><p class="rule-text">Única fuente de Omega-3 EPA/DHA accesible en Venezuela. Mínimo una lata diaria.</p></div>
+      <div class="rule-card"><div class="rule-num">04</div><h4 class="rule-title">Aguacate diario si hay</h4><p class="rule-text">Grasa monoinsaturada + potasio + fibra. Úsalo como sustituto del pan o del arroz.</p></div>
+      <div class="rule-card"><div class="rule-num">05</div><h4 class="rule-title">Especias son libres</h4><p class="rule-text">Curry, cúrcuma, comino, ajo — sin restricción. Antiinflamatorios y hacen la dieta sostenible.</p></div>
+      <div class="rule-card"><div class="rule-num">06</div><h4 class="rule-title">Hidratación con electrolitos</h4><p class="rule-text">Dieta alta en proteína requiere más agua. Añade una pizca de sal o exprime limón.</p></div>
+    </div>
 
-  <!-- API KEY HINT -->
-  <div class="api-hint">
-    <span>Búsqueda USDA requiere API key gratuita →</span>
-    <button class="btn-link" onclick="window._openApiKeyModal()">Configurar API key</button>
-  </div>
+    <div class="gaps-callout">
+      <div class="gaps-eyebrow">GAPS A CONSIDERAR</div>
+      <p>Los únicos dos micronutrientes que este plan no cubre completamente son <strong>Vitamina&nbsp;D</strong> y <strong>Magnesio</strong>. La vitamina&nbsp;D se obtiene con 20–30 min de sol directo. El magnesio con semillas de girasol/ajonjolí o suplemento de óxido/citrato.</p>
+    </div>
+  </section>
 
-  <!-- ── STATIC SECTIONS ───────────────────────────────────────────── -->
+  <footer class="footer">
+    <span>Nutrition · protocolo personal</span>
+    <span class="footer-dot">·</span>
+    <span>Datos USDA + lista local</span>
+  </footer>
 
-  <div class="section-title">cobertura de micronutrientes <span class="section-note">(referencial)</span></div>
-  <div class="micro-grid">
-    <div class="micro-card"><div><div class="micro-name">Vitamina A</div><div class="micro-source">Huevos · Auyama · Zanahoria</div></div><div class="micro-status ok">✓ OK</div></div>
-    <div class="micro-card"><div><div class="micro-name">Vitamina D</div><div class="micro-source">Sardinas · Huevos</div></div><div class="micro-status warn">~ BAJO</div></div>
-    <div class="micro-card"><div><div class="micro-name">Vitamina B12</div><div class="micro-source">Sardinas · Pollo · Huevos</div></div><div class="micro-status ok">✓ OK</div></div>
-    <div class="micro-card"><div><div class="micro-name">Vitamina C</div><div class="micro-source">Brócoli · Tomate · Limón</div></div><div class="micro-status ok">✓ OK</div></div>
-    <div class="micro-card"><div><div class="micro-name">Hierro</div><div class="micro-source">Sardinas · Pollo · Vegetales</div></div><div class="micro-status ok">✓ OK</div></div>
-    <div class="micro-card"><div><div class="micro-name">Calcio</div><div class="micro-source">Queso blanco · Sardinas</div></div><div class="micro-status ok">✓ OK</div></div>
-    <div class="micro-card"><div><div class="micro-name">Omega-3</div><div class="micro-source">Sardinas (EPA/DHA)</div></div><div class="micro-status ok">✓ OK</div></div>
-    <div class="micro-card"><div><div class="micro-name">Potasio</div><div class="micro-source">Aguacate · Pollo · Brócoli</div></div><div class="micro-status ok">✓ OK</div></div>
-    <div class="micro-card"><div><div class="micro-name">Magnesio</div><div class="micro-source">Vegetales verdes · Sardinas</div></div><div class="micro-status warn">~ BAJO</div></div>
-    <div class="micro-card"><div><div class="micro-name">Zinc</div><div class="micro-source">Pollo · Huevos · Sardinas</div></div><div class="micro-status ok">✓ OK</div></div>
-    <div class="micro-card"><div><div class="micro-name">Colina</div><div class="micro-source">Huevos (yema)</div></div><div class="micro-status sup">↑ ÓPTIMO</div></div>
-    <div class="micro-card"><div><div class="micro-name">Vitamina K2</div><div class="micro-source">Queso · Huevos</div></div><div class="micro-status ok">✓ OK</div></div>
-  </div>
+</div><!-- /app -->
 
-  <div class="section-title">reglas del protocolo</div>
-  <div class="rules-grid">
-    <div class="rule-card"><div class="rule-icon">🔥</div><div class="rule-title">Calorías desde grasa, no carbos</div><div class="rule-text">Para subir calorías sin inflar los carbos, siempre sube primero aceite, aguacate o más huevos.</div></div>
-    <div class="rule-card"><div class="rule-icon">🍗</div><div class="rule-title">Muslo > Pechuga</div><div class="rule-text">El muslo con piel es más económico, más sabroso y más rico en grasa y micronutrientes.</div></div>
-    <div class="rule-card"><div class="rule-icon">🐟</div><div class="rule-title">Sardinas: irremplazables</div><div class="rule-text">Única fuente de Omega-3 EPA/DHA accesible en Venezuela. Mínimo una lata diaria.</div></div>
-    <div class="rule-card"><div class="rule-icon">🥑</div><div class="rule-title">Aguacate diario si hay</div><div class="rule-text">Grasa monoinsaturada + potasio + fibra. Úsalo como sustituto del pan o del arroz.</div></div>
-    <div class="rule-card"><div class="rule-icon">🧂</div><div class="rule-title">Especias son libres</div><div class="rule-text">Curry, cúrcuma, comino, ajo — sin restricción. Antiinflamatorios y hacen la dieta sostenible.</div></div>
-    <div class="rule-card"><div class="rule-icon">💧</div><div class="rule-title">Hidratación con electrolitos</div><div class="rule-text">Dieta alta en proteína requiere más agua. Añade una pizca de sal o exprime limón.</div></div>
-  </div>
-
-  <div class="supp-box">
-    <h4>// Gaps a considerar</h4>
-    <p>Los únicos dos micronutrientes que este plan no cubre completamente son <strong>Vitamina D</strong> y <strong>Magnesio</strong>. La vitamina D se obtiene con 20–30 min de sol directo. El magnesio con semillas de girasol/ajonjolí o suplemento de óxido/citrato.</p>
-  </div>
-
-</div><!-- /container -->
-
-<!-- ── SEARCH MODAL ───────────────────────────────────────────────── -->
+<!-- ── SEARCH MODAL ─────────────────────────────────────────────── -->
 <div class="modal-backdrop hidden" id="searchModal">
   <div class="modal">
     <div class="modal-header">
       <span>Agregar ingrediente</span>
       <div class="modal-header-actions">
-        <button class="btn-link small" onclick="window._openApiKeyModal()">API key</button>
-        <button class="modal-close" onclick="window._closeSearch()">×</button>
+        <button class="link-btn small" onclick="window._openApiKeyModal()">API key</button>
+        <button class="modal-close" onclick="window._closeSearch()" aria-label="Cerrar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
       </div>
     </div>
     <div class="modal-body">
-      <input type="text" id="searchInput" placeholder="Buscar alimento (USDA o lista local)…"
-             oninput="window._handleSearchInput()" autocomplete="off">
+      <div class="search-input-wrap">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="searchInput" placeholder="Buscar alimento (USDA o lista local)…"
+               oninput="window._handleSearchInput()" autocomplete="off">
+      </div>
       <div id="searchResults" class="search-results"></div>
       <div id="amountWrap" class="amount-wrap hidden">
         <div id="selectedFoodName" class="selected-food-name"></div>
         <div class="amount-row">
           <input type="number" id="ingredientAmount" placeholder="100" min="1" value="100">
-          <span class="ing-unit">g</span>
+          <span class="amount-unit">g</span>
           <button class="btn-accent" onclick="window._confirmIngredient()">Agregar</button>
         </div>
       </div>
@@ -162,12 +230,14 @@
   </div>
 </div>
 
-<!-- ── API KEY MODAL ──────────────────────────────────────────────── -->
+<!-- ── API KEY MODAL ────────────────────────────────────────────── -->
 <div class="modal-backdrop hidden" id="apiKeyModal">
   <div class="modal modal--sm">
     <div class="modal-header">
       <span>USDA API Key</span>
-      <button class="modal-close" onclick="window._closeApiKeyModal()">×</button>
+      <button class="modal-close" onclick="window._closeApiKeyModal()" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
     </div>
     <div class="modal-body">
       <p class="modal-desc">API key gratuita en <a href="https://fdc.nal.usda.gov/api-key-signup.html" target="_blank" rel="noopener">fdc.nal.usda.gov</a>. Sin key, la búsqueda usa la lista local.</p>
@@ -177,23 +247,39 @@
   </div>
 </div>
 
-<!-- ── CONFIRM MODAL ──────────────────────────────────────────────── -->
+<!-- ── CONFIRM MODAL ────────────────────────────────────────────── -->
 <div class="modal-backdrop hidden" id="confirmModal" style="z-index: 1000;">
   <div class="modal modal--sm">
     <div class="modal-header">
       <span id="confirm-title">Confirmar</span>
     </div>
     <div class="modal-body">
-      <p class="modal-desc" id="confirm-msg" style="margin-bottom: 20px; color: var(--text);"></p>
-      <div style="display: flex; gap: 10px; justify-content: flex-end;">
-        <button class="btn-link" id="confirm-cancel" style="padding: 8px 16px; margin: 0; flex: 1; border: 1px solid var(--border);">Cancelar</button>
-        <button class="btn-accent" id="confirm-ok" style="background: #ef4444; color: white; flex: 1;">Eliminar</button>
+      <p class="modal-desc" id="confirm-msg"></p>
+      <div class="confirm-actions">
+        <button class="btn-ghost" id="confirm-cancel">Cancelar</button>
+        <button class="btn-danger" id="confirm-ok">Eliminar</button>
       </div>
     </div>
   </div>
 </div>
 
+<!-- ── HERO DATE ────────────────────────────────────────────────── -->
+<script>
+  (function () {
+    const d = new Date();
+    const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const el = document.getElementById('heroDate');
+    if (el) el.textContent = `${days[d.getDay()]}, ${d.getDate()} de ${months[d.getMonth()]}`;
+  })();
+</script>
+
 <script type="module" src="./main.js"></script>
 <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
+
+<!-- ── TWEAKS PANEL ─────────────────────────────────────────────── -->
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks.jsx"></script>
+
 </body>
 </html>
