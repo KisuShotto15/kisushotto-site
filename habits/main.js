@@ -129,7 +129,10 @@ function renderToday() {
   const t = selectedDate;
   const d = new Date(t + 'T12:00:00');
   const isToday = t === today();
-  const dateText = d.toLocaleDateString('es', { weekday:'long', day:'numeric', month:'long' });
+  const yDate = new Date(); yDate.setDate(yDate.getDate() - 1);
+  const yesterdayISO = dateStr(yDate.getFullYear(), yDate.getMonth() + 1, yDate.getDate());
+  const isYesterday = t === yesterdayISO;
+  const dateText = isToday ? 'Hoy' : isYesterday ? 'Ayer' : d.toLocaleDateString('es', { weekday:'long', day:'numeric', month:'long' });
   $('todayDate').innerHTML = isToday
     ? dateText
     : `${dateText} <button onclick="selectDate('${today()}')" style="margin-left:8px;background:rgba(196,181,253,0.12);border:1px solid var(--accent);border-radius:5px;color:var(--accent);font-size:11px;padding:2px 8px;cursor:pointer;font-family:'IBM Plex Mono',monospace">Hoy →</button>`;
