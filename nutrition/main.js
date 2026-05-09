@@ -1,6 +1,7 @@
 import { loadLocal, saveLocal, pull, push } from './sync.js';
-import { calcBMR, calcTDEE, calcTarget, mealMacros, totalMacros, scalePortions } from './calculator.js';
-import { searchFoods, getApiKey, setApiKey } from './search.js';
+import { calcBMR, calcTDEE, calcTarget, mealMacros, totalMacros, scalePortions,
+         MICROS_DEF, calcRDA, totalMicros } from './calculator.js';
+import { searchFoods, getFoodDetail, getApiKey, setApiKey } from './search.js';
 import { FALLBACK_FOODS } from './data/fallback.js';
 
 // ── Default meals (initial state) ─────────────────────────────────────────────
@@ -62,7 +63,8 @@ function defaultProfile(name) {
 let S = {
   activeProfile: 'ef',
   profiles: { ef: defaultProfile('Yo') },
-  lastModified: 0
+  lastModified: 0,
+  microCache: {},
 };
 
 let syncTimer = null;
@@ -93,6 +95,7 @@ function migrateState(s) {
       p.activeDay = 'd1';
     }
   });
+  if (!s.microCache) s.microCache = {};
   return s;
 }
 
@@ -354,6 +357,79 @@ window._applyTDEE = function(target) {
   renderMeals();
 };
 
+// ── Micronutrient coverage ────────────────────────────────────────────────────
+async function ensureMicros(ingredients) {
+  const apiKey = getApiKey(S.activeProfile);
+  if (!apiKey) return;
+  const unique = [...new Set(
+    ingredients.filter(i => i.fdcId && !(i.fdcId in S.microCache)).map(i => i.fdcId)
+  )];
+  if (!unique.length) return;
+  for (let i = 0; i < unique.length; i += 4) {
+    await Promise.allSettled(
+      unique.slice(i, i + 4).map(async fdcId => {
+        try { S.microCache[fdcId] = await getFoodDetail(fdcId, apiKey); }
+        catch { S.microCache[fdcId] = {}; }
+      })
+    );
+  }
+  save();
+}
+
+async function renderMicros() {
+  const el = document.getElementById('micros-list');
+  if (!el) return;
+  const apiKey = getApiKey(S.activeProfile);
+  if (!apiKey) {
+    el.innerHTML = `<div class="micros-loading">Micronutrientes requieren una
+      <button class="link-btn" onclick="window._openApiKeyModal()">API key USDA</button>
+      para calcular cobertura real.</div>`;
+    return;
+  }
+  if (!el.querySelector('.micro-row')) {
+    el.innerHTML = '<div class="micros-loading">Calculando cobertura...</div>';
+  }
+  const meals = day().meals;
+  const allIngs = meals.flatMap(m => m.ingredients);
+  await ensureMicros(allIngs);
+  const t      = profile().tdee;
+  const age    = parseInt(t.age) || 30;
+  const gender = t.gender || 'male';
+  const rda    = calcRDA(age, gender);
+  const totals = totalMicros(meals, S.microCache);
+
+  el.innerHTML = MICROS_DEF.map(def => {
+    const total  = totals[def.key] || 0;
+    const rdaVal = rda[def.key] || 1;
+    const pct    = Math.round(total / rdaVal * 100);
+    const barPct = Math.min(100, pct);
+    const status = pct < 70 ? 'warn' : pct > 120 ? 'sup' : 'ok';
+    const label  = status === 'ok' ? 'Cubierto' : status === 'warn' ? 'Bajo' : 'Óptimo';
+    const sources = [];
+    for (const meal of meals) {
+      for (const ing of meal.ingredients) {
+        if (!ing.fdcId) continue;
+        const cached = S.microCache[ing.fdcId];
+        if (!cached) continue;
+        const f = ing.amountG / 100;
+        const amt = def.key === 'omega3'
+          ? ((cached.epa || 0) + (cached.dha || 0)) * f
+          : (cached[def.key] || 0) * f;
+        if (amt / rdaVal * 100 >= 5) sources.push({ name: ing.name, amt });
+      }
+    }
+    sources.sort((a, b) => b.amt - a.amt);
+    const srcText = sources.length ? sources.slice(0, 3).map(s => s.name).join(' · ') : '—';
+    return `<div class="micro-row" data-status="${status}" data-pct="${pct}">
+      <div class="micro-name">${def.label}</div>
+      <div class="micro-source">${srcText}</div>
+      <div class="micro-bar"><div class="micro-bar-fill" style="--pct:${barPct}%"></div><div class="micro-bar-mark"></div></div>
+      <div class="micro-pct">${pct}<span>%</span></div>
+      <div class="micro-status">${label}</div>
+    </div>`;
+  }).join('');
+}
+
 // ── Summary bar ───────────────────────────────────────────────────────────────
 function renderSummary() {
   const el = document.getElementById('summaryBar');
@@ -388,6 +464,7 @@ function renderSummary() {
       <div class="macro-unit">CARBS</div>
       <div class="macro-label">${m.calories ? fmt(m.carbs * 4 / m.calories * 100) : 0}% kcal</div>
     </div>`;
+  renderMicros();
 }
 
 // ── Meals ─────────────────────────────────────────────────────────────────────
@@ -626,12 +703,21 @@ window._confirmIngredient = function() {
   const amountG = Math.max(1, parseInt(amtEl.value) || 100);
   const meal = day().meals.find(m => m.id === searchTargetMealId);
   if (!meal) return;
+  // Cache micro data from the search result (free — already in the response)
+  if (pendingFood.fdcId && pendingFood.per100g) {
+    S.microCache[pendingFood.fdcId] = pendingFood.per100g;
+  }
   meal.ingredients.push({
     id:     uid(),
     name:   pendingFood.name,
     fdcId:  pendingFood.fdcId || null,
     amountG,
-    per100g: pendingFood.per100g
+    per100g: {
+      calories: pendingFood.per100g.calories,
+      protein:  pendingFood.per100g.protein,
+      fat:      pendingFood.per100g.fat,
+      carbs:    pendingFood.per100g.carbs,
+    }
   });
   save();
   window._closeSearch();
