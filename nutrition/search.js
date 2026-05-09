@@ -29,11 +29,22 @@ export async function searchFoods(query, apiKey) {
   }));
 }
 
+const NUTRIENT_NUM_MAP = {
+  '203':1003,'204':1004,'205':1005,'208':1008,
+  '318':1106,'328':1114,'323':1109,'430':1185,
+  '401':1162,'415':1175,'418':1178,'435':1190,
+  '421':1180,'301':1087,'303':1089,'304':1090,
+  '309':1095,'306':1092,'317':1103,'629':1278,'621':1272,
+};
+
 function extractPer100g(nutrients) {
-  const get = id => {
-    const n = nutrients.find(n => n.nutrientId === id);
-    return n ? (n.value ?? 0) : 0;
-  };
+  const map = new Map();
+  for (const n of nutrients) {
+    const id  = n.nutrientId || NUTRIENT_NUM_MAP[n.number];
+    const val = n.value ?? n.amount ?? 0;
+    if (id) map.set(id, val);
+  }
+  const get = id => map.get(id) ?? 0;
   return {
     calories:  get(1008), protein:   get(1003), fat:       get(1004), carbs:     get(1005),
     vitaminA:  get(1106), vitaminD:  get(1114), vitaminE:  get(1109), vitaminK:  get(1185),
