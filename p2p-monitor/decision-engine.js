@@ -110,15 +110,21 @@
     if (!snap) return null;
 
     var may   = sanitize(snap.may);
-    var buy   = snap.buy;
+    var small = snap.small || [];
+    var buy   = snap.buy || [];
     var maj   = majors(may);
 
-    if (may.length < 3 || !buy.length) {
+    if (may.length < 3 || !small.length) {
       return { degraded: true, reason: 'thin book', spreadNet: 0 };
     }
 
+    // pSell = best mayorista price (where user sells USDT).
+    // pRebuy = smallAds[0] = expected post-drawdown price where user rebuys.
+    //   Rationale: when mayoristas drain, price falls to smallAds level.
+    //   Using buyAds[0] would be wrong: those are merchants SELLING USDT
+    //   (naturally higher price = negative spread, permanent HIGH RISK).
     var pSell  = may[0].price;
-    var pRebuy = buy[0].price;
+    var pRebuy = small[0].price;
 
     // 1. Spread
     var spreadGross = (pSell - pRebuy) / pRebuy;
@@ -131,10 +137,10 @@
       if (maj[i].price >= threshold) LA += maj[i].avail;
     }
 
-    // 3. LB — liquidity below (rebuyable near best buy)
+    // 3. LB — liquidity at rebuy level (smallAds near best small price)
     var LB = 0, lbCap = pRebuy * 1.0015;
-    for (var j = 0; j < buy.length; j++) {
-      if (buy[j].price <= lbCap) LB += buy[j].avail;
+    for (var j = 0; j < small.length; j++) {
+      if (small[j].price <= lbCap) LB += small[j].avail;
     }
 
     // 4. HHI on top5 majors
@@ -269,6 +275,22 @@
     };
   }
 
+  // Debug helper: window.DE.dump() to inspect last computation
+  function dump(ST, history) {
+    var F = computeFeatures(ST, history);
+    var S = score(F);
+    console.log('[DE] features:', F);
+    console.log('[DE] score:', S);
+    console.log('[DE] history len:', history.length);
+    if (history.length) {
+      var snap = history[history.length - 1];
+      console.log('[DE] last snap may[0]:', snap.may[0]);
+      console.log('[DE] last snap small[0]:', snap.small && snap.small[0]);
+      console.log('[DE] last snap buy[0]:', snap.buy && snap.buy[0]);
+    }
+    return { F: F, S: S };
+  }
+
   // ── Score ───────────────────────────────────────────
   var WEIGHTS = {
     spread: 30, liqRatio: 12, conc: 8, abs: 15,
@@ -393,4 +415,5 @@
   root.DE.isMajor = isMajor;
   root.DE.sanitize = sanitize;
   root.DE.majors = majors;
+  root.DE.dump = dump;
 })(typeof window !== 'undefined' ? window : globalThis);
