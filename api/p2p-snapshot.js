@@ -73,11 +73,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [mayRaw, smallRaw, buyRaw] = await Promise.all([
+    // Small tiers: fetch at 3 amounts and merge unique ads by merchant
+    // so the snapshot covers the full range the user may configure (30k–300k VES).
+    const [mayRaw, buyRaw, sm1, sm2, sm3] = await Promise.all([
       fetchTier(2000000, 'SELL', 2),
-      fetchTier(59999,   'SELL', 5),
-      fetchTier(2000000, 'BUY',  2)
+      fetchTier(2000000, 'BUY',  2),
+      fetchTier(40000,   'SELL', 3),
+      fetchTier(100000,  'SELL', 2),
+      fetchTier(300000,  'SELL', 2)
     ]);
+    const smallMerged = new Map();
+    for (const item of [...sm1, ...sm2, ...sm3]) {
+      const key = item.advertiser.nickName;
+      if (!smallMerged.has(key)) smallMerged.set(key, item);
+    }
+    const smallRaw = [...smallMerged.values()];
 
     const ts = Date.now();
     const snap = {

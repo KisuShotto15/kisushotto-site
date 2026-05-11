@@ -105,7 +105,7 @@
   }
 
   // ── Features ────────────────────────────────────────
-  function computeFeatures(ST, history) {
+  function computeFeatures(ST, history, buyLimit) {
     var snap = history[history.length - 1];
     if (!snap) return null;
 
@@ -137,10 +137,12 @@
       if (maj[i].price >= threshold) LA += maj[i].avail;
     }
 
-    // 3. LB — liquidity at rebuy level (smallAds near best small price)
+    // 3. LB — liquidity at rebuy level, filtered to user's configured buy limit
     var LB = 0, lbCap = pRebuy * 1.0015;
     for (var j = 0; j < small.length; j++) {
-      if (small[j].price <= lbCap) LB += small[j].avail;
+      var ad = small[j];
+      var inRange = !buyLimit || (ad.minVES <= buyLimit && ad.maxVES >= buyLimit);
+      if (ad.price <= lbCap && inRange) LB += ad.avail;
     }
 
     // 4. HHI on top5 majors

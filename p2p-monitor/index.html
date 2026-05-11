@@ -2049,7 +2049,7 @@ ST.deLastFeatures = null;
 function runDecisionEngine() {
   if (!window.DE) return;
   DE.pushSnapshot(ST.deHistory, ST);
-  var F = DE.computeFeatures(ST, ST.deHistory);
+  var F = DE.computeFeatures(ST, ST.deHistory, CFG.smallAmount);
   var S = DE.score(F);
   ST.deDecision = DE.decide(F, S);
   ST.deLastFeatures = F;
@@ -2253,7 +2253,7 @@ function fastEventTick() {
   // recompute lightly with current ST as "live" snapshot, no push
   var ephemeral = ST.deHistory.slice();
   ephemeral.push(DE.buildSnapshot(ST));
-  var F = DE.computeFeatures(ST, ephemeral);
+  var F = DE.computeFeatures(ST, ephemeral, CFG.smallAmount);
   if (!F || F.degraded) return;
   if (F.events.rapidDeplete || F.events.priceDropTop) {
     var S = DE.score(F);
