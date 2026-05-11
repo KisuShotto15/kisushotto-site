@@ -70,6 +70,7 @@ let S = {
 let syncTimer = null;
 let searchTargetMealId = null;
 let pendingFood = null;
+let pendingDetailFetch = null;
 
 // ── State helpers ─────────────────────────────────────────────────────────────
 function profile() { return S.profiles[S.activeProfile]; }
@@ -695,10 +696,24 @@ window._selectFood = function(encoded) {
   document.getElementById('ingredientAmount').focus();
   document.getElementById('searchResults').innerHTML = '';
   document.getElementById('searchInput').value = '';
+  pendingDetailFetch = null;
+  // SR Legacy search responses often omit EPA/DHA — fetch detail to fill gaps
+  if (pendingFood.fdcId && pendingFood.per100g && (pendingFood.per100g.epa === 0 && pendingFood.per100g.dha === 0)) {
+    const key = getApiKey(S.activeProfile);
+    if (key) {
+      pendingDetailFetch = getFoodDetail(pendingFood.fdcId, key).then(detail => {
+        if (detail && (detail.epa > 0 || detail.dha > 0)) {
+          pendingFood.per100g = detail;
+        }
+      }).catch(() => {}); // silent fail, use search data
+    }
+  }
 };
 
-window._confirmIngredient = function() {
+window._confirmIngredient = async function() {
   if (!pendingFood || !searchTargetMealId) return;
+  // Wait for detail fetch if in progress
+  if (pendingDetailFetch) await pendingDetailFetch;
   const amtEl = document.getElementById('ingredientAmount');
   const amountG = Math.max(1, parseInt(amtEl.value) || 100);
   const meal = day().meals.find(m => m.id === searchTargetMealId);
