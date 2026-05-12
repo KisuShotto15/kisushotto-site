@@ -1689,7 +1689,9 @@ async function botCycle() {
       return;
     }
     if (ad.__noFunds) {
-      botSetStatus('💸 Fondos insuficientes (<100 USDT)', '#E24B4A');
+      botLog('🛑 Fondos insuficientes (<100 USDT) — bot detenido automáticamente', '#E24B4A');
+      sendTelegram('🛑 P2P Bot detenido: fondos insuficientes (<100 USDT)');
+      await botToggle();
       return;
     }
     BOT.adNumber   = ad.adNumber || ad.advNo;
