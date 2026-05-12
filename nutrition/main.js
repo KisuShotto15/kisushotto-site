@@ -465,7 +465,6 @@ function renderSummary() {
       <div class="macro-unit">CARBS</div>
       <div class="macro-label">${m.calories ? fmt(m.carbs * 4 / m.calories * 100) : 0}% kcal</div>
     </div>`;
-  renderMicros();
 }
 
 // ── Meals ─────────────────────────────────────────────────────────────────────
@@ -517,8 +516,12 @@ function renderMealCard(meal, idx, total) {
 
 function renderIngredient(ing, mealId) {
   const m = mealMacros([{ ...ing, amountG: ing.amountG }]);
+  const disabled = !!ing.disabled;
+  const toggleIcon = disabled
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>`;
   return `
-  <li class="ingredient-item" id="ii-${ing.id}">
+  <li class="ingredient-item${disabled ? ' ing--disabled' : ''}" id="ii-${ing.id}">
     <span class="ing-name">${ing.name}</span>
     <div class="ing-amount-wrap">
       <input class="ing-amount" type="number" value="${ing.amountG}" min="1"
@@ -526,7 +529,8 @@ function renderIngredient(ing, mealId) {
         onclick="event.stopPropagation()">
       <span class="ing-unit">g</span>
     </div>
-    <span class="ing-macros">${fmt(m.protein)}P · ${fmt(m.fat)}F · ${fmt(m.carbs)}C · ${fmt(m.calories)}kcal</span>
+    <span class="ing-macros">${disabled ? '—' : `${fmt(m.protein)}P · ${fmt(m.fat)}F · ${fmt(m.carbs)}C · ${fmt(m.calories)}kcal`}</span>
+    <button class="ing-toggle" onclick="window._toggleIngredient('${mealId}','${ing.id}'); event.stopPropagation()" title="${disabled ? 'Activar' : 'Desactivar'}">${toggleIcon}</button>
     <button class="ing-del" onclick="window._deleteIng('${mealId}','${ing.id}'); event.stopPropagation()" title="Eliminar">×</button>
   </li>`;
 }
@@ -544,7 +548,7 @@ window._toggleMeal = function(id) {
 window._deleteMeal = async function(id) {
   if (!(await window.customConfirm('¿Eliminar esta comida?'))) return;
   day().meals = day().meals.filter(m => m.id !== id);
-  save(); renderSummary(); renderMeals();
+  save(); renderSummary(); renderMeals(); renderMicros();
 };
 
 window._moveMeal = function(id, dir) {
@@ -590,13 +594,22 @@ window._deleteIng = function(mealId, ingId) {
   const meal = day().meals.find(m => m.id === mealId);
   if (!meal) return;
   meal.ingredients = meal.ingredients.filter(i => i.id !== ingId);
-  save(); renderSummary(); renderMeals();
+  save(); renderSummary(); renderMeals(); renderMicros();
   setTimeout(() => {
     const body = document.getElementById(`body-${mealId}`);
     const chev = document.getElementById(`chev-${mealId}`);
     if (body) { body.classList.add('open'); }
     if (chev) { chev.classList.add('open'); }
   }, 30);
+};
+
+window._toggleIngredient = function(mealId, ingId) {
+  const meal = day().meals.find(m => m.id === mealId);
+  if (!meal) return;
+  const ing = meal.ingredients.find(i => i.id === ingId);
+  if (!ing) return;
+  ing.disabled = !ing.disabled;
+  save(); renderSummary(); renderMeals(); renderMicros();
 };
 
 window._updateAmount = function(mealId, ingId, val) {
@@ -705,24 +718,22 @@ window._selectFood = function(encoded) {
         if (detail && (detail.epa > 0 || detail.dha > 0)) {
           pendingFood.per100g = detail;
         }
-      }).catch(() => {}); // silent fail, use search data
+      }).catch(() => {});
     }
   }
 };
 
 window._confirmIngredient = async function() {
   if (!pendingFood || !searchTargetMealId) return;
-  // Wait for detail fetch if in progress
   if (pendingDetailFetch) await pendingDetailFetch;
   const amtEl = document.getElementById('ingredientAmount');
   const amountG = Math.max(1, parseInt(amtEl.value) || 100);
   const meal = day().meals.find(m => m.id === searchTargetMealId);
   if (!meal) return;
-  // Cache micro data from the search result (free — already in the response)
   if (pendingFood.fdcId && pendingFood.per100g) {
     S.microCache[pendingFood.fdcId] = pendingFood.per100g;
   }
-  meal.ingredients.push({
+  const ing = {
     id:     uid(),
     name:   pendingFood.name,
     fdcId:  pendingFood.fdcId || null,
@@ -733,11 +744,13 @@ window._confirmIngredient = async function() {
       fat:      pendingFood.per100g.fat,
       carbs:    pendingFood.per100g.carbs,
     }
-  });
+  };
+  meal.ingredients.push(ing);
   save();
   window._closeSearch();
   renderSummary();
   renderMeals();
+  renderMicros(); // Call directly to ensure it runs after renderMeals completes
   setTimeout(() => {
     const body = document.getElementById(`body-${searchTargetMealId}`);
     const chev = document.getElementById(`chev-${searchTargetMealId}`);

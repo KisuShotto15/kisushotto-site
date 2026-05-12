@@ -20,6 +20,7 @@ export function calcTarget(tdee, goal, goalPct) {
 
 export function mealMacros(ingredients) {
   return ingredients.reduce((acc, ing) => {
+    if (ing.disabled) return acc;
     const f = ing.amountG / 100;
     acc.calories += (ing.per100g.calories || 0) * f;
     acc.protein  += (ing.per100g.protein  || 0) * f;
@@ -76,6 +77,7 @@ export function totalMicros(meals, microCache) {
   for (const def of MICROS_DEF) totals[def.key] = 0;
   for (const meal of meals) {
     for (const ing of meal.ingredients) {
+      if (ing.disabled) continue;
       if (!ing.fdcId) continue;
       const cached = microCache[ing.fdcId];
       if (!cached) continue;
