@@ -133,11 +133,15 @@ a { color: inherit; text-decoration: none; }
 .app-brand-text {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
+}
+.app-brand-text .hero-kicker {
+  font-size: 13px;
+  letter-spacing: 0.28em;
 }
 .app-brand-title {
-  font-size: 20px !important;
-  line-height: 1.1 !important;
+  font-size: clamp(28px, 4vw, 42px) !important;
+  line-height: 1 !important;
   letter-spacing: -0.02em;
 }
 
