@@ -25,8 +25,12 @@ export async function pull() {
   const catsChanged = incomingCats.length !== localCats.length ||
     incomingCats.some((c, i) => !localCats[i] || localCats[i].updated_at !== c.updated_at);
   if (catsChanged) {
+    const localMap = Object.fromEntries(localCats.map(c => [c.id, c]));
     await idb.clear('categories');
-    for (const c of incomingCats) await idb.put('categories', c);
+    for (const c of incomingCats) {
+      if (!c.icon && localMap[c.id]?.icon) c.icon = localMap[c.id].icon;
+      await idb.put('categories', c);
+    }
     changed = true;
   }
   if (data.server_time) await idb.setMeta('lastSyncedAt', data.server_time);

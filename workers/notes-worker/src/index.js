@@ -93,6 +93,7 @@ async function migrate(env) {
   for (const s of stmts) await env.DB.prepare(s).run();
   // Additive migrations (ignore error if column already exists)
   try { await env.DB.prepare(`ALTER TABLE categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`).run(); } catch {}
+  try { await env.DB.prepare(`ALTER TABLE categories ADD COLUMN icon TEXT`).run(); } catch {}
 }
 
 // ── Auth helpers (PIN + WebAuthn) ────────────────────────────────────────────
@@ -338,11 +339,11 @@ async function upsertCategory(env, email, c) {
   if (existing) {
     if (existing.owner_email !== email) return { skipped: true, reason: 'forbidden' };
     if (existing.updated_at > (c.updated_at || 0)) return { skipped: true, reason: 'older' };
-    await env.DB.prepare(`UPDATE categories SET name=?, color=?, sort_order=?, updated_at=? WHERE id=?`)
-      .bind(c.name, c.color, c.sort_order ?? existing.sort_order ?? 0, c.updated_at || now(), c.id).run();
+    await env.DB.prepare(`UPDATE categories SET name=?, color=?, icon=?, sort_order=?, updated_at=? WHERE id=?`)
+      .bind(c.name, c.color, c.icon || null, c.sort_order ?? existing.sort_order ?? 0, c.updated_at || now(), c.id).run();
   } else {
-    await env.DB.prepare(`INSERT INTO categories (id, owner_email, name, color, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`)
-      .bind(c.id, email, c.name, c.color, c.sort_order ?? 0, c.created_at || now(), c.updated_at || now()).run();
+    await env.DB.prepare(`INSERT INTO categories (id, owner_email, name, color, icon, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`)
+      .bind(c.id, email, c.name, c.color, c.icon || null, c.sort_order ?? 0, c.created_at || now(), c.updated_at || now()).run();
   }
   return { skipped: false };
 }
