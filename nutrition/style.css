@@ -143,12 +143,9 @@ a { color: inherit; text-decoration: none; }
   line-height: 1;
 }
 .app-brand-title {
-  font-family: var(--font-sans);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
+  font-size: 20px !important;
+  line-height: 1.1 !important;
   letter-spacing: -0.01em;
-  line-height: 1.1;
 }
 .app-brand-back {
   color: var(--muted);
