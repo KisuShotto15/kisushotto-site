@@ -222,7 +222,7 @@ function renderSidebarNav() {
 
   list.innerHTML = ownCats.map(c => `
     <button class="sidebar-item${State.view === 'cat:' + c.id ? ' active' : ''}" data-view="cat:${c.id}">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path></svg>
+      <span class="sidebar-cat-icon">${c.icon || '🏷️'}</span>
       <span>${escapeHtml(c.name)}</span>
     </button>
   `).join('');
@@ -312,6 +312,7 @@ async function reorderCategoryDrag(srcId, targetId) {
 
 const TRASH_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
 const GRIP_SVG  = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>`;
+const CAT_ICONS = ['🏷️','📁','🏠','💼','📚','🎯','🍽️','💪','💰','🎨','✈️','🎮','🎵','💡','🛒','🌿','🔧','❤️','📝','🏃','🎬','📊','⭐','🔔','🎁'];
 
 function renderDrawerCats() {
   const root = $('#drawer-cat-list');
@@ -330,24 +331,25 @@ function renderDrawerCats() {
     grip.className = 'drag-handle cat-grip';
     grip.innerHTML = GRIP_SVG;
 
-    const dot = document.createElement('span');
-    dot.className = 'drawer-cat-dot';
-    dot.style.background = c.color;
+    const iconBtn = document.createElement('button');
+    iconBtn.className = 'cat-icon-btn';
+    iconBtn.textContent = c.icon || '🏷️';
+    iconBtn.title = 'Cambiar icono';
 
     const inp = document.createElement('input');
     inp.className = 'drawer-cat-name';
     inp.value = c.name;
     inp.dataset.id = c.id;
 
-    const colorInp = document.createElement('input');
-    colorInp.type = 'color';
-    colorInp.value = c.color;
-    colorInp.dataset.id = c.id;
-
     const delBtn = document.createElement('button');
     delBtn.className = 'btn-icon';
     delBtn.dataset.del = c.id;
     delBtn.innerHTML = TRASH_SVG;
+
+    const iconGrid = document.createElement('div');
+    iconGrid.className = 'cat-icon-grid';
+    iconGrid.hidden = true;
+    iconGrid.innerHTML = CAT_ICONS.map(em => `<button class="cat-icon-opt">${em}</button>`).join('');
 
     inp.addEventListener('change', async () => {
       const cat = State.categories.find(x => x.id === c.id);
@@ -359,15 +361,22 @@ function renderDrawerCats() {
       renderCategoriesStrip();
     });
 
-    colorInp.addEventListener('change', async () => {
-      const cat = State.categories.find(x => x.id === c.id);
-      if (!cat) return;
-      cat.color = colorInp.value;
-      cat.updated_at = Date.now();
-      dot.style.background = cat.color;
-      await saveCategoryLocal(cat);
-      try { await apiUpdateCat(c.id, { color: cat.color }); } catch {}
-      renderCategoriesStrip();
+    iconBtn.addEventListener('click', () => {
+      iconGrid.hidden = !iconGrid.hidden;
+    });
+
+    iconGrid.querySelectorAll('.cat-icon-opt').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const cat = State.categories.find(x => x.id === c.id);
+        if (!cat) return;
+        cat.icon = btn.textContent;
+        cat.updated_at = Date.now();
+        iconBtn.textContent = cat.icon;
+        iconGrid.hidden = true;
+        await saveCategoryLocal(cat);
+        try { await apiUpdateCat(c.id, { icon: cat.icon }); } catch {}
+        renderCategoriesStrip();
+      });
     });
 
     delBtn.addEventListener('click', async () => {
@@ -380,8 +389,9 @@ function renderDrawerCats() {
       render();
     });
 
-    row.append(grip, dot, inp, colorInp, delBtn);
+    row.append(grip, iconBtn, inp, delBtn);
     root.appendChild(row);
+    root.appendChild(iconGrid);
   }
 
   // ── Mouse drag (handle-activated) ───────────────────────────────────────
@@ -464,7 +474,7 @@ function noteCardHtml(n) {
   }
 
   const cats = (n.categories || []).map(cid => State.categories.find(c => c.id === cid)).filter(Boolean);
-  const catTags = cats.map(c => `<span class="nc-cat-tag">${escapeHtml(c.name)}</span>`).join('');
+  const catTags = cats.map(c => `<span class="nc-cat-tag">${c.icon || '🏷️'} ${escapeHtml(c.name)}</span>`).join('');
   const sharedBadge = isShared ? `<span class="nc-shared">📥 Compartida</span>` : '';
   const lockBadge = n.locked ? `<span class="nc-locked" style="display:inline-flex;align-items:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>` : '';
   const reminderBadge = n.reminder_at ? `<span>⏰ ${fmtDate(n.reminder_at)}</span>` : '';
@@ -791,7 +801,22 @@ function renderChecklist() {
     del.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
 
     chk.addEventListener('change', () => { it.done = chk.checked; row.classList.toggle('done', chk.checked); scheduleSave(); });
-    del.addEventListener('click', () => { e.checklist_items = e.checklist_items.filter(x => x.id !== it.id); renderChecklist(); scheduleSave(); });
+    txt.addEventListener('focus', () => {
+      root.querySelectorAll('.ed-check-row').forEach(r => r.classList.remove('row-selected'));
+      row.classList.add('row-selected');
+    });
+    del.addEventListener('click', () => {
+      const idx = e.checklist_items.findIndex(x => x.id === it.id);
+      e.checklist_items = e.checklist_items.filter(x => x.id !== it.id);
+      renderChecklist();
+      scheduleSave();
+      const rows = root.querySelectorAll('.ed-check-row');
+      if (rows.length > 0) {
+        const target = rows[Math.max(0, idx - 1)];
+        target.classList.add('row-selected');
+        target.querySelector('.ed-check-text')?.focus();
+      }
+    });
 
     row.append(handle, chk, txt, del);
     root.appendChild(row);
@@ -977,7 +1002,7 @@ function openNew(type) {
     reminder_sent: false,
     last_modified: Date.now(),
     created_at: Date.now(),
-    categories: [],
+    categories: State.view.startsWith('cat:') ? [State.view.slice(4)] : [],
     attachments: [],
     shares: [],
   };
@@ -1136,10 +1161,12 @@ function bindEditorActions() {
   });
 
   // Categories
-  $('#ed-categories').addEventListener('click', (ev) => {
+  $('#ed-categories').addEventListener('click', () => {
     renderCategoriesPopup();
-    showPopupAt('#popup-cats', ev.currentTarget);
+    openCatsModal();
   });
+  $('#cats-modal-bg').addEventListener('click', closeCatsModal);
+  $('#cats-modal-close').addEventListener('click', closeCatsModal);
   $('#popup-new-cat-btn').addEventListener('click', async () => {
     const inp = $('#popup-new-cat');
     const name = inp.value.trim();
@@ -1148,13 +1175,14 @@ function bindEditorActions() {
       id: crypto.randomUUID(),
       owner_email: getUserEmail(),
       name,
+      icon: '🏷️',
       color: '#5B3082',
       created_at: Date.now(),
       updated_at: Date.now(),
     };
     State.categories.push(cat);
     await saveCategoryLocal(cat);
-    try { await apiCreateCat({ id: cat.id, name: cat.name, color: cat.color }); } catch {}
+    try { await apiCreateCat({ id: cat.id, name: cat.name, icon: cat.icon, color: cat.color }); } catch {}
     inp.value = '';
     renderCategoriesPopup();
     renderCategoriesStrip();
@@ -1321,15 +1349,16 @@ function bindEditorActions() {
 }
 
 function renderCategoriesPopup() {
-  const list = $('#popup-cats-list');
+  const list = $('#cats-modal-list');
   list.innerHTML = '';
   const me = getUserEmail();
   const own = State.categories.filter(c => c.owner_email === me);
   for (const c of own) {
     const lbl = document.createElement('label');
+    lbl.className = 'cats-modal-row';
     const checked = (State.editing?.categories || []).includes(c.id);
     lbl.innerHTML = `<input type="checkbox" data-id="${c.id}" ${checked ? 'checked' : ''}>
-                     <span class="drawer-cat-dot" style="background:${c.color}"></span>
+                     <span class="cat-icon-display">${c.icon || '🏷️'}</span>
                      <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
       const id = e.target.dataset.id;
@@ -1344,7 +1373,7 @@ function renderCategoriesPopup() {
     });
     list.appendChild(lbl);
   }
-  if (!own.length) list.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:8px">No tienes categorías aún.</p>';
+  if (!own.length) list.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:12px 0">No tienes categorías aún.</p>';
 }
 
 function renderSharePopup() {
@@ -1365,6 +1394,16 @@ function renderSharePopup() {
   if (!(State.editing?.shares || []).length) {
     root.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:8px">No compartida aún.</p>';
   }
+}
+
+// ── cats modal ───────────────────────────────────────────────────────────────
+function openCatsModal() {
+  lockBodyScroll();
+  $('#cats-modal').hidden = false;
+}
+function closeCatsModal() {
+  $('#cats-modal').hidden = true;
+  unlockBodyScroll();
 }
 
 // ── popups positioning ──────────────────────────────────────────────────────
@@ -1401,7 +1440,7 @@ function openBulkCatsModal() {
     lbl.className = 'bulk-cat-row';
     const allHave = [...State.selected].every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id));
     lbl.innerHTML = `<input type="checkbox" ${allHave ? 'checked' : ''}>
-      <span class="drawer-cat-dot" style="background:${c.color}"></span>
+      <span class="cat-icon-display">${c.icon || '🏷️'}</span>
       <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
       for (const nid of State.selected) {
@@ -1455,13 +1494,14 @@ function bindDrawer() {
       id: crypto.randomUUID(),
       owner_email: getUserEmail(),
       name,
+      icon: '🏷️',
       color: '#5B3082',
       created_at: Date.now(),
       updated_at: Date.now(),
     };
     State.categories.push(cat);
     await saveCategoryLocal(cat);
-    try { await apiCreateCat({ id: cat.id, name, color: cat.color }); } catch {}
+    try { await apiCreateCat({ id: cat.id, name, icon: cat.icon, color: cat.color }); } catch {}
     inp.value = '';
     renderDrawerCats();
     renderCategoriesStrip();

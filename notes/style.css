@@ -541,11 +541,12 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   border: none;
   background: transparent;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s;
   user-select: none; -webkit-user-select: none;
 }
 .ed-check-row:hover .row-del,
-.ed-check-row:focus-within .row-del { opacity: 0.7; }
+.ed-check-row.row-selected .row-del { opacity: 0.7; pointer-events: auto; }
 .ed-check-row .row-del:hover { opacity: 1; }
 .ed-check-add {
   display: flex; align-items: center; gap: 10px;
@@ -717,21 +718,99 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   padding: 0 12px;
   font-size: 13px;
 }
-#popup-cats-list, #popup-share-list {
+#popup-share-list {
   max-height: 200px;
   overflow-y: auto;
   display: flex; flex-direction: column; gap: 4px;
 }
-#popup-cats-list label {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 8px;
+
+/* Categories modal */
+.cats-modal-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 20px;
+}
+.cats-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.cats-modal-title {
+  font-size: 15px; font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.cats-modal-list {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 260px; overflow-y: auto;
+  margin-bottom: 14px;
+}
+.cats-modal-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 8px;
   border-radius: var(--r-sm);
   cursor: pointer;
+  font-size: 15px;
+  transition: background 0.1s;
 }
-#popup-cats-list label:hover { background: var(--card); }
-#popup-cats-list input[type=checkbox] {
-  width: 16px; height: 16px;
+.cats-modal-row:hover { background: var(--hover); }
+.cats-modal-row input[type=checkbox] {
+  width: 17px; height: 17px;
   accent-color: var(--accent);
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.cats-modal-foot {
+  display: flex; gap: 8px; align-items: center;
+}
+.cats-modal-foot input {
+  flex: 1;
+  padding: 9px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--text);
+}
+.cats-modal-foot .btn-pri {
+  height: 36px; padding: 0 14px; font-size: 14px;
+}
+.cat-icon-display {
+  font-size: 18px; line-height: 1; flex: 0 0 auto;
+}
+
+/* Category icon picker in drawer */
+.cat-icon-btn {
+  font-size: 18px; line-height: 1;
+  background: none; border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  transition: background 0.1s;
+  flex: 0 0 auto;
+}
+.cat-icon-btn:hover { background: var(--hover); }
+.cat-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  padding: 8px 12px 10px 44px;
+  background: var(--bg);
+  border-radius: var(--r-sm);
+  margin-bottom: 2px;
+}
+.cat-icon-opt {
+  font-size: 20px; line-height: 1;
+  background: none; border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--r-sm);
+  transition: background 0.1s;
+  display: flex; align-items: center; justify-content: center;
+}
+.cat-icon-opt:hover { background: var(--hover); }
+.sidebar-cat-icon {
+  font-size: 18px; line-height: 1;
+  flex: 0 0 22px;
+  display: flex; align-items: center; justify-content: center;
 }
 #popup-share-list .share-row {
   display: flex; justify-content: space-between; align-items: center;
