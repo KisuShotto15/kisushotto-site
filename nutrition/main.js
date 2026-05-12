@@ -609,7 +609,25 @@ window._toggleIngredient = function(mealId, ingId) {
   const ing = meal.ingredients.find(i => i.id === ingId);
   if (!ing) return;
   ing.disabled = !ing.disabled;
-  save(); renderSummary(); renderMeals(); renderMicros();
+  save(); renderSummary(); renderMicros();
+  // Update in-place to avoid closing the meal card
+  const li = document.getElementById(`ii-${ingId}`);
+  if (li) {
+    const m = mealMacros([{ ...ing, amountG: ing.amountG }]);
+    const disabled = !!ing.disabled;
+    li.classList.toggle('ing--disabled', disabled);
+    const nameEl = li.querySelector('.ing-name');
+    if (nameEl) nameEl.style.textDecoration = disabled ? 'line-through' : '';
+    const macroEl = li.querySelector('.ing-macros');
+    if (macroEl) macroEl.textContent = disabled ? '—' : `${fmt(m.protein)}P · ${fmt(m.fat)}F · ${fmt(m.carbs)}C · ${fmt(m.calories)}kcal`;
+    const toggleBtn = li.querySelector('.ing-toggle');
+    if (toggleBtn) {
+      toggleBtn.title = disabled ? 'Activar' : 'Desactivar';
+      toggleBtn.innerHTML = disabled
+        ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>`
+        : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>`;
+    }
+  }
 };
 
 window._updateAmount = function(mealId, ingId, val) {
