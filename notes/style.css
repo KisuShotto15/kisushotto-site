@@ -161,6 +161,7 @@ input, textarea, select {
   transition: opacity 0.12s;
   overflow: hidden;
 }
+.sidebar-item .sidebar-cat-icon { opacity: 1; flex: 0 0 22px; }
 .sidebar-item:hover { background: var(--card2); color: var(--text); }
 .sidebar-item.active {
   background: rgba(251,191,36,0.12);
@@ -777,7 +778,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   font-size: 18px; line-height: 1; flex: 0 0 auto;
 }
 
-/* Category icon picker in drawer */
+/* Category icon picker */
 .cat-icon-btn {
   font-size: 18px; line-height: 1;
   background: none; border: none;
@@ -788,20 +789,25 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   flex: 0 0 auto;
 }
 .cat-icon-btn:hover { background: var(--hover); }
-.cat-icon-grid {
+#cat-icon-popup {
+  position: fixed;
+  z-index: 300;
+  background: var(--card2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 10px;
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 4px;
-  padding: 8px 12px 10px 44px;
-  background: var(--bg);
-  border-radius: var(--r-sm);
-  margin-bottom: 2px;
+  width: 256px;
 }
+#cat-icon-popup[hidden] { display: none; }
 .cat-icon-opt {
   font-size: 20px; line-height: 1;
   background: none; border: none;
   cursor: pointer;
-  padding: 4px;
+  padding: 5px;
   border-radius: var(--r-sm);
   transition: background 0.1s;
   display: flex; align-items: center; justify-content: center;

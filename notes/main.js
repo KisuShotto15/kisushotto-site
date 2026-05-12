@@ -346,11 +346,6 @@ function renderDrawerCats() {
     delBtn.dataset.del = c.id;
     delBtn.innerHTML = TRASH_SVG;
 
-    const iconGrid = document.createElement('div');
-    iconGrid.className = 'cat-icon-grid';
-    iconGrid.hidden = true;
-    iconGrid.innerHTML = CAT_ICONS.map(em => `<button class="cat-icon-opt">${em}</button>`).join('');
-
     inp.addEventListener('change', async () => {
       const cat = State.categories.find(x => x.id === c.id);
       if (!cat) return;
@@ -361,22 +356,9 @@ function renderDrawerCats() {
       renderCategoriesStrip();
     });
 
-    iconBtn.addEventListener('click', () => {
-      iconGrid.hidden = !iconGrid.hidden;
-    });
-
-    iconGrid.querySelectorAll('.cat-icon-opt').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const cat = State.categories.find(x => x.id === c.id);
-        if (!cat) return;
-        cat.icon = btn.textContent;
-        cat.updated_at = Date.now();
-        iconBtn.textContent = cat.icon;
-        iconGrid.hidden = true;
-        await saveCategoryLocal(cat);
-        try { await apiUpdateCat(c.id, { icon: cat.icon }); } catch {}
-        renderCategoriesStrip();
-      });
+    iconBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      openIconPicker(c.id, iconBtn);
     });
 
     delBtn.addEventListener('click', async () => {
@@ -391,7 +373,6 @@ function renderDrawerCats() {
 
     row.append(grip, iconBtn, inp, delBtn);
     root.appendChild(row);
-    root.appendChild(iconGrid);
   }
 
   // ── Mouse drag (handle-activated) ───────────────────────────────────────
@@ -1395,6 +1376,43 @@ function renderSharePopup() {
     root.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:8px">No compartida aún.</p>';
   }
 }
+
+// ── icon picker popup (shared, used in drawer) ───────────────────────────────
+function openIconPicker(catId, anchorBtn) {
+  const popup = $('#cat-icon-popup');
+  popup.innerHTML = CAT_ICONS.map(em => `<button class="cat-icon-opt" data-icon="${em}">${em}</button>`).join('');
+  popup.dataset.catId = catId;
+
+  const rect = anchorBtn.getBoundingClientRect();
+  popup.hidden = false;
+  const popW = 256, popH = 140;
+  let left = rect.left;
+  let top = rect.bottom + 6;
+  if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+  if (top + popH > window.innerHeight - 8) top = rect.top - popH - 6;
+  popup.style.left = `${Math.max(8, left)}px`;
+  popup.style.top  = `${Math.max(8, top)}px`;
+
+  popup.querySelectorAll('.cat-icon-opt').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const cat = State.categories.find(x => x.id === catId);
+      if (cat) {
+        cat.icon = btn.dataset.icon;
+        cat.updated_at = Date.now();
+        anchorBtn.textContent = cat.icon;
+        await saveCategoryLocal(cat);
+        try { await apiUpdateCat(catId, { icon: cat.icon }); } catch {}
+        renderCategoriesStrip();
+      }
+      popup.hidden = true;
+    });
+  });
+}
+
+document.addEventListener('click', () => {
+  const popup = $('#cat-icon-popup');
+  if (popup && !popup.hidden) popup.hidden = true;
+});
 
 // ── cats modal ───────────────────────────────────────────────────────────────
 function openCatsModal() {
