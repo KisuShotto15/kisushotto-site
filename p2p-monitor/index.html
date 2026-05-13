@@ -878,6 +878,8 @@ var PAY_METHODS = [
   { id: 'PagoMovil',        label: 'Pago Móvil' }
 ];
 var ACTIVE_PAY = 'BancoDeVenezuela';
+// Identifiers genéricos (catch-all) que NO deben usarse para filtrar competidores
+var GENERIC_PAY_IDS = ['BANK', 'BankTransfer', 'OtherPayments', 'SpecificBank'];
 
 function payLabel(id) {
   for (var i = 0; i < PAY_METHODS.length; i++) {
@@ -1738,12 +1740,12 @@ async function botCycle() {
       ad = BOT.cachedAd;
     } else {
       botSetStatus('Consultando anuncio...', '#F0B90B');
-      ad = await botGetMyAd();
+      ad = await botGetMyAd(true);
       if (ad) { BOT.cachedAd = ad; BOT.cachedAdAt = now; }
     }
     if (!ad) {
       BOT.cachedAd = null;
-      botSetStatus('⏸ Anuncio pausado — esperando...', '#555');
+      botSetStatus('Anuncio no encontrado', '#E24B4A');
       return;
     }
     if (ad.__noFunds) {
@@ -1756,7 +1758,8 @@ async function botCycle() {
     // Precio: confiar en currentPrice si fue actualizado en este ciclo; si no, leer del ad
     if (!BOT.currentPrice) BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit = parseFloat(ad.minSingleTransAmount);
-    var freshPays = (ad.tradeMethods || []).map(function(m){ return m.identifier; }).filter(Boolean);
+    var freshPays = (ad.tradeMethods || []).map(function(m){ return m.identifier; })
+                    .filter(function(id){ return id && GENERIC_PAY_IDS.indexOf(id) === -1; });
     if (freshPays.length) { BOT.adPayTypes = freshPays; updateBotPayBadge(); }
 
     // Calcular techo desde precio de venta configurado
@@ -1866,7 +1869,8 @@ async function botInitialCycle(allowPaused) {
     BOT.adNumber     = ad.adNumber || ad.advNo;
     BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit   = parseFloat(ad.minSingleTransAmount);
-    BOT.adPayTypes   = (ad.tradeMethods || []).map(function(m){ return m.identifier; }).filter(Boolean);
+    BOT.adPayTypes   = (ad.tradeMethods || []).map(function(m){ return m.identifier; })
+                       .filter(function(id){ return id && GENERIC_PAY_IDS.indexOf(id) === -1; });
     if (BOT.adPayTypes.length) {
       botLog('💳 Métodos: ' + BOT.adPayTypes.map(payLabel).join(', '), '#8b949e');
       updateBotPayBadge();
