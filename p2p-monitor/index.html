@@ -540,7 +540,7 @@ input:focus {
   <a href="https://kisushotto.com" class="hub-back" title="Volver al Hub"><svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;border-radius:7px"><rect width="100" height="100" rx="22" fill="#0d0f14"/><line x1="50" y1="12" x2="50" y2="30" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="83" y1="31" x2="67" y2="40" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="83" y1="69" x2="67" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="50" y1="88" x2="50" y2="70" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="17" y1="69" x2="33" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="17" y1="31" x2="33" y2="40" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="50" y1="30" x2="50" y2="70" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="67" y1="40" x2="33" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="33" y1="40" x2="67" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><polygon points="50,30 67,40 67,60 50,70 33,60 33,40" fill="rgba(240,185,11,0.07)" stroke="#f0b90b" stroke-width="2" stroke-linejoin="round"/><polygon points="50,12 83,31 83,69 50,88 17,69 17,31" fill="none" stroke="#f0b90b" stroke-width="2.5" stroke-linejoin="round"/><circle cx="50" cy="50" r="7" fill="none" stroke="#f0b90b" stroke-width="2.2"/><circle cx="50" cy="50" r="3" fill="#f0b90b"/><circle cx="50" cy="12" r="3.5" fill="#f0b90b"/><circle cx="83" cy="31" r="3.5" fill="#f0b90b"/><circle cx="83" cy="69" r="3.5" fill="#f0b90b"/><circle cx="50" cy="88" r="3.5" fill="#f0b90b"/><circle cx="17" cy="69" r="3.5" fill="#f0b90b"/><circle cx="17" cy="31" r="3.5" fill="#f0b90b"/></svg></a>
   <h1>P2P Monitor</h1>
   <span class="nav-pair" style="font-size:16px;color:var(--text-3);font-weight:500">VES/USDT</span>
-  <span class="tag-bank">Banco de Venezuela</span>
+  <select id="pay-method-select" class="tag-bank" onchange="setPayMethod(this.value)" style="font-family:inherit;cursor:pointer;outline:none"></select>
   <span class="tag-ver">✓ Verificados</span>
   <span class="badge badge-off" id="live-badge"><span class="dot dot-off" id="live-dot"></span><span id="live-label">Detenido</span></span>
   <span id="topbar-bot-price" style="display:none;font-size:14px;font-weight:700;color:var(--gold);background:var(--gold-d);border:1px solid var(--gold-b);border-radius:6px;padding:2px 10px;font-variant-numeric:tabular-nums">—</span>
@@ -735,7 +735,10 @@ input:focus {
     <!-- Auto-Repricing Bot -->
     <div class="panel" id="bot-panel" style="position:relative">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div class="ptitle" style="margin-bottom:0">🤖 Auto-Repricing</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="ptitle" style="margin-bottom:0">🤖 Auto-Repricing</div>
+          <span id="bot-pay-badge" style="display:none;font-size:11px;font-weight:700;color:var(--gold);background:var(--gold-d);border:1px solid var(--gold-b);border-radius:4px;padding:2px 6px;letter-spacing:.02em">—</span>
+        </div>
         <button id="bot-gear-btn" class="btn btn-sm" onclick="toggleBotGear(event)" title="Configuración API" style="font-size:15px;padding:3px 9px">⚙</button>
       </div>
 
@@ -864,6 +867,60 @@ input:focus {
 <script src="decision-engine.js"></script>
 <script src="decision-journal.js"></script>
 <script>
+// ── Métodos de pago ───────────────────────────────────
+var PAY_METHODS = [
+  { id: 'BancoDeVenezuela', label: 'Banco de Venezuela' },
+  { id: 'Provincial',       label: 'Provincial' },
+  { id: 'Mercantil',        label: 'Mercantil' },
+  { id: 'Banesco',          label: 'Banesco' },
+  { id: 'Bancamiga',        label: 'Bancamiga' },
+  { id: 'BNCBancoNacional', label: 'BNC' },
+  { id: 'PagoMovil',        label: 'Pago Móvil' }
+];
+var ACTIVE_PAY = 'BancoDeVenezuela';
+
+function payLabel(id) {
+  for (var i = 0; i < PAY_METHODS.length; i++) {
+    if (PAY_METHODS[i].id === id) return PAY_METHODS[i].label;
+  }
+  return id;
+}
+
+function loadPayMethod() {
+  try {
+    var saved = localStorage.getItem('p2p_pay_method');
+    if (saved && PAY_METHODS.some(function(m){ return m.id === saved; })) ACTIVE_PAY = saved;
+  } catch(e) {}
+  var sel = document.getElementById('pay-method-select');
+  if (sel) {
+    sel.innerHTML = PAY_METHODS.map(function(m){
+      return '<option value="' + m.id + '"' + (m.id === ACTIVE_PAY ? ' selected' : '') + '>' + m.label + '</option>';
+    }).join('');
+  }
+}
+
+function setPayMethod(id) {
+  if (id === ACTIVE_PAY) return;
+  if (typeof BOT !== 'undefined' && BOT.running) {
+    botLog('🛑 Bot detenido: cambio de método de pago', '#E24B4A');
+    botToggle();
+  }
+  ACTIVE_PAY = id;
+  try { localStorage.setItem('p2p_pay_method', id); } catch(e) {}
+  if (typeof fetchOnce === 'function') fetchOnce();
+}
+
+function updateBotPayBadge() {
+  var el = document.getElementById('bot-pay-badge');
+  if (!el) return;
+  if (BOT.adPayTypes && BOT.adPayTypes.length) {
+    el.textContent = BOT.adPayTypes.map(payLabel).join(' · ');
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
 // ── Config ────────────────────────────────────────────
 var CFG = {
   interval: 30,
@@ -911,7 +968,7 @@ async function fetchTier(transAmount, maxPages) {
       rows: 20,
       tradeType: 'SELL',
       transAmount: transAmount,
-      payTypes: ['BancoDeVenezuela']
+      payTypes: [ACTIVE_PAY]
     };
     var r = await fetch(PROXY, {
       method: 'POST',
@@ -958,7 +1015,7 @@ async function fetchBuySection() {
     var body = {
       asset: 'USDT', fiat: 'VES', merchantCheck: false,
       page: page, rows: 20, tradeType: 'BUY',
-      transAmount: CFG.buyAmount, payTypes: ['BancoDeVenezuela']
+      transAmount: CFG.buyAmount, payTypes: [ACTIVE_PAY]
     };
     var r = await fetch(PROXY, {
       method: 'POST',
@@ -1466,7 +1523,8 @@ var BOT = {
   sessMax: null,
   sessMin: null,
   cachedAd: null,
-  cachedAdAt: 0
+  cachedAdAt: 0,
+  adPayTypes: []
 };
 
 var BOT_CFG = {
@@ -1698,6 +1756,8 @@ async function botCycle() {
     // Precio: confiar en currentPrice si fue actualizado en este ciclo; si no, leer del ad
     if (!BOT.currentPrice) BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit = parseFloat(ad.minSingleTransAmount);
+    var freshPays = (ad.tradeMethods || []).map(function(m){ return m.identifier; }).filter(Boolean);
+    if (freshPays.length) { BOT.adPayTypes = freshPays; updateBotPayBadge(); }
 
     // Calcular techo desde precio de venta configurado
     if (!BOT_CFG.sellPrice) {
@@ -1711,10 +1771,13 @@ async function botCycle() {
     botSetStatus('Analizando mercado...', '#F0B90B');
     var market = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3));
 
-    // 3. Competidores: badge + BancoDeVenezuela, límite mínimo ≤ mío + umbral
+    // 3. Competidores: badge + match con métodos del anuncio, límite mínimo ≤ mío + umbral
+    var myPays = BOT.adPayTypes && BOT.adPayTypes.length ? BOT.adPayTypes : [ACTIVE_PAY];
     var competitors = market.filter(function(a) {
+      var aTypes = a.payTypes || [];
+      var match = myPays.some(function(p) { return aTypes.indexOf(p) !== -1; });
       return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
-             (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
+             match &&
              a.minVES < (BOT.myMinLimit + BOT_CFG.limitThreshold) &&
              a.avail >= 150;
     });
@@ -1803,14 +1866,22 @@ async function botInitialCycle(allowPaused) {
     BOT.adNumber     = ad.adNumber || ad.advNo;
     BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit   = parseFloat(ad.minSingleTransAmount);
+    BOT.adPayTypes   = (ad.tradeMethods || []).map(function(m){ return m.identifier; }).filter(Boolean);
+    if (BOT.adPayTypes.length) {
+      botLog('💳 Métodos: ' + BOT.adPayTypes.map(payLabel).join(', '), '#8b949e');
+      updateBotPayBadge();
+    }
     BOT.ceiling = BOT_CFG.sellPrice * (1 - BOT_CFG.minSpread / 100);
     document.getElementById('bot-ceiling').textContent    = BOT.ceiling.toFixed(3) + ' Bs';
     document.getElementById('bot-cur-price').textContent  = BOT.currentPrice.toFixed(3) + ' Bs';
 
     var market      = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3));
+    var myPays = BOT.adPayTypes && BOT.adPayTypes.length ? BOT.adPayTypes : [ACTIVE_PAY];
     var competitors = market.filter(function(a) {
+      var aTypes = a.payTypes || [];
+      var match = myPays.some(function(p) { return aTypes.indexOf(p) !== -1; });
       return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
-             (a.payTypes || []).indexOf('BancoDeVenezuela') !== -1 &&
+             match &&
              a.minVES < (BOT.myMinLimit + BOT_CFG.limitThreshold) &&
              a.avail >= 150;
     });
@@ -1862,6 +1933,8 @@ async function botToggle() {
     BOT.ceiling = null;
     BOT.cachedAd = null;
     BOT.cachedAdAt = 0;
+    BOT.adPayTypes = [];
+    updateBotPayBadge();
 
     document.getElementById('bot-toggle').textContent = '▶ Iniciar Bot';
     document.getElementById('bot-toggle').style.background = '';
@@ -2332,7 +2405,7 @@ if (!ST.deFastTimer) ST.deFastTimer = setInterval(fastEventTick, 15000);
 setInterval(checkOpenTradesPrompt, 60000);
 hydrateServerHistory();
 
-loadConfig(); loadTgConfig(); loadBotConfig(); updNotifSt(); renderAlerts();
+loadConfig(); loadTgConfig(); loadBotConfig(); loadPayMethod(); updNotifSt(); renderAlerts();
 if (window.DJ) refreshCalibration();
 renderOB('ob-may',   [], 'best');
 renderOB('ob-small', [], 'best-buy');
