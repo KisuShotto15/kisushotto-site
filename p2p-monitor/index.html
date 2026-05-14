@@ -803,7 +803,9 @@ input:focus {
           </div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-          <span style="font-size:13px;color:var(--text-3)">Total ≈</span>
+          <span style="font-size:13px;color:var(--text-3)">Total ≈
+            <span id="manual-balance" style="margin-left:6px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span>
+          </span>
           <span id="manual-total" style="font-size:15px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span>
         </div>
         <div id="manual-st" style="font-size:13px;color:var(--text-3);margin-top:4px;min-height:16px"></div>
@@ -1659,6 +1661,18 @@ function updateManualTotal() {
   el.textContent = (qty && price) ? fmt(price * qty) + ' Bs' : '—';
 }
 
+function updateManualBalance() {
+  var el = document.getElementById('manual-balance');
+  if (!el) return;
+  var ad = BOT.cachedAd;
+  if (!ad) { el.textContent = ''; return; }
+  var usdt = parseFloat(ad.surplusAmount || ad.tradableQuantity || ad.remainQuantity || 0);
+  if (!usdt) { el.textContent = ''; return; }
+  var price = BOT.currentPrice || parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
+  var ves = price ? '· ' + fmt(usdt * price) + ' Bs' : '';
+  el.textContent = '(' + usdt.toFixed(2) + ' USDT ' + ves + ')';
+}
+
 async function manualSetQty() {
   var qty = parseFloat(document.getElementById('manual-qty').value);
   var st = document.getElementById('manual-st');
@@ -1741,7 +1755,7 @@ async function botCycle() {
     } else {
       botSetStatus('Consultando anuncio...', '#F0B90B');
       ad = await botGetMyAd(true);
-      if (ad) { BOT.cachedAd = ad; BOT.cachedAdAt = now; }
+      if (ad) { BOT.cachedAd = ad; BOT.cachedAdAt = now; updateManualBalance(); }
     }
     if (!ad) {
       BOT.cachedAd = null;
@@ -1939,6 +1953,7 @@ async function botToggle() {
     BOT.cachedAdAt = 0;
     BOT.adPayTypes = [];
     updateBotPayBadge();
+    updateManualBalance();
 
     document.getElementById('bot-toggle').textContent = '▶ Iniciar Bot';
     document.getElementById('bot-toggle').style.background = '';
