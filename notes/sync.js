@@ -13,11 +13,13 @@ export async function pull() {
   const since = (await idb.getMeta('lastSyncedAt')) || 0;
   const data = await apiSyncPull(since);
   let changed = false;
+  const changedNoteIds = new Set();
   for (const n of data.notes || []) {
     const local = await idb.getOne('notes', n.id);
     if (!local || local.last_modified <= n.last_modified) {
       await idb.put('notes', n);
       changed = true;
+      changedNoteIds.add(n.id);
     }
   }
   const incomingCats = data.categories || [];
@@ -34,7 +36,7 @@ export async function pull() {
     changed = true;
   }
   if (data.server_time) await idb.setMeta('lastSyncedAt', data.server_time);
-  return { ok: true, changed };
+  return { ok: true, changed, changedNoteIds };
 }
 
 export async function pushQueueDebounced() {

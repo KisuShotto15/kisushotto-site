@@ -103,14 +103,28 @@ async function init() {
     console.warn('initial sync failed', e);
   }
 
-  // Periodic pull — only re-render if server returned new/updated data
+  // Periodic pull — re-render grid or refresh editor if the open note changed
   setInterval(async () => {
     if (!navigator.onLine) return;
     try {
-      const { changed } = await pull();
-      if (changed && $('#editor').hidden) { await loadFromIDB(); render(); }
+      const { changed, changedNoteIds } = await pull();
+      if (!changed) return;
+      const editorOpen = !$('#editor').hidden;
+      if (editorOpen && State.editing && changedNoteIds?.has(State.editing.id)) {
+        // Reload the open note from IDB without closing the editor
+        const fresh = await idb.getOne('notes', State.editing.id);
+        if (fresh) {
+          State.editing = fresh;
+          State.notes[State.notes.findIndex(n => n.id === fresh.id)] = fresh;
+          renderChecklist();
+          updateEditorMeta();
+          $('#ed-status').textContent = 'Actualizado';
+        }
+      } else if (!editorOpen) {
+        await loadFromIDB(); render();
+      }
     } catch {}
-  }, 30000);
+  }, 10000);
 
   // Open note from query param (push notification deep-link)
   const params = new URLSearchParams(location.search);
