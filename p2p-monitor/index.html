@@ -2039,7 +2039,7 @@ async function botToggle() {
     BOT.running = true;
     BOT.lastReprice = 0;
     botSetStatus('✓ Bot activo', '#1D9E75');
-    BOT.timer = setInterval(botCycle, 30000);
+    BOT.timer = setInterval(botCycle, 20000);
     keepAwakeStart();
   }
 }
