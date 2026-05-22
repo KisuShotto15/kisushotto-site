@@ -881,7 +881,8 @@ var PAY_METHODS = [
 ];
 var ACTIVE_PAY = 'BancoDeVenezuela';
 // Identifiers genéricos (catch-all) que NO deben usarse para filtrar competidores
-var GENERIC_PAY_IDS = ['BANK', 'BankTransfer', 'OtherPayments', 'SpecificBank'];
+// BANK = Bank Transfer (legítimo, lo usa el usuario junto a BDV) → no se filtra
+var GENERIC_PAY_IDS = ['OtherPayments', 'SpecificBank'];
 
 function payLabel(id) {
   for (var i = 0; i < PAY_METHODS.length; i++) {
@@ -1907,9 +1908,15 @@ async function botInitialCycle(allowPaused) {
     if (BOT.adPayTypes.length) {
       botLog('💳 Métodos: ' + BOT.adPayTypes.map(payLabel).join(', '), '#8b949e');
       updateBotPayBadge();
-      // Auto-sync selector del monitor con el primer método del anuncio
-      var primary = BOT.adPayTypes[0];
-      if (PAY_METHODS.some(function(m){ return m.id === primary; }) && primary !== ACTIVE_PAY) {
+      // Auto-sync selector del monitor con el primer método del anuncio que esté en PAY_METHODS
+      var primary = null;
+      for (var pi = 0; pi < BOT.adPayTypes.length; pi++) {
+        if (PAY_METHODS.some(function(m){ return m.id === BOT.adPayTypes[pi]; })) {
+          primary = BOT.adPayTypes[pi];
+          break;
+        }
+      }
+      if (primary && primary !== ACTIVE_PAY) {
         ACTIVE_PAY = primary;
         try { localStorage.setItem('p2p_pay_method', primary); } catch(e) {}
         var sel = document.getElementById('pay-method-select');
