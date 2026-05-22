@@ -972,8 +972,9 @@ var COOLDOWN = {};
 var COOLDOWN_MS = 5 * 60000;
 
 // ── API ──────────────────────────────────────────────
-async function fetchTier(transAmount, maxPages) {
+async function fetchTier(transAmount, maxPages, payTypesOverride) {
   maxPages = maxPages || 2;
+  var pays = (payTypesOverride && payTypesOverride.length) ? payTypesOverride : [ACTIVE_PAY];
   async function onePage(page) {
     var body = {
       asset: 'USDT',
@@ -983,7 +984,7 @@ async function fetchTier(transAmount, maxPages) {
       rows: 20,
       tradeType: 'SELL',
       transAmount: transAmount,
-      payTypes: [ACTIVE_PAY]
+      payTypes: pays
     };
     var r = await fetch(PROXY, {
       method: 'POST',
@@ -1803,9 +1804,9 @@ async function botCycle() {
     document.getElementById('bot-cur-price').textContent = BOT.currentPrice.toFixed(3) + ' Bs';
     updateBotPriceColor();
 
-    // 2. Mercado público — 3 páginas para no perder competidores profundos
+    // 2. Mercado público — 3 páginas, usando los métodos del anuncio del bot
     botSetStatus('Analizando mercado...', '#F0B90B');
-    var market = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3));
+    var market = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3, BOT.adPayTypes));
 
     // 3. Competidores: badge + match con métodos del anuncio, límite mínimo ≤ mío + umbral
     var myPays = BOT.adPayTypes && BOT.adPayTypes.length ? BOT.adPayTypes : [ACTIVE_PAY];
@@ -1929,7 +1930,7 @@ async function botInitialCycle(allowPaused) {
     document.getElementById('bot-cur-price').textContent  = BOT.currentPrice.toFixed(3) + ' Bs';
     updateBotPriceColor();
 
-    var market      = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3));
+    var market      = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3, BOT.adPayTypes));
     var myPays = BOT.adPayTypes && BOT.adPayTypes.length ? BOT.adPayTypes : [ACTIVE_PAY];
     var competitors = market.filter(function(a) {
       var aTypes = a.payTypes || [];
