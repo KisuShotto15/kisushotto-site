@@ -207,6 +207,9 @@
         <option value="daily">Diario</option>
         <option value="weekly">Semanal (días específicos)</option>
         <option value="custom">Cada N días</option>
+        <option value="monthly">Mensual (día del mes)</option>
+        <option value="every_n_months">Cada N meses</option>
+        <option value="yearly">Anual</option>
       </select>
     </div>
 
@@ -229,6 +232,52 @@
       <div class="form-field">
         <label>Cada cuántos días</label>
         <input type="number" id="fEvery" min="2" max="30" placeholder="2">
+      </div>
+    </div>
+
+    <div id="monthlyFields" style="display:none">
+      <div class="form-field">
+        <label>Día del mes</label>
+        <input type="number" id="fMonthDay" min="1" max="31" placeholder="22">
+      </div>
+    </div>
+
+    <div id="everyNMonthsFields" style="display:none">
+      <div class="form-row">
+        <div class="form-field">
+          <label>Cada cuántos meses</label>
+          <input type="number" id="fNMonths" min="2" max="12" placeholder="3">
+        </div>
+        <div class="form-field">
+          <label>Día del mes</label>
+          <input type="number" id="fNMonthsDay" min="1" max="31" placeholder="1">
+        </div>
+      </div>
+    </div>
+
+    <div id="yearlyFields" style="display:none">
+      <div class="form-row">
+        <div class="form-field">
+          <label>Mes</label>
+          <select id="fYearMonth">
+            <option value="1">Enero</option>
+            <option value="2">Febrero</option>
+            <option value="3">Marzo</option>
+            <option value="4">Abril</option>
+            <option value="5">Mayo</option>
+            <option value="6">Junio</option>
+            <option value="7">Julio</option>
+            <option value="8">Agosto</option>
+            <option value="9">Septiembre</option>
+            <option value="10">Octubre</option>
+            <option value="11">Noviembre</option>
+            <option value="12">Diciembre</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Día</label>
+          <input type="number" id="fYearDay" min="1" max="31" placeholder="1">
+        </div>
       </div>
     </div>
 

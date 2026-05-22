@@ -63,6 +63,27 @@ function isDueOn(habit, dateISO) {
     const diff   = Math.floor((d - origin) / 86400000);
     return diff % every === 0;
   }
+
+  if (habit.frequency === 'monthly') {
+    const days = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1];
+    return days.includes(d.getDate());
+  }
+
+  if (habit.frequency === 'every_n_months') {
+    const every  = habit.frequency_every || 3;
+    const day    = habit.frequency_days ? JSON.parse(habit.frequency_days)[0] : 1;
+    if (d.getDate() !== day) return false;
+    const origin      = new Date(habit.created_at * 1000);
+    const originMonth = origin.getFullYear() * 12 + origin.getMonth();
+    const checkMonth  = d.getFullYear() * 12 + d.getMonth();
+    return (checkMonth - originMonth) % every === 0;
+  }
+
+  if (habit.frequency === 'yearly') {
+    const [m, day] = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1, 1];
+    return d.getMonth() + 1 === m && d.getDate() === day;
+  }
+
   return true;
 }
 
@@ -74,6 +95,20 @@ function freqLabel(habit) {
     return days.map(d => DAYS[d]).join(' ');
   }
   if (habit.frequency === 'custom') return `Cada ${habit.frequency_every} días`;
+  if (habit.frequency === 'monthly') {
+    const days = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1];
+    return `Mensual · día ${days.join(', ')}`;
+  }
+  if (habit.frequency === 'every_n_months') {
+    const every = habit.frequency_every || 3;
+    const day   = habit.frequency_days ? JSON.parse(habit.frequency_days)[0] : 1;
+    return `Cada ${every} meses · día ${day}`;
+  }
+  if (habit.frequency === 'yearly') {
+    const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const [m, day] = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1, 1];
+    return `Anual · ${day} ${MONTHS[m - 1]}`;
+  }
   return '';
 }
 
@@ -380,6 +415,13 @@ window.openPanel = function(habit) {
   $('fUnit').value      = habit?.target_unit   || '';
   $('fFreq').value      = habit?.frequency     || 'daily';
   $('fEvery').value     = habit?.frequency_every ?? 2;
+
+  const fd = habit?.frequency_days ? JSON.parse(habit.frequency_days) : [];
+  $('fMonthDay').value      = habit?.frequency === 'monthly'        ? (fd[0] ?? 1)  : 1;
+  $('fNMonths').value       = habit?.frequency === 'every_n_months' ? (habit.frequency_every ?? 3) : 3;
+  $('fNMonthsDay').value    = habit?.frequency === 'every_n_months' ? (fd[0] ?? 1)  : 1;
+  $('fYearMonth').value     = habit?.frequency === 'yearly'         ? (fd[0] ?? 1)  : 1;
+  $('fYearDay').value       = habit?.frequency === 'yearly'         ? (fd[1] ?? 1)  : 1;
   $('fReminder').value  = habit?.reminder_time || '';
   $('fDesc').value      = habit?.description   || '';
 
@@ -430,8 +472,11 @@ window.onTypeChange = function() {
 
 window.onFreqChange = function() {
   const v = $('fFreq').value;
-  $('weeklyFields').style.display = v === 'weekly' ? 'block' : 'none';
-  $('customFields').style.display = v === 'custom'  ? 'block' : 'none';
+  $('weeklyFields').style.display        = v === 'weekly'         ? 'block' : 'none';
+  $('customFields').style.display        = v === 'custom'         ? 'block' : 'none';
+  $('monthlyFields').style.display       = v === 'monthly'        ? 'block' : 'none';
+  $('everyNMonthsFields').style.display  = v === 'every_n_months' ? 'block' : 'none';
+  $('yearlyFields').style.display        = v === 'yearly'         ? 'block' : 'none';
 };
 
 window.saveHabit = async function() {
@@ -449,8 +494,14 @@ window.saveHabit = async function() {
     target_value:    parseFloat($('fTarget').value) || 1,
     target_unit:     $('fUnit').value.trim()        || 'veces',
     frequency:       $('fFreq').value,
-    frequency_days:  $('fFreq').value === 'weekly'  ? activeDays : null,
-    frequency_every: parseInt($('fEvery').value)    || 2,
+    frequency_days:  $('fFreq').value === 'weekly'         ? activeDays
+                   : $('fFreq').value === 'monthly'        ? [parseInt($('fMonthDay').value) || 1]
+                   : $('fFreq').value === 'every_n_months' ? [parseInt($('fNMonthsDay').value) || 1]
+                   : $('fFreq').value === 'yearly'         ? [parseInt($('fYearMonth').value) || 1, parseInt($('fYearDay').value) || 1]
+                   : null,
+    frequency_every: $('fFreq').value === 'every_n_months' ? (parseInt($('fNMonths').value) || 3)
+                   : $('fFreq').value === 'custom'         ? (parseInt($('fEvery').value)   || 2)
+                   : null,
     reminder_time:   $('fReminder').value           || null,
     description:     $('fDesc').value.trim()        || null,
   };

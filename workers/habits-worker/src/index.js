@@ -30,6 +30,50 @@ function getUser(request) {
   return (request.headers.get('X-User-Email') || '').toLowerCase().trim() || null;
 }
 
+// ── Frequency helper ──────────────────────────────────────────────────────────
+function isDueOn(habit, dateISO) {
+  const d   = new Date(dateISO + 'T00:00:00Z');
+  const dow = d.getUTCDay();
+  const dom = d.getUTCDate();
+  const mon = d.getUTCMonth() + 1;
+
+  if (habit.frequency === 'daily') return true;
+
+  if (habit.frequency === 'weekly') {
+    const days = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1,2,3,4,5];
+    return days.includes(dow);
+  }
+
+  if (habit.frequency === 'custom') {
+    const every  = habit.frequency_every || 1;
+    const origin = new Date(habit.created_at * 1000);
+    const diff   = Math.floor((d - origin) / 86400000);
+    return diff >= 0 && diff % every === 0;
+  }
+
+  if (habit.frequency === 'monthly') {
+    const days = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1];
+    return days.includes(dom);
+  }
+
+  if (habit.frequency === 'every_n_months') {
+    const every       = habit.frequency_every || 3;
+    const day         = habit.frequency_days ? JSON.parse(habit.frequency_days)[0] : 1;
+    if (dom !== day) return false;
+    const origin      = new Date(habit.created_at * 1000);
+    const originMonth = origin.getUTCFullYear() * 12 + origin.getUTCMonth();
+    const checkMonth  = d.getUTCFullYear() * 12 + d.getUTCMonth();
+    return (checkMonth - originMonth) % every === 0;
+  }
+
+  if (habit.frequency === 'yearly') {
+    const [m, day] = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1, 1];
+    return mon === m && dom === day;
+  }
+
+  return true;
+}
+
 // ── DB bootstrap ──────────────────────────────────────────────────────────────
 async function migrate(env) {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS habits (id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT '', name TEXT NOT NULL, description TEXT, type TEXT NOT NULL DEFAULT 'binary', target_value REAL DEFAULT 1, target_unit TEXT DEFAULT 'veces', frequency TEXT NOT NULL DEFAULT 'daily', frequency_days TEXT, frequency_every INTEGER DEFAULT 1, color TEXT NOT NULL DEFAULT 'lavender', emoji TEXT NOT NULL DEFAULT '✓', reminder_time TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)").run();
@@ -160,7 +204,7 @@ async function getStats(request, env, uid) {
   const to   = `${month}-31`;
 
   const { results: habits } = await env.DB.prepare(
-    `SELECT id, name, frequency, frequency_days, frequency_every, color FROM habits WHERE active = 1 AND user_id = ?`
+    `SELECT id, name, frequency, frequency_days, frequency_every, color, created_at FROM habits WHERE active = 1 AND user_id = ?`
   ).bind(uid).all();
   const { results: comps } = await env.DB.prepare(
     `SELECT habit_id, date, value FROM completions WHERE user_id = ? AND date >= ? AND date <= ?`
@@ -182,11 +226,9 @@ async function getStats(request, env, uid) {
   const daysInMonth = new Date(year, mon, 0).getDate();
   for (let d = 1; d <= daysInMonth; d++) {
     const date = `${month}-${String(d).padStart(2, '0')}`;
-    let done = 0;
-    for (const h of habits) {
-      if (compMap[h.id]?.[date]) done++;
-    }
-    daily[date] = habits.length > 0 ? Math.round(done / habits.length * 100) : 0;
+    const due  = habits.filter(h => isDueOn(h, date));
+    const done = due.filter(h => compMap[h.id]?.[date]).length;
+    daily[date] = due.length > 0 ? Math.round(done / due.length * 100) : 0;
   }
 
   return json({ stats, daily, total_habits: habits.length });
