@@ -1291,7 +1291,7 @@ function renderOB(id, ads, bestCls) {
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
-        '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'g' : 'b') : '') + '">' + fmt(ad.price) + '</span>' +
+        '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'g' : 'b') : '') + '">' + fmtP(ad.price) + '</span>' +
         '<span class="lim-c">' + lims + '</span>' +
       '</div>';
     } else {
@@ -1333,7 +1333,7 @@ function renderBuySection(ads) {
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
-        '<span class="price-c y">' + fmt(ad.price) + '</span>' +
+        '<span class="price-c y">' + fmtP(ad.price) + '</span>' +
         '<span class="lim-c">' + lims + '</span>' +
       '</div>';
     } else {
@@ -2188,6 +2188,7 @@ function loadConfig() {
 
 // ── Utils ─────────────────────────────────────────────
 function fmt(n) { return parseFloat(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtP(n) { return parseFloat(n).toLocaleString('es-VE', { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
 function fmtM(n) {
   n = parseFloat(n);
   if (n >= 1000000) return (n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1) + 'M';
