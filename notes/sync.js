@@ -16,7 +16,7 @@ export async function pull() {
   const changedNoteIds = new Set();
   for (const n of data.notes || []) {
     const local = await idb.getOne('notes', n.id);
-    if (!local || local.last_modified <= n.last_modified) {
+    if (!local || local.last_modified < n.last_modified) {
       await idb.put('notes', n);
       changed = true;
       changedNoteIds.add(n.id);

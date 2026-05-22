@@ -111,14 +111,18 @@ async function init() {
       if (!changed) return;
       const editorOpen = !$('#editor').hidden;
       if (editorOpen && State.editing && changedNoteIds?.has(State.editing.id)) {
-        // Reload the open note from IDB without closing the editor
-        const fresh = await idb.getOne('notes', State.editing.id);
-        if (fresh) {
-          State.editing = fresh;
-          State.notes[State.notes.findIndex(n => n.id === fresh.id)] = fresh;
-          renderChecklist();
-          updateEditorMeta();
-          $('#ed-status').textContent = 'Actualizado';
+        // Only refresh the open note if the user isn't actively typing in it
+        const userTyping = document.activeElement && $('#editor').contains(document.activeElement)
+          && document.activeElement !== document.body;
+        if (!userTyping) {
+          const fresh = await idb.getOne('notes', State.editing.id);
+          if (fresh) {
+            State.editing = fresh;
+            State.notes[State.notes.findIndex(n => n.id === fresh.id)] = fresh;
+            renderChecklist();
+            updateEditorMeta();
+            $('#ed-status').textContent = 'Actualizado';
+          }
         }
       } else if (!editorOpen) {
         await loadFromIDB(); render();
@@ -1237,6 +1241,23 @@ function bindEditorActions() {
     }
   });
 
+  // Paste image from clipboard anywhere in the editor
+  $('#editor').addEventListener('paste', async (ev) => {
+    if (!State.editing) return;
+    const imageItem = [...(ev.clipboardData?.items || [])].find(it => it.type.startsWith('image/'));
+    if (!imageItem) return;
+    ev.preventDefault();
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    const blob = await resizeImage(file, 1600, 0.85);
+    try {
+      const att = await apiUploadAttachment(State.editing.id, blob, 'image');
+      State.editing.attachments = (State.editing.attachments || []).concat([{ ...att, note_id: State.editing.id }]);
+      renderAttachments();
+      scheduleSave();
+    } catch (err) { alert(err.message); }
+  });
+
   // Image
   $('#ed-image').addEventListener('click', () => $('#file-image').click());
   $('#file-image').addEventListener('change', async (e) => {
@@ -1326,6 +1347,7 @@ function bindEditorActions() {
   cl.addEventListener('beforeinput', (ev) => {
     if (ev.inputType !== 'deleteContentBackward') return;
     if (!ev.target.matches('.ed-check-text')) return;
+    if (ev.isComposing) return;
     if (ev.target.textContent !== '') return;
     ev.preventDefault();
     const e = State.editing;
