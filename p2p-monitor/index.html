@@ -914,6 +914,16 @@ function setPayMethod(id) {
   if (typeof fetchOnce === 'function') fetchOnce();
 }
 
+function updateBotPriceColor() {
+  var el = document.getElementById('bot-cur-price');
+  if (!el || !BOT.currentPrice || !BOT.ceiling) return;
+  var ratio = BOT.currentPrice / BOT.ceiling;
+  if (ratio > 1)         el.style.color = '#E24B4A';
+  else if (ratio > 0.98) el.style.color = '#F0B90B';
+  else if (ratio < 0.85) el.style.color = '#1D9E75';
+  else                   el.style.color = 'var(--gold)';
+}
+
 function updateBotPayBadge() {
   var el = document.getElementById('bot-pay-badge');
   if (!el) return;
@@ -1684,6 +1694,8 @@ async function manualSetQty() {
     var data = await botCallWorker('/update-quantity', { advNo: adNo, totalAmount: qty });
     if (data.code && data.code !== '000000') throw new Error(data.msgDetail || data.msg || data.message || 'código ' + data.code);
     botLog('✎ Cantidad manual → ' + qty + ' USDT', '#58A6FF');
+    BOT.cachedAd = null;
+    BOT.cachedAdAt = 0;
     st.textContent = '✓ Cantidad actualizada'; st.style.color = 'var(--green)';
   } catch(e) {
     st.textContent = '✗ ' + e.message; st.style.color = 'var(--red)';
@@ -1769,8 +1781,13 @@ async function botCycle() {
       return;
     }
     BOT.adNumber   = ad.adNumber || ad.advNo;
-    // Precio: confiar en currentPrice si fue actualizado en este ciclo; si no, leer del ad
-    if (!BOT.currentPrice) BOT.currentPrice = parseFloat(ad.price);
+    // Sincronizar BOT.currentPrice con el ad fresco para detectar cambios manuales en Binance.
+    // Excepción: si el bot acaba de reprice (<60s), conservar el local para evitar race con propagación.
+    var adIsFresh = (BOT.cachedAdAt === now);
+    var recentReprice = BOT.lastReprice && (now - BOT.lastReprice) < 60000;
+    if (!BOT.currentPrice || (adIsFresh && !recentReprice)) {
+      BOT.currentPrice = parseFloat(ad.price);
+    }
     BOT.myMinLimit = parseFloat(ad.minSingleTransAmount);
     var freshPays = (ad.tradeMethods || []).map(function(m){ return m.identifier; })
                     .filter(function(id){ return id && GENERIC_PAY_IDS.indexOf(id) === -1; });
@@ -1783,6 +1800,7 @@ async function botCycle() {
     BOT.ceiling = BOT_CFG.sellPrice * (1 - BOT_CFG.minSpread / 100);
     document.getElementById('bot-ceiling').textContent = BOT.ceiling.toFixed(3) + ' Bs';
     document.getElementById('bot-cur-price').textContent = BOT.currentPrice.toFixed(3) + ' Bs';
+    updateBotPriceColor();
 
     // 2. Mercado público — 3 páginas para no perder competidores profundos
     botSetStatus('Analizando mercado...', '#F0B90B');
@@ -1865,6 +1883,7 @@ async function botCycle() {
     var msg = (isUp ? '↑' : '↓') + ' ' + BOT.currentPrice.toFixed(3) + ' → ' + targetPrice.toFixed(3) + ' Bs  |  ' + reason;
     BOT.currentPrice = targetPrice;
     document.getElementById('bot-cur-price').textContent = targetPrice.toFixed(3) + ' Bs';
+    updateBotPriceColor();
     botLog(msg, isUp ? '#1D9E75' : '#5dade2');
     botSetStatus('✓ Repriciado', '#1D9E75');
     updateTopbarBotPrice(targetPrice);
@@ -1888,10 +1907,20 @@ async function botInitialCycle(allowPaused) {
     if (BOT.adPayTypes.length) {
       botLog('💳 Métodos: ' + BOT.adPayTypes.map(payLabel).join(', '), '#8b949e');
       updateBotPayBadge();
+      // Auto-sync selector del monitor con el primer método del anuncio
+      var primary = BOT.adPayTypes[0];
+      if (PAY_METHODS.some(function(m){ return m.id === primary; }) && primary !== ACTIVE_PAY) {
+        ACTIVE_PAY = primary;
+        try { localStorage.setItem('p2p_pay_method', primary); } catch(e) {}
+        var sel = document.getElementById('pay-method-select');
+        if (sel) sel.value = primary;
+        botLog('🔄 Selector ajustado → ' + payLabel(primary), '#8b949e');
+      }
     }
     BOT.ceiling = BOT_CFG.sellPrice * (1 - BOT_CFG.minSpread / 100);
     document.getElementById('bot-ceiling').textContent    = BOT.ceiling.toFixed(3) + ' Bs';
     document.getElementById('bot-cur-price').textContent  = BOT.currentPrice.toFixed(3) + ' Bs';
+    updateBotPriceColor();
 
     var market      = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3));
     var myPays = BOT.adPayTypes && BOT.adPayTypes.length ? BOT.adPayTypes : [ACTIVE_PAY];
@@ -1934,6 +1963,7 @@ async function botInitialCycle(allowPaused) {
     botLog('⚡ Inicial: ' + arrow + ' ' + BOT.currentPrice.toFixed(3) + ' → ' + targetPrice.toFixed(3) + ' Bs', '#F0B90B');
     BOT.currentPrice = targetPrice;
     document.getElementById('bot-cur-price').textContent = targetPrice.toFixed(3) + ' Bs';
+    updateBotPriceColor();
     updateTopbarBotPrice(targetPrice);
   } catch(e) {
     botLog('⚠ Reprice inicial: ' + e.message, '#F6465D');
@@ -1959,6 +1989,7 @@ async function botToggle() {
     document.getElementById('bot-toggle').style.background = '';
     document.getElementById('bot-live').style.display = 'none';
     document.getElementById('bot-cur-price').textContent = '—';
+    document.getElementById('bot-cur-price').style.color = 'var(--gold)';
     document.getElementById('bot-ceiling').textContent = '—';
     updateTopbarBotPrice(null);
     botSetStatus('Deteniendo...', '#888');
