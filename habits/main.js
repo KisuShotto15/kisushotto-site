@@ -452,7 +452,11 @@ window.closePanel = function() {
 
 window.toggleEmojiPicker = function() {
   const p = $('emojiPicker');
-  p.style.display = p.style.display === 'grid' ? 'none' : 'grid';
+  if (p.style.display === 'grid') { p.style.display = 'none'; return; }
+  const rect = $('emojiBtn').getBoundingClientRect();
+  p.style.top  = (rect.bottom + 4) + 'px';
+  p.style.left = Math.min(rect.left, window.innerWidth - 248) + 'px';
+  p.style.display = 'grid';
 };
 
 window.pickEmoji = function(e) {
