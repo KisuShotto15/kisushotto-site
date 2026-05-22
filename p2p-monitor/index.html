@@ -665,7 +665,10 @@ input:focus {
     <div class="panel" style="padding:11px;position:relative">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div class="ptitle" style="margin-bottom:0;font-size:13px">Libro de compradores — Sección Vender</div>
-        <button id="ob-gear-btn" class="btn btn-sm" onclick="toggleObGear(event)" title="Configuración" style="font-size:15px;padding:3px 9px;flex-shrink:0">⚙</button>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span id="ob-commission-label" style="font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.04em;display:none">COMISIÓN —</span>
+          <button id="ob-gear-btn" class="btn btn-sm" onclick="toggleObGear(event)" title="Configuración" style="font-size:15px;padding:3px 9px">⚙</button>
+        </div>
       </div>
 
       <!-- Config popup -->
@@ -739,7 +742,10 @@ input:focus {
           <div class="ptitle" style="margin-bottom:0">🤖 Auto-Repricing</div>
           <span id="bot-pay-badge" style="display:none;font-size:11px;font-weight:700;color:var(--gold);background:var(--gold-d);border:1px solid var(--gold-b);border-radius:4px;padding:2px 6px;letter-spacing:.02em">—</span>
         </div>
-        <button id="bot-gear-btn" class="btn btn-sm" onclick="toggleBotGear(event)" title="Configuración API" style="font-size:15px;padding:3px 9px">⚙</button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span id="bot-commission-label" style="font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.04em;display:none">COMISIÓN —</span>
+          <button id="bot-gear-btn" class="btn btn-sm" onclick="toggleBotGear(event)" title="Configuración API" style="font-size:15px;padding:3px 9px">⚙</button>
+        </div>
       </div>
 
       <!-- Gear popup (Worker URL, Bot Token, Ad Number) -->
@@ -1609,12 +1615,26 @@ function loadBotConfig() {
   } catch(e) {}
 }
 
+function updateCommissionLabels() {
+  var c = CFG.commission || 0;
+  ['ob-commission-label','bot-commission-label'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (c > 0) {
+      el.textContent = 'COMISIÓN ' + c + '%';
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+}
+
 function botUpdateCeiling() {
   var sell   = parseFloat(document.getElementById('cfg-bot-sell').value)   || 0;
   var spread = parseFloat(document.getElementById('cfg-bot-spread').value) || 0.5;
   var disp   = document.getElementById('cfg-bot-ceil-display');
   if (sell > 0) {
-    var ceiling = sell * (1 - spread / 100);
+    var ceiling = sell * (1 - (spread + (CFG.commission || 0)) / 100);
     disp.textContent = ceiling.toFixed(3) + ' Bs';
   } else {
     disp.textContent = '— (ingresa precio de venta)';
@@ -1799,7 +1819,7 @@ async function botCycle() {
     if (!BOT_CFG.sellPrice) {
       throw new Error('Configura el Precio de venta antes de iniciar');
     }
-    BOT.ceiling = BOT_CFG.sellPrice * (1 - BOT_CFG.minSpread / 100);
+    BOT.ceiling = BOT_CFG.sellPrice * (1 - (BOT_CFG.minSpread + (CFG.commission || 0)) / 100);
     document.getElementById('bot-ceiling').textContent = BOT.ceiling.toFixed(3) + ' Bs';
     document.getElementById('bot-cur-price').textContent = BOT.currentPrice.toFixed(3) + ' Bs';
     updateBotPriceColor();
@@ -1925,7 +1945,7 @@ async function botInitialCycle(allowPaused) {
         botLog('🔄 Selector ajustado → ' + payLabel(primary), '#8b949e');
       }
     }
-    BOT.ceiling = BOT_CFG.sellPrice * (1 - BOT_CFG.minSpread / 100);
+    BOT.ceiling = BOT_CFG.sellPrice * (1 - (BOT_CFG.minSpread + (CFG.commission || 0)) / 100);
     document.getElementById('bot-ceiling').textContent    = BOT.ceiling.toFixed(3) + ' Bs';
     document.getElementById('bot-cur-price').textContent  = BOT.currentPrice.toFixed(3) + ' Bs';
     updateBotPriceColor();
@@ -2144,6 +2164,8 @@ function saveConfig() {
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   if (ST.running) { clearInterval(ST.timer); ST.timer = setInterval(fetchOnce, CFG.interval * 1000); }
+  updateCommissionLabels();
+  botUpdateCeiling();
   toast('Guardado');
 }
 
@@ -2463,7 +2485,7 @@ if (!ST.deFastTimer) ST.deFastTimer = setInterval(fastEventTick, 15000);
 setInterval(checkOpenTradesPrompt, 60000);
 hydrateServerHistory();
 
-loadConfig(); loadTgConfig(); loadBotConfig(); loadPayMethod(); updNotifSt(); renderAlerts();
+loadConfig(); loadTgConfig(); loadBotConfig(); loadPayMethod(); updateCommissionLabels(); updNotifSt(); renderAlerts();
 if (window.DJ) refreshCalibration();
 renderOB('ob-may',   [], 'best');
 renderOB('ob-small', [], 'best-buy');
