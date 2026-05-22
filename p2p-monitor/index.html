@@ -2166,6 +2166,7 @@ function saveConfig() {
   if (ST.running) { clearInterval(ST.timer); ST.timer = setInterval(fetchOnce, CFG.interval * 1000); }
   updateCommissionLabels();
   botUpdateCeiling();
+  fetchOnce();
   toast('Guardado');
 }
 
