@@ -452,6 +452,8 @@ window.closePanel = function() {
 
 window.toggleEmojiPicker = function() {
   const p = $('emojiPicker');
+  // Move to body to escape the panel's CSS transform containing block
+  if (p.parentElement !== document.body) document.body.appendChild(p);
   if (p.style.display === 'grid') { p.style.display = 'none'; return; }
   const rect = $('emojiBtn').getBoundingClientRect();
   p.style.top  = (rect.bottom + 4) + 'px';
