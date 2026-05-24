@@ -457,7 +457,7 @@ window.toggleEmojiPicker = function() {
   if (p.style.display === 'grid') { p.style.display = 'none'; return; }
   const rect = $('emojiBtn').getBoundingClientRect();
   p.style.top  = (rect.bottom + 4) + 'px';
-  p.style.left = Math.min(rect.left, window.innerWidth - 248) + 'px';
+  p.style.left = Math.min(rect.left, window.innerWidth - 236) + 'px';
   p.style.display = 'grid';
 };
 
