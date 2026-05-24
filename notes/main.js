@@ -1241,21 +1241,39 @@ function bindEditorActions() {
     }
   });
 
-  // Paste image from clipboard anywhere in the editor
+  // Paste handler: images get uploaded; text always stripped to plain
   $('#editor').addEventListener('paste', async (ev) => {
     if (!State.editing) return;
-    const imageItem = [...(ev.clipboardData?.items || [])].find(it => it.type.startsWith('image/'));
-    if (!imageItem) return;
+    const items = [...(ev.clipboardData?.items || [])];
+    const imageItem = items.find(it => it.type.startsWith('image/'));
+    if (imageItem) {
+      ev.preventDefault();
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      const blob = await resizeImage(file, 1600, 0.85);
+      try {
+        const att = await apiUploadAttachment(State.editing.id, blob, 'image');
+        State.editing.attachments = (State.editing.attachments || []).concat([{ ...att, note_id: State.editing.id }]);
+        renderAttachments();
+        scheduleSave();
+      } catch (err) { alert(err.message); }
+      return;
+    }
+    // Strip formatting: always paste plain text
+    const target = document.activeElement;
+    if (!target || (!target.isContentEditable && target.tagName !== 'TEXTAREA' && target.tagName !== 'INPUT')) return;
+    const plain = ev.clipboardData.getData('text/plain');
+    if (!plain) return;
     ev.preventDefault();
-    const file = imageItem.getAsFile();
-    if (!file) return;
-    const blob = await resizeImage(file, 1600, 0.85);
-    try {
-      const att = await apiUploadAttachment(State.editing.id, blob, 'image');
-      State.editing.attachments = (State.editing.attachments || []).concat([{ ...att, note_id: State.editing.id }]);
-      renderAttachments();
-      scheduleSave();
-    } catch (err) { alert(err.message); }
+    if (target.isContentEditable) {
+      document.execCommand('insertText', false, plain);
+    } else {
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      target.value = target.value.slice(0, start) + plain + target.value.slice(end);
+      target.selectionStart = target.selectionEnd = start + plain.length;
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   });
 
   // Image
