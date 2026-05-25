@@ -84,24 +84,29 @@ async function init() {
   updateNetBanner(navigator.onLine);
   onConnectionChange(updateNetBanner);
 
-  // Local-first — wrapped in try/catch because IDB may be blocked (Brave Shields)
+  // Network-first with short timeout to avoid showing stale data flash
+  const networkPromise = (async () => {
+    State.user = await apiGetMe();
+    await pull();
+  })().catch(e => { console.warn('initial sync failed', e); });
+
+  // Wait up to 600ms for pull; if slower, render local (stale) data while it finishes
+  if (navigator.onLine) {
+    await Promise.race([networkPromise, new Promise(r => setTimeout(r, 600))]);
+  }
+
   try {
     await loadFromIDB();
     render();
   } catch (e) {
     console.warn('IndexedDB load failed (Brave Shields?)', e);
-    render(); // render empty state so the UI is usable
+    render();
   }
 
-  // Network
-  try {
-    State.user = await apiGetMe();
-    await pull();
-    await loadFromIDB();
-    render();
-  } catch (e) {
-    console.warn('initial sync failed', e);
-  }
+  // If network was slow, re-render once it finishes
+  networkPromise.then(async () => {
+    try { await loadFromIDB(); render(); } catch {}
+  });
 
   // Periodic pull — re-render grid or refresh editor if the open note changed
   setInterval(async () => {
@@ -118,6 +123,7 @@ async function init() {
           const fresh = await idb.getOne('notes', State.editing.id);
           if (fresh) {
             State.editing = fresh;
+            State.editingSnapshotTime = fresh.last_modified || 0;
             State.notes[State.notes.findIndex(n => n.id === fresh.id)] = fresh;
             renderChecklist();
             updateEditorMeta();
@@ -678,6 +684,7 @@ async function openCard(n) {
 // ── editor ───────────────────────────────────────────────────────────────────
 function openEditor(n) {
   State.editing = JSON.parse(JSON.stringify(n));
+  State.editingSnapshotTime = n.last_modified || 0;
   const e = State.editing;
 
   // Push history entry so Android back button closes editor instead of exiting
@@ -932,6 +939,24 @@ function scheduleSave() {
 async function commitEditor() {
   const e = State.editing;
   if (!e) return;
+  // Merge remote changes that arrived while we were editing
+  try {
+    const remote = await idb.getOne('notes', e.id);
+    if (remote && remote.last_modified > (State.editingSnapshotTime || 0)) {
+      if (e.type === 'checklist' && Array.isArray(remote.checklist_items)) {
+        const localById = new Map((e.checklist_items || []).map(it => [it.id, it]));
+        const merged = remote.checklist_items.map(rit => {
+          const lit = localById.get(rit.id);
+          return lit ? { ...rit, text: lit.text } : rit;
+        });
+        for (const lit of (e.checklist_items || [])) {
+          if (!remote.checklist_items.some(rit => rit.id === lit.id)) merged.push(lit);
+        }
+        e.checklist_items = merged;
+      }
+      State.editingSnapshotTime = remote.last_modified;
+    }
+  } catch {}
   const idx = State.notes.findIndex(n => n.id === e.id);
   if (idx >= 0) State.notes[idx] = JSON.parse(JSON.stringify(e));
   else State.notes.unshift(JSON.parse(JSON.stringify(e)));
