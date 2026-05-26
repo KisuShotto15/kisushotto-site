@@ -295,6 +295,7 @@ body {
 .merch { font-size:16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .price-c { font-size:17px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
 .lim-c { font-size:14px; color: var(--text-3); text-align: center; }
+.lim-amount { display: none; font-size:11px; color: var(--text-3); margin-top:2px; font-variant-numeric: tabular-nums; }
 .empty-ob { text-align: center; padding: 20px; color: var(--text-3); font-size:16px; }
 
 /* ── Alerts ─────────────────────────────────────────── */
@@ -439,11 +440,13 @@ input:focus {
   .spread-hero-full { padding: 12px; }
   .sh-pct { font-size: 40px; }
 
-  .ob-head, .ob-row { grid-template-columns: 18px 1fr 80px 70px; }
+  .ob-head, .ob-row { grid-template-columns: 1fr 80px 70px; padding: 8px 8px; }
+  .ob-head span:nth-child(1), .ob-row > span:nth-child(1),
   .ob-head span:nth-child(3), .ob-row > span:nth-child(3) { display: none; }
   .merch { font-size: 14px; }
   .price-c { font-size: 15px; }
-  .lim-c { font-size: 13px; }
+  .lim-c { font-size: 13px; line-height: 1.2; }
+  .lim-amount { display: block; }
 
   input[type=number] { width: 117px; }
   input[type=password], input[type=text] { width: 115px; }
@@ -1292,7 +1295,7 @@ function renderOB(id, ads, bestCls) {
         '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
         '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'g' : 'b') : '') + '">' + fmtP(ad.price) + '</span>' +
-        '<span class="lim-c">' + lims + '</span>' +
+        '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
       '</div>';
     } else {
       rows += '<div class="ob-row" style="opacity:0.18">' +
@@ -1334,7 +1337,7 @@ function renderBuySection(ads) {
         '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
         '<span class="price-c y">' + fmtP(ad.price) + '</span>' +
-        '<span class="lim-c">' + lims + '</span>' +
+        '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
       '</div>';
     } else {
       rows += '<div class="ob-row" style="opacity:0.18">' +
