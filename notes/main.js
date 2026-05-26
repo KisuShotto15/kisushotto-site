@@ -2,6 +2,7 @@
 
 import * as idb from './idb.js';
 import {
+  cfg,
   apiGetMe, apiCreateCat, apiUpdateCat, apiDeleteCat,
   apiShareNote, apiRevokeShare,
   apiUploadAttachment, apiDeleteAttachment, apiAttachmentBlobUrl,
