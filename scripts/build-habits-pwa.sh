@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Builds a self-contained habits-pwa/ directory for deployment to habits.kisushotto.com
+set -e
+
+OUT="habits-pwa"
+
+mkdir -p "$OUT/icons" "$OUT/images"
+
+# App files
+cp habits/index.html  "$OUT/index.html"
+cp habits/style.css   "$OUT/style.css"
+cp habits/main.js     "$OUT/main.js"
+cp habits/api.js      "$OUT/api.js"
+
+# Adjust manifest path in index.html (subdominio uses /manifest.json at root)
+sed -i 's|href="/manifests/habits.json"|href="/manifest.json"|g' "$OUT/index.html"
+
+# Manifest at root
+cp public/manifests/habits.json "$OUT/manifest.json"
+
+# Service worker
+cp public/sw.js "$OUT/sw.js"
+
+# Icons
+cp public/icons/habits-192.png "$OUT/icons/habits-192.png"
+cp public/icons/habits-512.png "$OUT/icons/habits-512.png"
+
+# Favicon SVG
+cp public/images/habits-favicon.svg "$OUT/images/habits-favicon.svg"
+
+echo "habits-pwa/ built OK"

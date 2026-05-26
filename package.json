@@ -12,6 +12,7 @@
     "lightweight-charts": "^4.2.0"
   },
   "devDependencies": {
+    "sharp": "^0.34.5",
     "vite": "^5.0.0"
   }
 }
