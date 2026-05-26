@@ -1865,20 +1865,14 @@ function _b64urlDecode(s) {
 
 async function initLoginScreen() {
   const available = await isWebauthnAvailable();
-  const hasStored = !!localStorage.getItem('notes_login_cred_id');
+  const hint = document.getElementById('loginHint');
   if (!available) {
-    document.getElementById('loginPasskeySection')?.classList.add('hidden');
-    document.getElementById('btnShowEmail')?.classList.add('hidden');
-    showEmailLogin();
+    document.getElementById('btnPasskeyLogin')?.setAttribute('disabled', '');
+    if (hint) hint.textContent = 'Este dispositivo no soporta passkeys. Para registrar tu passkey, ingresa desde kisushotto.com/notes/ en un dispositivo compatible.';
     return;
   }
-  if (!hasStored) {
-    // No passkey registered yet — show email flow directly
-    document.getElementById('loginPasskeySection')?.classList.add('hidden');
-    document.getElementById('btnShowEmail')?.classList.add('hidden');
-    showEmailLogin();
-  } else {
-    document.getElementById('btnShowEmail').textContent = '¿Problemas? Usar email';
+  if (!localStorage.getItem('notes_login_cred_id')) {
+    if (hint) hint.textContent = 'Primera vez aqui: registra tu passkey desde kisushotto.com/notes/ → Ajustes → "Registrar passkey de acceso".';
   }
 }
 
@@ -1921,13 +1915,7 @@ window.loginWithPasskey = async function() {
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Entrar con passkey'; }
     if (errEl) errEl.textContent = e.message || 'Error de autenticación';
-    showEmailLogin();
   }
-};
-
-window.showEmailLogin = function showEmailLogin() {
-  document.getElementById('loginEmailSection')?.classList.remove('hidden');
-  document.getElementById('btnShowEmail')?.classList.add('hidden');
 };
 
 window.registerLoginPasskey = async function() {
@@ -1959,28 +1947,6 @@ window.registerLoginPasskey = async function() {
     console.warn('Passkey registration failed', e);
     return false;
   }
-};
-
-window.submitLogin = async function() {
-  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-  const errEl = document.getElementById('loginError');
-  if (!email || !email.includes('@')) {
-    if (errEl) errEl.textContent = 'Ingresa un email válido.';
-    return;
-  }
-  localStorage.setItem('notes_user', email);
-  if (errEl) errEl.textContent = '';
-  document.getElementById('loginScreen').classList.add('hidden');
-  // Offer passkey registration after first email login
-  if (await isWebauthnAvailable() && !localStorage.getItem('notes_login_cred_id')) {
-    const ok = confirm('¿Registrar una passkey en este dispositivo para entrar mas rapido la proxima vez?');
-    if (ok) await window.registerLoginPasskey();
-  }
-  init();
-};
-
-window.handleLoginKey = function(e) {
-  if (e.key === 'Enter') window.submitLogin();
 };
 
 window.logout = function() {
