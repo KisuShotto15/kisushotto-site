@@ -1881,23 +1881,14 @@ window.loginWithPasskey = async function() {
   if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
   if (errEl) errEl.textContent = '';
   try {
-    const stored = localStorage.getItem('notes_login_cred_id');
-    const opts = {
+    const assertion = await navigator.credentials.get({
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
         timeout: 60000,
         userVerification: 'required',
         rpId: 'kisushotto.com',
       }
-    };
-    if (stored) {
-      opts.publicKey.allowCredentials = [{
-        type: 'public-key',
-        id: _b64urlDecode(stored),
-        transports: ['internal'],
-      }];
-    }
-    const assertion = await navigator.credentials.get(opts);
+    });
     if (!assertion) throw new Error('Cancelado');
     const credId = _b64urlEncode(assertion.rawId);
     const res = await fetch(`${cfg.base()}/auth/passkey/authenticate`, {
@@ -1908,7 +1899,6 @@ window.loginWithPasskey = async function() {
     if (!res.ok) throw new Error('Passkey no reconocida. Ingresa con tu email primero.');
     const { email } = await res.json();
     localStorage.setItem('notes_user', email);
-    localStorage.setItem('notes_login_cred_id', credId);
     document.getElementById('loginScreen').classList.add('hidden');
     init();
   } catch (e) {
@@ -1953,7 +1943,6 @@ window.registerLoginPasskey = async function() {
 window.logout = function() {
   localStorage.removeItem('notes_user');
   localStorage.removeItem('notes_unlocked_until');
-  localStorage.removeItem('notes_login_cred_id');
   location.reload();
 };
 
