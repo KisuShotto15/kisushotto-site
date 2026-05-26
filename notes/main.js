@@ -1649,8 +1649,6 @@ function bindDrawer() {
   });
   $('#drawer-logout')?.addEventListener('click', () => window.logout());
   $('#drawer-register-passkey')?.addEventListener('click', async () => {
-    const available = await isWebauthnAvailable();
-    if (!available) { alert('Tu dispositivo no soporta passkeys.'); return; }
     const ok = await window.registerLoginPasskey();
     alert(ok ? 'Passkey registrada. La proxima vez podras entrar con biometria.' : 'No se pudo registrar la passkey.');
   });
@@ -1888,7 +1886,7 @@ window.loginWithPasskey = async function() {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
         timeout: 60000,
         userVerification: 'required',
-        rpId: location.hostname,
+        rpId: 'kisushotto.com',
       }
     };
     if (stored) {
@@ -1926,7 +1924,7 @@ window.registerLoginPasskey = async function() {
     const cred = await navigator.credentials.create({
       publicKey: {
         challenge,
-        rp: { name: 'Notas — KS', id: location.hostname },
+        rp: { name: 'Notas — KS', id: 'kisushotto.com' },
         user: { id: new TextEncoder().encode(email), name: email, displayName: email },
         pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
         authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
