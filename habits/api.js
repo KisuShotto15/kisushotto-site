@@ -8,16 +8,14 @@ export const cfg = {
   token: () => localStorage.getItem('habits_token') || DEFAULT_TOKEN,
 };
 
-// Read user email from Cloudflare Access JWT cookie (CF_Authorization)
-// Falls back to localStorage override for local dev (no CF Access)
-function getUserEmail() {
-  const override = localStorage.getItem('habits_user');
-  if (override) return override;
+export function getUserEmail() {
+  const stored = localStorage.getItem('habits_user');
+  if (stored) return stored;
 
+  // Fallback: read from Cloudflare Access JWT (kisushotto.com/habits path)
   const raw = document.cookie.split(';').map(c => c.trim())
     .find(c => c.startsWith('CF_Authorization='));
   if (!raw) return null;
-
   try {
     const token   = raw.split('=').slice(1).join('=');
     const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
@@ -30,7 +28,7 @@ function getUserEmail() {
 async function api(path, opts = {}) {
   const url   = cfg.base() + path;
   const email = getUserEmail();
-  if (!email) throw new Error('No se pudo identificar el usuario. Abre la app desde el dominio protegido.');
+  if (!email) throw new Error('LOGIN_REQUIRED');
 
   let res;
   try {

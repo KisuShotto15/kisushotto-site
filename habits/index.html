@@ -25,6 +25,7 @@
       <button class="notif-bell" id="notifBell" onclick="toggleNotifDrawer()">
         🔔<span class="notif-badge hidden" id="notifBadge"></span>
       </button>
+      <button class="logout-btn" onclick="logout()" title="Cerrar sesión">⏏</button>
     </div>
     <h1 class="page-header-h1">HABIT <span>TRACKER</span></h1>
   </div>
@@ -316,6 +317,25 @@
       <button class="btn" id="confirm-cancel">Cancelar</button>
       <button class="btn btn-danger" id="confirm-ok">Eliminar</button>
     </div>
+  </div>
+</div>
+
+<!-- Login screen -->
+<div class="login-screen hidden" id="loginScreen">
+  <div class="login-card">
+    <div class="login-icon">
+      <svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="36" fill="none" stroke="#1e1e2e" stroke-width="6"/>
+        <circle cx="50" cy="50" r="36" fill="none" stroke="#7c6af7" stroke-width="6" stroke-linecap="round" stroke-dasharray="169.6 56.5" stroke-dashoffset="56.5" transform="rotate(-90 50 50)"/>
+        <circle cx="50" cy="50" r="26" fill="none" stroke="#1e1e2e" stroke-width="1.5"/>
+        <polyline points="37,50 46,60 64,40" fill="none" stroke="#7c6af7" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h2 class="login-title">HABIT TRACKER</h2>
+    <p class="login-sub">Ingresa tu email para continuar</p>
+    <input type="email" id="loginEmail" class="login-input" placeholder="tu@email.com" onkeydown="handleLoginKey(event)" autocomplete="email">
+    <p class="login-error" id="loginError"></p>
+    <button class="btn btn-accent login-btn" onclick="submitLogin()">Entrar</button>
   </div>
 </div>
 

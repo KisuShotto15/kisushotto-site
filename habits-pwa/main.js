@@ -1,4 +1,4 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats } from './api.js';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -693,13 +693,7 @@ async function loadCalMonth(force = false) {
 }
 
 async function init() {
-  // Dev override: set habits_user in localStorage for local testing without CF Access
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    if (!localStorage.getItem('habits_user')) {
-      const email = prompt('Dev mode: ingresa tu email para identificarte');
-      if (email) localStorage.setItem('habits_user', email.toLowerCase().trim());
-    }
-  }
+  if (!getUserEmail()) { showLogin(); return; }
 
   const now = new Date();
   calYear      = now.getFullYear();
@@ -808,6 +802,31 @@ document.addEventListener('keydown', e => {
     }, 185);
   }, { passive: true });
 })();
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+function showLogin() {
+  $('loginScreen').classList.remove('hidden');
+}
+
+window.submitLogin = function() {
+  const email = $('loginEmail').value.trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    $('loginError').textContent = 'Ingresa un email válido.';
+    return;
+  }
+  localStorage.setItem('habits_user', email);
+  $('loginScreen').classList.add('hidden');
+  init();
+};
+
+window.handleLoginKey = function(e) {
+  if (e.key === 'Enter') window.submitLogin();
+};
+
+window.logout = function() {
+  localStorage.removeItem('habits_user');
+  location.reload();
+};
 
 // ── Swipe to change month on calendar (mobile) ────────────────────────────────
 (function() {
