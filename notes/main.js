@@ -1918,7 +1918,7 @@ window.loginWithPasskey = async function() {
 
 window.registerLoginPasskey = async function() {
   const email = getUserEmail();
-  if (!email) return;
+  if (!email) { alert('Error: no se pudo obtener el email del usuario.'); return false; }
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     const cred = await navigator.credentials.create({
@@ -1932,17 +1932,19 @@ window.registerLoginPasskey = async function() {
         attestation: 'none',
       },
     });
-    if (!cred) return false;
+    if (!cred) { alert('Error: navigator.credentials.create devolvio null.'); return false; }
     const credId = _b64urlEncode(cred.rawId);
-    await fetch(`${cfg.base()}/auth/passkey/register`, {
+    const res = await fetch(`${cfg.base()}/auth/passkey/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}`, 'X-User-Email': email },
       body: JSON.stringify({ email, credentialId: credId }),
     });
+    if (!res.ok) { alert(`Error del servidor: ${res.status} ${await res.text()}`); return false; }
     localStorage.setItem('notes_login_cred_id', credId);
     return true;
   } catch (e) {
-    console.warn('Passkey registration failed', e);
+    alert(`Excepcion: ${e.name}: ${e.message}`);
+    console.error('Passkey registration failed', e);
     return false;
   }
 };
