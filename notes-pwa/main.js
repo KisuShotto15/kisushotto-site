@@ -1863,16 +1863,8 @@ function _b64urlDecode(s) {
 }
 
 async function initLoginScreen() {
-  const available = await isWebauthnAvailable();
   const hint = document.getElementById('loginHint');
-  if (!available) {
-    document.getElementById('btnPasskeyLogin')?.setAttribute('disabled', '');
-    if (hint) hint.textContent = 'Este dispositivo no soporta passkeys. Para registrar tu passkey, ingresa desde kisushotto.com/notes/ en un dispositivo compatible.';
-    return;
-  }
-  if (!localStorage.getItem('notes_login_cred_id')) {
-    if (hint) hint.textContent = 'Primera vez aqui: registra tu passkey desde kisushotto.com/notes/ → Ajustes → "Registrar passkey de acceso".';
-  }
+  if (hint) hint.textContent = 'Para registrar tu passkey por primera vez, ingresa desde kisushotto.com/notes/ → Ajustes → "Registrar passkey de acceso".';
 }
 
 window.loginWithPasskey = async function() {
@@ -1903,7 +1895,9 @@ window.loginWithPasskey = async function() {
     init();
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Entrar con passkey'; }
-    if (errEl) errEl.textContent = e.message || 'Error de autenticación';
+    const msg = `${e.name}: ${e.message}`;
+    if (errEl) errEl.textContent = msg;
+    alert(msg);
   }
 };
 
