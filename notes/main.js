@@ -67,6 +67,7 @@ let saveTimer = null;
 async function init() {
   if (!getUserEmail()) {
     $('#loginScreen')?.classList.remove('hidden');
+    initLoginScreen();
     return;
   }
   $('#loginScreen')?.classList.add('hidden');
@@ -1647,6 +1648,12 @@ function bindDrawer() {
     alert(`Sincronización completa: ${State.notes.length} notas cargadas.`);
   });
   $('#drawer-logout')?.addEventListener('click', () => window.logout());
+  $('#drawer-register-passkey')?.addEventListener('click', async () => {
+    const available = await isWebauthnAvailable();
+    if (!available) { alert('Tu dispositivo no soporta passkeys.'); return; }
+    const ok = await window.registerLoginPasskey();
+    alert(ok ? 'Passkey registrada. La proxima vez podras entrar con biometria.' : 'No se pudo registrar la passkey.');
+  });
 }
 
 // ── search + nav ─────────────────────────────────────────────────────────────
@@ -1845,16 +1852,130 @@ async function resizeImage(file, maxDim, quality = 0.85) {
 window.NotesApp = { openNew };
 
 // ── Login (called from inline handlers in #loginScreen) ──────────────────────
-window.submitLogin = function() {
+// ── Login passkey helpers ─────────────────────────────────────────────────────
+function _b64urlEncode(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function _b64urlDecode(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+
+async function initLoginScreen() {
+  const available = await isWebauthnAvailable();
+  const hasStored = !!localStorage.getItem('notes_login_cred_id');
+  if (!available) {
+    document.getElementById('loginPasskeySection')?.classList.add('hidden');
+    document.getElementById('btnShowEmail')?.classList.add('hidden');
+    showEmailLogin();
+    return;
+  }
+  if (!hasStored) {
+    // No passkey registered yet — show email flow directly
+    document.getElementById('loginPasskeySection')?.classList.add('hidden');
+    document.getElementById('btnShowEmail')?.classList.add('hidden');
+    showEmailLogin();
+  } else {
+    document.getElementById('btnShowEmail').textContent = '¿Problemas? Usar email';
+  }
+}
+
+window.loginWithPasskey = async function() {
+  const btn = document.getElementById('btnPasskeyLogin');
+  const errEl = document.getElementById('loginError');
+  if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
+  if (errEl) errEl.textContent = '';
+  try {
+    const stored = localStorage.getItem('notes_login_cred_id');
+    const opts = {
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        timeout: 60000,
+        userVerification: 'required',
+        rpId: location.hostname,
+      }
+    };
+    if (stored) {
+      opts.publicKey.allowCredentials = [{
+        type: 'public-key',
+        id: _b64urlDecode(stored),
+        transports: ['internal'],
+      }];
+    }
+    const assertion = await navigator.credentials.get(opts);
+    if (!assertion) throw new Error('Cancelado');
+    const credId = _b64urlEncode(assertion.rawId);
+    const res = await fetch(`${cfg.base()}/auth/passkey/authenticate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}` },
+      body: JSON.stringify({ credentialId: credId }),
+    });
+    if (!res.ok) throw new Error('Passkey no reconocida. Ingresa con tu email primero.');
+    const { email } = await res.json();
+    localStorage.setItem('notes_user', email);
+    localStorage.setItem('notes_login_cred_id', credId);
+    document.getElementById('loginScreen').classList.add('hidden');
+    init();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Entrar con passkey'; }
+    if (errEl) errEl.textContent = e.message || 'Error de autenticación';
+    showEmailLogin();
+  }
+};
+
+window.showEmailLogin = function showEmailLogin() {
+  document.getElementById('loginEmailSection')?.classList.remove('hidden');
+  document.getElementById('btnShowEmail')?.classList.add('hidden');
+};
+
+window.registerLoginPasskey = async function() {
+  const email = getUserEmail();
+  if (!email) return;
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { name: 'Notas — KS', id: location.hostname },
+        user: { id: new TextEncoder().encode(email), name: email, displayName: email },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+        timeout: 60000,
+        attestation: 'none',
+      },
+    });
+    if (!cred) return false;
+    const credId = _b64urlEncode(cred.rawId);
+    await fetch(`${cfg.base()}/auth/passkey/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}`, 'X-User-Email': email },
+      body: JSON.stringify({ email, credentialId: credId }),
+    });
+    localStorage.setItem('notes_login_cred_id', credId);
+    return true;
+  } catch (e) {
+    console.warn('Passkey registration failed', e);
+    return false;
+  }
+};
+
+window.submitLogin = async function() {
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-  const err = document.getElementById('loginError');
+  const errEl = document.getElementById('loginError');
   if (!email || !email.includes('@')) {
-    if (err) err.textContent = 'Ingresa un email válido.';
+    if (errEl) errEl.textContent = 'Ingresa un email válido.';
     return;
   }
   localStorage.setItem('notes_user', email);
-  if (err) err.textContent = '';
+  if (errEl) errEl.textContent = '';
   document.getElementById('loginScreen').classList.add('hidden');
+  // Offer passkey registration after first email login
+  if (await isWebauthnAvailable() && !localStorage.getItem('notes_login_cred_id')) {
+    const ok = confirm('¿Registrar una passkey en este dispositivo para entrar mas rapido la proxima vez?');
+    if (ok) await window.registerLoginPasskey();
+  }
   init();
 };
 
@@ -1865,6 +1986,7 @@ window.handleLoginKey = function(e) {
 window.logout = function() {
   localStorage.removeItem('notes_user');
   localStorage.removeItem('notes_unlocked_until');
+  localStorage.removeItem('notes_login_cred_id');
   location.reload();
 };
 

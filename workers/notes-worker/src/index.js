@@ -94,6 +94,8 @@ async function migrate(env) {
   // Additive migrations (ignore error if column already exists)
   try { await env.DB.prepare(`ALTER TABLE categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`).run(); } catch {}
   try { await env.DB.prepare(`ALTER TABLE categories ADD COLUMN icon TEXT`).run(); } catch {}
+  try { await env.DB.prepare(`CREATE TABLE IF NOT EXISTS login_passkeys (credential_id TEXT PRIMARY KEY, email TEXT NOT NULL, device_name TEXT, created_at INTEGER NOT NULL)`).run(); } catch {}
+  try { await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_lp_email ON login_passkeys(email)`).run(); } catch {}
 }
 
 // ── Auth helpers (PIN + WebAuthn) ────────────────────────────────────────────
@@ -213,28 +215,38 @@ async function fetchNotesForUser(env, email, since = 0) {
   if (!all.length) return [];
 
   const ids = all.map(n => n.id);
-  const placeholders = ids.map(() => '?').join(',');
-  const ncRes = await env.DB.prepare(
-    `SELECT note_id, category_id FROM note_categories WHERE note_id IN (${placeholders})`
-  ).bind(...ids).all();
+
+  // D1/SQLite limit: chunk IN queries to avoid "too many SQL variables" error
+  async function queryInChunks(sql, ids) {
+    const CHUNK = 90;
+    const rows = [];
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const res = await env.DB.prepare(sql.replace('__IN__', ph)).bind(...chunk).all();
+      rows.push(...(res.results || []));
+    }
+    return rows;
+  }
+
+  const ncRows = await queryInChunks(
+    `SELECT note_id, category_id FROM note_categories WHERE note_id IN (__IN__)`, ids);
   const catMap = {};
-  for (const row of ncRes.results || []) {
+  for (const row of ncRows) {
     (catMap[row.note_id] ||= []).push(row.category_id);
   }
 
-  const sharesRes = await env.DB.prepare(
-    `SELECT note_id, shared_with_email, can_edit FROM note_shares WHERE note_id IN (${placeholders})`
-  ).bind(...ids).all();
+  const shareRows = await queryInChunks(
+    `SELECT note_id, shared_with_email, can_edit FROM note_shares WHERE note_id IN (__IN__)`, ids);
   const shareMap = {};
-  for (const row of sharesRes.results || []) {
+  for (const row of shareRows) {
     (shareMap[row.note_id] ||= []).push({ email: row.shared_with_email, can_edit: !!row.can_edit });
   }
 
-  const attRes = await env.DB.prepare(
-    `SELECT id, note_id, type, mime, size, created_at FROM attachments WHERE note_id IN (${placeholders})`
-  ).bind(...ids).all();
+  const attRows = await queryInChunks(
+    `SELECT id, note_id, type, mime, size, created_at FROM attachments WHERE note_id IN (__IN__)`, ids);
   const attMap = {};
-  for (const row of attRes.results || []) {
+  for (const row of attRows) {
     (attMap[row.note_id] ||= []).push(row);
   }
 
@@ -612,6 +624,28 @@ async function purgeOldTrash(env) {
   }
 }
 
+// ── Passkey login (no email header required) ─────────────────────────────────
+async function loginPasskeyRegister(request, env) {
+  const { email, credentialId, deviceName } = await request.json();
+  if (!email || !credentialId) return err('email and credentialId required');
+  const clean = email.toLowerCase().trim();
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO login_passkeys (credential_id, email, device_name, created_at) VALUES (?, ?, ?, ?)`
+  ).bind(credentialId, clean, deviceName || null, Date.now()).run();
+  await ensureUser(env, clean);
+  return json({ ok: true });
+}
+
+async function loginPasskeyAuthenticate(request, env) {
+  const { credentialId } = await request.json();
+  if (!credentialId) return err('credentialId required');
+  const row = await env.DB.prepare(
+    `SELECT email FROM login_passkeys WHERE credential_id = ?`
+  ).bind(credentialId).first();
+  if (!row) return err('Passkey no encontrada', 404);
+  return json({ email: row.email });
+}
+
 // ── Router ───────────────────────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
@@ -619,8 +653,6 @@ export default {
       return new Response(null, { status: 204, headers: CORS });
     }
     if (!authToken(request, env)) return err('Unauthorized', 401);
-    const email = getUser(request);
-    if (!email) return err('User identity required', 401);
 
     try { await migrate(env); }
     catch (e) { return err('DB init failed: ' + e.message, 500); }
@@ -628,6 +660,13 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
     const m = request.method;
+
+    // Passkey auth endpoints — no X-User-Email required
+    if (path === '/auth/passkey/register'      && m === 'POST') return await loginPasskeyRegister(request, env);
+    if (path === '/auth/passkey/authenticate'  && m === 'POST') return await loginPasskeyAuthenticate(request, env);
+
+    const email = getUser(request);
+    if (!email) return err('User identity required', 401);
     const seg = path.split('/').filter(Boolean);
 
     try {
