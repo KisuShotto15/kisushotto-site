@@ -809,6 +809,39 @@ document.addEventListener('keydown', e => {
   }, { passive: true });
 })();
 
+// ── Swipe to change month on calendar (mobile) ────────────────────────────────
+(function() {
+  let x0 = null, y0 = null, locked = false;
+  const el = document.getElementById('calGrid');
+  if (!el) return;
+
+  el.addEventListener('touchstart', e => {
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+    locked = false;
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    if (x0 === null) return;
+    const dx = e.touches[0].clientX - x0;
+    const dy = e.touches[0].clientY - y0;
+    if (!locked && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) locked = true;
+    if (locked) e.preventDefault();
+  }, { passive: false });
+
+  el.addEventListener('touchend', e => {
+    if (x0 === null || !locked) { x0 = y0 = null; locked = false; return; }
+    const dx = e.changedTouches[0].clientX - x0;
+    x0 = y0 = null; locked = false;
+    if (Math.abs(dx) < 50) return;
+    const dir = dx < 0 ? 1 : -1;
+    const now = new Date();
+    const isCurrentMonth = calYear === now.getFullYear() && calMonth === now.getMonth() + 1;
+    if (dir === 1 && isCurrentMonth) return; // no avanzar mas alla del mes actual
+    shiftMonth(dir);
+  }, { passive: true });
+})();
+
 init();
 
 window.customConfirm = function(msg) {
