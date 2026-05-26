@@ -1278,7 +1278,7 @@ function renderOB(id, ads, bestCls) {
     if (ad) {
       var cls = 'ob-row' + (i === 0 ? ' ' + bestCls : '');
       var rnk = '<span class="rank ' + (i === 0 ? 'n1' : '') + '">' + (i + 1) + '</span>';
-      var lims = fmtM(ad.minVES) + '–' + fmtM(ad.maxVES);
+      var lims = fmtM(ad.minVES) + '–' + fmtM(ad.price * ad.avail);
       var lvlColor = ['','#CD7F32','#A8B8C8','#F0B90B'][ad.vipLevel] || '#F0B90B';
       var badgeHtml = '';
       if (ad.badges && ad.badges[0]) {
@@ -1320,7 +1320,7 @@ function renderBuySection(ads) {
     if (ad) {
       var cls = 'ob-row' + (i === 0 ? ' best-buy-asc' : '');
       var rnk = '<span class="rank ' + (i === 0 ? 'n1' : '') + '">' + (i + 1) + '</span>';
-      var lims = fmtM(ad.minVES) + '–' + fmtM(ad.maxVES);
+      var lims = fmtM(ad.minVES) + '–' + fmtM(ad.price * ad.avail);
       var lvlColor = ['','#CD7F32','#A8B8C8','#F0B90B'][ad.vipLevel] || '#F0B90B';
       var badgeHtml = '';
       if (ad.badges && ad.badges[0]) {
