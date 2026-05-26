@@ -278,9 +278,6 @@ async function upsertNote(env, email, n) {
 
   const serverNow = now();
   if (existing) {
-    if (existing.last_modified > (n.last_modified || 0)) {
-      return { skipped: true, reason: 'older' };
-    }
     if (!(await canEdit(env, n.id, email))) {
       return { skipped: true, reason: 'forbidden' };
     }
@@ -338,9 +335,8 @@ async function upsertCategory(env, email, c) {
   const existing = await env.DB.prepare(`SELECT updated_at, owner_email FROM categories WHERE id = ?`).bind(c.id).first();
   if (existing) {
     if (existing.owner_email !== email) return { skipped: true, reason: 'forbidden' };
-    if (existing.updated_at > (c.updated_at || 0)) return { skipped: true, reason: 'older' };
     await env.DB.prepare(`UPDATE categories SET name=?, color=?, icon=?, sort_order=?, updated_at=? WHERE id=?`)
-      .bind(c.name, c.color, c.icon || null, c.sort_order ?? existing.sort_order ?? 0, c.updated_at || now(), c.id).run();
+      .bind(c.name, c.color, c.icon || null, c.sort_order ?? existing.sort_order ?? 0, now(), c.id).run();
   } else {
     await env.DB.prepare(`INSERT INTO categories (id, owner_email, name, color, icon, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`)
       .bind(c.id, email, c.name, c.color, c.icon || null, c.sort_order ?? 0, c.created_at || now(), c.updated_at || now()).run();
