@@ -1582,6 +1582,7 @@ function bindDrawer() {
     history.pushState({ modal: 'drawer' }, '');
     lockBodyScroll();
     $('#drawer').hidden = false;
+    renderPasskeyList();
   });
   $$('#drawer [data-close-drawer]').forEach(el => el.addEventListener('click', () => {
     if (history.state?.modal === 'drawer') history.back();
@@ -1684,12 +1685,11 @@ function bindDrawer() {
     }
   }
 
-  $('#drawer-add-passkey').addEventListener('click', async () => {
+  $('#drawer-add-passkey')?.addEventListener('click', async () => {
     const ok = await doRegisterPasskey();
     if (ok) renderPasskeyList();
     else alert('No se pudo registrar la passkey.');
   });
-  renderPasskeyList();
 
   $('#drawer-test-push').addEventListener('click', async () => {
     try {
