@@ -105,7 +105,6 @@ export async function unlockWithWebauthn() {
     const allowCredentials = [{
       type: 'public-key',
       id: b64urlDecode(credId),
-      transports: ['internal'],
     }];
     const assertion = await navigator.credentials.get({
       publicKey: {
