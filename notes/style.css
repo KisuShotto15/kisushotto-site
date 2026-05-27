@@ -610,8 +610,16 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 .select-bar[hidden] { display: none; }
 #select-count { flex: 1; font-size: 14px; color: var(--muted2); }
 .select-actions { display: flex; gap: 4px; margin-left: auto; align-items: center; }
-.select-actions .btn-icon { width: 36px; height: 36px; }
-.select-danger { color: var(--danger) !important; border-color: var(--danger) !important; }
+.select-actions .btn-icon {
+  width: 36px; height: 36px;
+  border: none; background: transparent;
+}
+.select-actions .btn-icon:hover { background: var(--card2); }
+.select-danger { color: var(--danger) !important; }
+#select-cancel { border: none; background: transparent; }
+#select-cancel:hover { background: var(--card2); }
+#btn-settings { border: none; background: transparent; }
+#btn-settings:hover { background: var(--card2); }
 
 /* Editor icon buttons — no background circle */
 .ed-toolbar .btn-icon,
