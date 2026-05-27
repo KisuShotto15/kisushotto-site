@@ -345,7 +345,8 @@ async function reorderCategoryDrag(srcId, targetId) {
   renderDrawerCats();
 }
 
-const TRASH_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+const TRASH_SVG  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+const PENCIL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 014 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`;
 const GRIP_SVG  = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>`;
 const CAT_ICONS = ['🏷️','📁','🏠','💼','📚','🎯','🍽️','💪','💰','🎨','✈️','🎮','🎵','💡','🛒','🌿','🔧','❤️','📝','🏃','🎬','📊','⭐','🔔','🎁','🇯🇵'];
 
@@ -377,7 +378,7 @@ function renderDrawerCats() {
     inp.dataset.id = c.id;
 
     const delBtn = document.createElement('button');
-    delBtn.className = 'btn-icon';
+    delBtn.className = 'del-btn';
     delBtn.dataset.del = c.id;
     delBtn.innerHTML = TRASH_SVG;
 
@@ -1670,23 +1671,37 @@ function bindDrawer() {
             <div class="passkey-name" title="${credId}">${name}</div>
             <div class="passkey-date">Uso: ${lastUsed} · Creada: ${created}</div>
           </div>
-          <button class="passkey-btn" data-action="rename" title="Renombrar">✏️</button>
-          <button class="passkey-btn" data-action="delete" title="Eliminar">🗑</button>
+          <button class="passkey-btn" data-action="rename" title="Renombrar">${PENCIL_SVG}</button>
+          <button class="passkey-btn" data-action="delete" title="Eliminar">${TRASH_SVG}</button>
         `;
-        row.querySelector('[data-action="rename"]').addEventListener('click', async () => {
+        row.querySelector('[data-action="rename"]').addEventListener('click', () => {
+          const nameDiv  = row.querySelector('.passkey-name');
+          const dateDiv  = row.querySelector('.passkey-date');
+          const renameBtn = row.querySelector('[data-action="rename"]');
+          const deleteBtn = row.querySelector('[data-action="delete"]');
           const input = document.createElement('input');
           input.className = 'passkey-rename-input';
           input.value = name;
-          const nameSpan = row.querySelector('.passkey-name');
-          row.replaceChild(input, nameSpan);
-          input.focus(); input.select();
+          const confirmBtn = document.createElement('button');
+          confirmBtn.className = 'passkey-btn';
+          confirmBtn.title = 'Guardar';
+          confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+          nameDiv.replaceWith(input);
+          dateDiv.style.display = 'none';
+          renameBtn.replaceWith(confirmBtn);
+          deleteBtn.style.display = 'none';
+          requestAnimationFrame(() => { input.focus(); input.select(); });
+          let saved = false;
           const save = async () => {
+            if (saved) return;
+            saved = true;
             const newName = input.value.trim() || 'Passkey';
             await apiRenamePasskey(credId, newName).catch(() => {});
             renderPasskeyList();
           };
-          input.addEventListener('blur', save);
+          confirmBtn.addEventListener('click', save);
           input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+          input.addEventListener('keydown', e => { if (e.key === 'Escape') renderPasskeyList(); });
         });
         row.querySelector('[data-action="delete"]').addEventListener('click', async () => {
           const passkeys2 = await apiListPasskeys().catch(() => []);

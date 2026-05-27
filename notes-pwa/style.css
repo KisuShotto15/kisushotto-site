@@ -986,11 +986,19 @@ body.select-mode .nc-select-wrap { display: block; }
   padding: 2px 6px; color: var(--text);
 }
 .passkey-btn {
+  display: inline-flex; align-items: center; justify-content: center;
   background: transparent; border: none; cursor: pointer;
-  color: var(--text2); font-size: 14px; padding: 2px 4px;
+  color: var(--text2); padding: 4px 5px;
   border-radius: var(--r-sm); flex-shrink: 0;
 }
-.passkey-btn:hover { color: var(--text); background: var(--card3, #333); }
+.passkey-btn:hover { color: var(--text); background: var(--card2); }
+.del-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text2); padding: 4px 5px;
+  border-radius: var(--r-sm); flex-shrink: 0;
+}
+.del-btn:hover { color: var(--danger, #f87171); }
 .drawer-row {
   display: flex; gap: 6px; align-items: center;
   padding: 8px 12px;
