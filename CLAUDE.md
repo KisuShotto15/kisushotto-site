@@ -28,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 6. Cero charla aduladora
 - No digas "Excelente pregunta", "Gran idea", "Perfecto", etc.
 - No halagues al usuario. Ve directo al trabajo.
-- Nunca me escribas con acento de ningun pais, sobretodo argentino. Siempre utiliza un Español neutro de latinoamerica
+- Nunca me escribas con acento de ningun pais, sobretodo argentino. Siempre utiliza un castellano neutro
 
 ## 7. Soluciones simples
 - Implementa lo minimo que resuelve el problema. Nada mas.

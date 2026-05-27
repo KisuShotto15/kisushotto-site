@@ -1856,14 +1856,10 @@ function _b64urlEncode(buf) {
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function initLoginScreen() {
-  const btnPasskey = document.getElementById('btnPasskeyLogin');
-  const btnEmail   = document.getElementById('btnEmailLogin');
-  const emailInput = document.getElementById('loginEmail');
-  const divider    = document.getElementById('loginDivider');
-
-  btnEmail?.addEventListener('click', doEmailLogin);
-  emailInput?.addEventListener('keydown', e => { if (e.key === 'Enter') doEmailLogin(); });
+function initLoginScreen() {
+  document.getElementById('btnEmailLogin')?.addEventListener('click', doEmailLogin);
+  document.getElementById('loginEmail')?.addEventListener('keydown', e => { if (e.key === 'Enter') doEmailLogin(); });
+  document.getElementById('btnPasskeyLogin')?.addEventListener('click', doPasskeyLogin);
 
   // Passkey setup overlay — registration is mandatory, no skip
   document.getElementById('btnSetupPasskey')?.addEventListener('click', async () => {
@@ -1882,14 +1878,6 @@ async function initLoginScreen() {
       if (errEl) errEl.textContent = 'No se pudo registrar. Intenta de nuevo.';
     }
   });
-
-  if (await isWebauthnAvailable().catch(() => false)) {
-    if (btnPasskey) {
-      btnPasskey.style.display = '';
-      btnPasskey.addEventListener('click', doPasskeyLogin);
-    }
-    if (divider) divider.style.display = '';
-  }
 }
 
 async function doPasskeyLogin() {
@@ -1957,12 +1945,8 @@ async function doEmailLogin() {
   localStorage.setItem('notes_user', email);
   document.getElementById('loginScreen').classList.add('hidden');
 
-  // Show passkey setup overlay instead of confirm() (blocked in PWA standalone)
-  if (await isWebauthnAvailable().catch(() => false)) {
-    document.getElementById('passkeySetup').classList.remove('hidden');
-  } else {
-    init();
-  }
+  // Show passkey setup overlay — always, passkey registration is mandatory
+  document.getElementById('passkeySetup').classList.remove('hidden');
 }
 
 // ONE credential for both login and note-unlock
