@@ -1907,6 +1907,7 @@ async function doPasskeyLogin() {
     if (!res.ok) throw new Error('Passkey no encontrada. Inicia sesion con tu email primero.');
     const { email } = await res.json();
     localStorage.setItem('notes_user', email);
+    localStorage.setItem('notes_webauthn_id', credId);
     document.getElementById('loginScreen').classList.add('hidden');
     init();
   } catch (e) {

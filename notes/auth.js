@@ -89,7 +89,7 @@ export async function registerWebauthn(email) {
 }
 
 export async function unlockWithWebauthn() {
-  if (!await isWebauthnAvailable()) return false;
+  if (!window.PublicKeyCredential) return false;
   let credId = localStorage.getItem('notes_webauthn_id');
   if (!credId) {
     try {
