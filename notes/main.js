@@ -1651,10 +1651,6 @@ function bindDrawer() {
     alert(`Sincronización completa: ${State.notes.length} notas cargadas.`);
   });
   $('#drawer-logout')?.addEventListener('click', () => window.logout());
-  $('#drawer-register-passkey')?.addEventListener('click', async () => {
-    const ok = await window.registerLoginPasskey();
-    alert(ok ? 'Passkey registrada. La proxima vez podras entrar con biometria.' : 'No se pudo registrar la passkey.');
-  });
 }
 
 // ── search + nav ─────────────────────────────────────────────────────────────
