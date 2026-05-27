@@ -1671,11 +1671,12 @@ function bindDrawer() {
         row.className = 'passkey-row';
         const credId = pk.credential_id;
         const name = pk.device_name || 'Passkey';
-        const lastUsed = relativeTime(pk.last_used_at);
+        const lastUsed = pk.last_used_at ? relativeTime(pk.last_used_at) : 'Nunca';
+        const created  = pk.created_at  ? relativeTime(pk.created_at)  : '';
         row.innerHTML = `
           <div style="flex:1;min-width:0">
             <div class="passkey-name" title="${credId}">${name}</div>
-            <div class="passkey-date">Ultimo uso: ${lastUsed}</div>
+            <div class="passkey-date">Uso: ${lastUsed} · Creada: ${created}</div>
           </div>
           <button class="passkey-btn" data-action="rename" title="Renombrar">✏️</button>
           <button class="passkey-btn" data-action="delete" title="Eliminar">🗑</button>

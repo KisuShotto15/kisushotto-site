@@ -630,9 +630,10 @@ async function loginPasskeyRegister(request, env) {
   const { email, credentialId, deviceName } = await request.json();
   if (!email || !credentialId) return err('email and credentialId required');
   const clean = email.toLowerCase().trim();
+  const now = Date.now();
   await env.DB.prepare(
-    `INSERT OR REPLACE INTO login_passkeys (credential_id, email, device_name, created_at) VALUES (?, ?, ?, ?)`
-  ).bind(credentialId, clean, deviceName || null, Date.now()).run();
+    `INSERT OR REPLACE INTO login_passkeys (credential_id, email, device_name, created_at, last_used_at) VALUES (?, ?, ?, ?, ?)`
+  ).bind(credentialId, clean, deviceName || null, now, now).run();
   await ensureUser(env, clean);
   return json({ ok: true });
 }
