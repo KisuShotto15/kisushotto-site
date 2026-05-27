@@ -1,4 +1,4 @@
-const CACHE = 'ks-notes-v2';
+const CACHE = 'ks-notes-v3';
 const PRECACHE = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {

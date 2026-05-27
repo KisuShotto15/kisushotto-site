@@ -26,7 +26,7 @@ sed -i 's|"start_url": "/notes/"|"start_url": "/"|; s|"scope": "/notes/"|"scope"
 
 # Service worker — notes-specific, network-first for JS/CSS so updates are picked up immediately
 cat > "$OUT/sw.js" << 'SWEOF'
-const CACHE = 'ks-notes-v2';
+const CACHE = 'ks-notes-v3';
 const PRECACHE = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {
