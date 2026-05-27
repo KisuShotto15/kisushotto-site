@@ -1630,6 +1630,20 @@ function bindDrawer() {
     catch (e) { alert(e.message); }
   });
 
+  function relativeTime(ts) {
+    if (!ts) return 'Nunca';
+    const diff = Date.now() - ts;
+    const m = Math.floor(diff / 60000);
+    if (m < 2)   return 'Hace un momento';
+    if (m < 60)  return `Hace ${m} min`;
+    const h = Math.floor(m / 60);
+    if (h < 24)  return `Hace ${h}h`;
+    const d = Math.floor(h / 24);
+    if (d < 30)  return `Hace ${d}d`;
+    const mo = Math.floor(d / 30);
+    return `Hace ${mo} mes${mo > 1 ? 'es' : ''}`;
+  }
+
   async function renderPasskeyList() {
     const container = $('#drawer-passkey-list');
     if (!container) return;
@@ -1646,10 +1660,12 @@ function bindDrawer() {
         row.className = 'passkey-row';
         const credId = pk.credential_id;
         const name = pk.device_name || 'Passkey';
-        const date = pk.created_at ? new Date(pk.created_at).toLocaleDateString() : '';
+        const lastUsed = relativeTime(pk.last_used_at);
         row.innerHTML = `
-          <span class="passkey-name" title="${credId}">${name}</span>
-          <span class="passkey-date">${date}</span>
+          <div style="flex:1;min-width:0">
+            <div class="passkey-name" title="${credId}">${name}</div>
+            <div class="passkey-date">Ultimo uso: ${lastUsed}</div>
+          </div>
           <button class="passkey-btn" data-action="rename" title="Renombrar">✏️</button>
           <button class="passkey-btn" data-action="delete" title="Eliminar">🗑</button>
         `;

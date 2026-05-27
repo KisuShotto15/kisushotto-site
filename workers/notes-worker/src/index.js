@@ -96,6 +96,7 @@ async function migrate(env) {
   try { await env.DB.prepare(`ALTER TABLE categories ADD COLUMN icon TEXT`).run(); } catch {}
   try { await env.DB.prepare(`CREATE TABLE IF NOT EXISTS login_passkeys (credential_id TEXT PRIMARY KEY, email TEXT NOT NULL, device_name TEXT, created_at INTEGER NOT NULL)`).run(); } catch {}
   try { await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_lp_email ON login_passkeys(email)`).run(); } catch {}
+  try { await env.DB.prepare(`ALTER TABLE login_passkeys ADD COLUMN last_used_at INTEGER`).run(); } catch {}
 }
 
 // ── Auth helpers (PIN + WebAuthn) ────────────────────────────────────────────
@@ -652,12 +653,15 @@ async function loginPasskeyAuthenticate(request, env) {
     `SELECT email FROM login_passkeys WHERE credential_id = ?`
   ).bind(credentialId).first();
   if (!row) return err('Passkey no encontrada', 404);
+  await env.DB.prepare(
+    `UPDATE login_passkeys SET last_used_at = ? WHERE credential_id = ?`
+  ).bind(Date.now(), credentialId).run();
   return json({ email: row.email });
 }
 
 async function loginPasskeyList(env, email) {
   const { results } = await env.DB.prepare(
-    `SELECT credential_id, device_name, created_at FROM login_passkeys WHERE email = ? ORDER BY created_at DESC`
+    `SELECT credential_id, device_name, created_at, last_used_at FROM login_passkeys WHERE email = ? ORDER BY created_at DESC`
   ).bind(email).all();
   return json(results || []);
 }
