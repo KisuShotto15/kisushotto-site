@@ -256,10 +256,12 @@
   <div class="login-card">
     <img class="login-icon" src="/images/notes-logo.svg" alt="" width="64" height="64">
     <h2 class="login-title">NOTAS</h2>
-    <p class="login-sub" id="loginSub">Tu espacio privado de notas</p>
-    <button class="btn-pri login-btn" id="btnPasskeyLogin">Entrar con passkey</button>
+    <button class="btn-pri login-btn" id="btnPasskeyLogin" style="display:none">Entrar con passkey</button>
+    <div id="loginEmailSection">
+      <input type="email" id="loginEmail" class="login-input" placeholder="tu@email.com" autocomplete="email">
+      <button class="btn-pri login-btn" id="btnEmailLogin">Continuar</button>
+    </div>
     <p class="login-error" id="loginError"></p>
-    <p class="login-hint" id="loginHint"></p>
   </div>
 </div>
 
