@@ -7,6 +7,7 @@ import {
   apiShareNote, apiRevokeShare,
   apiUploadAttachment, apiDeleteAttachment, apiAttachmentBlobUrl,
   apiTrashNote, apiRestoreNote, apiPurgeNote,
+  apiRegWebauthn,
   getUserEmail,
 } from './api.js';
 import { pull, flushQueue, saveNoteLocal, saveCategoryLocal, onConnectionChange } from './sync.js';
@@ -1624,11 +1625,8 @@ function bindDrawer() {
   });
 
   $('#drawer-webauthn').addEventListener('click', async () => {
-    try {
-      await registerWebauthn(getUserEmail());
-      await doRegisterPasskey();
-      alert('Huella / passkey registrada en este dispositivo');
-    } catch (e) { alert(e.message); }
+    const ok = await doRegisterPasskey();
+    alert(ok ? 'Passkey registrada. Sirve para login y notas protegidas.' : 'No se pudo registrar la passkey.');
   });
 
   $('#drawer-test-push').addEventListener('click', async () => {
@@ -1858,12 +1856,29 @@ async function initLoginScreen() {
   const btnPasskey = document.getElementById('btnPasskeyLogin');
   const btnEmail   = document.getElementById('btnEmailLogin');
   const emailInput = document.getElementById('loginEmail');
+  const divider    = document.getElementById('loginDivider');
 
   btnEmail?.addEventListener('click', doEmailLogin);
   emailInput?.addEventListener('keydown', e => { if (e.key === 'Enter') doEmailLogin(); });
 
-  if (await isWebauthnAvailable()) {
-    if (btnPasskey) { btnPasskey.style.display = ''; btnPasskey.addEventListener('click', doPasskeyLogin); }
+  // Passkey setup overlay buttons
+  document.getElementById('btnSetupPasskey')?.addEventListener('click', async () => {
+    document.getElementById('btnSetupPasskey').disabled = true;
+    await doRegisterPasskey();
+    document.getElementById('passkeySetup').classList.add('hidden');
+    init();
+  });
+  document.getElementById('btnSetupSkip')?.addEventListener('click', () => {
+    document.getElementById('passkeySetup').classList.add('hidden');
+    init();
+  });
+
+  if (await isWebauthnAvailable().catch(() => false)) {
+    if (btnPasskey) {
+      btnPasskey.style.display = '';
+      btnPasskey.addEventListener('click', doPasskeyLogin);
+    }
+    if (divider) divider.style.display = '';
   }
 }
 
@@ -1907,16 +1922,40 @@ async function doEmailLogin() {
     if (errEl) errEl.textContent = 'Ingresa un email valido.';
     return;
   }
-  localStorage.setItem('notes_user', email);
   if (errEl) errEl.textContent = '';
+
+  // Block email login if this account already has a passkey
+  try {
+    const chk = await fetch(`${cfg.base()}/auth/passkey/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}` },
+      body: JSON.stringify({ email }),
+    });
+    if (chk.ok) {
+      const { hasPasskey } = await chk.json();
+      if (hasPasskey) {
+        if (errEl) errEl.textContent = 'Esta cuenta usa passkey. Usa el boton de arriba.';
+        const btn = document.getElementById('btnPasskeyLogin');
+        if (btn) { btn.style.display = ''; btn.addEventListener('click', doPasskeyLogin); }
+        const divider = document.getElementById('loginDivider');
+        if (divider) divider.style.display = '';
+        return;
+      }
+    }
+  } catch { /* si el check falla, permitir email login */ }
+
+  localStorage.setItem('notes_user', email);
   document.getElementById('loginScreen').classList.add('hidden');
-  if (await isWebauthnAvailable()) {
-    const ok = confirm('¿Registrar passkey en este dispositivo?\nLa proxima vez entras con huella o Bitwarden sin escribir el email.');
-    if (ok) await doRegisterPasskey();
+
+  // Show passkey setup overlay instead of confirm() (blocked in PWA standalone)
+  if (await isWebauthnAvailable().catch(() => false)) {
+    document.getElementById('passkeySetup').classList.remove('hidden');
+  } else {
+    init();
   }
-  init();
 }
 
+// ONE credential for both login and note-unlock
 async function doRegisterPasskey() {
   const email = getUserEmail();
   if (!email) return false;
@@ -1934,12 +1973,16 @@ async function doRegisterPasskey() {
     });
     if (!cred) return false;
     const credId = _b64urlEncode(cred.rawId);
-    const res = await fetch(`${cfg.base()}/auth/passkey/register`, {
+    // Register for app login
+    await fetch(`${cfg.base()}/auth/passkey/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}`, 'X-User-Email': email },
       body: JSON.stringify({ email, credentialId: credId }),
     });
-    return res.ok;
+    // Register same credential for note unlock
+    await apiRegWebauthn(credId, null);
+    localStorage.setItem('notes_webauthn_id', credId);
+    return true;
   } catch (e) {
     console.warn('Passkey registration failed', e);
     return false;

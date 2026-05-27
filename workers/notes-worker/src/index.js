@@ -636,6 +636,15 @@ async function loginPasskeyRegister(request, env) {
   return json({ ok: true });
 }
 
+async function loginPasskeyCheck(request, env) {
+  const { email } = await request.json().catch(() => ({}));
+  if (!email) return err('email required');
+  const row = await env.DB.prepare(
+    `SELECT 1 FROM login_passkeys WHERE email = ? LIMIT 1`
+  ).bind(email.toLowerCase().trim()).first();
+  return json({ hasPasskey: !!row });
+}
+
 async function loginPasskeyAuthenticate(request, env) {
   const { credentialId } = await request.json();
   if (!credentialId) return err('credentialId required');
@@ -664,6 +673,7 @@ export default {
     // Passkey auth endpoints — no X-User-Email required
     if (path === '/auth/passkey/register'      && m === 'POST') return await loginPasskeyRegister(request, env);
     if (path === '/auth/passkey/authenticate'  && m === 'POST') return await loginPasskeyAuthenticate(request, env);
+    if (path === '/auth/passkey/check'         && m === 'POST') return await loginPasskeyCheck(request, env);
 
     const email = getUser(request);
     if (!email) return err('User identity required', 401);
