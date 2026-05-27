@@ -83,6 +83,8 @@ mkdir -p "$TWA_DIR/app/src/main/res/values"
 for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
   mkdir -p "$TWA_DIR/app/src/main/res/mipmap-$d"
 done
+mkdir -p "$TWA_DIR/app/src/main/res/mipmap-anydpi-v26"
+mkdir -p "$TWA_DIR/app/src/main/res/drawable"
 
 cat > "$TWA_DIR/settings.gradle" << 'SEOF'
 rootProject.name = "KsNotes"
@@ -109,8 +111,8 @@ android {
         applicationId 'com.kisushotto.notes'
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName '1.0.0'
+        versionCode 2
+        versionName '1.1.0'
     }
     signingConfigs {
         release {
@@ -155,6 +157,12 @@ cat > "$TWA_DIR/app/src/main/AndroidManifest.xml" << 'MEOF'
             <meta-data
                 android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
                 android:resource="@color/colorPrimary" />
+            <meta-data
+                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
+                android:resource="@color/backgroundColor" />
+            <meta-data
+                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_DIVIDER_COLOR"
+                android:resource="@color/backgroundColor" />
             <meta-data
                 android:name="android.support.customtabs.trusted.SPLASH_SCREEN_BACKGROUND_COLOR"
                 android:resource="@color/backgroundColor" />
@@ -218,17 +226,54 @@ cd "$REPO_ROOT"
 node -e "
 const sharp = require('sharp');
 const src = 'public/images/notes-icon.svg';
-const sizes = {
-  'notes-twa/app/src/main/res/mipmap-mdpi/ic_launcher.png': 48,
-  'notes-twa/app/src/main/res/mipmap-hdpi/ic_launcher.png': 72,
-  'notes-twa/app/src/main/res/mipmap-xhdpi/ic_launcher.png': 96,
-  'notes-twa/app/src/main/res/mipmap-xxhdpi/ic_launcher.png': 144,
-  'notes-twa/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png': 192,
-};
-Promise.all(Object.entries(sizes).map(([dst, s]) =>
-  sharp(src).resize(s, s).png().toFile(dst)
-)).then(() => console.log('Icons generated OK')).catch(e => { console.error(e); process.exit(1); });
+const bg = { r: 17, g: 17, b: 20, alpha: 1 }; // #111114
+
+// Icon with background baked in: icon at 65% of canvas
+async function makeIcon(dst, canvas) {
+  const iconSize = Math.round(canvas * 0.65);
+  const iconBuf = await sharp(src).resize(iconSize, iconSize).png().toBuffer();
+  return sharp({ create: { width: canvas, height: canvas, channels: 4, background: bg } })
+    .composite([{ input: iconBuf, gravity: 'center' }])
+    .png()
+    .toFile(dst);
+}
+
+// Adaptive foreground: transparent bg, icon at 50% of 432px canvas (safe zone = 288px)
+async function makeForeground(dst, canvas) {
+  const iconSize = Math.round(canvas * 0.50);
+  const iconBuf = await sharp(src).resize(iconSize, iconSize).png().toBuffer();
+  return sharp({ create: { width: canvas, height: canvas, channels: 4, background: { r:0,g:0,b:0,alpha:0 } } })
+    .composite([{ input: iconBuf, gravity: 'center' }])
+    .png()
+    .toFile(dst);
+}
+
+Promise.all([
+  makeIcon('notes-twa/app/src/main/res/mipmap-mdpi/ic_launcher.png', 48),
+  makeIcon('notes-twa/app/src/main/res/mipmap-hdpi/ic_launcher.png', 72),
+  makeIcon('notes-twa/app/src/main/res/mipmap-xhdpi/ic_launcher.png', 96),
+  makeIcon('notes-twa/app/src/main/res/mipmap-xxhdpi/ic_launcher.png', 144),
+  makeIcon('notes-twa/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png', 192),
+  makeForeground('notes-twa/app/src/main/res/drawable/ic_launcher_foreground.png', 432),
+]).then(() => console.log('Icons generated OK')).catch(e => { console.error(e); process.exit(1); });
 "
+
+# Adaptive icon background (solid color XML)
+cat > "$TWA_DIR/app/src/main/res/drawable/ic_launcher_background.xml" << 'DIBEOF'
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#111114"/>
+</shape>
+DIBEOF
+
+# Adaptive icon definition (Android 8+)
+cat > "$TWA_DIR/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml" << 'AIEOF'
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>
+AIEOF
 
 # ── 7. Build APK ───────────────────────────────────────────────────────────────
 echo "[build] Building APK (first build downloads ~150MB of dependencies)..."
