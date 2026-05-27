@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.kisushotto.habits",
+    "sha256_cert_fingerprints": ["CB:15:F0:DF:63:61:A5:36:8B:33:25:75:81:34:9E:5F:0B:CB:F8:B0:5B:B8:54:B5:E2:CE:CD:48:3D:B2:10:0E"]
+  }
+}]

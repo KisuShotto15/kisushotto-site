@@ -3,8 +3,12 @@ dist/
 .env
 .env.local
 
-# TWA build artifacts (keystore must never be committed)
+# TWA build artifacts (keystores must never be committed)
 notes-twa.keystore
 notes-twa/app/build/
 notes-twa/.gradle/
 notes-twa/build/
+habits-twa.keystore
+habits-twa/app/build/
+habits-twa/.gradle/
+habits-twa/build/

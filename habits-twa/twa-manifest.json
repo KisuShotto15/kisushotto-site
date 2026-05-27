@@ -1,0 +1,30 @@
+{
+  "packageId": "com.kisushotto.habits",
+  "host": "habits.kisushotto.com",
+  "name": "KS Habits",
+  "launcherName": "Habits",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#0d0d0f",
+  "backgroundColor": "#0d0d0f",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://habits.kisushotto.com/icons/habits-512.png",
+  "maskableIconUrl": "https://habits.kisushotto.com/icons/habits-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "../habits-twa.keystore",
+    "alias": "habits-key"
+  },
+  "appVersionCode": 1,
+  "appVersionName": "1.0.0",
+  "shortcuts": [],
+  "alphaDependencies": { "enabled": false },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://habits.kisushotto.com/",
+  "minSdkVersion": 21,
+  "webManifestUrl": "https://habits.kisushotto.com/manifest.json",
+  "fallbackType": "customtabs"
+}
