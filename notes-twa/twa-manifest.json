@@ -1,0 +1,30 @@
+{
+  "packageId": "com.kisushotto.notes",
+  "host": "notes.kisushotto.com",
+  "name": "KS Notes",
+  "launcherName": "Notes",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#111114",
+  "backgroundColor": "#111114",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://notes.kisushotto.com/icons/notes-512.png",
+  "maskableIconUrl": "https://notes.kisushotto.com/icons/notes-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "../notes-twa.keystore",
+    "alias": "notes-key"
+  },
+  "appVersionCode": 1,
+  "appVersionName": "1.0.0",
+  "shortcuts": [],
+  "alphaDependencies": { "enabled": false },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://notes.kisushotto.com/",
+  "minSdkVersion": 19,
+  "webManifestUrl": "https://notes.kisushotto.com/manifest.json",
+  "fallbackType": "customtabs"
+}
