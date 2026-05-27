@@ -98,14 +98,17 @@ input, textarea, select {
 .search-wrap {
   flex: 1;
   max-width: 480px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 8px 16px;
+  margin-left: 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 6px 4px;
   height: 40px;
-  display: flex; align-items: center;
+  display: flex; align-items: center; gap: 8px;
 }
-.search-wrap input { width: 100%; }
+.search-icon { flex: 0 0 auto; color: var(--muted); }
+.search-wrap input { width: 100%; background: transparent; border: none; outline: none; }
 .search-wrap input::placeholder { color: var(--muted); }
 
 .topbar-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
