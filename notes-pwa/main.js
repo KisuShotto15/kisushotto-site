@@ -1886,7 +1886,7 @@ async function doPasskeyLogin() {
   if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
   if (errEl) errEl.textContent = '';
   try {
-    const assertion = await navigator.credentials.get({
+    const credPromise = navigator.credentials.get({
       mediation: 'required',
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
@@ -1895,6 +1895,8 @@ async function doPasskeyLogin() {
         rpId: 'kisushotto.com',
       },
     });
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado. Intenta de nuevo.')), 65000));
+    const assertion = await Promise.race([credPromise, timeout]);
     if (!assertion) throw new Error('Cancelado');
     const credId = _b64urlEncode(assertion.rawId);
     const res = await fetch(`${cfg.base()}/auth/passkey/authenticate`, {
@@ -1916,32 +1918,39 @@ async function doPasskeyLogin() {
 async function doEmailLogin() {
   const email = (document.getElementById('loginEmail')?.value || '').trim().toLowerCase();
   const errEl = document.getElementById('loginError');
+  const emailBtn = document.getElementById('btnEmailLogin');
   if (!email || !email.includes('@')) {
     if (errEl) errEl.textContent = 'Ingresa un email valido.';
     return;
   }
   if (errEl) errEl.textContent = '';
+  if (emailBtn) { emailBtn.disabled = true; emailBtn.textContent = 'Verificando…'; }
 
-  // Block email login if this account already has a passkey
   try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 8000);
     const chk = await fetch(`${cfg.base()}/auth/passkey/check`, {
       method: 'POST',
+      signal: controller.signal,
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}` },
       body: JSON.stringify({ email }),
     });
+    clearTimeout(t);
     if (chk.ok) {
       const { hasPasskey } = await chk.json();
       if (hasPasskey) {
+        if (emailBtn) { emailBtn.disabled = false; emailBtn.textContent = 'Continuar con email'; }
         doPasskeyLogin();
         return;
       }
     }
-  } catch { /* si el check falla, permitir email login */ }
+  } catch {
+    // si el check falla o timeout, continuar con email
+  }
 
+  if (emailBtn) { emailBtn.disabled = false; emailBtn.textContent = 'Continuar con email'; }
   localStorage.setItem('notes_user', email);
   document.getElementById('loginScreen').classList.add('hidden');
-
-  // Show passkey setup overlay — always, passkey registration is mandatory
   document.getElementById('passkeySetup').classList.remove('hidden');
 }
 
