@@ -121,7 +121,7 @@ input, textarea, select {
   top: 64px; left: 0; bottom: 0;
   width: var(--sb-w);
   background: var(--bg);
-  border-right: 1px solid var(--border);
+  border-right: none;
   z-index: 65;
   overflow: hidden;
   transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
@@ -164,12 +164,12 @@ input, textarea, select {
 .sidebar-item .sidebar-cat-icon { opacity: 1; flex: 0 0 22px; }
 .sidebar-item:hover { background: var(--card2); color: var(--text); }
 .sidebar-item.active {
-  background: rgba(251,191,36,0.12);
-  color: var(--accent);
-  font-weight: 600;
+  background: var(--card2);
+  color: var(--text);
+  font-weight: 500;
 }
-.sidebar-item.active svg { stroke: var(--accent); }
-.sidebar-item.active:hover { background: rgba(251,191,36,0.18); }
+.sidebar-item.active svg { stroke: var(--text); }
+.sidebar-item.active:hover { background: var(--card2); }
 
 body.sidebar-open .sidebar { width: var(--sb-open); }
 body.sidebar-open .sidebar-item span { opacity: 1; }
