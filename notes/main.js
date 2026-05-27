@@ -1932,11 +1932,7 @@ async function doEmailLogin() {
     if (chk.ok) {
       const { hasPasskey } = await chk.json();
       if (hasPasskey) {
-        if (errEl) errEl.textContent = 'Esta cuenta usa passkey. Usa el boton de arriba.';
-        const btn = document.getElementById('btnPasskeyLogin');
-        if (btn) { btn.style.display = ''; btn.addEventListener('click', doPasskeyLogin); }
-        const divider = document.getElementById('loginDivider');
-        if (divider) divider.style.display = '';
+        doPasskeyLogin();
         return;
       }
     }
