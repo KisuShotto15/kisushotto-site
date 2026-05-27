@@ -79,10 +79,11 @@ async function init() {
   // (Brave Shields can block IndexedDB, breaking all async below)
   bindUI();
 
-  // SW — auto-reload when new SW takes control so stale cache is never served
+  // SW — force update check on every load; reload when new SW takes control
   if ('serviceWorker' in navigator) {
     try {
-      await navigator.serviceWorker.register('/sw.js');
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      reg.update();
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
     } catch {}
   }

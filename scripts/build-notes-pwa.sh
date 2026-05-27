@@ -108,15 +108,13 @@ cp public/images/notes-favicon.svg "$OUT/images/notes-favicon.svg"
 cp public/images/notes-logo.svg    "$OUT/images/notes-logo.svg"
 cp public/images/notes-icon.svg    "$OUT/images/notes-icon.svg"
 
-# Cache headers (not regenerated each build, only if missing)
-if [ ! -f "$OUT/_headers" ]; then
-  cat > "$OUT/_headers" << 'HEADERS'
+# Cache headers — always regenerated
+cat > "$OUT/_headers" << 'HEADERS'
 /sw.js
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-store
 
 /manifest.json
   Cache-Control: public, max-age=86400
 HEADERS
-fi
 
 echo "notes-pwa/ built OK"
