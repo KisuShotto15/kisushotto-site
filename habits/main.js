@@ -402,11 +402,10 @@ window.shiftMonth = function(dir) {
   grid.classList.remove('enter-from-right', 'enter-from-left');
   grid.classList.add(exitClass);
 
-  setTimeout(async () => {
+  setTimeout(() => {
     calMonth += dir;
     if (calMonth > 12) { calMonth = 1;  calYear++; }
     if (calMonth < 1)  { calMonth = 12; calYear--; }
-    await loadCalMonth();
     renderCalendar();
     renderStats();
     const g = document.getElementById('calGrid');
@@ -414,6 +413,7 @@ window.shiftMonth = function(dir) {
     void g.offsetWidth;
     g.classList.add(enterClass);
     g.addEventListener('animationend', () => g.classList.remove(enterClass), { once: true });
+    loadCalMonth().then(() => { renderCalendar(); renderStats(); });
   }, 185);
 };
 
