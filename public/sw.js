@@ -1,4 +1,4 @@
-const CACHE = 'ks-hub-v6';
+const CACHE = 'ks-hub-v7';
 const PRECACHE = ['/', '/manifest.json', '/icons/icon-192x192.png', '/icons/icon-512x512.png'];
 
 self.addEventListener('install', e => {
