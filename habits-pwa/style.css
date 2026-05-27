@@ -766,4 +766,8 @@ body::before {
 #habitList.exit-right       { animation: exitRight       0.18s ease forwards; pointer-events: none; }
 #habitList.enter-from-right { animation: enterFromRight  0.22s ease both; }
 #habitList.enter-from-left  { animation: enterFromLeft   0.22s ease both; }
+#calGrid.exit-left          { animation: exitLeft        0.18s ease forwards; pointer-events: none; }
+#calGrid.exit-right         { animation: exitRight       0.18s ease forwards; pointer-events: none; }
+#calGrid.enter-from-right   { animation: enterFromRight  0.22s ease both; }
+#calGrid.enter-from-left    { animation: enterFromLeft   0.22s ease both; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }

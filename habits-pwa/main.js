@@ -393,12 +393,23 @@ window.adjustCount = async function(id, delta) {
 
 // ── Calendar navigation ───────────────────────────────────────────────────────
 window.shiftMonth = async function(dir) {
+  const grid = document.getElementById('calGrid');
+  const exitClass  = dir > 0 ? 'exit-left'       : 'exit-right';
+  const enterClass = dir > 0 ? 'enter-from-right' : 'enter-from-left';
+  grid.classList.remove('enter-from-right', 'enter-from-left');
+  grid.classList.add(exitClass);
+  await new Promise(r => setTimeout(r, 185));
   calMonth += dir;
   if (calMonth > 12) { calMonth = 1;  calYear++; }
   if (calMonth < 1)  { calMonth = 12; calYear--; }
   await loadCalMonth();
   renderCalendar();
   renderStats();
+  const g = document.getElementById('calGrid');
+  g.classList.remove('exit-left', 'exit-right', 'enter-from-right', 'enter-from-left');
+  void g.offsetWidth;
+  g.classList.add(enterClass);
+  g.addEventListener('animationend', () => g.classList.remove(enterClass), { once: true });
 };
 
 // ── Panel: add/edit habit ─────────────────────────────────────────────────────
@@ -856,8 +867,8 @@ window.logout = function() {
     const dir = dx < 0 ? 1 : -1;
     const now = new Date();
     const isCurrentMonth = calYear === now.getFullYear() && calMonth === now.getMonth() + 1;
-    if (dir === 1 && isCurrentMonth) return; // no avanzar mas alla del mes actual
-    shiftMonth(dir);
+    if (dir === 1 && isCurrentMonth) return;
+    shiftMonth(dir); // shiftMonth ya maneja la animación
   }, { passive: true });
 })();
 
