@@ -111,8 +111,8 @@ android {
         applicationId 'com.kisushotto.notes'
         minSdk 21
         targetSdk 34
-        versionCode 2
-        versionName '1.1.0'
+        versionCode 3
+        versionName '1.2.0'
     }
     signingConfigs {
         release {
@@ -147,7 +147,7 @@ cat > "$TWA_DIR/app/src/main/AndroidManifest.xml" << 'MEOF'
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+        android:theme="@style/AppTheme">
         <activity
             android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
             android:exported="true">
@@ -200,6 +200,18 @@ cat > "$TWA_DIR/app/src/main/res/values/strings.xml" << 'SXEOF'
 </resources>
 SXEOF
 
+cat > "$TWA_DIR/app/src/main/res/values/styles.xml" << 'STEOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/backgroundColor</item>
+        <item name="android:statusBarColor">@color/backgroundColor</item>
+        <item name="android:navigationBarColor">@color/backgroundColor</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
+STEOF
+
 cat > "$TWA_DIR/app/src/main/res/values/colors.xml" << 'CEOF'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
@@ -230,7 +242,7 @@ const bg = { r: 17, g: 17, b: 20, alpha: 1 }; // #111114
 
 // Icon with background baked in: icon at 65% of canvas
 async function makeIcon(dst, canvas) {
-  const iconSize = Math.round(canvas * 0.65);
+  const iconSize = Math.round(canvas * 0.82);
   const iconBuf = await sharp(src).resize(iconSize, iconSize).png().toBuffer();
   return sharp({ create: { width: canvas, height: canvas, channels: 4, background: bg } })
     .composite([{ input: iconBuf, gravity: 'center' }])
@@ -240,7 +252,7 @@ async function makeIcon(dst, canvas) {
 
 // Adaptive foreground: transparent bg, icon at 50% of 432px canvas (safe zone = 288px)
 async function makeForeground(dst, canvas) {
-  const iconSize = Math.round(canvas * 0.50);
+  const iconSize = Math.round(canvas * 0.65);
   const iconBuf = await sharp(src).resize(iconSize, iconSize).png().toBuffer();
   return sharp({ create: { width: canvas, height: canvas, channels: 4, background: { r:0,g:0,b:0,alpha:0 } } })
     .composite([{ input: iconBuf, gravity: 'center' }])
