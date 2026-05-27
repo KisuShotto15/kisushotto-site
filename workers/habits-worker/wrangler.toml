@@ -7,5 +7,17 @@ binding = "DB"
 database_name = "habits-db"
 database_id = "d15b535c-edda-4bf8-8805-1fc3c1c244ea"
 
+[[kv_namespaces]]
+binding = "PUSH_KV"
+id = "183e28e496f3468fae40a58237cb098f"
+
+[triggers]
+crons = ["* * * * *"]
+
 [vars]
 TOKEN = "151322"
+VAPID_SUBJECT = "mailto:efrenalejandro2010@gmail.com"
+
+# Set as secrets via:
+#   wrangler secret put VAPID_PUBLIC
+#   wrangler secret put VAPID_PRIVATE_JWK

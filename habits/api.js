@@ -66,3 +66,6 @@ export const toggleComplete = b       => api('/completions/toggle', { method: 'P
 export const setComplete    = b       => api('/completions/set',    { method: 'POST', body: JSON.stringify(b) });
 
 export const getStats       = p       => api(`/stats${qs(p)}`);
+
+export const apiVapid    = ()    => api('/vapid');
+export const apiSetPush  = sub   => api('/me/push', { method: 'POST', body: JSON.stringify(sub) });

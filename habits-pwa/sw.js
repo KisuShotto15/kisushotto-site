@@ -1,48 +1,32 @@
-const CACHE = 'ks-hub-v7';
-const PRECACHE = ['/', '/manifest.json', '/icons/icon-192x192.png', '/icons/icon-512x512.png'];
+const CACHE = 'ks-habits-v2';
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
-});
+self.addEventListener('install', () => { self.skipWaiting(); });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('push', e => {
   let data = {};
-  try { data = e.data ? e.data.json() : {}; } catch { data = { title: 'Recordatorio', body: 'Tienes una nota' }; }
-  const title = data.title || 'Notas';
+  try { data = e.data ? e.data.json() : {}; } catch { data = {}; }
+  const title = data.title || 'Habitos';
   const body  = data.body  || '';
-  const tag   = data.noteId ? `notes-${data.noteId}` : 'notes';
-  const url   = data.noteId ? `/notes/?note=${encodeURIComponent(data.noteId)}` : '/notes/';
   e.waitUntil(self.registration.showNotification(title, {
     body,
-    tag,
-    icon: '/images/notes-icon.svg',
-    badge: '/icons/icon-192x192.png',
-    data: { url },
+    tag: 'habits-reminder',
+    icon: '/images/habits-favicon.svg',
+    badge: '/icons/habits-192.png',
+    data: { url: '/' },
   }));
 });
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const target = e.notification?.data?.url
-    || (e.notification.tag?.startsWith('notes') ? '/notes/' : '/habits/');
-  e.waitUntil(clients.openWindow(target));
-});
-
-self.addEventListener('sync', e => {
-  if (e.tag === 'notes-flush') {
-    e.waitUntil((async () => {
-      const cs = await self.clients.matchAll({ includeUncontrolled: true });
-      for (const c of cs) c.postMessage({ type: 'flush-queue' });
-    })());
-  }
+  e.waitUntil(clients.openWindow(e.notification?.data?.url || '/'));
 });
 
 self.addEventListener('fetch', e => {
@@ -50,7 +34,17 @@ self.addEventListener('fetch', e => {
     e.respondWith(fetch(e.request).catch(() => caches.match('/')));
     return;
   }
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
-  );
+  const url = new URL(e.request.url);
+  if (url.origin === self.location.origin &&
+      (url.pathname.endsWith('.js') || url.pathname.endsWith('.css'))) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+  e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request)));
 });

@@ -1,4 +1,5 @@
 import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js';
+import { ensurePushSubscription } from './push.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -532,6 +533,7 @@ window.saveHabit = async function() {
     if (editingId) await updateHabit(editingId, body);
     else           await createHabit(body);
     toast(editingId ? 'Hábito actualizado' : '¡Hábito creado!');
+    if (body.reminder_time) ensurePushSubscription().catch(() => {});
     closePanel();
     await init();
   } catch (e) {
@@ -646,6 +648,7 @@ window.requestNotifPermission = async function() {
     $('notifBanner').classList.add('hidden');
     toast('Notificaciones activadas ✓');
     setupReminders();
+    ensurePushSubscription().catch(() => {});
   }
 };
 

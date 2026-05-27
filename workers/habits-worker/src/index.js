@@ -74,6 +74,80 @@ function isDueOn(habit, dateISO) {
   return true;
 }
 
+// ── VAPID / Web Push ──────────────────────────────────────────────────────────
+function b64urlToBytes(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+function bytesToB64url(bytes) {
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function signVapidJwt(payload, privateJwk) {
+  const header = { typ: 'JWT', alg: 'ES256' };
+  const enc = new TextEncoder();
+  const headB64 = bytesToB64url(enc.encode(JSON.stringify(header)));
+  const payB64  = bytesToB64url(enc.encode(JSON.stringify(payload)));
+  const data = enc.encode(`${headB64}.${payB64}`);
+  const key = await crypto.subtle.importKey('jwk', privateJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, data);
+  return `${headB64}.${payB64}.${bytesToB64url(new Uint8Array(sig))}`;
+}
+
+async function sendWebPush(env, subscription, payload) {
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE_JWK) return false;
+  let privateJwk;
+  try { privateJwk = JSON.parse(env.VAPID_PRIVATE_JWK); } catch { return false; }
+  const url = new URL(subscription.endpoint);
+  const aud = `${url.protocol}//${url.host}`;
+  const exp = Math.floor(Date.now() / 1000) + 12 * 3600;
+  const sub = env.VAPID_SUBJECT || 'mailto:admin@example.com';
+  const jwt = await signVapidJwt({ aud, exp, sub }, privateJwk);
+  const headers = {
+    'Authorization': `vapid t=${jwt}, k=${env.VAPID_PUBLIC}`,
+    'Content-Encoding': 'aes128gcm',
+    'TTL': '86400',
+  };
+  try {
+    const res = await fetch(subscription.endpoint, { method: 'POST', headers, body: new Uint8Array(0) });
+    return res.ok;
+  } catch { return false; }
+}
+
+async function setPushSubscription(request, env, uid) {
+  const sub = await request.json();
+  if (!sub?.endpoint) return err('subscription required');
+  await env.PUSH_KV.put(`push:${uid}`, JSON.stringify(sub));
+  return json({ ok: true });
+}
+
+async function getVapidPublic(env) {
+  return json({ key: env.VAPID_PUBLIC || null });
+}
+
+async function dispatchReminders(env) {
+  const now = new Date();
+  const hhmm = `${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')}`;
+  const today = now.toISOString().slice(0, 10);
+
+  const { results } = await env.DB.prepare(
+    `SELECT id, user_id, name, reminder_time, reminder_last_sent FROM habits
+     WHERE active = 1 AND reminder_time = ? AND (reminder_last_sent IS NULL OR reminder_last_sent != ?)`
+  ).bind(hhmm, today).all();
+
+  for (const h of results || []) {
+    const subRaw = await env.PUSH_KV.get(`push:${h.user_id}`);
+    if (subRaw) {
+      try {
+        const sub = JSON.parse(subRaw);
+        await sendWebPush(env, sub, { title: h.name, body: 'Es hora de tu habito diario' });
+      } catch (_) {}
+    }
+    await env.DB.prepare(`UPDATE habits SET reminder_last_sent = ? WHERE id = ?`).bind(today, h.id).run();
+  }
+}
+
 // ── DB bootstrap ──────────────────────────────────────────────────────────────
 async function migrate(env) {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS habits (id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT '', name TEXT NOT NULL, description TEXT, type TEXT NOT NULL DEFAULT 'binary', target_value REAL DEFAULT 1, target_unit TEXT DEFAULT 'veces', frequency TEXT NOT NULL DEFAULT 'daily', frequency_days TEXT, frequency_every INTEGER DEFAULT 1, color TEXT NOT NULL DEFAULT 'lavender', emoji TEXT NOT NULL DEFAULT '✓', reminder_time TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)").run();
@@ -81,6 +155,7 @@ async function migrate(env) {
   // Add user_id to existing tables if missing (safe to run multiple times)
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN user_id TEXT NOT NULL DEFAULT ''").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE completions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''").run(); } catch (_) {}
+  try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN reminder_last_sent TEXT").run(); } catch (_) {}
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -257,6 +332,9 @@ export default {
     const seg    = path.split('/').filter(Boolean);
 
     try {
+      if (path === '/me/push' && method === 'POST') return await setPushSubscription(request, env, uid);
+      if (path === '/vapid'   && method === 'GET')  return await getVapidPublic(env);
+
       if (path === '/habits' && method === 'GET')  return await getHabits(env, uid);
       if (path === '/habits' && method === 'POST') return await createHabit(request, env, uid);
       if (seg[0] === 'habits' && seg[1] && method === 'PUT')    return await updateHabit(seg[1], request, env, uid);
@@ -272,5 +350,10 @@ export default {
     } catch (e) {
       return err(e.message, 500);
     }
+  },
+
+  async scheduled(_event, env) {
+    try { await migrate(env); } catch (_) {}
+    await dispatchReminders(env);
   },
 };

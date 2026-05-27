@@ -1,5 +1,15 @@
 /sw.js
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-store
 
 /manifest.json
   Cache-Control: public, max-age=86400
+
+/.well-known/assetlinks.json
+  Cache-Control: public, max-age=3600
+  Content-Type: application/json
+
+/*.js
+  Cache-Control: no-cache
+
+/*.css
+  Cache-Control: no-cache
