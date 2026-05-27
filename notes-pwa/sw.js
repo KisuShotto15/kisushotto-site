@@ -1,8 +1,7 @@
-const CACHE = 'ks-notes-v5';
-const PRECACHE = ['/', '/manifest.json'];
+const CACHE = 'ks-notes-v6';
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+self.addEventListener('install', () => {
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
