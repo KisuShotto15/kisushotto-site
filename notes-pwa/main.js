@@ -966,6 +966,7 @@ async function commitEditor() {
       State.editingSnapshotTime = remote.last_modified;
     }
   } catch {}
+  if (isNoteEmpty(e)) return;
   const idx = State.notes.findIndex(n => n.id === e.id);
   if (idx >= 0) State.notes[idx] = JSON.parse(JSON.stringify(e));
   else State.notes.unshift(JSON.parse(JSON.stringify(e)));
