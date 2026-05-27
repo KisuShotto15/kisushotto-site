@@ -1861,16 +1861,22 @@ async function initLoginScreen() {
   btnEmail?.addEventListener('click', doEmailLogin);
   emailInput?.addEventListener('keydown', e => { if (e.key === 'Enter') doEmailLogin(); });
 
-  // Passkey setup overlay buttons
+  // Passkey setup overlay — registration is mandatory, no skip
   document.getElementById('btnSetupPasskey')?.addEventListener('click', async () => {
-    document.getElementById('btnSetupPasskey').disabled = true;
-    await doRegisterPasskey();
-    document.getElementById('passkeySetup').classList.add('hidden');
-    init();
-  });
-  document.getElementById('btnSetupSkip')?.addEventListener('click', () => {
-    document.getElementById('passkeySetup').classList.add('hidden');
-    init();
+    const btn = document.getElementById('btnSetupPasskey');
+    const errEl = document.getElementById('setupError');
+    btn.disabled = true;
+    btn.textContent = 'Registrando…';
+    if (errEl) errEl.textContent = '';
+    const ok = await doRegisterPasskey();
+    if (ok) {
+      document.getElementById('passkeySetup').classList.add('hidden');
+      init();
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Reintentar';
+      if (errEl) errEl.textContent = 'No se pudo registrar. Intenta de nuevo.';
+    }
   });
 
   if (await isWebauthnAvailable().catch(() => false)) {
@@ -1974,11 +1980,12 @@ async function doRegisterPasskey() {
     if (!cred) return false;
     const credId = _b64urlEncode(cred.rawId);
     // Register for app login
-    await fetch(`${cfg.base()}/auth/passkey/register`, {
+    const res = await fetch(`${cfg.base()}/auth/passkey/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}`, 'X-User-Email': email },
       body: JSON.stringify({ email, credentialId: credId }),
     });
+    if (!res.ok) { console.error('passkey register failed', res.status, await res.text()); return false; }
     // Register same credential for note unlock
     await apiRegWebauthn(credId, null);
     localStorage.setItem('notes_webauthn_id', credId);
