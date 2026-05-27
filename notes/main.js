@@ -83,6 +83,16 @@ async function init() {
   // SW — force update check on every load; reload when new SW takes control
   if ('serviceWorker' in navigator) {
     try {
+      // Unregister stale SWs before registering fresh one
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) {
+        const sv = r.active || r.installing || r.waiting;
+        if (sv) {
+          const res = await fetch(sv.scriptURL, { cache: 'no-store' }).catch(() => null);
+          const txt = await res?.text().catch(() => '');
+          if (txt && !txt.includes('ks-notes-v5')) { await r.unregister(); }
+        }
+      }
       const reg = await navigator.serviceWorker.register('/sw.js');
       reg.update();
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());

@@ -115,6 +115,12 @@ cat > "$OUT/_headers" << 'HEADERS'
 
 /manifest.json
   Cache-Control: public, max-age=86400
+
+/*.js
+  Cache-Control: no-cache
+
+/*.css
+  Cache-Control: no-cache
 HEADERS
 
 echo "notes-pwa/ built OK"

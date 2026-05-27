@@ -3,3 +3,9 @@
 
 /manifest.json
   Cache-Control: public, max-age=86400
+
+/*.js
+  Cache-Control: no-cache
+
+/*.css
+  Cache-Control: no-cache
