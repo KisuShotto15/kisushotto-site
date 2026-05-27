@@ -1626,6 +1626,8 @@ function bindDrawer() {
   $('#drawer-webauthn').addEventListener('click', async () => {
     try {
       await registerWebauthn(getUserEmail());
+      // Also register as login passkey so the same biometric unlocks the app
+      await window.registerLoginPasskey();
       alert('Huella registrada en este dispositivo');
     } catch (e) { alert(e.message); }
   });
@@ -1865,6 +1867,7 @@ function _b64urlDecode(s) {
 async function initLoginScreen() {
   const hint = document.getElementById('loginHint');
   if (hint) hint.textContent = 'Para registrar tu passkey por primera vez, ingresa desde kisushotto.com/notes/ → Ajustes → "Registrar passkey de acceso".';
+  document.getElementById('btnPasskeyLogin')?.addEventListener('click', window.loginWithPasskey);
 }
 
 window.loginWithPasskey = async function() {
@@ -1874,6 +1877,7 @@ window.loginWithPasskey = async function() {
   if (errEl) errEl.textContent = '';
   try {
     const assertion = await navigator.credentials.get({
+      mediation: 'required',
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
         timeout: 60000,

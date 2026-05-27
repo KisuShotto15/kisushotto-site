@@ -60,7 +60,7 @@ export async function registerWebauthn(email) {
   const cred = await navigator.credentials.create({
     publicKey: {
       challenge,
-      rp: { name: 'Notas — KS', id: location.hostname },
+      rp: { name: 'Notas — KS', id: 'kisushotto.com' },
       user: {
         id: userIdBytes,
         name: email,
@@ -113,7 +113,7 @@ export async function unlockWithWebauthn() {
         timeout: 60000,
         userVerification: 'required',
         allowCredentials,
-        rpId: location.hostname,
+        rpId: 'kisushotto.com',
       },
     });
     if (!assertion) return false;
