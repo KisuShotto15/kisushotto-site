@@ -1,5 +1,5 @@
-const CACHE = 'ks-hub-v6';
-const PRECACHE = ['/', '/manifest.json', '/icons/icon-192x192.png', '/icons/icon-512x512.png'];
+const CACHE = 'ks-notes-v2';
+const PRECACHE = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
@@ -19,21 +19,18 @@ self.addEventListener('push', e => {
   const title = data.title || 'Notas';
   const body  = data.body  || '';
   const tag   = data.noteId ? `notes-${data.noteId}` : 'notes';
-  const url   = data.noteId ? `/notes/?note=${encodeURIComponent(data.noteId)}` : '/notes/';
+  const url   = data.noteId ? `/?note=${encodeURIComponent(data.noteId)}` : '/';
   e.waitUntil(self.registration.showNotification(title, {
-    body,
-    tag,
+    body, tag,
     icon: '/images/notes-icon.svg',
-    badge: '/icons/icon-192x192.png',
+    badge: '/icons/notes-192.png',
     data: { url },
   }));
 });
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const target = e.notification?.data?.url
-    || (e.notification.tag?.startsWith('notes') ? '/notes/' : '/habits/');
-  e.waitUntil(clients.openWindow(target));
+  e.waitUntil(clients.openWindow(e.notification?.data?.url || '/'));
 });
 
 self.addEventListener('sync', e => {
@@ -48,6 +45,19 @@ self.addEventListener('sync', e => {
 self.addEventListener('fetch', e => {
   if (e.request.mode === 'navigate') {
     e.respondWith(fetch(e.request).catch(() => caches.match('/')));
+    return;
+  }
+  const url = new URL(e.request.url);
+  // Network-first for app files so deploys take effect immediately
+  if (url.origin === self.location.origin &&
+      (url.pathname.endsWith('.js') || url.pathname.endsWith('.css'))) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
     return;
   }
   e.respondWith(
