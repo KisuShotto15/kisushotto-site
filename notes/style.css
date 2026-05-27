@@ -969,6 +969,28 @@ body.select-mode .nc-select-wrap { display: block; }
   color: var(--text);
 }
 .drawer-item:hover { background: var(--card2); }
+.passkey-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+}
+.passkey-row:hover { background: var(--card2); }
+.passkey-name {
+  flex: 1; font-size: 13px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.passkey-date { font-size: 11px; color: var(--text2); flex-shrink: 0; }
+.passkey-rename-input {
+  flex: 1; font-size: 13px; background: var(--card2);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 2px 6px; color: var(--text);
+}
+.passkey-btn {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text2); font-size: 14px; padding: 2px 4px;
+  border-radius: var(--r-sm); flex-shrink: 0;
+}
+.passkey-btn:hover { color: var(--text); background: var(--card3, #333); }
 .drawer-row {
   display: flex; gap: 6px; align-items: center;
   padding: 8px 12px;

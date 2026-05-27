@@ -8,6 +8,7 @@ import {
   apiUploadAttachment, apiDeleteAttachment, apiAttachmentBlobUrl,
   apiTrashNote, apiRestoreNote, apiPurgeNote,
   apiRegWebauthn,
+  apiListPasskeys, apiRenamePasskey, apiDeletePasskey,
   getUserEmail,
 } from './api.js';
 import { pull, flushQueue, saveNoteLocal, saveCategoryLocal, onConnectionChange } from './sync.js';
@@ -1628,10 +1629,67 @@ function bindDrawer() {
     catch (e) { alert(e.message); }
   });
 
-  $('#drawer-webauthn').addEventListener('click', async () => {
+  async function renderPasskeyList() {
+    const container = $('#drawer-passkey-list');
+    if (!container) return;
+    container.innerHTML = '<p style="padding:4px 12px;font-size:13px;color:var(--text2)">Cargando…</p>';
+    try {
+      const passkeys = await apiListPasskeys();
+      if (!passkeys.length) {
+        container.innerHTML = '<p style="padding:4px 12px;font-size:13px;color:var(--text2)">Sin passkeys registradas.</p>';
+        return;
+      }
+      container.innerHTML = '';
+      passkeys.forEach(pk => {
+        const row = document.createElement('div');
+        row.className = 'passkey-row';
+        const credId = pk.credential_id;
+        const name = pk.device_name || 'Passkey';
+        const date = pk.created_at ? new Date(pk.created_at).toLocaleDateString() : '';
+        row.innerHTML = `
+          <span class="passkey-name" title="${credId}">${name}</span>
+          <span class="passkey-date">${date}</span>
+          <button class="passkey-btn" data-action="rename" title="Renombrar">✏️</button>
+          <button class="passkey-btn" data-action="delete" title="Eliminar">🗑</button>
+        `;
+        row.querySelector('[data-action="rename"]').addEventListener('click', async () => {
+          const input = document.createElement('input');
+          input.className = 'passkey-rename-input';
+          input.value = name;
+          const nameSpan = row.querySelector('.passkey-name');
+          row.replaceChild(input, nameSpan);
+          input.focus(); input.select();
+          const save = async () => {
+            const newName = input.value.trim() || 'Passkey';
+            await apiRenamePasskey(credId, newName).catch(() => {});
+            renderPasskeyList();
+          };
+          input.addEventListener('blur', save);
+          input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+        });
+        row.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+          const passkeys2 = await apiListPasskeys().catch(() => []);
+          if (passkeys2.length <= 1) {
+            alert('No puedes eliminar tu unica passkey. Agrega otra primero.');
+            return;
+          }
+          if (!confirm(`Eliminar "${name}"?`)) return;
+          await apiDeletePasskey(credId).catch(() => {});
+          renderPasskeyList();
+        });
+        container.appendChild(row);
+      });
+    } catch (e) {
+      container.innerHTML = `<p style="padding:4px 12px;font-size:13px;color:var(--danger,#f87171)">${e.message}</p>`;
+    }
+  }
+
+  $('#drawer-add-passkey').addEventListener('click', async () => {
     const ok = await doRegisterPasskey();
-    alert(ok ? 'Passkey registrada. Sirve para login y notas protegidas.' : 'No se pudo registrar la passkey.');
+    if (ok) renderPasskeyList();
+    else alert('No se pudo registrar la passkey.');
   });
+  renderPasskeyList();
 
   $('#drawer-test-push').addEventListener('click', async () => {
     try {

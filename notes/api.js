@@ -50,6 +50,9 @@ export const apiSetPin       = (pin)              => api('/me/pin',         { me
 export const apiVerifyPin    = (pin)              => api('/me/pin/verify',  { method: 'POST', body: JSON.stringify({ pin }) });
 export const apiRegWebauthn  = (cid, pk)          => api('/me/webauthn/register', { method: 'POST', body: JSON.stringify({ credentialId: cid, publicKey: pk }) });
 export const apiGetWebauthn  = ()                 => api('/me/webauthn');
+export const apiListPasskeys = ()                 => api('/auth/passkeys');
+export const apiRenamePasskey = (credId, name)    => api(`/auth/passkey/${encodeURIComponent(credId)}`, { method: 'PATCH', body: JSON.stringify({ deviceName: name }) });
+export const apiDeletePasskey = (credId)          => api(`/auth/passkey/${encodeURIComponent(credId)}`, { method: 'DELETE' });
 export const apiSetPush      = (sub)              => api('/me/push',        { method: 'POST', body: JSON.stringify(sub) });
 export const apiVapid        = ()                 => api('/vapid');
 

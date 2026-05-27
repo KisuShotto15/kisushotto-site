@@ -655,6 +655,28 @@ async function loginPasskeyAuthenticate(request, env) {
   return json({ email: row.email });
 }
 
+async function loginPasskeyList(env, email) {
+  const { results } = await env.DB.prepare(
+    `SELECT credential_id, device_name, created_at FROM login_passkeys WHERE email = ? ORDER BY created_at DESC`
+  ).bind(email).all();
+  return json(results || []);
+}
+
+async function loginPasskeyRename(request, env, email, credId) {
+  const { deviceName } = await request.json().catch(() => ({}));
+  await env.DB.prepare(
+    `UPDATE login_passkeys SET device_name = ? WHERE credential_id = ? AND email = ?`
+  ).bind(deviceName || null, credId, email).run();
+  return json({ ok: true });
+}
+
+async function loginPasskeyDelete(env, email, credId) {
+  await env.DB.prepare(
+    `DELETE FROM login_passkeys WHERE credential_id = ? AND email = ?`
+  ).bind(credId, email).run();
+  return json({ ok: true });
+}
+
 // ── Router ───────────────────────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
@@ -680,6 +702,10 @@ export default {
     const seg = path.split('/').filter(Boolean);
 
     try {
+      if (path === '/auth/passkeys'                                           && m === 'GET')    return await loginPasskeyList(env, email);
+      if (seg[0] === 'auth' && seg[1] === 'passkey' && seg[2] && m === 'PATCH')  return await loginPasskeyRename(request, env, email, seg[2]);
+      if (seg[0] === 'auth' && seg[1] === 'passkey' && seg[2] && m === 'DELETE') return await loginPasskeyDelete(env, email, seg[2]);
+
       if (path === '/me'                       && m === 'GET')  return await getMe(env, email);
       if (path === '/me/pin'                   && m === 'POST') return await setPin(request, env, email);
       if (path === '/me/pin/verify'            && m === 'POST') return await verifyPin(request, env, email);

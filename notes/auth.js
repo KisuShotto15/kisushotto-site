@@ -1,7 +1,7 @@
 // notes/auth.js — PIN modal + WebAuthn helpers.
 // Session unlock keeps locked notes accessible for 1 minute.
 
-import { apiSetPin, apiVerifyPin, apiRegWebauthn, apiGetWebauthn } from './api.js';
+import { apiSetPin, apiVerifyPin, apiRegWebauthn } from './api.js';
 
 const SESSION_KEY = 'notes_unlocked_until';
 const SESSION_MS = 1 * 60 * 1000;
@@ -90,28 +90,12 @@ export async function registerWebauthn(email) {
 
 export async function unlockWithWebauthn() {
   if (!window.PublicKeyCredential) return false;
-  let credId = localStorage.getItem('notes_webauthn_id');
-  if (!credId) {
-    try {
-      const info = await apiGetWebauthn();
-      credId = info.credentialId;
-      if (credId) localStorage.setItem('notes_webauthn_id', credId);
-    } catch { /* ignore */ }
-  }
-  if (!credId) return false;
-
   try {
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const allowCredentials = [{
-      type: 'public-key',
-      id: b64urlDecode(credId),
-    }];
     const assertion = await navigator.credentials.get({
       publicKey: {
-        challenge,
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
         timeout: 60000,
         userVerification: 'required',
-        allowCredentials,
         rpId: 'kisushotto.com',
       },
     });
