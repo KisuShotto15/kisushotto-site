@@ -198,8 +198,8 @@ function renderToday() {
     const streakHtml  = streak > 0
       ? `<span class="habit-streak ${streak >= 7 ? 'hot' : ''}">🔥 ${streak}</span>`
       : '';
-    const reminderHtml = overdue
-      ? `<span class="reminder-badge">⏰ ${h.reminder_time}</span>`
+    const reminderInline = overdue
+      ? `<span class="reminder-inline">⏰ ${h.reminder_time}</span>`
       : '';
 
     let rightSide = '';
@@ -214,7 +214,7 @@ function renderToday() {
           <button class="counter-btn" onclick="adjustCount('${h.id}',+1)">+</button>
         </div>`;
     } else {
-      rightSide = `${reminderHtml}${streakHtml}`;
+      rightSide = streakHtml;
     }
 
     return `
@@ -227,7 +227,7 @@ function renderToday() {
         <span class="habit-emoji">${h.emoji || '✓'}</span>
         <div class="habit-info">
           <div class="habit-name">${h.name}</div>
-          <div class="habit-freq">${freqLabel(h)}${h.description ? ` · ${h.description}` : ''}</div>
+          <div class="habit-freq">${freqLabel(h)}${h.description ? ` · ${h.description}` : ''}${reminderInline}</div>
         </div>
         ${rightSide}
       </div>`;

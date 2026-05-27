@@ -320,6 +320,12 @@ body::before {
 .habit-freq {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 13px; color: var(--muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reminder-inline {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+  color: var(--coral); margin-left: 6px;
+  animation: pulse 2s ease-in-out infinite;
 }
 
 /* Quantitative counter */
