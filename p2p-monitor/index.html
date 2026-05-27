@@ -892,11 +892,20 @@ var ACTIVE_PAY = 'BancoDeVenezuela';
 // Identifiers genéricos (catch-all) que NO deben usarse para filtrar competidores
 // BANK = Bank Transfer (legítimo, lo usa el usuario junto a BDV) → no se filtra
 var GENERIC_PAY_IDS = ['OtherPayments', 'SpecificBank'];
+// Aliases: identifiers alternativos que Binance puede devolver para el mismo método
+var PAY_ALIASES = {
+  'BNC':                     'BNCBancoNacional',
+  'BancoNacionalDeCredito':  'BNCBancoNacional',
+  'BNCBank':                 'BNCBancoNacional',
+  'BANK':                    'BANK'
+};
 
 function payLabel(id) {
+  var canonical = PAY_ALIASES[id] || id;
   for (var i = 0; i < PAY_METHODS.length; i++) {
-    if (PAY_METHODS[i].id === id) return PAY_METHODS[i].label;
+    if (PAY_METHODS[i].id === canonical) return PAY_METHODS[i].label;
   }
+  if (canonical === 'BANK') return 'Bank Transfer';
   return id;
 }
 
