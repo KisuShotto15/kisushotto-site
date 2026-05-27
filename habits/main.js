@@ -392,24 +392,29 @@ window.adjustCount = async function(id, delta) {
 };
 
 // ── Calendar navigation ───────────────────────────────────────────────────────
-window.shiftMonth = async function(dir) {
-  const grid = document.getElementById('calGrid');
+window.shiftMonth = function(dir) {
+  const now = new Date();
+  if (dir > 0 && calYear === now.getFullYear() && calMonth === now.getMonth() + 1) return;
+
   const exitClass  = dir > 0 ? 'exit-left'       : 'exit-right';
   const enterClass = dir > 0 ? 'enter-from-right' : 'enter-from-left';
+  const grid = document.getElementById('calGrid');
   grid.classList.remove('enter-from-right', 'enter-from-left');
   grid.classList.add(exitClass);
-  await new Promise(r => setTimeout(r, 185));
-  calMonth += dir;
-  if (calMonth > 12) { calMonth = 1;  calYear++; }
-  if (calMonth < 1)  { calMonth = 12; calYear--; }
-  await loadCalMonth();
-  renderCalendar();
-  renderStats();
-  const g = document.getElementById('calGrid');
-  g.classList.remove('exit-left', 'exit-right', 'enter-from-right', 'enter-from-left');
-  void g.offsetWidth;
-  g.classList.add(enterClass);
-  g.addEventListener('animationend', () => g.classList.remove(enterClass), { once: true });
+
+  setTimeout(async () => {
+    calMonth += dir;
+    if (calMonth > 12) { calMonth = 1;  calYear++; }
+    if (calMonth < 1)  { calMonth = 12; calYear--; }
+    await loadCalMonth();
+    renderCalendar();
+    renderStats();
+    const g = document.getElementById('calGrid');
+    g.classList.remove('exit-left', 'exit-right', 'enter-from-right', 'enter-from-left');
+    void g.offsetWidth;
+    g.classList.add(enterClass);
+    g.addEventListener('animationend', () => g.classList.remove(enterClass), { once: true });
+  }, 185);
 };
 
 // ── Panel: add/edit habit ─────────────────────────────────────────────────────
@@ -864,11 +869,7 @@ window.logout = function() {
     const dx = e.changedTouches[0].clientX - x0;
     x0 = y0 = null; locked = false;
     if (Math.abs(dx) < 50) return;
-    const dir = dx < 0 ? 1 : -1;
-    const now = new Date();
-    const isCurrentMonth = calYear === now.getFullYear() && calMonth === now.getMonth() + 1;
-    if (dir === 1 && isCurrentMonth) return;
-    shiftMonth(dir); // shiftMonth ya maneja la animación
+    shiftMonth(dx < 0 ? 1 : -1);
   }, { passive: true });
 })();
 
