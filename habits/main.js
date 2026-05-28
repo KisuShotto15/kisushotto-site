@@ -1,5 +1,5 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js';
-import { ensurePushSubscription } from './push.js';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=4';
+import { ensurePushSubscription } from './push.js?v=4';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
