@@ -1034,10 +1034,9 @@ function renderChecklist() {
       const srcH        = rects[srcIdx].height;
       const ghostCenter = ghostTop + srcH / 2;
 
-      // Closest row center → drop target index
+      // Closest row center → drop target (include srcIdx so ghost near origin = no-op)
       let tIdx = srcIdx, minDist = Infinity;
       allRows.forEach((_, i) => {
-        if (i === srcIdx) return;
         const mid = rects[i].top + rects[i].height / 2;
         const d = Math.abs(ghostCenter - mid);
         if (d < minDist) { minDist = d; tIdx = i; }
