@@ -1,5 +1,5 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=4';
-import { ensurePushSubscription } from './push.js?v=4';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=5';
+import { ensurePushSubscription } from './push.js?v=5';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -645,21 +645,24 @@ function initNotifications() {
 }
 
 window.requestNotifPermission = async function() {
-  if (!('Notification' in window)) {
-    toast('Este navegador no soporta notificaciones', 'err'); return;
-  }
-  let perm = Notification.permission;
-  if (perm === 'default') {
-    try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; }
-  }
-  if (perm === 'granted') {
+  try {
+    if (!('Notification' in window)) {
+      toast('Notificaciones no disponibles en este navegador', 'err'); return;
+    }
+    let perm = Notification.permission;
+    if (perm === 'default') {
+      try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; }
+    }
     $('notifBanner').classList.add('hidden');
-    toast('Notificaciones activadas ✓');
-    setupReminders();
-    ensurePushSubscription().catch(() => {});
-  } else if (perm === 'denied') {
-    toast('Notificaciones bloqueadas — habilítalas en Configuración del navegador', 'err');
-    $('notifBanner').classList.add('hidden');
+    if (perm === 'granted') {
+      toast('Notificaciones activadas ✓');
+      setupReminders();
+      ensurePushSubscription().catch(() => {});
+    } else {
+      toast('Activa las notificaciones en Ajustes del navegador', 'err');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
   }
 };
 
