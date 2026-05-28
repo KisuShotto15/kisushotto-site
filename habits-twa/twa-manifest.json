@@ -7,7 +7,7 @@
   "orientation": "portrait",
   "themeColor": "#0d0d0f",
   "backgroundColor": "#0d0d0f",
-  "enableNotifications": false,
+  "enableNotifications": true,
   "startUrl": "/",
   "iconUrl": "https://habits.kisushotto.com/icons/habits-512.png",
   "maskableIconUrl": "https://habits.kisushotto.com/icons/habits-512.png",
