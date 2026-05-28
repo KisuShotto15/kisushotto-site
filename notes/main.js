@@ -71,6 +71,8 @@ const EditorHistory = {
   past: [],
   future: [],
   _timer: null,
+  _typing: false,
+  _sessionStart: null,  // snapshot taken BEFORE the current typing session began
 
   _capture() {
     if (!State.editing) return null;
@@ -81,20 +83,17 @@ const EditorHistory = {
       body:  $('#ed-body')?.value  ?? htmlToText(e.body || ''),
       type:  e.type,
       checklist_items: JSON.parse(JSON.stringify(e.checklist_items || [])),
-      color:       e.color,
-      pinned:      e.pinned,
-      archived:    e.archived,
-      locked:      e.locked,
-      reminder_at: e.reminder_at,
-      reminder_sent: e.reminder_sent,
-      categories:  [...(e.categories || [])],
+      color:        e.color,
+      pinned:       e.pinned,
+      archived:     e.archived,
+      locked:       e.locked,
+      reminder_at:  e.reminder_at,
+      reminder_sent:e.reminder_sent,
+      categories:   [...(e.categories || [])],
     };
   },
 
-  // Call BEFORE a structural (non-text) change
-  flush() {
-    clearTimeout(this._timer);
-    const snap = this._capture();
+  _push(snap) {
     if (!snap) return;
     const last = this.past[this.past.length - 1];
     if (last && JSON.stringify(last) === JSON.stringify(snap)) return;
@@ -103,23 +102,37 @@ const EditorHistory = {
     this.future = [];
   },
 
-  // Schedule a snapshot after text typing pauses
+  // Call when a text field gains focus — captures the before-state for the next typing session
+  mark() {
+    if (this._typing) return;
+    this._sessionStart = this._capture();
+  },
+
+  // Call on each text input event
   schedule() {
+    if (!this._typing) {
+      // First keystroke of this session: push the before-state captured at focus time
+      this._push(this._sessionStart);
+      this._typing = true;
+    }
     clearTimeout(this._timer);
     this._timer = setTimeout(() => {
-      const snap = this._capture();
-      if (!snap) return;
-      const last = this.past[this.past.length - 1];
-      if (last && JSON.stringify(last) === JSON.stringify(snap)) return;
-      this.past.push(snap);
-      if (this.past.length > 100) this.past.shift();
-      this.future = [];
+      this._typing = false;
+      this._sessionStart = this._capture();  // save state as before for the next session
     }, 1500);
+  },
+
+  // Call BEFORE a structural (non-text) change
+  flush() {
+    clearTimeout(this._timer);
+    this._typing = false;
+    this._push(this._capture());
   },
 
   undo() {
     if (!this.past.length || !State.editing) return;
     clearTimeout(this._timer);
+    this._typing = false;
     const current = this._capture();
     if (current) this.future.push(current);
     this._apply(this.past.pop());
@@ -128,6 +141,7 @@ const EditorHistory = {
   redo() {
     if (!this.future.length || !State.editing) return;
     clearTimeout(this._timer);
+    this._typing = false;
     const current = this._capture();
     if (current) this.past.push(current);
     this._apply(this.future.pop());
@@ -136,36 +150,40 @@ const EditorHistory = {
   _apply(snap) {
     if (!snap || !State.editing) return;
     const e = State.editing;
-    e.title          = snap.title;
-    e.body           = snap.body;
-    e.type           = snap.type;
+    e.title           = snap.title;
+    e.body            = snap.body;
+    e.type            = snap.type;
     e.checklist_items = JSON.parse(JSON.stringify(snap.checklist_items));
-    e.color          = snap.color;
-    e.pinned         = snap.pinned;
-    e.archived       = snap.archived;
-    e.locked         = snap.locked;
-    e.reminder_at    = snap.reminder_at;
-    e.reminder_sent  = snap.reminder_sent;
-    e.categories     = [...snap.categories];
+    e.color           = snap.color;
+    e.pinned          = snap.pinned;
+    e.archived        = snap.archived;
+    e.locked          = snap.locked;
+    e.reminder_at     = snap.reminder_at;
+    e.reminder_sent   = snap.reminder_sent;
+    e.categories      = [...snap.categories];
 
     $('#ed-title').value = snap.title;
     $('#ed-body').value  = snap.body;
     autoGrow($('#ed-body'));
     const isChecklist = snap.type === 'checklist';
-    $('#ed-body').hidden            = isChecklist;
-    $('#ed-checklist-list').hidden  = !isChecklist;
+    $('#ed-body').hidden           = isChecklist;
+    $('#ed-checklist-list').hidden = !isChecklist;
     const card = $('#editor .editor-card');
     card.style.background = snap.color || '';
     card.classList.toggle('colored', !!snap.color);
     renderChecklist();
     updateEditorMeta();
     scheduleSave();
+    // After applying, the current state is the before-state for the next session
+    this._sessionStart = this._capture();
   },
 
   clear() {
     clearTimeout(this._timer);
-    this.past    = [];
-    this.future  = [];
+    this._typing      = false;
+    this._sessionStart = null;
+    this.past         = [];
+    this.future       = [];
   },
 };
 
@@ -1450,14 +1468,17 @@ function bindEditorActions() {
   $('#editor').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeEditor();
   });
-  $('#ed-title').addEventListener('input', () => { EditorHistory.schedule(); scheduleSave(); });
-  $('#ed-body').addEventListener('input', () => { autoGrow($('#ed-body')); EditorHistory.schedule(); scheduleSave(); });
-  $('#ed-title').addEventListener('blur',  commitEditor);
-  $('#ed-body').addEventListener('blur',   commitEditor);
+  $('#ed-title').addEventListener('focus',   () => EditorHistory.mark());
+  $('#ed-body').addEventListener('focus',    () => EditorHistory.mark());
+  $('#ed-title').addEventListener('input',   () => { EditorHistory.schedule(); scheduleSave(); });
+  $('#ed-body').addEventListener('input',    () => { autoGrow($('#ed-body')); EditorHistory.schedule(); scheduleSave(); });
+  $('#ed-title').addEventListener('blur',    commitEditor);
+  $('#ed-body').addEventListener('blur',     commitEditor);
 
   // Checklist container — bound ONCE here, not inside renderChecklist
   const cl = $('#ed-checklist-list');
-  cl.addEventListener('input', () => { syncChecklistFromDom(); EditorHistory.schedule(); scheduleSave(); });
+  cl.addEventListener('focusin', () => EditorHistory.mark());
+  cl.addEventListener('input',   () => { syncChecklistFromDom(); EditorHistory.schedule(); scheduleSave(); });
   cl.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' && !ev.shiftKey) {
       ev.preventDefault();
