@@ -228,7 +228,7 @@ function renderToday() {
         <span class="habit-emoji">${h.emoji || '✓'}</span>
         <div class="habit-info">
           <div class="habit-name">${h.name}</div>
-          <div class="habit-freq">${freqLabel(h)}${h.description ? ` · ${h.description}` : ''}${reminderInline}</div>
+          <div class="habit-freq">${h.description ? h.description : freqLabel(h)}${reminderInline}</div>
         </div>
         ${rightSide}
       </div>`;
@@ -639,6 +639,8 @@ function initNotifications() {
   if (Notification.permission === 'default') {
     $('notifBanner').classList.remove('hidden');
   }
+  const btn = document.getElementById('notifActivarBtn');
+  if (btn) btn.addEventListener('click', () => requestNotifPermission());
   updateNotifBadge();
 }
 
