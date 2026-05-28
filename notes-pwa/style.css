@@ -278,8 +278,10 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 
 /* Masonry */
 .masonry {
-  column-width: 240px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   column-gap: 12px;
+  align-items: start;
 }
 
 /* Note card */
@@ -1224,7 +1226,7 @@ body.modal-open {
   }
 
   main { padding: 14px 12px 100px; }
-  .masonry { column-width: 160px; column-gap: 10px; }
+  .masonry { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); column-gap: 10px; }
   .note-card { padding: 12px; }
 
   /* Popups → bottom sheet on mobile */
