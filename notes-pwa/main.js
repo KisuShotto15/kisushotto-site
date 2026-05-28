@@ -1110,24 +1110,6 @@ function scheduleSave() {
 async function commitEditor() {
   const e = State.editing;
   if (!e) return;
-  // Merge remote changes that arrived while we were editing
-  try {
-    const remote = await idb.getOne('notes', e.id);
-    if (remote && remote.last_modified > (State.editingSnapshotTime || 0)) {
-      if (e.type === 'checklist' && Array.isArray(remote.checklist_items)) {
-        const localById = new Map((e.checklist_items || []).map(it => [it.id, it]));
-        const merged = remote.checklist_items.map(rit => {
-          const lit = localById.get(rit.id);
-          return lit ? { ...rit, text: lit.text } : rit;
-        });
-        for (const lit of (e.checklist_items || [])) {
-          if (!remote.checklist_items.some(rit => rit.id === lit.id)) merged.push(lit);
-        }
-        e.checklist_items = merged;
-      }
-      State.editingSnapshotTime = remote.last_modified;
-    }
-  } catch {}
   if (isNoteEmpty(e)) return;
   const idx = State.notes.findIndex(n => n.id === e.id);
   if (idx >= 0) State.notes[idx] = JSON.parse(JSON.stringify(e));
