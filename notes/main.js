@@ -1133,6 +1133,7 @@ async function commitEditor() {
   if (idx >= 0) State.notes[idx] = JSON.parse(JSON.stringify(e));
   else State.notes.unshift(JSON.parse(JSON.stringify(e)));
   await saveNoteLocal(e);
+  State.editingSnapshotTime = e.last_modified;  // prevent next commit from re-merging this save as "remote"
   State.editorDirty = true;
   $('#ed-status').textContent = 'Guardado';
   updateEditorMeta();
