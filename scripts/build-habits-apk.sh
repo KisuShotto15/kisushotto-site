@@ -110,8 +110,8 @@ android {
         applicationId 'com.kisushotto.habits'
         minSdk 21
         targetSdk 34
-        versionCode 2
-        versionName '1.1.0'
+        versionCode 3
+        versionName '1.2.0'
     }
     signingConfigs {
         release {
@@ -240,7 +240,7 @@ const src = 'public/images/habits-icon.svg';
 const bg = { r: 13, g: 13, b: 15, alpha: 1 }; // #0d0d0f
 
 async function makeIcon(dst, canvas) {
-  const iconSize = Math.round(canvas * 0.82);
+  const iconSize = Math.round(canvas * 0.91);
   const iconBuf = await sharp(src).resize(iconSize, iconSize).png().toBuffer();
   return sharp({ create: { width: canvas, height: canvas, channels: 4, background: bg } })
     .composite([{ input: iconBuf, gravity: 'center' }])
@@ -249,7 +249,7 @@ async function makeIcon(dst, canvas) {
 }
 
 async function makeForeground(dst, canvas) {
-  const iconSize = Math.round(canvas * 0.65);
+  const iconSize = Math.round(canvas * 0.83);
   const iconBuf = await sharp(src).resize(iconSize, iconSize).png().toBuffer();
   return sharp({ create: { width: canvas, height: canvas, channels: 4, background: { r:0,g:0,b:0,alpha:0 } } })
     .composite([{ input: iconBuf, gravity: 'center' }])
