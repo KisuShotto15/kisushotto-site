@@ -66,6 +66,109 @@ const State = {
 
 let saveTimer = null;
 
+// ── Editor undo/redo ──────────────────────────────────────────────────────────
+const EditorHistory = {
+  past: [],
+  future: [],
+  _timer: null,
+
+  _capture() {
+    if (!State.editing) return null;
+    syncChecklistFromDom();
+    const e = State.editing;
+    return {
+      title: $('#ed-title')?.value ?? e.title ?? '',
+      body:  $('#ed-body')?.value  ?? htmlToText(e.body || ''),
+      type:  e.type,
+      checklist_items: JSON.parse(JSON.stringify(e.checklist_items || [])),
+      color:       e.color,
+      pinned:      e.pinned,
+      archived:    e.archived,
+      locked:      e.locked,
+      reminder_at: e.reminder_at,
+      reminder_sent: e.reminder_sent,
+      categories:  [...(e.categories || [])],
+    };
+  },
+
+  // Call BEFORE a structural (non-text) change
+  flush() {
+    clearTimeout(this._timer);
+    const snap = this._capture();
+    if (!snap) return;
+    const last = this.past[this.past.length - 1];
+    if (last && JSON.stringify(last) === JSON.stringify(snap)) return;
+    this.past.push(snap);
+    if (this.past.length > 100) this.past.shift();
+    this.future = [];
+  },
+
+  // Schedule a snapshot after text typing pauses
+  schedule() {
+    clearTimeout(this._timer);
+    this._timer = setTimeout(() => {
+      const snap = this._capture();
+      if (!snap) return;
+      const last = this.past[this.past.length - 1];
+      if (last && JSON.stringify(last) === JSON.stringify(snap)) return;
+      this.past.push(snap);
+      if (this.past.length > 100) this.past.shift();
+      this.future = [];
+    }, 1500);
+  },
+
+  undo() {
+    if (!this.past.length || !State.editing) return;
+    clearTimeout(this._timer);
+    const current = this._capture();
+    if (current) this.future.push(current);
+    this._apply(this.past.pop());
+  },
+
+  redo() {
+    if (!this.future.length || !State.editing) return;
+    clearTimeout(this._timer);
+    const current = this._capture();
+    if (current) this.past.push(current);
+    this._apply(this.future.pop());
+  },
+
+  _apply(snap) {
+    if (!snap || !State.editing) return;
+    const e = State.editing;
+    e.title          = snap.title;
+    e.body           = snap.body;
+    e.type           = snap.type;
+    e.checklist_items = JSON.parse(JSON.stringify(snap.checklist_items));
+    e.color          = snap.color;
+    e.pinned         = snap.pinned;
+    e.archived       = snap.archived;
+    e.locked         = snap.locked;
+    e.reminder_at    = snap.reminder_at;
+    e.reminder_sent  = snap.reminder_sent;
+    e.categories     = [...snap.categories];
+
+    $('#ed-title').value = snap.title;
+    $('#ed-body').value  = snap.body;
+    autoGrow($('#ed-body'));
+    const isChecklist = snap.type === 'checklist';
+    $('#ed-body').hidden            = isChecklist;
+    $('#ed-checklist-list').hidden  = !isChecklist;
+    const card = $('#editor .editor-card');
+    card.style.background = snap.color || '';
+    card.classList.toggle('colored', !!snap.color);
+    renderChecklist();
+    updateEditorMeta();
+    scheduleSave();
+  },
+
+  clear() {
+    clearTimeout(this._timer);
+    this.past    = [];
+    this.future  = [];
+  },
+};
+
 // ── init ─────────────────────────────────────────────────────────────────────
 async function init() {
   if (!getUserEmail()) {
@@ -697,6 +800,7 @@ async function openCard(n) {
 function openEditor(n) {
   State.editing = JSON.parse(JSON.stringify(n));
   State.editingSnapshotTime = n.last_modified || 0;
+  EditorHistory.clear();
   const e = State.editing;
 
   // Push history entry so Android back button closes editor instead of exiting
@@ -773,6 +877,7 @@ function syncChecklistFromDom() {
 function reorderChecklist(srcId, targetId) {
   const e = State.editing;
   if (!e) return;
+  EditorHistory.flush();
   syncChecklistFromDom();
   const items = e.checklist_items;
   const srcIdx = items.findIndex(x => x.id === srcId);
@@ -818,12 +923,13 @@ function renderChecklist() {
     del.contentEditable = 'false';
     del.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
 
-    chk.addEventListener('change', () => { it.done = chk.checked; row.classList.toggle('done', chk.checked); scheduleSave(); });
+    chk.addEventListener('change', () => { EditorHistory.flush(); it.done = chk.checked; row.classList.toggle('done', chk.checked); scheduleSave(); });
     txt.addEventListener('focus', () => {
       root.querySelectorAll('.ed-check-row').forEach(r => r.classList.remove('row-selected'));
       row.classList.add('row-selected');
     });
     del.addEventListener('click', () => {
+      EditorHistory.flush();
       const idx = e.checklist_items.findIndex(x => x.id === it.id);
       e.checklist_items = e.checklist_items.filter(x => x.id !== it.id);
       renderChecklist();
@@ -1092,20 +1198,24 @@ function closePinModal(ok) {
 // ── action: pin / archive / lock / color / categories / share / reminder ────
 function bindEditorActions() {
   $('#ed-pin').addEventListener('click', () => {
+    EditorHistory.flush();
     State.editing.pinned = !State.editing.pinned;
     scheduleSave(); updateEditorMeta();
   });
   $('#ed-lock').addEventListener('click', () => {
+    EditorHistory.flush();
     State.editing.locked = !State.editing.locked;
     scheduleSave(); updateEditorMeta();
   });
   $('#ed-archive').addEventListener('click', () => {
+    EditorHistory.flush();
     State.editing.archived = !State.editing.archived;
     scheduleSave(); updateEditorMeta();
     closeEditor();
     render();
   });
   $('#ed-checklist').addEventListener('click', () => {
+    EditorHistory.flush();
     const e = State.editing;
     if (e.type === 'checklist') {
       syncChecklistFromDom();
@@ -1150,24 +1260,8 @@ function bindEditorActions() {
   });
 
   // Undo / redo
-  $('#ed-undo').addEventListener('click', () => {
-    const el = document.activeElement;
-    if (el && (el.isContentEditable || el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
-      document.execCommand('undo');
-    } else {
-      $('#ed-body').focus();
-      document.execCommand('undo');
-    }
-  });
-  $('#ed-redo').addEventListener('click', () => {
-    const el = document.activeElement;
-    if (el && (el.isContentEditable || el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
-      document.execCommand('redo');
-    } else {
-      $('#ed-body').focus();
-      document.execCommand('redo');
-    }
-  });
+  $('#ed-undo').addEventListener('click', () => EditorHistory.undo());
+  $('#ed-redo').addEventListener('click', () => EditorHistory.redo());
   $('#ed-delete').addEventListener('click', async () => {
     if (!(await window.customConfirm('¿Mover a la papelera?'))) return;
     const id = State.editing.id;
@@ -1185,6 +1279,7 @@ function bindEditorActions() {
   });
   $$('#popup-color .color-swatch').forEach(s => {
     s.addEventListener('click', () => {
+      EditorHistory.flush();
       State.editing.color = s.dataset.color || null;
       const c = State.editing.color;
       const ec = $('#editor .editor-card');
@@ -1242,6 +1337,7 @@ function bindEditorActions() {
   $('#popup-reminder-save').addEventListener('click', () => {
     const v = $('#popup-reminder-input').value;
     if (!v) return;
+    EditorHistory.flush();
     State.editing.reminder_at = new Date(v).getTime();
     State.editing.reminder_sent = false;
     hidePopups();
@@ -1251,6 +1347,7 @@ function bindEditorActions() {
     ensurePushSubscription().catch(() => {});
   });
   $('#popup-reminder-clear').addEventListener('click', () => {
+    EditorHistory.flush();
     State.editing.reminder_at = null;
     State.editing.reminder_sent = false;
     hidePopups();
@@ -1353,19 +1450,20 @@ function bindEditorActions() {
   $('#editor').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeEditor();
   });
-  $('#ed-title').addEventListener('input', scheduleSave);
-  $('#ed-body').addEventListener('input', () => { autoGrow($('#ed-body')); scheduleSave(); });
+  $('#ed-title').addEventListener('input', () => { EditorHistory.schedule(); scheduleSave(); });
+  $('#ed-body').addEventListener('input', () => { autoGrow($('#ed-body')); EditorHistory.schedule(); scheduleSave(); });
   $('#ed-title').addEventListener('blur',  commitEditor);
   $('#ed-body').addEventListener('blur',   commitEditor);
 
   // Checklist container — bound ONCE here, not inside renderChecklist
   const cl = $('#ed-checklist-list');
-  cl.addEventListener('input', () => { syncChecklistFromDom(); scheduleSave(); });
+  cl.addEventListener('input', () => { syncChecklistFromDom(); EditorHistory.schedule(); scheduleSave(); });
   cl.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' && !ev.shiftKey) {
       ev.preventDefault();
       const e = State.editing;
       if (!e) return;
+      EditorHistory.flush();
       syncChecklistFromDom();
       e.checklist_items = e.checklist_items || [];
       const curRow = ev.target.closest?.('.ed-check-row');
@@ -1387,6 +1485,7 @@ function bindEditorActions() {
       ev.preventDefault();
       const e = State.editing;
       if (!e) return;
+      EditorHistory.flush();
       const row = ev.target.closest('.ed-check-row');
       const id = row?.dataset.id;
       if (!id) return;
@@ -1408,6 +1507,7 @@ function bindEditorActions() {
     ev.preventDefault();
     const e = State.editing;
     if (!e) return;
+    EditorHistory.flush();
     const row = ev.target.closest('.ed-check-row');
     const id = row?.dataset.id;
     if (!id) return;
@@ -1434,6 +1534,7 @@ function renderCategoriesPopup() {
                      <span class="cat-icon-display">${c.icon || '🏷️'}</span>
                      <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
+      EditorHistory.flush();
       const id = e.target.dataset.id;
       State.editing.categories = State.editing.categories || [];
       if (e.target.checked) {
@@ -1855,6 +1956,17 @@ function bindUI() {
   $('#lightbox-bg').addEventListener('click', closeLightbox);
   $('#lightbox-img').addEventListener('click', closeLightbox);
   document.addEventListener('keydown', e => {
+    if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !$('#editor').hidden) {
+      e.preventDefault();
+      if (e.shiftKey) EditorHistory.redo();
+      else            EditorHistory.undo();
+      return;
+    }
+    if (e.key === 'y' && (e.ctrlKey || e.metaKey) && !$('#editor').hidden) {
+      e.preventDefault();
+      EditorHistory.redo();
+      return;
+    }
     if (e.key !== 'Escape') return;
     if (!$('#lightbox').hidden) { closeLightbox(); return; }
     if (!$('#bulk-cats-modal').hidden) { closeBulkCatsModal(); return; }
