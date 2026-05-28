@@ -1,5 +1,5 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=6';
-import { ensurePushSubscription } from './push.js?v=6';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=7';
+import { ensurePushSubscription } from './push.js?v=7';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -634,13 +634,24 @@ function renderNotifDrawer() {
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────
-function initNotifications() {
+function checkNotifBanner() {
   if (!('Notification' in window)) return;
-  if (Notification.permission === 'default') {
+  if (Notification.permission === 'granted') {
+    $('notifBanner').classList.add('hidden');
+    setupReminders();
+  } else if (Notification.permission === 'default') {
     $('notifBanner').classList.remove('hidden');
   }
+}
+
+function initNotifications() {
+  if (!('Notification' in window)) return;
+  checkNotifBanner();
   const btn = document.getElementById('notifActivarBtn');
   if (btn) btn.addEventListener('click', () => requestNotifPermission());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkNotifBanner();
+  });
   updateNotifBadge();
 }
 
@@ -664,8 +675,10 @@ window.requestNotifPermission = async function() {
       toast('Notificaciones activadas ✓');
       setupReminders();
       ensurePushSubscription().catch(() => {});
+    } else if (perm === 'denied') {
+      toast('Notificaciones bloqueadas en ajustes del navegador', 'err');
     } else {
-      toast('Activa en Ajustes del navegador', 'err');
+      toast('Permiso pendiente — reabre la app', 'err');
     }
   } catch (e) {
     toast('Error: ' + e.message, 'err');
