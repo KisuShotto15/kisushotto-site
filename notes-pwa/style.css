@@ -538,7 +538,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 }
 .ed-check-row:hover .drag-handle { opacity: 0.8; }
 .drag-handle:active { cursor: grabbing; }
-.ed-check-row.drag-over { border-top: 2px solid var(--accent); }
+.ed-check-row { will-change: transform; }
 .ed-check-row .row-del {
   width: 28px; height: 28px;
   font-size: 14px;

@@ -964,62 +964,98 @@ function renderChecklist() {
     root.appendChild(row);
   }
 
-  // "Nuevo ítem" input row has been removed.
+  // ── Drag-and-drop: pointer events (mouse + touch), handle only ───────────────
+  // Ghost floats with the pointer; other rows animate with translateY in real-time.
+  let activeDrag = null;
 
-  // ── Drag-and-drop (mouse: only from handle; touch: handle touch events) ──
-  let dragSrcId = null;
+  function endDrag() {
+    if (!activeDrag) return;
+    const { srcRow, allRows, ghost, srcIdx, tIdx } = activeDrag;
+    activeDrag = null;
+    allRows.forEach(r => { r.style.transition = ''; r.style.transform = ''; });
+    srcRow.style.visibility = '';
+    ghost.remove();
+    if (tIdx !== srcIdx) reorderChecklist(srcRow.dataset.id, allRows[tIdx].dataset.id);
+  }
 
-  root.querySelectorAll('.ed-check-row').forEach(row => {
-    // Mouse drag — only activated when handle is grabbed
-    row.addEventListener('dragstart', ev => {
-      if (!row.draggable) { ev.preventDefault(); return; }
-      dragSrcId = row.dataset.id;
-      ev.dataTransfer.effectAllowed = 'move';
-    });
-    row.addEventListener('dragend', () => { row.draggable = false; });
-    row.addEventListener('dragover', ev => {
-      ev.preventDefault();
-      root.querySelectorAll('.ed-check-row').forEach(r => r.classList.remove('drag-over'));
-      row.classList.add('drag-over');
-    });
-    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
-    row.addEventListener('drop', ev => {
-      ev.preventDefault();
-      row.classList.remove('drag-over');
-      if (dragSrcId && dragSrcId !== row.dataset.id) reorderChecklist(dragSrcId, row.dataset.id);
-      dragSrcId = null;
-    });
-    // Enable drag only when mousedown is on the handle
-    row.querySelector('.drag-handle')?.addEventListener('mousedown', () => {
-      row.draggable = true;
-    });
-  });
-
-  // Touch drag on handle
   root.querySelectorAll('.drag-handle').forEach(handle => {
-    let touchDragId = null;
-    handle.addEventListener('touchstart', ev => {
-      touchDragId = handle.closest('.ed-check-row')?.dataset.id;
+    handle.addEventListener('pointerdown', ev => {
+      if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+      if (activeDrag) return;
       ev.preventDefault();
+
+      const srcRow = handle.closest('.ed-check-row');
+      if (!srcRow) return;
+
+      syncChecklistFromDom();
+      EditorHistory.flush();
+
+      const allRows = Array.from(root.querySelectorAll('.ed-check-row'));
+      const srcIdx  = allRows.indexOf(srcRow);
+      const rects   = allRows.map(r => r.getBoundingClientRect());
+      const srcRect = rects[srcIdx];
+      const offsetY = ev.clientY - srcRect.top;
+      const cardEl  = document.querySelector('#editor .editor-card');
+      const cardBg  = cardEl ? getComputedStyle(cardEl).backgroundColor : '';
+
+      const ghost = srcRow.cloneNode(true);
+      Object.assign(ghost.style, {
+        position: 'fixed',
+        left: srcRect.left + 'px',
+        top:  srcRect.top  + 'px',
+        width: srcRect.width + 'px',
+        margin: '0',
+        zIndex: '9999',
+        pointerEvents: 'none',
+        background: cardBg || 'var(--surface)',
+        boxShadow: '0 8px 28px rgba(0,0,0,.4)',
+        borderRadius: '6px',
+        opacity: '0.97',
+        transform: 'scale(1.02)',
+      });
+      document.body.appendChild(ghost);
+
+      srcRow.style.visibility = 'hidden';
+      allRows.forEach((r, i) => {
+        if (i !== srcIdx) r.style.transition = 'transform .15s ease';
+      });
+
+      activeDrag = { handle, srcRow, allRows, rects, srcIdx, tIdx: srcIdx, ghost, offsetY };
+      handle.setPointerCapture(ev.pointerId);
     }, { passive: false });
-    handle.addEventListener('touchmove', ev => {
-      if (!touchDragId) return;
+
+    handle.addEventListener('pointermove', ev => {
+      if (!activeDrag || activeDrag.handle !== handle) return;
       ev.preventDefault();
-      const touch = ev.touches[0];
-      const el = document.elementFromPoint(touch.clientX, touch.clientY);
-      const targetRow = el?.closest('.ed-check-row');
-      root.querySelectorAll('.ed-check-row').forEach(r => r.classList.remove('drag-over'));
-      if (targetRow && targetRow.dataset.id !== touchDragId) targetRow.classList.add('drag-over');
+
+      const { ghost, allRows, rects, srcIdx, offsetY } = activeDrag;
+      const ghostTop    = ev.clientY - offsetY;
+      ghost.style.top   = ghostTop + 'px';
+      const srcH        = rects[srcIdx].height;
+      const ghostCenter = ghostTop + srcH / 2;
+
+      // Closest row center → drop target index
+      let tIdx = srcIdx, minDist = Infinity;
+      allRows.forEach((_, i) => {
+        if (i === srcIdx) return;
+        const mid = rects[i].top + rects[i].height / 2;
+        const d = Math.abs(ghostCenter - mid);
+        if (d < minDist) { minDist = d; tIdx = i; }
+      });
+      activeDrag.tIdx = tIdx;
+
+      // Shift rows to open gap at drop target
+      allRows.forEach((r, i) => {
+        if (i === srcIdx) return;
+        let dy = 0;
+        if (tIdx > srcIdx && i > srcIdx && i <= tIdx) dy = -srcH;
+        if (tIdx < srcIdx && i >= tIdx && i < srcIdx) dy =  srcH;
+        r.style.transform = dy ? `translateY(${dy}px)` : '';
+      });
     }, { passive: false });
-    handle.addEventListener('touchend', ev => {
-      if (!touchDragId) return;
-      const touch = ev.changedTouches[0];
-      const el = document.elementFromPoint(touch.clientX, touch.clientY);
-      const targetRow = el?.closest('.ed-check-row');
-      root.querySelectorAll('.ed-check-row').forEach(r => r.classList.remove('drag-over'));
-      if (targetRow && targetRow.dataset.id !== touchDragId) reorderChecklist(touchDragId, targetRow.dataset.id);
-      touchDragId = null;
-    }, { passive: false });
+
+    handle.addEventListener('pointerup',     endDrag);
+    handle.addEventListener('pointercancel', endDrag);
   });
 }
 
