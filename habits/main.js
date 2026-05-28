@@ -643,12 +643,21 @@ function initNotifications() {
 }
 
 window.requestNotifPermission = async function() {
-  const perm = await Notification.requestPermission();
+  if (!('Notification' in window)) {
+    toast('Este navegador no soporta notificaciones', 'err'); return;
+  }
+  let perm = Notification.permission;
+  if (perm === 'default') {
+    try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; }
+  }
   if (perm === 'granted') {
     $('notifBanner').classList.add('hidden');
     toast('Notificaciones activadas ✓');
     setupReminders();
     ensurePushSubscription().catch(() => {});
+  } else if (perm === 'denied') {
+    toast('Notificaciones bloqueadas — habilítalas en Configuración del navegador', 'err');
+    $('notifBanner').classList.add('hidden');
   }
 };
 
