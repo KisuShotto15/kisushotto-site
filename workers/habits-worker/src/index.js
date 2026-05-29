@@ -46,7 +46,8 @@ function isDueOn(habit, dateISO) {
 
   if (habit.frequency === 'custom') {
     const every  = habit.frequency_every || 1;
-    const origin = new Date(habit.created_at * 1000);
+    const fd     = habit.frequency_days ? JSON.parse(habit.frequency_days) : [];
+    const origin = fd[0] ? new Date(fd[0] + 'T00:00:00') : new Date(habit.created_at * 1000);
     const diff   = Math.floor((d - origin) / 86400000);
     return diff >= 0 && diff % every === 0;
   }

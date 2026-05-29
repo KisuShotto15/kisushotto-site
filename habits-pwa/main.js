@@ -1,5 +1,5 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=7';
-import { ensurePushSubscription } from './push.js?v=7';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=8';
+import { ensurePushSubscription } from './push.js?v=8';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -60,9 +60,10 @@ function isDueOn(habit, dateISO) {
 
   if (habit.frequency === 'custom') {
     const every  = habit.frequency_every || 1;
-    const origin = new Date(habit.created_at * 1000);
+    const fd     = habit.frequency_days ? JSON.parse(habit.frequency_days) : [];
+    const origin = fd[0] ? new Date(fd[0] + 'T00:00:00') : new Date(habit.created_at * 1000);
     const diff   = Math.floor((d - origin) / 86400000);
-    return diff % every === 0;
+    return diff >= 0 && diff % every === 0;
   }
 
   if (habit.frequency === 'monthly') {
@@ -432,6 +433,8 @@ window.openPanel = function(habit) {
   $('fUnit').value      = habit?.target_unit   || '';
   $('fFreq').value      = habit?.frequency     || 'daily';
   $('fEvery').value     = habit?.frequency_every ?? 2;
+  const customStart = habit?.frequency === 'custom' && fd[0] ? fd[0] : today();
+  $('fCustomStart').value = customStart;
 
   const fd = habit?.frequency_days ? JSON.parse(habit.frequency_days) : [];
   $('fMonthDay').value      = habit?.frequency === 'monthly'        ? (fd[0] ?? 1)  : 1;
@@ -521,6 +524,7 @@ window.saveHabit = async function() {
                    : $('fFreq').value === 'monthly'        ? [parseInt($('fMonthDay').value) || 1]
                    : $('fFreq').value === 'every_n_months' ? [parseInt($('fNMonthsDay').value) || 1]
                    : $('fFreq').value === 'yearly'         ? [parseInt($('fYearMonth').value) || 1, parseInt($('fYearDay').value) || 1]
+                   : $('fFreq').value === 'custom'         ? [$('fCustomStart').value || today()]
                    : null,
     frequency_every: $('fFreq').value === 'every_n_months' ? (parseInt($('fNMonths').value) || 3)
                    : $('fFreq').value === 'custom'         ? (parseInt($('fEvery').value)   || 2)
