@@ -343,6 +343,12 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   color: #fff;
 }
 .nc-pin svg { fill: #fff; }
+.nc-archive-badge {
+  position: absolute; bottom: 8px; right: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted);
+  opacity: 0.7;
+}
 .nc-shared { font-size: 11px; color: var(--accent); }
 .nc-locked { font-size: 14px; }
 .nc-checklist-line {

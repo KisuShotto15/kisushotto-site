@@ -616,11 +616,13 @@ function noteCardHtml(n) {
   const sharedBadge = isShared ? `<span class="nc-shared">📥 Compartida</span>` : '';
   const lockBadge = n.locked ? `<span class="nc-locked" style="display:inline-flex;align-items:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>` : '';
   const reminderBadge = n.reminder_at ? `<span>⏰ ${fmtDate(n.reminder_at)}</span>` : '';
+  const archiveBadge = n.archived ? `<span class="nc-archive-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></span>` : '';
 
   return `
     <article class="${cls}" ${style} data-id="${n.id}" onclick="">
       <label class="nc-select-wrap"><input type="checkbox" class="nc-select-cb" data-id="${n.id}" ${isSelected ? 'checked' : ''}></label>
       ${n.pinned ? '<span class="nc-pin"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></span>' : ''}
+      ${archiveBadge}
       ${n.locked && !isSessionUnlocked() ? '' : (n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : '')}
       ${n.locked && !isSessionUnlocked() ? '' : imgs}
       ${body}
@@ -1243,10 +1245,20 @@ function bindEditorActions() {
     State.editing.locked = !State.editing.locked;
     scheduleSave(); updateEditorMeta();
   });
-  $('#ed-archive').addEventListener('click', () => {
+  $('#ed-archive').addEventListener('click', async () => {
     EditorHistory.flush();
-    State.editing.archived = !State.editing.archived;
-    scheduleSave(); updateEditorMeta();
+    const e = State.editing;
+    if (!e) return;
+    syncChecklistFromDom();
+    e.title = $('#ed-title')?.value || '';
+    e.body  = $('#ed-body')?.value  || '';
+    e.archived = !e.archived;
+    e.last_modified = Date.now();
+    const idx = State.notes.findIndex(n => n.id === e.id);
+    if (idx >= 0) State.notes[idx] = JSON.parse(JSON.stringify(e));
+    else State.notes.unshift(JSON.parse(JSON.stringify(e)));
+    await saveNoteLocal(e);
+    State.editing = null;
     closeEditor();
     render();
   });
