@@ -1,5 +1,5 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=8';
-import { ensurePushSubscription } from './push.js?v=8';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=9';
+import { ensurePushSubscription } from './push.js?v=9';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -182,20 +182,22 @@ function renderToday() {
   $('statToday').textContent     = `${done}/${due}`;
 
   const dueHabits = habits.filter(h => isDueOn(h, t));
-  const notDue    = habits.filter(h => !isDueOn(h, t));
 
   const list = $('habitList');
   if (!habits.length) {
     list.innerHTML = `<div class="habits-empty"><div class="habits-empty-icon">🌱</div>Sin hábitos aún.<br>Usa el botón + para crear el primero.</div>`;
     return;
   }
+  if (!dueHabits.length) {
+    list.innerHTML = `<div class="habits-empty"><div class="habits-empty-icon">✓</div>Sin hábitos para hoy.</div>`;
+    return;
+  }
 
-  list.innerHTML = [...dueHabits, ...notDue].map(h => {
+  list.innerHTML = dueHabits.map(h => {
     const color   = COLORS[h.color] || COLORS.lavender;
     const done_   = isDone(h.id, t);
     const streak  = calcStreak(h);
-    const notDue_ = !isDueOn(h, t);
-    const overdue = h.reminder_time && !done_ && isOverdue(h.reminder_time) && isDueOn(h, t);
+    const overdue = h.reminder_time && !done_ && isOverdue(h.reminder_time);
 
     const streakHtml  = streak > 0
       ? `<span class="habit-streak ${streak >= 7 ? 'hot' : ''}">🔥 ${streak}</span>`
@@ -205,7 +207,7 @@ function renderToday() {
       : '';
 
     let rightSide = '';
-    if (!notDue_ && h.type === 'count') {
+    if (h.type === 'count') {
       const val = getValue(h.id, t);
       const target = h.target_value || 1;
       const isDoneCount = val >= target;
@@ -220,10 +222,10 @@ function renderToday() {
     }
 
     return `
-      <div class="habit-row ${done_ ? 'done' : ''} ${notDue_ ? 'not-due' : ''}"
+      <div class="habit-row ${done_ ? 'done' : ''}"
            data-hid="${h.id}"
            style="--habit-color:${color}"
-           onclick="${notDue_ ? '' : `onHabitClick('${h.id}')`}">
+           onclick="onHabitClick('${h.id}')">
         <div class="habit-pill"></div>
         <div class="habit-check"></div>
         <span class="habit-emoji">${h.emoji || '✓'}</span>
