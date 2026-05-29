@@ -1,5 +1,5 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=11';
-import { ensurePushSubscription } from './push.js?v=11';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=12';
+import { ensurePushSubscription } from './push.js?v=12';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -440,10 +440,10 @@ window.openPanel = function(habit) {
   $('fUnit').value      = habit?.target_unit   || '';
   $('fFreq').value      = habit?.frequency     || 'daily';
   $('fEvery').value     = habit?.frequency_every ?? 2;
-  const customStart = habit?.frequency === 'custom' && fd[0] ? fd[0] : today();
-  $('fCustomStart').value = customStart;
 
   const fd = habit?.frequency_days ? JSON.parse(habit.frequency_days) : [];
+  const customStart = habit?.frequency === 'custom' && fd[0] ? fd[0] : today();
+  $('fCustomStart').value = customStart;
   $('fMonthDay').value      = habit?.frequency === 'monthly'        ? (fd[0] ?? 1)  : 1;
   $('fNMonths').value       = habit?.frequency === 'every_n_months' ? (habit.frequency_every ?? 3) : 3;
   $('fNMonthsDay').value    = habit?.frequency === 'every_n_months' ? (fd[0] ?? 1)  : 1;
