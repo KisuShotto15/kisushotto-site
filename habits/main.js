@@ -1,5 +1,5 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=9';
-import { ensurePushSubscription } from './push.js?v=9';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=10';
+import { ensurePushSubscription } from './push.js?v=10';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -550,14 +550,18 @@ window.saveHabit = async function() {
 window.confirmDelete = async function() {
   if (!editingId) return;
   if (!(await window.customConfirm('¿Eliminar este hábito?'))) return;
+  const idToDelete = editingId;
+  closePanel();
+  habits = habits.filter(h => h.id !== idToDelete);
+  renderToday();
+  renderManage();
   try {
-    await deleteHabit(editingId);
+    await deleteHabit(idToDelete);
     toast('Hábito eliminado');
-    closePanel();
-    await init();
   } catch (e) {
     toast(e.message, 'err');
   }
+  await init();
 };
 
 // ── Weekday picker toggle ─────────────────────────────────────────────────────
