@@ -1,5 +1,5 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=10';
-import { ensurePushSubscription } from './push.js?v=10';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=11';
+import { ensurePushSubscription } from './push.js?v=11';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -256,7 +256,7 @@ function renderManage() {
     return `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color 0.2s"
            onmouseenter="this.style.borderColor='var(--border2)'" onmouseleave="this.style.borderColor='var(--border)'"
-           onclick="openPanel(${JSON.stringify(h).replace(/"/g,'&quot;')})">
+           onclick="openPanelById('${h.id}')">
         <span style="font-size:18px;line-height:1">${h.emoji || '✓'}</span>
         <span style="flex:1;font-size:13px;font-weight:600">${h.name}</span>
         <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted2)">${freqLabel(h)}</span>
@@ -422,6 +422,11 @@ window.shiftMonth = function(dir) {
 };
 
 // ── Panel: add/edit habit ─────────────────────────────────────────────────────
+window.openPanelById = function(id) {
+  const habit = habits.find(h => h.id === id);
+  if (habit) window.openPanel(habit);
+};
+
 window.openPanel = function(habit) {
   editingId = habit?.id ?? null;
   $('panelTitle').textContent = habit ? 'EDITAR HÁBITO' : 'NUEVO HÁBITO';
