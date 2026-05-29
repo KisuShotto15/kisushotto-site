@@ -816,6 +816,31 @@ async function openCard(n) {
   openEditor(n);
 }
 
+// ── visual-viewport keyboard fix ─────────────────────────────────────────────
+// On iOS, position:fixed doesn't shrink when the keyboard opens (layout viewport
+// stays the same). Use visualViewport to push the modal bottom up so the
+// bottom bar stays above the keyboard.
+let _vvCleanup = null;
+function attachKeyboardListener() {
+  const modal = $('#editor');
+  if (!window.visualViewport || !modal) return;
+  const update = () => {
+    if (modal.hidden) return;
+    const keyboardH = Math.max(0, window.innerHeight - window.visualViewport.height);
+    modal.style.bottom = keyboardH > 0 ? keyboardH + 'px' : '';
+  };
+  window.visualViewport.addEventListener('resize', update);
+  window.visualViewport.addEventListener('scroll', update);
+  _vvCleanup = () => {
+    window.visualViewport.removeEventListener('resize', update);
+    window.visualViewport.removeEventListener('scroll', update);
+    modal.style.bottom = '';
+  };
+}
+function detachKeyboardListener() {
+  if (_vvCleanup) { _vvCleanup(); _vvCleanup = null; }
+}
+
 // ── editor ───────────────────────────────────────────────────────────────────
 function openEditor(n) {
   State.editing = JSON.parse(JSON.stringify(n));
@@ -828,6 +853,7 @@ function openEditor(n) {
 
   lockBodyScroll();
   $('#editor').hidden = false;
+  attachKeyboardListener();
   const card = $('#editor .editor-card');
   card.style.background = e.color || '';
   card.classList.toggle('colored', !!e.color);
@@ -1134,6 +1160,7 @@ function isNoteEmpty(e) {
 }
 
 function closeEditor(fromPopState = false) {
+  detachKeyboardListener();
   clearTimeout(saveTimer);
   saveTimer = null;
   if (State.editing) {
