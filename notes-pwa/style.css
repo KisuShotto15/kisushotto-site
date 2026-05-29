@@ -1184,7 +1184,7 @@ body.modal-open {
   .editor-card {
     height: 100%;
     max-height: 100%;
-    overflow: hidden;
+    overflow: hidden !important;
   }
 
   /* Toolbar: horizontal scroll on mobile instead of wrap */

@@ -817,24 +817,30 @@ async function openCard(n) {
 }
 
 // ── visual-viewport keyboard fix ─────────────────────────────────────────────
-// On iOS, position:fixed doesn't shrink when the keyboard opens (layout viewport
-// stays the same). Use visualViewport to push the modal bottom up so the
-// bottom bar stays above the keyboard.
+// When the software keyboard opens in overlay mode (Android Chrome, iOS Safari),
+// window.innerHeight stays the same but visualViewport.height shrinks.
+// We explicitly set the editor modal's height/top to match the visual viewport
+// so the flex layout keeps the bottom bar above the keyboard at all times.
 let _vvCleanup = null;
+function _updateEditorViewport() {
+  const modal = document.getElementById('editor');
+  if (!modal || modal.hidden) return;
+  const vp = window.visualViewport;
+  if (!vp) return;
+  modal.style.top    = vp.offsetTop + 'px';
+  modal.style.height = vp.height    + 'px';
+}
 function attachKeyboardListener() {
-  const modal = $('#editor');
-  if (!window.visualViewport || !modal) return;
-  const update = () => {
-    if (modal.hidden) return;
-    const keyboardH = Math.max(0, window.innerHeight - window.visualViewport.height);
-    modal.style.bottom = keyboardH > 0 ? keyboardH + 'px' : '';
-  };
-  window.visualViewport.addEventListener('resize', update);
-  window.visualViewport.addEventListener('scroll', update);
+  if (!window.visualViewport) return;
+  window.visualViewport.addEventListener('resize', _updateEditorViewport);
+  window.visualViewport.addEventListener('scroll', _updateEditorViewport);
+  window.addEventListener('resize', _updateEditorViewport);
   _vvCleanup = () => {
-    window.visualViewport.removeEventListener('resize', update);
-    window.visualViewport.removeEventListener('scroll', update);
-    modal.style.bottom = '';
+    window.visualViewport.removeEventListener('resize', _updateEditorViewport);
+    window.visualViewport.removeEventListener('scroll', _updateEditorViewport);
+    window.removeEventListener('resize', _updateEditorViewport);
+    const modal = document.getElementById('editor');
+    if (modal) { modal.style.top = ''; modal.style.height = ''; }
   };
 }
 function detachKeyboardListener() {
@@ -854,6 +860,7 @@ function openEditor(n) {
   lockBodyScroll();
   $('#editor').hidden = false;
   attachKeyboardListener();
+  _updateEditorViewport();
   const card = $('#editor .editor-card');
   card.style.background = e.color || '';
   card.classList.toggle('colored', !!e.color);
