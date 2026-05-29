@@ -1184,8 +1184,7 @@ body.modal-open {
   .editor-card {
     height: 100%;
     max-height: 100%;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
   }
 
   /* Toolbar: horizontal scroll on mobile instead of wrap */
@@ -1223,10 +1222,16 @@ body.modal-open {
   .ed-body {
     overflow-y: auto !important;
     min-height: 120px;
+    /* Don't let autoGrow push the card beyond its bounds */
+    max-height: none;
   }
   .ed-checklist {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  /* Bottom bar always visible — never scrolls out of view */
+  .ed-bottom-bar {
+    flex-shrink: 0;
   }
 
   main { padding: 14px 12px 100px; }
