@@ -554,6 +554,16 @@ input:focus {
   <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative;font-size:17px;padding:5px 10px" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
 </div>
 
+<!-- Presence check modal -->
+<div id="presence-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surf-1);border:2px solid var(--gold);border-radius:var(--r);padding:24px;text-align:center;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7)">
+    <div style="font-size:36px;margin-bottom:6px">⚠️</div>
+    <div style="font-size:22px;font-weight:700;color:var(--gold);margin-bottom:10px">¿Sigues ahí?</div>
+    <div style="color:var(--text-2);margin-bottom:18px;font-size:14px;line-height:1.4">Confirma tu presencia o el bot se detendrá automáticamente en <span id="presence-countdown" style="color:var(--red);font-weight:700">60s</span></div>
+    <button class="btn btn-gold" onclick="confirmPresence()" style="font-size:18px;padding:12px 32px;width:100%">Sigo aquí</button>
+  </div>
+</div>
+
 <!-- Bell alert dropdown -->
 <div id="alert-dropdown" style="display:none;position:fixed;top:52px;right:12px;z-index:200;width:340px;background:var(--surf-2);border:1px solid var(--border-2);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.7);overflow:hidden;flex-direction:column;max-height:420px">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
@@ -1527,6 +1537,147 @@ function toggleObGear(e) {
   p.style.display = p.style.display === 'none' ? 'block' : 'none';
 }
 
+// ── Presence watchdog ─────────────────────────────────
+var ACTIVITY = {
+  lastActivity: Date.now(),
+  checkTimer: null,
+  countdownTimer: null,
+  INACTIVE_MS: 5 * 60 * 1000,
+  GRACE_MS: 60 * 1000,
+  CHECK_MS: 30 * 1000
+};
+
+function bumpActivity() { ACTIVITY.lastActivity = Date.now(); }
+
+['mousemove','keydown','touchstart','click','scroll'].forEach(function(ev){
+  document.addEventListener(ev, bumpActivity, { passive: true });
+});
+
+function startActivityWatcher() {
+  bumpActivity();
+  if (ACTIVITY.checkTimer) clearInterval(ACTIVITY.checkTimer);
+  ACTIVITY.checkTimer = setInterval(activityCheck, ACTIVITY.CHECK_MS);
+}
+
+function stopActivityWatcher() {
+  if (ACTIVITY.checkTimer) { clearInterval(ACTIVITY.checkTimer); ACTIVITY.checkTimer = null; }
+  hidePresenceModal();
+}
+
+// ── Orders watcher (Telegram notifications) ───────────
+var ORDERS = {
+  knownIds: null,    // null = first poll not done
+  lastNotifTs: 0,
+  timer: null,
+  COOLDOWN_MS: 3 * 60 * 1000,
+  POLL_MS: 60 * 1000
+};
+
+function startOrdersWatcher() {
+  ORDERS.knownIds = null;
+  ORDERS.lastNotifTs = 0;
+  if (ORDERS.timer) clearInterval(ORDERS.timer);
+  pollOrders();
+  ORDERS.timer = setInterval(pollOrders, ORDERS.POLL_MS);
+}
+
+function stopOrdersWatcher() {
+  if (ORDERS.timer) { clearInterval(ORDERS.timer); ORDERS.timer = null; }
+}
+
+async function pollOrders() {
+  if (!BOT.running) return;
+  try {
+    var res = await botCallWorker('/orders', { sinceMs: 2 * 60 * 60 * 1000 });
+    if (!res || !res.data) return;
+    var orders = res.data;
+    var now = Date.now();
+
+    // Primera poll: sembrar known sin notificar
+    if (ORDERS.knownIds === null) {
+      ORDERS.knownIds = {};
+      orders.forEach(function(o){ ORDERS.knownIds[o.orderNumber] = true; });
+      ORDERS.lastNotifTs = now; // arrancar cooldown
+      return;
+    }
+
+    var newOrders = orders.filter(function(o){ return !ORDERS.knownIds[o.orderNumber]; });
+    newOrders.forEach(function(o){ ORDERS.knownIds[o.orderNumber] = true; });
+
+    var canNotify = (now - ORDERS.lastNotifTs) >= ORDERS.COOLDOWN_MS;
+
+    if (newOrders.length > 0) {
+      if (canNotify) {
+        var first = newOrders[0];
+        var totalBs = first.totalPrice || (parseFloat(first.amount || 0) * parseFloat(first.price || 0)).toFixed(2);
+        var msg = '🟢 <b>Nueva orden P2P</b>\n' +
+                  'Cantidad: ' + (first.amount || '?') + ' USDT\n' +
+                  'Total: ' + totalBs + ' Bs\n' +
+                  'Precio: ' + (first.price || '?') + ' Bs';
+        if (newOrders.length > 1) msg += '\n(+' + (newOrders.length - 1) + ' más)';
+        sendTelegram(msg);
+        ORDERS.lastNotifTs = now;
+        botLog('📩 Orden nueva notificada', '#1D9E75');
+      } else {
+        botLog('📨 ' + newOrders.length + ' orden(es) nueva(s) — silenciada(s) por cooldown', '#8b949e');
+      }
+    } else if (canNotify) {
+      // No nuevas, pero pueden haber pendientes (status 0 = pending pay, 1 = paid awaiting release)
+      var pending = orders.filter(function(o){
+        var s = Number(o.orderStatus);
+        return s === 0 || s === 1;
+      });
+      if (pending.length > 0) {
+        sendTelegram('⏳ <b>Órdenes pendientes</b>\n' + pending.length + ' orden(es) sin completar');
+        ORDERS.lastNotifTs = now;
+        botLog('📩 Pendientes notificadas: ' + pending.length, '#F0B90B');
+      }
+    }
+  } catch(e) {
+    // silencioso
+  }
+}
+
+function activityCheck() {
+  if (!BOT.running) return;
+  var modal = document.getElementById('presence-modal');
+  if (modal && modal.style.display === 'flex') return;
+  if (Date.now() - ACTIVITY.lastActivity >= ACTIVITY.INACTIVE_MS) showPresenceModal();
+}
+
+function showPresenceModal() {
+  var m = document.getElementById('presence-modal');
+  if (!m) return;
+  m.style.display = 'flex';
+  try { new Audio('data:audio/wav;base64,UklGRl9vAAAAAQEBAAEBAAEBAAEBAAEBAAEBAAEB').play(); } catch(e) {}
+  var deadline = Date.now() + ACTIVITY.GRACE_MS;
+  var cd = document.getElementById('presence-countdown');
+  function tick() {
+    var rem = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+    if (cd) cd.textContent = rem + 's';
+    if (rem <= 0) {
+      hidePresenceModal();
+      botLog('🛑 Bot detenido por inactividad (sin respuesta al chequeo de presencia)', '#E24B4A');
+      sendTelegram('🛑 P2P Bot detenido: inactividad detectada — anuncio pausado');
+      botToggle();
+    }
+  }
+  tick();
+  ACTIVITY.countdownTimer = setInterval(tick, 1000);
+}
+
+function hidePresenceModal() {
+  var m = document.getElementById('presence-modal');
+  if (m) m.style.display = 'none';
+  if (ACTIVITY.countdownTimer) { clearInterval(ACTIVITY.countdownTimer); ACTIVITY.countdownTimer = null; }
+}
+
+function confirmPresence() {
+  bumpActivity();
+  hidePresenceModal();
+  botLog('✓ Presencia confirmada', '#8b949e');
+}
+
 document.addEventListener('click', function(e) {
   var d = document.getElementById('alert-dropdown');
   if (d && d.style.display === 'flex' && !d.contains(e.target) && e.target.id !== 'btn-bell' && !document.getElementById('btn-bell').contains(e.target)) {
@@ -2017,6 +2168,8 @@ async function botToggle() {
     clearInterval(BOT.timer);
     BOT.timer = null;
     keepAwakeStop();
+    stopActivityWatcher();
+    stopOrdersWatcher();
     BOT.basePrice = null;
     BOT.ceiling = null;
     BOT.cachedAd = null;
@@ -2112,6 +2265,8 @@ async function botToggle() {
     botSetStatus('✓ Bot activo', '#1D9E75');
     BOT.timer = setInterval(botCycle, 20000);
     keepAwakeStart();
+    startActivityWatcher();
+    startOrdersWatcher();
   }
 }
 
