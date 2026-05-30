@@ -646,41 +646,48 @@ function cardHash(s) {
   return h;
 }
 
-// ── Swipe-to-archive toast ────────────────────────────────────────────────────
-let _archiveToast = null, _archiveToastTimer = null;
-function showArchiveToast(noteId) {
-  if (_archiveToastTimer) clearTimeout(_archiveToastTimer);
-  if (_archiveToast) _archiveToast.remove();
+// ── Undo toast (archive / delete) ────────────────────────────────────────────
+let _undoToast = null, _undoToastTimer = null;
+function showUndoToast(message, undoFn) {
+  if (_undoToastTimer) clearTimeout(_undoToastTimer);
+  if (_undoToast) { _undoToast.remove(); _undoToast = null; }
 
   const toast = document.createElement('div');
   toast.className = 'swipe-toast';
-  toast.innerHTML = `<span>Nota archivada</span><button class="swipe-toast-undo">Deshacer</button>`;
+  toast.innerHTML = `<span>${message}</span><button class="swipe-toast-undo">Deshacer</button>`;
   document.body.appendChild(toast);
-  _archiveToast = toast;
+  _undoToast = toast;
 
   toast.querySelector('.swipe-toast-undo').addEventListener('click', () => {
-    clearTimeout(_archiveToastTimer);
-    toast.remove(); _archiveToast = null;
-    const n = State.notes.find(x => x.id === noteId);
-    if (n) { n.archived = false; n.last_modified = Date.now(); saveNoteLocal(n); render(); }
+    clearTimeout(_undoToastTimer);
+    toast.remove(); _undoToast = null;
+    undoFn();
   });
 
   requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('swipe-toast-show')));
-  _archiveToastTimer = setTimeout(() => {
+  _undoToastTimer = setTimeout(() => {
     toast.classList.remove('swipe-toast-show');
-    setTimeout(() => { if (_archiveToast === toast) { toast.remove(); _archiveToast = null; } }, 300);
+    setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 300);
   }, 10000);
 }
 
+const ARCHIVE_ICON_SVG = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg>`;
+const SWIPE_THRESHOLD = 0.38;
+const SWIPE_ACTIVE_COLOR = 'rgba(67,160,71,0.92)';
+
 let _lpTimer = null;
 function wireCard(card) {
-  // Swipe to archive (mobile only, not in select mode, only in non-archive/trash views)
-  let _sx = 0, _sy = 0, _dir = null, _active = false;
+  let _sx = 0, _sy = 0, _dir = null, _active = false, _overlay = null;
+
+  function removeOverlay() {
+    if (_overlay) { _overlay.remove(); _overlay = null; }
+  }
 
   function resetCard() {
-    card.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+    card.style.transition = 'transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.2s';
     card.style.transform = '';
-    card.style.opacity = '';
+    card.style.zIndex = '';
+    removeOverlay();
     _active = false; _dir = null;
   }
 
@@ -689,6 +696,7 @@ function wireCard(card) {
     _sx = ev.touches[0].clientX;
     _sy = ev.touches[0].clientY;
     _dir = null; _active = false;
+    removeOverlay();
     card.style.transition = 'none';
   }, { passive: true });
 
@@ -697,30 +705,78 @@ function wireCard(card) {
     if (State.selectMode) return;
     const dx = ev.touches[0].clientX - _sx;
     const dy = ev.touches[0].clientY - _sy;
+
     if (!_dir && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
       _dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      if (_dir === 'h' && State.view !== 'archive' && State.view !== 'trash') {
+        // Create Google Keep-style reveal overlay at card's current position
+        const rect = card.getBoundingClientRect();
+        _overlay = document.createElement('div');
+        _overlay.className = 'swipe-reveal';
+        Object.assign(_overlay.style, {
+          top: rect.top + 'px', left: rect.left + 'px',
+          width: rect.width + 'px', height: rect.height + 'px',
+          borderRadius: getComputedStyle(card).borderRadius,
+        });
+        _overlay.innerHTML = `
+          <span class="swipe-reveal-icon swipe-reveal-icon-l">${ARCHIVE_ICON_SVG}</span>
+          <span class="swipe-reveal-icon swipe-reveal-icon-r">${ARCHIVE_ICON_SVG}</span>`;
+        document.body.appendChild(_overlay);
+        card.style.zIndex = '12';
+      }
     }
-    if (_dir !== 'h') return;
+
+    if (_dir !== 'h' || !_overlay) return;
     ev.preventDefault();
     _active = true;
+
     const pct = Math.min(Math.abs(dx) / card.offsetWidth, 1);
-    card.style.transform = `translateX(${dx}px)`;
-    card.style.opacity = String(1 - pct * 0.6);
+    const rot = dx > 0 ? Math.min(pct * 4, 3) : -Math.min(pct * 4, 3);
+    card.style.transform = `translateX(${dx}px) rotate(${rot}deg)`;
+    card.style.boxShadow = `0 ${8 + pct * 16}px ${24 + pct * 24}px rgba(0,0,0,${0.3 + pct * 0.25})`;
+
+    const pastThreshold = pct >= SWIPE_THRESHOLD;
+    _overlay.style.background = pastThreshold ? SWIPE_ACTIVE_COLOR : 'rgba(67,160,71,0.55)';
+    // Show only the icon on the revealing side
+    _overlay.querySelector('.swipe-reveal-icon-l').style.opacity = dx > 0 ? '1' : '0';
+    _overlay.querySelector('.swipe-reveal-icon-r').style.opacity = dx < 0 ? '1' : '0';
   }, { passive: false });
 
   card.addEventListener('touchend', (ev) => {
     clearTimeout(_lpTimer);
-    if (!_active) { _dir = null; return; }
+    if (!_active) { removeOverlay(); _dir = null; return; }
     const dx = ev.changedTouches[0].clientX - _sx;
-    if (Math.abs(dx) > card.offsetWidth * 0.38 && State.view !== 'archive' && State.view !== 'trash') {
+    const canArchive = State.view !== 'archive' && State.view !== 'trash';
+
+    if (Math.abs(dx) > card.offsetWidth * SWIPE_THRESHOLD && canArchive && _overlay) {
       const sign = dx > 0 ? 1 : -1;
-      card.style.transition = 'transform 0.22s ease, opacity 0.22s ease, max-height 0.3s ease 0.15s, margin-bottom 0.3s ease 0.15s';
-      card.style.transform = `translateX(${sign * card.offsetWidth * 1.3}px)`;
-      card.style.opacity = '0';
+      // Fly card off screen
+      card.style.transition = 'transform 0.22s cubic-bezier(0.4,0,1,1), box-shadow 0.22s';
+      card.style.transform = `translateX(${sign * (card.offsetWidth + 40)}px) rotate(${sign * 4}deg)`;
+      card.style.boxShadow = 'none';
+      // Fade overlay
+      _overlay.style.transition = 'opacity 0.22s';
+      _overlay.style.opacity = '0';
+
       const n = State.notes.find(x => x.id === card.dataset.id);
       if (n) {
         n.archived = true; n.last_modified = Date.now(); saveNoteLocal(n);
-        setTimeout(() => { render(); showArchiveToast(n.id); }, 260);
+        setTimeout(() => {
+          removeOverlay();
+          // Collapse the card's slot before re-render
+          const h = card.offsetHeight;
+          card.style.transition = 'max-height 0.22s ease, margin-bottom 0.22s ease, opacity 0.1s';
+          card.style.overflow = 'hidden';
+          card.style.maxHeight = h + 'px';
+          card.style.opacity = '0';
+          requestAnimationFrame(() => { card.style.maxHeight = '0'; card.style.marginBottom = '0'; });
+          setTimeout(() => {
+          render();
+          showUndoToast('Nota archivada', () => {
+            n.archived = false; n.last_modified = Date.now(); saveNoteLocal(n); render();
+          });
+        }, 230);
+        }, 200);
       }
     } else {
       resetCard();
@@ -1372,15 +1428,23 @@ function bindEditorActions() {
     syncChecklistFromDom();
     e.title = $('#ed-title')?.value || '';
     e.body  = $('#ed-body')?.value  || '';
-    e.archived = !e.archived;
+    const wasArchived = e.archived;
+    e.archived = !wasArchived;
     e.last_modified = Date.now();
     const idx = State.notes.findIndex(n => n.id === e.id);
     if (idx >= 0) State.notes[idx] = JSON.parse(JSON.stringify(e));
     else State.notes.unshift(JSON.parse(JSON.stringify(e)));
     await saveNoteLocal(e);
+    const noteId = e.id;
     State.editing = null;
     closeEditor();
     render();
+    if (!wasArchived) {
+      showUndoToast('Nota archivada', () => {
+        const n = State.notes.find(x => x.id === noteId);
+        if (n) { n.archived = false; n.last_modified = Date.now(); saveNoteLocal(n); render(); }
+      });
+    }
   });
   $('#ed-checklist').addEventListener('click', () => {
     EditorHistory.flush();
@@ -1433,14 +1497,21 @@ function bindEditorActions() {
   $('#ed-undo').addEventListener('click', () => EditorHistory.undo());
   $('#ed-redo').addEventListener('click', () => EditorHistory.redo());
   $('#ed-delete').addEventListener('click', async () => {
-    if (!(await window.customConfirm('¿Mover a la papelera?'))) return;
-    const id = State.editing.id;
-    State.editing.trashed_at = Date.now();
-    State.editing.last_modified = Date.now();
+    const e = State.editing;
+    if (!e) return;
+    const noteId = e.id;
+    const snapshot = JSON.parse(JSON.stringify(e));
+    e.trashed_at = Date.now();
+    e.last_modified = Date.now();
     await commitEditor();
-    try { await apiTrashNote(id); } catch {}
+    try { await apiTrashNote(noteId); } catch {}
     closeEditor();
     render();
+    showUndoToast('Nota eliminada', () => {
+      const n = State.notes.find(x => x.id === noteId);
+      if (n) { n.trashed_at = null; n.last_modified = Date.now(); saveNoteLocal(n); render(); }
+      else { snapshot.trashed_at = null; snapshot.last_modified = Date.now(); State.notes.unshift(snapshot); saveNoteLocal(snapshot); render(); }
+    });
   });
 
   // Color picker
@@ -2125,28 +2196,42 @@ function bindUI() {
   $('#bulk-cats-close')?.addEventListener('click', () => closeBulkCatsModal());
   $('#bulk-cats-bg')?.addEventListener('click', () => closeBulkCatsModal());
   $('#select-archive')?.addEventListener('click', async () => {
-    for (const id of State.selected) {
+    const ids = [...State.selected];
+    for (const id of ids) {
       const n = State.notes.find(x => x.id === id);
       if (!n) continue;
-      n.archived = true;
-      n.last_modified = Date.now();
+      n.archived = true; n.last_modified = Date.now();
       await saveNoteLocal(n);
     }
-    exitSelectMode();
-    render();
+    exitSelectMode(); render();
+    const label = ids.length === 1 ? 'Nota archivada' : `${ids.length} notas archivadas`;
+    showUndoToast(label, async () => {
+      for (const id of ids) {
+        const n = State.notes.find(x => x.id === id);
+        if (n) { n.archived = false; n.last_modified = Date.now(); await saveNoteLocal(n); }
+      }
+      render();
+    });
   });
   $('#select-delete')?.addEventListener('click', async () => {
-    if (!(await window.customConfirm(`¿Mover ${State.selected.size} nota(s) a la papelera?`))) return;
-    for (const id of State.selected) {
+    const ids = [...State.selected];
+    const ts = Date.now();
+    for (const id of ids) {
       const n = State.notes.find(x => x.id === id);
       if (!n) continue;
-      n.trashed_at = Date.now();
-      n.last_modified = Date.now();
+      n.trashed_at = ts; n.last_modified = ts;
       await saveNoteLocal(n);
       try { await apiTrashNote(id); } catch {}
     }
-    exitSelectMode();
-    render();
+    exitSelectMode(); render();
+    const label = ids.length === 1 ? 'Nota eliminada' : `${ids.length} notas eliminadas`;
+    showUndoToast(label, async () => {
+      for (const id of ids) {
+        const n = State.notes.find(x => x.id === id);
+        if (n) { n.trashed_at = null; n.last_modified = Date.now(); await saveNoteLocal(n); }
+      }
+      render();
+    });
   });
 
   // Lightbox
