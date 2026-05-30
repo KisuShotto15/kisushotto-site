@@ -280,6 +280,7 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 .masonry {
   column-width: 240px;
   column-gap: 12px;
+  contain: layout style;
 }
 
 /* Note card */
@@ -1178,14 +1179,19 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
 }
 
 .note-card { animation: cardIn 0.18s ease-out both; }
+.note-card[style*="animation: none"] { animation: none !important; }
 
 .modal:not([hidden]) .modal-bg  { animation: overlayIn 0.1s ease-out both; }
 .modal:not([hidden]) .modal-card { animation: editorIn 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
 
+/* FLIP close: JS applies inline transitions directly; .closing is the CSS fallback */
 .modal.closing .modal-bg  { animation: overlayOut 0.1s ease-in both; }
 .modal.closing .modal-card { animation: editorOut 0.12s ease-in both; }
 
 .popup:not([hidden]) { animation: popupIn 0.14s ease-out both; }
+
+/* Drag ghost cursor */
+body.dragging-note * { cursor: grabbing !important; user-select: none; }
 
 /* Body scroll lock (applied by JS when modals open) */
 body.modal-open {

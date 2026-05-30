@@ -58,6 +58,7 @@ const State = {
   search: '',
   editing: null,        // note being edited
   editorDirty: false,   // whether note was modified while editor was open
+  editorOriginRect: null, // DOMRect of the card that opened the editor (for FLIP close animation)
   attachUrls: {},       // attId -> object URL
   pinPending: null,     // resolver fn while PIN modal open
   selected: new Set(),  // selected note IDs for multi-select
@@ -280,7 +281,9 @@ async function init() {
 async function loadFromIDB() {
   State.notes      = await idb.getAll('notes')      || [];
   State.categories = await idb.getAll('categories') || [];
-  State.notes.sort((a, b) => (b.last_modified || 0) - (a.last_modified || 0));
+  // Assign sort_order to notes that don't have it (backward-compat migration)
+  State.notes.forEach(n => { if (n.sort_order == null) n.sort_order = n.created_at || n.last_modified || 0; });
+  State.notes.sort((a, b) => (b.sort_order ?? 0) - (a.sort_order ?? 0));
 }
 
 let _lightboxClosedAt = 0;
@@ -658,7 +661,8 @@ function showUndoToast(message, undoFn) {
   document.body.appendChild(toast);
   _undoToast = toast;
 
-  toast.querySelector('.swipe-toast-undo').addEventListener('click', () => {
+  toast.querySelector('.swipe-toast-undo').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
     clearTimeout(_undoToastTimer);
     toast.remove(); _undoToast = null;
     undoFn();
@@ -675,9 +679,104 @@ const ARCHIVE_ICON_SVG = `<svg width="28" height="28" viewBox="0 0 24 24" fill="
 const SWIPE_THRESHOLD = 0.38;
 const SWIPE_ACTIVE_COLOR = 'rgba(67,160,71,0.92)';
 
-let _lpTimer = null;
+// ── Drag-to-reorder state ────────────────────────────────────────────────────
+let _dragState = null; // { noteId, ghost, card, offsetX, offsetY, container }
+let _dragHappened = false;
+
+function startDrag(card, x, y) {
+  if (_dragState) return;
+  const rect = card.getBoundingClientRect();
+  const ghost = card.cloneNode(true);
+  ghost.removeAttribute('data-id');
+  Object.assign(ghost.style, {
+    position: 'fixed',
+    left: rect.left + 'px', top: rect.top + 'px',
+    width: rect.width + 'px', height: rect.height + 'px',
+    pointerEvents: 'none',
+    zIndex: '500',
+    opacity: '0.92',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.55)',
+    transform: 'scale(1.04)',
+    transition: 'box-shadow 0.15s, transform 0.15s',
+    borderRadius: getComputedStyle(card).borderRadius,
+    margin: '0',
+  });
+  document.body.appendChild(ghost);
+  document.body.classList.add('dragging-note');
+  card.style.opacity = '0.25';
+  card.style.pointerEvents = 'none';
+  navigator.vibrate?.(18);
+  _dragState = {
+    noteId: card.dataset.id,
+    ghost,
+    card,
+    offsetX: x - rect.left,
+    offsetY: y - rect.top,
+    container: card.closest('#grid-pinned, #grid-others'),
+  };
+}
+
+function updateDrag(x, y) {
+  if (!_dragState) return;
+  const { ghost, card, offsetX, offsetY, container } = _dragState;
+  ghost.style.left = (x - offsetX) + 'px';
+  ghost.style.top  = (y - offsetY) + 'px';
+
+  ghost.style.visibility = 'hidden';
+  const els = document.elementsFromPoint(x, y);
+  ghost.style.visibility = '';
+
+  const target = els.find(el => el.classList.contains('note-card') && el !== card && !el.dataset.ghost);
+  if (target && container?.contains(target)) {
+    const targetRect = target.getBoundingClientRect();
+    if (y < targetRect.top + targetRect.height / 2) {
+      container.insertBefore(card, target);
+    } else {
+      container.insertBefore(card, target.nextElementSibling);
+    }
+  }
+}
+
+function endDrag() {
+  if (!_dragState) return;
+  const { ghost, card } = _dragState;
+  _dragState = null;
+  _dragHappened = true;
+
+  ghost.style.transition = 'opacity 0.12s ease';
+  ghost.style.opacity = '0';
+  setTimeout(() => ghost.remove(), 130);
+  document.body.classList.remove('dragging-note');
+
+  card.style.opacity = '';
+  card.style.pointerEvents = '';
+
+  // Save sort_order based on new DOM positions
+  const gridPinned = $('#grid-pinned');
+  const gridOthers = $('#grid-others');
+  const allCards = [
+    ...(gridPinned ? gridPinned.querySelectorAll('.note-card') : []),
+    ...(gridOthers ? gridOthers.querySelectorAll('.note-card') : []),
+  ];
+  const total = allCards.length;
+  const now = Date.now();
+  allCards.forEach((c, i) => {
+    const note = State.notes.find(n => n.id === c.dataset.id);
+    if (!note) return;
+    const newOrder = (total - i) * 1000 + now;
+    if (note.sort_order !== newOrder) {
+      note.sort_order = newOrder;
+      saveNoteLocal(note);
+    }
+  });
+  State.notes.sort((a, b) => (b.sort_order ?? 0) - (a.sort_order ?? 0));
+  renderGrid();
+}
+
 function wireCard(card) {
   let _sx = 0, _sy = 0, _dir = null, _active = false, _overlay = null;
+  let _lpTimer = null; // per-card, not shared
+  let _dragMode = false;
 
   function removeOverlay() {
     if (_overlay) { _overlay.remove(); _overlay = null; }
@@ -687,47 +786,77 @@ function wireCard(card) {
     card.style.transition = 'transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.2s';
     card.style.transform = '';
     card.style.zIndex = '';
+    card.style.willChange = '';
     removeOverlay();
-    _active = false; _dir = null;
+    _active = false; _dir = null; _dragMode = false;
   }
 
+  // ── Touch ────────────────────────────────────────────────────────────────
+
   card.addEventListener('touchstart', (ev) => {
-    _lpTimer = setTimeout(() => { enterSelectMode(); toggleSelect(card.dataset.id); }, 550);
     _sx = ev.touches[0].clientX;
     _sy = ev.touches[0].clientY;
-    _dir = null; _active = false;
+    _dir = null; _active = false; _dragMode = false;
     removeOverlay();
     card.style.transition = 'none';
+    card.style.willChange = 'transform';
+
+    // 400ms → drag mode; 550ms → select mode (if drag not started)
+    _lpTimer = setTimeout(() => {
+      if (!State.selectMode && !_active) {
+        _dragMode = true;
+        startDrag(card, _sx, _sy);
+      }
+    }, 400);
+    const selectTimer = setTimeout(() => {
+      if (!_dragMode && !_active) { enterSelectMode(); toggleSelect(card.dataset.id); }
+    }, 550);
+    // Store selectTimer so we can clear it when needed
+    card._selectTimer = selectTimer;
   }, { passive: true });
 
   card.addEventListener('touchmove', (ev) => {
     clearTimeout(_lpTimer);
+    clearTimeout(card._selectTimer);
+
+    if (_dragMode) {
+      ev.preventDefault();
+      updateDrag(ev.touches[0].clientX, ev.touches[0].clientY);
+      return;
+    }
+
     if (State.selectMode) return;
+
     const dx = ev.touches[0].clientX - _sx;
     const dy = ev.touches[0].clientY - _sy;
 
+    // Cancel drag/select if moved early
+    if (Math.hypot(dx, dy) > 8) { clearTimeout(_lpTimer); clearTimeout(card._selectTimer); }
+
     if (!_dir && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
       _dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-      if (_dir === 'h' && State.view !== 'archive' && State.view !== 'trash') {
-        // Create Google Keep-style reveal overlay at card's current position
-        const rect = card.getBoundingClientRect();
-        _overlay = document.createElement('div');
-        _overlay.className = 'swipe-reveal';
-        Object.assign(_overlay.style, {
-          top: rect.top + 'px', left: rect.left + 'px',
-          width: rect.width + 'px', height: rect.height + 'px',
-          borderRadius: getComputedStyle(card).borderRadius,
-        });
-        _overlay.innerHTML = `
-          <span class="swipe-reveal-icon swipe-reveal-icon-l">${ARCHIVE_ICON_SVG}</span>
-          <span class="swipe-reveal-icon swipe-reveal-icon-r">${ARCHIVE_ICON_SVG}</span>`;
-        document.body.appendChild(_overlay);
-        card.style.zIndex = '12';
-      }
+    }
+    if (_dir !== 'h') return;
+
+    ev.preventDefault(); // prevent scroll as soon as horizontal direction confirmed
+
+    if (!_overlay && State.view !== 'archive' && State.view !== 'trash') {
+      const rect = card.getBoundingClientRect();
+      _overlay = document.createElement('div');
+      _overlay.className = 'swipe-reveal';
+      Object.assign(_overlay.style, {
+        top: rect.top + 'px', left: rect.left + 'px',
+        width: rect.width + 'px', height: rect.height + 'px',
+        borderRadius: getComputedStyle(card).borderRadius,
+      });
+      _overlay.innerHTML = `
+        <span class="swipe-reveal-icon swipe-reveal-icon-l">${ARCHIVE_ICON_SVG}</span>
+        <span class="swipe-reveal-icon swipe-reveal-icon-r">${ARCHIVE_ICON_SVG}</span>`;
+      document.body.appendChild(_overlay);
+      card.style.zIndex = '12';
     }
 
-    if (_dir !== 'h' || !_overlay) return;
-    ev.preventDefault();
+    if (!_overlay) return;
     _active = true;
 
     const pct = Math.min(Math.abs(dx) / card.offsetWidth, 1);
@@ -737,45 +866,50 @@ function wireCard(card) {
 
     const pastThreshold = pct >= SWIPE_THRESHOLD;
     _overlay.style.background = pastThreshold ? SWIPE_ACTIVE_COLOR : 'rgba(67,160,71,0.55)';
-    // Show only the icon on the revealing side
     _overlay.querySelector('.swipe-reveal-icon-l').style.opacity = dx > 0 ? '1' : '0';
     _overlay.querySelector('.swipe-reveal-icon-r').style.opacity = dx < 0 ? '1' : '0';
   }, { passive: false });
 
   card.addEventListener('touchend', (ev) => {
     clearTimeout(_lpTimer);
+    clearTimeout(card._selectTimer);
+
+    if (_dragMode) {
+      _dragMode = false;
+      endDrag();
+      return;
+    }
+
+    card.style.willChange = '';
+
     if (!_active) { removeOverlay(); _dir = null; return; }
     const dx = ev.changedTouches[0].clientX - _sx;
     const canArchive = State.view !== 'archive' && State.view !== 'trash';
 
     if (Math.abs(dx) > card.offsetWidth * SWIPE_THRESHOLD && canArchive && _overlay) {
       const sign = dx > 0 ? 1 : -1;
-      // Fly card off screen
       card.style.transition = 'transform 0.22s cubic-bezier(0.4,0,1,1), box-shadow 0.22s';
       card.style.transform = `translateX(${sign * (card.offsetWidth + 40)}px) rotate(${sign * 4}deg)`;
       card.style.boxShadow = 'none';
-      // Fade overlay
       _overlay.style.transition = 'opacity 0.22s';
       _overlay.style.opacity = '0';
 
       const n = State.notes.find(x => x.id === card.dataset.id);
       if (n) {
         n.archived = true; n.last_modified = Date.now(); saveNoteLocal(n);
+        // Show toast immediately so rapid undo works
+        showUndoToast('Nota archivada', () => {
+          n.archived = false; n.last_modified = Date.now(); saveNoteLocal(n); render();
+        });
         setTimeout(() => {
           removeOverlay();
-          // Collapse the card's slot before re-render
           const h = card.offsetHeight;
           card.style.transition = 'max-height 0.22s ease, margin-bottom 0.22s ease, opacity 0.1s';
           card.style.overflow = 'hidden';
           card.style.maxHeight = h + 'px';
           card.style.opacity = '0';
           requestAnimationFrame(() => { card.style.maxHeight = '0'; card.style.marginBottom = '0'; });
-          setTimeout(() => {
-          render();
-          showUndoToast('Nota archivada', () => {
-            n.archived = false; n.last_modified = Date.now(); saveNoteLocal(n); render();
-          });
-        }, 230);
+          setTimeout(() => render(), 230);
         }, 200);
       }
     } else {
@@ -784,8 +918,49 @@ function wireCard(card) {
     _active = false; _dir = null;
   }, { passive: true });
 
-  card.addEventListener('touchcancel', resetCard, { passive: true });
+  card.addEventListener('touchcancel', () => {
+    clearTimeout(_lpTimer);
+    clearTimeout(card._selectTimer);
+    if (_dragMode) { _dragMode = false; endDrag(); return; }
+    resetCard();
+  }, { passive: true });
+
+  // ── Mouse (desktop hold+drag) ─────────────────────────────────────────────
+
+  card.addEventListener('mousedown', (ev) => {
+    if (ev.button !== 0 || State.selectMode) return;
+    const startX = ev.clientX, startY = ev.clientY;
+    let moved = false;
+
+    const onMove = (e) => {
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) { moved = true; cleanup(); }
+    };
+    const cleanup = () => {
+      clearTimeout(mouseTimer);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    const onUp = () => cleanup();
+
+    const mouseTimer = setTimeout(() => {
+      cleanup();
+      if (!moved && !State.selectMode) {
+        startDrag(card, startX, startY);
+        const onDragMove = (e) => updateDrag(e.clientX, e.clientY);
+        const onDragUp   = () => { document.removeEventListener('mousemove', onDragMove); endDrag(); };
+        document.addEventListener('mousemove', onDragMove);
+        document.addEventListener('mouseup', onDragUp, { once: true });
+      }
+    }, 400);
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp, { once: true });
+  });
+
+  // ── Click ────────────────────────────────────────────────────────────────
+
   card.addEventListener('click', (ev) => {
+    if (_dragHappened) { _dragHappened = false; return; }
     if (ev.target.closest('.nc-select-wrap')) {
       ev.stopPropagation();
       if (!State.selectMode) enterSelectMode();
@@ -836,11 +1011,13 @@ function patchGrid(container, notes) {
         tmp.innerHTML = html.trim();
         const newEl = tmp.firstElementChild;
         newEl.dataset.rh = h;
-        newEl.style.animation = 'none';
+        newEl.style.animation = 'none'; // no re-animate replaced cards
         el.replaceWith(newEl);
         wireCard(newEl);
         existing.set(n.id, newEl);
         el = newEl;
+      } else {
+        el.style.animation = 'none'; // already in DOM, no re-animate on reorder
       }
     } else {
       const tmp = document.createElement('div');
@@ -995,6 +1172,10 @@ function openEditor(n) {
   State.editingSnapshotTime = n.last_modified || 0;
   EditorHistory.clear();
   const e = State.editing;
+
+  // Capture card position for FLIP close animation
+  const originCard = document.querySelector(`.note-card[data-id="${n.id}"]`);
+  State.editorOriginRect = originCard ? originCard.getBoundingClientRect() : null;
 
   // Push history entry so Android back button closes editor instead of exiting
   history.pushState({ modal: 'editor' }, '');
@@ -1312,12 +1493,15 @@ function closeEditor(fromPopState = false) {
   detachKeyboardListener();
   clearTimeout(saveTimer);
   saveTimer = null;
+
+  let noteWasEmpty = false;
   if (State.editing) {
     syncChecklistFromDom();
     const e = State.editing;
     e.title = $('#ed-title')?.value || '';
     e.body  = $('#ed-body')?.value  || '';
     if (isNoteEmpty(e)) {
+      noteWasEmpty = true;
       State.notes = State.notes.filter(n => n.id !== e.id);
       idb.del('notes', e.id).catch(() => {});
       renderGrid();
@@ -1331,14 +1515,47 @@ function closeEditor(fromPopState = false) {
   hidePopups();
 
   const modal = $('#editor');
-  modal.classList.add('closing');
-  const card = modal.querySelector('.modal-card');
-  card.addEventListener('animationend', () => {
+  const originRect = State.editorOriginRect;
+  State.editorOriginRect = null;
+
+  const modalCard = modal.querySelector('.modal-card');
+  const modalBg   = modal.querySelector('.modal-bg');
+
+  let _closed = false;
+  function onCloseEnd() {
+    if (_closed) return;
+    _closed = true;
     modal.classList.remove('closing');
     modal.hidden = true;
+    if (modalCard) { modalCard.style.cssText = ''; }
+    if (modalBg)   { modalBg.style.transition = ''; modalBg.style.opacity = ''; }
     $('#ed-checklist-list').contentEditable = 'inherit';
     if (State.editorDirty) { State.editorDirty = false; renderGrid(); }
-  }, { once: true });
+  }
+
+  if (originRect && modalCard && !noteWasEmpty) {
+    const cardRect = modalCard.getBoundingClientRect();
+    const scaleX = Math.max(originRect.width  / cardRect.width,  0.01);
+    const scaleY = Math.max(originRect.height / cardRect.height, 0.01);
+    const tx = originRect.left + originRect.width  / 2 - (cardRect.left + cardRect.width  / 2);
+    const ty = originRect.top  + originRect.height / 2 - (cardRect.top  + cardRect.height / 2);
+
+    modalCard.style.transition = 'transform 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease';
+    modalCard.style.transformOrigin = 'center center';
+    modalCard.style.pointerEvents = 'none';
+    if (modalBg) { modalBg.style.transition = 'opacity 0.22s ease'; modalBg.style.opacity = '0'; }
+
+    requestAnimationFrame(() => {
+      modalCard.style.transform = `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`;
+      modalCard.style.opacity = '0';
+      modalCard.addEventListener('transitionend', onCloseEnd, { once: true });
+      setTimeout(onCloseEnd, 380); // fallback if transitionend doesn't fire
+    });
+  } else {
+    modal.classList.add('closing');
+    modalCard?.addEventListener('animationend', onCloseEnd, { once: true });
+    setTimeout(onCloseEnd, 250); // fallback
+  }
 }
 
 function openNew(type) {
@@ -1359,6 +1576,7 @@ function openNew(type) {
     reminder_sent: false,
     last_modified: Date.now(),
     created_at: Date.now(),
+    sort_order: Date.now() + 1, // goes to top of grid
     categories: State.view.startsWith('cat:') ? [State.view.slice(4)] : [],
     attachments: [],
     shares: [],
