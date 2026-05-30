@@ -1178,7 +1178,6 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
 }
 
 .note-card { animation: cardIn 0.18s ease-out both; }
-.note-card[style*="animation: none"] { animation: none !important; }
 
 .modal:not([hidden]) .modal-bg  { animation: overlayIn 0.1s ease-out both; }
 .modal:not([hidden]) .modal-card { animation: editorIn 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }

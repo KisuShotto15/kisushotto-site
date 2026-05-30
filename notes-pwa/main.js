@@ -281,8 +281,16 @@ async function init() {
 async function loadFromIDB() {
   State.notes      = await idb.getAll('notes')      || [];
   State.categories = await idb.getAll('categories') || [];
-  // Assign sort_order to notes that don't have it (backward-compat migration)
-  State.notes.forEach(n => { if (n.sort_order == null) n.sort_order = n.created_at || n.last_modified || 0; });
+  // Migrate: assign sort_order from last_modified (preserves existing visible order)
+  // and persist to IDB so subsequent loads are stable.
+  const needsSave = [];
+  State.notes.forEach(n => {
+    if (n.sort_order == null) {
+      n.sort_order = n.last_modified || 0;
+      needsSave.push(n);
+    }
+  });
+  if (needsSave.length) needsSave.forEach(n => idb.put('notes', n).catch(() => {}));
   State.notes.sort((a, b) => (b.sort_order ?? 0) - (a.sort_order ?? 0));
 }
 
@@ -313,6 +321,9 @@ function isMobile() { return window.innerWidth <= 640; }
 
 function lockBodyScroll() {
   const scrollY = window.scrollY;
+  // Compensate for scrollbar disappearing so the grid doesn't shift
+  const sb = window.innerWidth - document.documentElement.clientWidth;
+  if (sb > 0) document.body.style.paddingRight = sb + 'px';
   document.body.style.setProperty('--scroll-y', `-${scrollY}px`);
   document.body.classList.add('modal-open');
   document.body.dataset.scrollY = scrollY;
@@ -322,6 +333,7 @@ function unlockBodyScroll() {
   const scrollY = parseInt(document.body.dataset.scrollY || '0', 10);
   document.body.classList.remove('modal-open');
   document.body.style.removeProperty('--scroll-y');
+  document.body.style.paddingRight = '';
   window.scrollTo(0, scrollY);
 }
 
@@ -815,8 +827,15 @@ function wireCard(card) {
   }, { passive: true });
 
   card.addEventListener('touchmove', (ev) => {
-    clearTimeout(_lpTimer);
-    clearTimeout(card._selectTimer);
+    const dx = ev.touches[0].clientX - _sx;
+    const dy = ev.touches[0].clientY - _sy;
+    const dist = Math.hypot(dx, dy);
+
+    // Only cancel hold timers when the finger moves meaningfully (not jitter)
+    if (dist > 10) {
+      clearTimeout(_lpTimer);
+      clearTimeout(card._selectTimer);
+    }
 
     if (_dragMode) {
       ev.preventDefault();
@@ -826,13 +845,7 @@ function wireCard(card) {
 
     if (State.selectMode) return;
 
-    const dx = ev.touches[0].clientX - _sx;
-    const dy = ev.touches[0].clientY - _sy;
-
-    // Cancel drag/select if moved early
-    if (Math.hypot(dx, dy) > 8) { clearTimeout(_lpTimer); clearTimeout(card._selectTimer); }
-
-    if (!_dir && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+    if (!_dir && dist > 6) {
       _dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
     }
     if (_dir !== 'h') return;
