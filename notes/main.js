@@ -1507,12 +1507,10 @@ function bindEditorActions() {
     e.body  = $('#ed-body')?.value  || '';
     e.trashed_at = Date.now();
     e.last_modified = Date.now();
-    // Update State.notes and save before closing (avoids double-commitEditor from closeEditor)
+    // Update State.notes synchronously, then close UI immediately
     const idx = State.notes.findIndex(n => n.id === e.id);
     if (idx >= 0) State.notes[idx] = JSON.parse(JSON.stringify(e));
-    await saveNoteLocal(e);
-    try { await apiTrashNote(noteId); } catch {}
-    State.editing = null;  // null BEFORE closeEditor so it won't call commitEditor again
+    State.editing = null;
     closeEditor();
     render();
     showUndoToast('Nota eliminada', () => {
@@ -1523,6 +1521,9 @@ function bindEditorActions() {
       saveNoteLocal(target);
       render();
     });
+    // Persist and sync in background (non-blocking)
+    saveNoteLocal(e);
+    apiTrashNote(noteId).catch(() => {});
   });
 
   // Color picker
@@ -2236,10 +2237,13 @@ function bindUI() {
       const n = State.notes.find(x => x.id === id);
       if (!n) continue;
       n.trashed_at = ts; n.last_modified = ts;
-      await saveNoteLocal(n);
-      try { await apiTrashNote(id); } catch {}
     }
     exitSelectMode(); render();
+    // Persist and sync in background
+    for (const id of ids) {
+      const n = State.notes.find(x => x.id === id);
+      if (n) { saveNoteLocal(n); apiTrashNote(id).catch(() => {}); }
+    }
     const label = ids.length === 1 ? 'Nota eliminada' : `${ids.length} notas eliminadas`;
     showUndoToast(label, async () => {
       for (const snap of snapshots) {
