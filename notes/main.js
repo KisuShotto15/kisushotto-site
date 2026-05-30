@@ -646,13 +646,89 @@ function cardHash(s) {
   return h;
 }
 
+// ── Swipe-to-archive toast ────────────────────────────────────────────────────
+let _archiveToast = null, _archiveToastTimer = null;
+function showArchiveToast(noteId) {
+  if (_archiveToastTimer) clearTimeout(_archiveToastTimer);
+  if (_archiveToast) _archiveToast.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'swipe-toast';
+  toast.innerHTML = `<span>Nota archivada</span><button class="swipe-toast-undo">Deshacer</button>`;
+  document.body.appendChild(toast);
+  _archiveToast = toast;
+
+  toast.querySelector('.swipe-toast-undo').addEventListener('click', () => {
+    clearTimeout(_archiveToastTimer);
+    toast.remove(); _archiveToast = null;
+    const n = State.notes.find(x => x.id === noteId);
+    if (n) { n.archived = false; n.last_modified = Date.now(); saveNoteLocal(n); render(); }
+  });
+
+  requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('swipe-toast-show')));
+  _archiveToastTimer = setTimeout(() => {
+    toast.classList.remove('swipe-toast-show');
+    setTimeout(() => { if (_archiveToast === toast) { toast.remove(); _archiveToast = null; } }, 300);
+  }, 10000);
+}
+
 let _lpTimer = null;
 function wireCard(card) {
-  card.addEventListener('touchstart', () => {
+  // Swipe to archive (mobile only, not in select mode, only in non-archive/trash views)
+  let _sx = 0, _sy = 0, _dir = null, _active = false;
+
+  function resetCard() {
+    card.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+    card.style.transform = '';
+    card.style.opacity = '';
+    _active = false; _dir = null;
+  }
+
+  card.addEventListener('touchstart', (ev) => {
     _lpTimer = setTimeout(() => { enterSelectMode(); toggleSelect(card.dataset.id); }, 550);
+    _sx = ev.touches[0].clientX;
+    _sy = ev.touches[0].clientY;
+    _dir = null; _active = false;
+    card.style.transition = 'none';
   }, { passive: true });
-  card.addEventListener('touchend',  () => clearTimeout(_lpTimer));
-  card.addEventListener('touchmove', () => clearTimeout(_lpTimer));
+
+  card.addEventListener('touchmove', (ev) => {
+    clearTimeout(_lpTimer);
+    if (State.selectMode) return;
+    const dx = ev.touches[0].clientX - _sx;
+    const dy = ev.touches[0].clientY - _sy;
+    if (!_dir && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+      _dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+    }
+    if (_dir !== 'h') return;
+    ev.preventDefault();
+    _active = true;
+    const pct = Math.min(Math.abs(dx) / card.offsetWidth, 1);
+    card.style.transform = `translateX(${dx}px)`;
+    card.style.opacity = String(1 - pct * 0.6);
+  }, { passive: false });
+
+  card.addEventListener('touchend', (ev) => {
+    clearTimeout(_lpTimer);
+    if (!_active) { _dir = null; return; }
+    const dx = ev.changedTouches[0].clientX - _sx;
+    if (Math.abs(dx) > card.offsetWidth * 0.38 && State.view !== 'archive' && State.view !== 'trash') {
+      const sign = dx > 0 ? 1 : -1;
+      card.style.transition = 'transform 0.22s ease, opacity 0.22s ease, max-height 0.3s ease 0.15s, margin-bottom 0.3s ease 0.15s';
+      card.style.transform = `translateX(${sign * card.offsetWidth * 1.3}px)`;
+      card.style.opacity = '0';
+      const n = State.notes.find(x => x.id === card.dataset.id);
+      if (n) {
+        n.archived = true; n.last_modified = Date.now(); saveNoteLocal(n);
+        setTimeout(() => { render(); showArchiveToast(n.id); }, 260);
+      }
+    } else {
+      resetCard();
+    }
+    _active = false; _dir = null;
+  }, { passive: true });
+
+  card.addEventListener('touchcancel', resetCard, { passive: true });
   card.addEventListener('click', (ev) => {
     if (ev.target.closest('.nc-select-wrap')) {
       ev.stopPropagation();

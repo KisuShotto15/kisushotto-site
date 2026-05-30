@@ -1083,6 +1083,36 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
 .editor-card.colored .btn-icon:hover { background: rgba(255,255,255,0.15); }
 .editor-card.colored .ed-meta-tag { background: rgba(255,255,255,0.12); color: var(--text); }
 
+/* Swipe-to-archive toast */
+.swipe-toast {
+  position: fixed;
+  bottom: 80px; left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--card2);
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  padding: 10px 8px 10px 18px;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 14px; color: var(--text);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+  z-index: 200;
+  opacity: 0;
+  transition: transform 0.22s ease, opacity 0.22s ease;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.swipe-toast.swipe-toast-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.swipe-toast-undo {
+  background: transparent; border: none;
+  color: var(--accent); font-weight: 700;
+  font-size: 14px; padding: 4px 10px;
+  cursor: pointer; border-radius: 999px;
+}
+.swipe-toast-undo:hover { background: rgba(255,255,255,0.08); }
+
 /* Net banner */
 .net-banner {
   position: fixed; bottom: 16px; left: 50%;
