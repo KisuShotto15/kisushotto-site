@@ -694,6 +694,7 @@ const SWIPE_ACTIVE_COLOR = 'rgba(67,160,71,0.92)';
 // ── Drag-to-reorder state ────────────────────────────────────────────────────
 let _dragState = null; // { noteId, ghost, card, offsetX, offsetY, container }
 let _dragHappened = false;
+let _dragScrollBlock = null;
 
 function startDrag(card, x, y) {
   if (_dragState) return;
@@ -718,6 +719,9 @@ function startDrag(card, x, y) {
   card.style.opacity = '0.25';
   card.style.pointerEvents = 'none';
   navigator.vibrate?.(18);
+  // Prevent iOS from taking over scroll during drag
+  _dragScrollBlock = (e) => e.preventDefault();
+  document.addEventListener('touchmove', _dragScrollBlock, { passive: false });
   _dragState = {
     noteId: card.dataset.id,
     ghost,
@@ -759,6 +763,10 @@ function endDrag() {
   ghost.style.opacity = '0';
   setTimeout(() => ghost.remove(), 130);
   document.body.classList.remove('dragging-note');
+  if (_dragScrollBlock) {
+    document.removeEventListener('touchmove', _dragScrollBlock);
+    _dragScrollBlock = null;
+  }
 
   card.style.opacity = '';
   card.style.pointerEvents = '';
@@ -1524,7 +1532,14 @@ function closeEditor(fromPopState = false) {
   }
   if (!fromPopState && history.state?.modal === 'editor') history.back();
   State.editing = null;
-  unlockBodyScroll();
+
+  // Unlock scroll but keep paddingRight until the close animation ends
+  // so the grid doesn't shift left mid-animation.
+  const savedScrollY = parseInt(document.body.dataset.scrollY || '0', 10);
+  document.body.classList.remove('modal-open');
+  document.body.style.removeProperty('--scroll-y');
+  window.scrollTo(0, savedScrollY);
+
   hidePopups();
 
   const modal = $('#editor');
@@ -1538,6 +1553,7 @@ function closeEditor(fromPopState = false) {
   function onCloseEnd() {
     if (_closed) return;
     _closed = true;
+    document.body.style.paddingRight = ''; // remove scrollbar compensation only now
     modal.classList.remove('closing');
     modal.hidden = true;
     if (modalCard) { modalCard.style.cssText = ''; }
@@ -1553,17 +1569,21 @@ function closeEditor(fromPopState = false) {
     const tx = originRect.left + originRect.width  / 2 - (cardRect.left + cardRect.width  / 2);
     const ty = originRect.top  + originRect.height / 2 - (cardRect.top  + cardRect.height / 2);
 
-    modalCard.style.transition = 'transform 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease';
-    modalCard.style.transformOrigin = 'center center';
+    // Hide modal content immediately, keep only the card shell for FLIP
+    modalCard.style.overflow = 'hidden';
     modalCard.style.pointerEvents = 'none';
-    if (modalBg) { modalBg.style.transition = 'opacity 0.22s ease'; modalBg.style.opacity = '0'; }
+    if (modalBg) { modalBg.style.transition = 'opacity 0.18s ease'; modalBg.style.opacity = '0'; }
 
-    requestAnimationFrame(() => {
-      modalCard.style.transform = `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`;
-      modalCard.style.opacity = '0';
-      modalCard.addEventListener('transitionend', onCloseEnd, { once: true });
-      setTimeout(onCloseEnd, 380); // fallback if transitionend doesn't fire
-    });
+    // Force reflow so browser registers current position before we add transition
+    modalCard.getBoundingClientRect(); // eslint-disable-line no-unused-expressions
+
+    modalCard.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease';
+    modalCard.style.transformOrigin = 'center center';
+    modalCard.style.transform = `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`;
+    modalCard.style.opacity = '0';
+
+    modalCard.addEventListener('transitionend', onCloseEnd, { once: true });
+    setTimeout(onCloseEnd, 420); // fallback
   } else {
     modal.classList.add('closing');
     modalCard?.addEventListener('animationend', onCloseEnd, { once: true });
