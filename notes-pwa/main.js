@@ -799,7 +799,6 @@ function wireCard(card) {
     _dir = null; _active = false; _dragMode = false;
     removeOverlay();
     card.style.transition = 'none';
-    card.style.willChange = 'transform';
 
     // 400ms → drag mode; 550ms → select mode (if drag not started)
     _lpTimer = setTimeout(() => {
@@ -839,6 +838,7 @@ function wireCard(card) {
     if (_dir !== 'h') return;
 
     ev.preventDefault(); // prevent scroll as soon as horizontal direction confirmed
+    card.style.willChange = 'transform'; // promote layer only when actually swiping
 
     if (!_overlay && State.view !== 'archive' && State.view !== 'trash') {
       const rect = card.getBoundingClientRect();
