@@ -826,9 +826,10 @@ function _updateEditorViewport() {
   const modal = document.getElementById('editor');
   if (!modal || modal.hidden) return;
   const vp = window.visualViewport;
-  if (!vp) return;
-  modal.style.top    = vp.offsetTop + 'px';
-  modal.style.height = vp.height    + 'px';
+  const h  = vp ? vp.height    : window.innerHeight;
+  const t  = vp ? vp.offsetTop : 0;
+  modal.style.top    = t + 'px';
+  modal.style.height = h + 'px';
 }
 function attachKeyboardListener() {
   if (!window.visualViewport) return;
