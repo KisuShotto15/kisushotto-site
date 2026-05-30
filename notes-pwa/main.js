@@ -1499,18 +1499,29 @@ function bindEditorActions() {
   $('#ed-delete').addEventListener('click', async () => {
     const e = State.editing;
     if (!e) return;
+    if (!(await window.customConfirm('¿Mover a la papelera?'))) return;
     const noteId = e.id;
     const snapshot = JSON.parse(JSON.stringify(e));
+    syncChecklistFromDom();
+    e.title = $('#ed-title')?.value || '';
+    e.body  = $('#ed-body')?.value  || '';
     e.trashed_at = Date.now();
     e.last_modified = Date.now();
-    await commitEditor();
+    // Update State.notes and save before closing (avoids double-commitEditor from closeEditor)
+    const idx = State.notes.findIndex(n => n.id === e.id);
+    if (idx >= 0) State.notes[idx] = JSON.parse(JSON.stringify(e));
+    await saveNoteLocal(e);
     try { await apiTrashNote(noteId); } catch {}
+    State.editing = null;  // null BEFORE closeEditor so it won't call commitEditor again
     closeEditor();
     render();
     showUndoToast('Nota eliminada', () => {
       const n = State.notes.find(x => x.id === noteId);
-      if (n) { n.trashed_at = null; n.last_modified = Date.now(); saveNoteLocal(n); render(); }
-      else { snapshot.trashed_at = null; snapshot.last_modified = Date.now(); State.notes.unshift(snapshot); saveNoteLocal(snapshot); render(); }
+      const target = n || (() => { State.notes.unshift(JSON.parse(JSON.stringify(snapshot))); return State.notes[0]; })();
+      target.trashed_at = null;
+      target.last_modified = Date.now();
+      saveNoteLocal(target);
+      render();
     });
   });
 
@@ -2215,6 +2226,11 @@ function bindUI() {
   });
   $('#select-delete')?.addEventListener('click', async () => {
     const ids = [...State.selected];
+    if (!(await window.customConfirm(`¿Mover ${ids.length} nota(s) a la papelera?`))) return;
+    const snapshots = ids.map(id => {
+      const n = State.notes.find(x => x.id === id);
+      return n ? JSON.parse(JSON.stringify(n)) : null;
+    }).filter(Boolean);
     const ts = Date.now();
     for (const id of ids) {
       const n = State.notes.find(x => x.id === id);
@@ -2226,9 +2242,12 @@ function bindUI() {
     exitSelectMode(); render();
     const label = ids.length === 1 ? 'Nota eliminada' : `${ids.length} notas eliminadas`;
     showUndoToast(label, async () => {
-      for (const id of ids) {
-        const n = State.notes.find(x => x.id === id);
-        if (n) { n.trashed_at = null; n.last_modified = Date.now(); await saveNoteLocal(n); }
+      for (const snap of snapshots) {
+        const n = State.notes.find(x => x.id === snap.id);
+        const target = n || (() => { State.notes.unshift(JSON.parse(JSON.stringify(snap))); return State.notes[0]; })();
+        target.trashed_at = null;
+        target.last_modified = Date.now();
+        await saveNoteLocal(target);
       }
       render();
     });
