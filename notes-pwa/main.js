@@ -1335,6 +1335,8 @@ function bindEditorActions() {
   // More options menu (⋮)
   $('#ed-more').addEventListener('click', (ev) => {
     showPopupAt('#popup-more', ev.currentTarget);
+    const popup = document.getElementById('popup-more');
+    if (popup) popup.style.background = State.editing?.color || '';
   });
 
   // Add menu (+)
