@@ -534,11 +534,12 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
 .ed-check-row.done .ed-check-text { text-decoration: line-through; color: var(--muted); }
 .drag-handle {
   flex: 0 0 auto;
-  color: var(--muted);
+  color: var(--text);
   cursor: grab;
   display: flex; align-items: center;
   padding: 0 2px;
-  opacity: 0.4;
+  margin-top: 2px;
+  opacity: 0.5;
   touch-action: none;
   user-select: none; -webkit-user-select: none;
 }
