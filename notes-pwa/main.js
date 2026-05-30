@@ -331,6 +331,15 @@ function placeCursorAtEnd(el) {
   sel.addRange(range);
 }
 
+function placeCursorAtStart(el) {
+  const range = document.createRange();
+  const sel = window.getSelection();
+  range.selectNodeContents(el);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 function updateNetBanner(online) {
   const el = $('#net-banner');
   if (!el) return;
@@ -1557,7 +1566,27 @@ function bindEditorActions() {
       const curRow = ev.target.closest?.('.ed-check-row');
       const curId = curRow?.dataset.id;
       const curIdx = curId ? e.checklist_items.findIndex(x => x.id === curId) : -1;
-      const newItem = { id: crypto.randomUUID(), text: '', done: false, order: 0 };
+      const curItem = curIdx >= 0 ? e.checklist_items[curIdx] : null;
+
+      // Split text at cursor: left stays in current item, right goes to new item
+      let textAfter = '';
+      if (ev.target.matches('.ed-check-text') && curItem) {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          const txtEl = ev.target;
+          const before = document.createRange();
+          before.selectNodeContents(txtEl);
+          before.setEnd(range.startContainer, range.startOffset);
+          const after = document.createRange();
+          after.selectNodeContents(txtEl);
+          after.setStart(range.endContainer, range.endOffset);
+          curItem.text = before.toString();
+          textAfter   = after.toString();
+        }
+      }
+
+      const newItem = { id: crypto.randomUUID(), text: textAfter, done: false, order: 0 };
       if (curIdx >= 0) e.checklist_items.splice(curIdx + 1, 0, newItem);
       else e.checklist_items.push(newItem);
       e.checklist_items.forEach((it, i) => { it.order = i; });
@@ -1565,7 +1594,11 @@ function bindEditorActions() {
       scheduleSave();
       const rows = cl.querySelectorAll('.ed-check-text');
       const target = rows[Math.max(0, curIdx + 1)];
-      if (target) { target.focus(); placeCursorAtEnd(target); setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50); }
+      if (target) {
+        target.focus();
+        textAfter ? placeCursorAtStart(target) : placeCursorAtEnd(target);
+        setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+      }
       return;
     }
     if (ev.key === 'Backspace' && ev.target.matches('.ed-check-text')) {
