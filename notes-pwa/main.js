@@ -785,9 +785,15 @@ function updateDrag(x, y) {
 
 function endDrag() {
   if (!_dragState) return;
-  const { ghost, card } = _dragState;
+  const { ghost, card, noteId } = _dragState;
   _dragState = null;
   _dragHappened = true;
+
+  // Deselect the dragged card; exit select mode if nothing else remains.
+  if (State.selectMode && State.selected.has(noteId)) {
+    toggleSelect(noteId);
+    if (State.selected.size === 0) exitSelectMode();
+  }
 
   // Animate ghost landing: scale down to 1 and fade out
   const cardRect = card.getBoundingClientRect();
@@ -1559,6 +1565,7 @@ function closeEditor(fromPopState = false) {
   saveTimer = null;
 
   let noteWasEmpty = false;
+  const editedId = State.editing?.id || null;
   if (State.editing) {
     syncChecklistFromDom();
     const e = State.editing;
@@ -1586,7 +1593,15 @@ function closeEditor(fromPopState = false) {
   hidePopups();
 
   const modal = $('#editor');
-  const originRect = State.editorOriginRect;
+  // Prefer a fresh measurement of the card in the current grid, so the
+  // FLIP target accounts for scroll, reflow, or pulls that happened
+  // while the editor was open. Fall back to the rect captured at open.
+  let originRect = State.editorOriginRect;
+  const freshCard = editedId ? document.querySelector(`.note-card[data-id="${editedId}"]`) : null;
+  if (freshCard) {
+    const r = freshCard.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) originRect = r;
+  }
   State.editorOriginRect = null;
 
   const modalCard = modal.querySelector('.modal-card');
@@ -1620,13 +1635,13 @@ function closeEditor(fromPopState = false) {
     // Force reflow so browser registers current position before we add transition
     modalCard.getBoundingClientRect(); // eslint-disable-line no-unused-expressions
 
-    modalCard.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease';
+    modalCard.style.transition = 'transform 0.26s cubic-bezier(0.2,0,0,1), opacity 0.2s ease';
     modalCard.style.transformOrigin = 'center center';
     modalCard.style.transform = `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`;
     modalCard.style.opacity = '0';
 
     modalCard.addEventListener('transitionend', onCloseEnd, { once: true });
-    setTimeout(onCloseEnd, 420); // fallback
+    setTimeout(onCloseEnd, 340); // fallback
   } else {
     modal.classList.add('closing');
     modalCard?.addEventListener('animationend', onCloseEnd, { once: true });
