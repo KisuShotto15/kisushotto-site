@@ -1099,6 +1099,14 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
   transition: opacity 0.1s;
 }
 
+/* Backdrop blocks touches to notes below while undo toast is visible */
+.swipe-toast-backdrop {
+  position: fixed; inset: 0;
+  z-index: 199;
+  background: transparent;
+  touch-action: none;
+}
+
 /* Swipe-to-archive toast */
 .swipe-toast {
   position: fixed;

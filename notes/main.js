@@ -665,7 +665,12 @@ function cardHash(s) {
 let _undoToast = null, _undoToastTimer = null;
 function showUndoToast(message, undoFn) {
   if (_undoToastTimer) clearTimeout(_undoToastTimer);
-  if (_undoToast) { _undoToast.remove(); _undoToast = null; }
+  if (_undoToast) { _undoToast._dismiss(); }
+
+  // Backdrop blocks all touches to notes below while toast is visible
+  const backdrop = document.createElement('div');
+  backdrop.className = 'swipe-toast-backdrop';
+  document.body.appendChild(backdrop);
 
   const toast = document.createElement('div');
   toast.className = 'swipe-toast';
@@ -673,18 +678,26 @@ function showUndoToast(message, undoFn) {
   document.body.appendChild(toast);
   _undoToast = toast;
 
+  const dismiss = () => {
+    clearTimeout(_undoToastTimer);
+    backdrop.remove();
+    toast.classList.remove('swipe-toast-show');
+    setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 280);
+  };
+  toast._dismiss = dismiss;
+
   toast.querySelector('.swipe-toast-undo').addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    clearTimeout(_undoToastTimer);
-    toast.remove(); _undoToast = null;
+    e.stopPropagation();
+    dismiss();
     undoFn();
   });
 
+  // Dismiss on backdrop tap (without triggering anything below)
+  backdrop.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); dismiss(); });
+
   requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('swipe-toast-show')));
-  _undoToastTimer = setTimeout(() => {
-    toast.classList.remove('swipe-toast-show');
-    setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 300);
-  }, 10000);
+  _undoToastTimer = setTimeout(dismiss, 10000);
 }
 
 const ARCHIVE_ICON_SVG = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg>`;
@@ -759,17 +772,25 @@ function endDrag() {
   _dragState = null;
   _dragHappened = true;
 
-  ghost.style.transition = 'opacity 0.12s ease';
+  // Animate ghost landing: scale down to 1 and fade out
+  const cardRect = card.getBoundingClientRect();
+  ghost.style.transition = 'left 0.16s ease, top 0.16s ease, transform 0.16s ease, opacity 0.16s ease';
+  ghost.style.left = cardRect.left + 'px';
+  ghost.style.top  = cardRect.top  + 'px';
+  ghost.style.transform = 'scale(1)';
   ghost.style.opacity = '0';
-  setTimeout(() => ghost.remove(), 130);
+  setTimeout(() => ghost.remove(), 180);
+
   document.body.classList.remove('dragging-note');
   if (_dragScrollBlock) {
     document.removeEventListener('touchmove', _dragScrollBlock);
     _dragScrollBlock = null;
   }
 
+  card.style.transition = 'opacity 0.16s ease';
   card.style.opacity = '';
   card.style.pointerEvents = '';
+  setTimeout(() => { card.style.transition = ''; }, 180);
 
   // Save sort_order based on new DOM positions
   const gridPinned = $('#grid-pinned');
@@ -795,7 +816,6 @@ function endDrag() {
 
 function wireCard(card) {
   let _sx = 0, _sy = 0, _dir = null, _active = false, _overlay = null;
-  let _lpTimer = null; // per-card, not shared
   let _dragMode = false;
 
   function removeOverlay() {
@@ -820,18 +840,10 @@ function wireCard(card) {
     removeOverlay();
     card.style.transition = 'none';
 
-    // 400ms → drag mode; 550ms → select mode (if drag not started)
-    _lpTimer = setTimeout(() => {
-      if (!State.selectMode && !_active) {
-        _dragMode = true;
-        startDrag(card, _sx, _sy);
-      }
-    }, 400);
-    const selectTimer = setTimeout(() => {
-      if (!_dragMode && !_active) { enterSelectMode(); toggleSelect(card.dataset.id); }
+    // 550ms hold → select mode (drag on touch removed: hold = select)
+    card._selectTimer = setTimeout(() => {
+      if (!_active) { enterSelectMode(); toggleSelect(card.dataset.id); }
     }, 550);
-    // Store selectTimer so we can clear it when needed
-    card._selectTimer = selectTimer;
   }, { passive: true });
 
   card.addEventListener('touchmove', (ev) => {
@@ -839,9 +851,8 @@ function wireCard(card) {
     const dy = ev.touches[0].clientY - _sy;
     const dist = Math.hypot(dx, dy);
 
-    // Only cancel hold timers when the finger moves meaningfully (not jitter)
+    // Only cancel hold timer when the finger moves meaningfully (not jitter)
     if (dist > 10) {
-      clearTimeout(_lpTimer);
       clearTimeout(card._selectTimer);
     }
 
@@ -892,7 +903,6 @@ function wireCard(card) {
   }, { passive: false });
 
   card.addEventListener('touchend', (ev) => {
-    clearTimeout(_lpTimer);
     clearTimeout(card._selectTimer);
 
     if (_dragMode) {
@@ -940,7 +950,6 @@ function wireCard(card) {
   }, { passive: true });
 
   card.addEventListener('touchcancel', () => {
-    clearTimeout(_lpTimer);
     clearTimeout(card._selectTimer);
     if (_dragMode) { _dragMode = false; endDrag(); return; }
     resetCard();
