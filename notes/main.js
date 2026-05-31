@@ -1593,14 +1593,17 @@ function closeEditor(fromPopState = false) {
 
   hidePopups();
 
-  // Prefer a fresh measurement of the card in the current grid, so the
-  // FLIP target accounts for scroll, reflow, or pulls that happened
-  // while the editor was open. Fall back to the rect captured at open.
+  // Use the rect captured at openEditor (before lockBodyScroll) which is
+  // the position the grid will have once the body is unlocked again.
+  // Querying the live card now would give a position shifted by the
+  // scrollbar-compensation padding that's still applied to body.
   let originRect = State.editorOriginRect;
-  const freshCard = editedId ? document.querySelector(`.note-card[data-id="${editedId}"]`) : null;
-  if (freshCard) {
-    const r = freshCard.getBoundingClientRect();
-    if (r.width > 0 && r.height > 0) originRect = r;
+  if (!originRect && editedId) {
+    const freshCard = document.querySelector(`.note-card[data-id="${editedId}"]`);
+    if (freshCard) {
+      const r = freshCard.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) originRect = r;
+    }
   }
   State.editorOriginRect = null;
 
@@ -1627,6 +1630,15 @@ function closeEditor(fromPopState = false) {
     if (State.editorDirty) { State.editorDirty = false; renderGrid(); }
   }
 
+  // When the user closes via the Android back gesture or system back
+  // button, popstate fires here. The browser already played its own
+  // page-back animation, so running our FLIP on top causes a visible
+  // re-show + double-animate. Hide the modal immediately in that case.
+  if (fromPopState) {
+    onCloseEnd();
+    return;
+  }
+
   if (originRect && modalCard && !noteWasEmpty) {
     const cardRect = modalCard.getBoundingClientRect();
     const scaleX = Math.max(originRect.width  / cardRect.width,  0.01);
@@ -1634,15 +1646,13 @@ function closeEditor(fromPopState = false) {
     const tx = originRect.left + originRect.width  / 2 - (cardRect.left + cardRect.width  / 2);
     const ty = originRect.top  + originRect.height / 2 - (cardRect.top  + cardRect.height / 2);
 
-    // Hide modal content immediately, keep only the card shell for FLIP
     modalCard.style.overflow = 'hidden';
     modalCard.style.pointerEvents = 'none';
-    if (modalBg) { modalBg.style.transition = 'opacity 0.18s ease'; modalBg.style.opacity = '0'; }
+    if (modalBg) { modalBg.style.transition = 'opacity 0.16s ease'; modalBg.style.opacity = '0'; }
 
-    // Force reflow so browser registers current position before we add transition
-    modalCard.getBoundingClientRect(); // eslint-disable-line no-unused-expressions
+    modalCard.getBoundingClientRect(); // force reflow
 
-    modalCard.style.transition = 'transform 0.2s cubic-bezier(0.2,0,0,1), opacity 0.18s ease';
+    modalCard.style.transition = 'transform 0.18s cubic-bezier(0.2,0,0,1), opacity 0.16s ease';
     modalCard.style.transformOrigin = 'center center';
     modalCard.style.transform = `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`;
     modalCard.style.opacity = '0';
@@ -1653,7 +1663,7 @@ function closeEditor(fromPopState = false) {
       onCloseEnd();
     };
     modalCard.addEventListener('transitionend', onTrans);
-    setTimeout(onCloseEnd, 260); // fallback
+    setTimeout(onCloseEnd, 240); // fallback
   } else {
     modal.classList.add('closing');
     modalCard?.addEventListener('animationend', onCloseEnd, { once: true });
