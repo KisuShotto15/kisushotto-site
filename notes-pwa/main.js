@@ -281,17 +281,21 @@ async function init() {
 async function loadFromIDB() {
   State.notes      = await idb.getAll('notes')      || [];
   State.categories = await idb.getAll('categories') || [];
-  // Migrate: assign sort_order from last_modified (preserves existing visible order)
-  // and persist to IDB so subsequent loads are stable.
+  // Migrate: assign sort_order from created_at (immutable). Using last_modified
+  // would mean a note that lost sort_order during sync round-trip would later
+  // get bumped to "now" because the server rewrites last_modified to its clock.
   const needsSave = [];
   State.notes.forEach(n => {
     if (n.sort_order == null) {
-      n.sort_order = n.last_modified || 0;
+      n.sort_order = n.created_at || n.last_modified || 0;
       needsSave.push(n);
     }
   });
   if (needsSave.length) needsSave.forEach(n => idb.put('notes', n).catch(() => {}));
-  State.notes.sort((a, b) => (b.sort_order ?? 0) - (a.sort_order ?? 0));
+  State.notes.sort((a, b) =>
+    (b.sort_order ?? 0) - (a.sort_order ?? 0) ||
+    (b.created_at ?? 0) - (a.created_at ?? 0)
+  );
 }
 
 let _lightboxClosedAt = 0;
@@ -1236,10 +1240,33 @@ function detachKeyboardListener() {
   if (_vvCleanup) { _vvCleanup(); _vvCleanup = null; }
 }
 
+// Stable hash of the editable content of a note — used to detect whether
+// the user actually changed anything in the editor before deciding to push.
+function noteContentHash(n) {
+  if (!n) return '';
+  return JSON.stringify({
+    title: n.title || '',
+    body: n.body || '',
+    type: n.type || 'text',
+    checklist_items: (n.checklist_items || []).map(it => ({
+      id: it.id, text: it.text || '', done: !!it.done, order: it.order,
+    })),
+    color: n.color || null,
+    pinned: !!n.pinned,
+    archived: !!n.archived,
+    trashed_at: n.trashed_at || null,
+    locked: !!n.locked,
+    reminder_at: n.reminder_at || null,
+    attachments: (n.attachments || []).map(a => a.id),
+    categories: [...(n.categories || [])].sort(),
+  });
+}
+
 // ── editor ───────────────────────────────────────────────────────────────────
 function openEditor(n) {
   State.editing = JSON.parse(JSON.stringify(n));
   State.editingSnapshotTime = n.last_modified || 0;
+  State.editorOpenSnapshot = noteContentHash(State.editing);
   EditorHistory.clear();
   const e = State.editing;
 
@@ -1580,7 +1607,7 @@ function closeEditor(fromPopState = false) {
       State.notes = State.notes.filter(n => n.id !== e.id);
       idb.del('notes', e.id).catch(() => {});
       renderGrid();
-    } else {
+    } else if (noteContentHash(e) !== State.editorOpenSnapshot) {
       commitEditor();
     }
   }
