@@ -630,7 +630,7 @@ function noteCardHtml(n) {
   let imgs = '';
   if (n.attachments?.length) {
     const imgAtts = n.attachments.filter(a => a.type === 'image');
-    if (imgAtts.length) imgs += `<div class="nc-imgs-row">${imgAtts.map(a => `<img class="nc-image-thumb" data-att="${a.id}" alt="" loading="lazy">`).join('')}</div>`;
+    if (imgAtts.length) imgs += `<div class="nc-imgs-row">${imgAtts.map(a => `<img class="nc-image-thumb" data-att="${a.id}" alt="" loading="lazy" draggable="false">`).join('')}</div>`;
     const audios = n.attachments.filter(a => a.type === 'audio');
     for (const a of audios) imgs += `<audio class="nc-audio" controls preload="none" data-att="${a.id}"></audio>`;
   }
@@ -665,7 +665,11 @@ function cardHash(s) {
 let _undoToast = null, _undoToastTimer = null;
 function showUndoToast(message, undoFn) {
   if (_undoToastTimer) clearTimeout(_undoToastTimer);
-  if (_undoToast) { _undoToast.remove(); _undoToast = null; }
+  if (_undoToast) { _undoToast._dismiss(); }
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'swipe-toast-backdrop';
+  document.body.appendChild(backdrop);
 
   const toast = document.createElement('div');
   toast.className = 'swipe-toast';
@@ -673,18 +677,41 @@ function showUndoToast(message, undoFn) {
   document.body.appendChild(toast);
   _undoToast = toast;
 
-  toast.querySelector('.swipe-toast-undo').addEventListener('pointerdown', (e) => {
-    e.preventDefault();
+  // Absorb stray synthesized click that may fire on the card below after touch
+  const swallowNextClick = () => {
+    const blocker = (e) => { e.preventDefault(); e.stopPropagation(); };
+    document.addEventListener('click', blocker, { capture: true, once: true });
+    setTimeout(() => document.removeEventListener('click', blocker, true), 500);
+  };
+
+  const dismiss = () => {
     clearTimeout(_undoToastTimer);
-    toast.remove(); _undoToast = null;
+    backdrop.remove();
+    toast.classList.remove('swipe-toast-show');
+    setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 280);
+  };
+  toast._dismiss = dismiss;
+
+  const btn = toast.querySelector('.swipe-toast-undo');
+  btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    swallowNextClick();
+    dismiss();
     undoFn();
   });
 
+  backdrop.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); });
+  backdrop.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    swallowNextClick();
+    dismiss();
+  });
+
   requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('swipe-toast-show')));
-  _undoToastTimer = setTimeout(() => {
-    toast.classList.remove('swipe-toast-show');
-    setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 300);
-  }, 10000);
+  _undoToastTimer = setTimeout(dismiss, 10000);
 }
 
 const ARCHIVE_ICON_SVG = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg>`;
@@ -759,17 +786,25 @@ function endDrag() {
   _dragState = null;
   _dragHappened = true;
 
-  ghost.style.transition = 'opacity 0.12s ease';
+  // Animate ghost landing: scale down to 1 and fade out
+  const cardRect = card.getBoundingClientRect();
+  ghost.style.transition = 'left 0.16s ease, top 0.16s ease, transform 0.16s ease, opacity 0.16s ease';
+  ghost.style.left = cardRect.left + 'px';
+  ghost.style.top  = cardRect.top  + 'px';
+  ghost.style.transform = 'scale(1)';
   ghost.style.opacity = '0';
-  setTimeout(() => ghost.remove(), 130);
+  setTimeout(() => ghost.remove(), 180);
+
   document.body.classList.remove('dragging-note');
   if (_dragScrollBlock) {
     document.removeEventListener('touchmove', _dragScrollBlock);
     _dragScrollBlock = null;
   }
 
+  card.style.transition = 'opacity 0.16s ease';
   card.style.opacity = '';
   card.style.pointerEvents = '';
+  setTimeout(() => { card.style.transition = ''; }, 180);
 
   // Save sort_order based on new DOM positions
   const gridPinned = $('#grid-pinned');
@@ -795,7 +830,6 @@ function endDrag() {
 
 function wireCard(card) {
   let _sx = 0, _sy = 0, _dir = null, _active = false, _overlay = null;
-  let _lpTimer = null; // per-card, not shared
   let _dragMode = false;
 
   function removeOverlay() {
@@ -803,8 +837,9 @@ function wireCard(card) {
   }
 
   function resetCard() {
-    card.style.transition = 'transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.2s';
+    card.style.transition = 'transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.2s';
     card.style.transform = '';
+    card.style.opacity = '';
     card.style.zIndex = '';
     card.style.willChange = '';
     removeOverlay();
@@ -820,18 +855,10 @@ function wireCard(card) {
     removeOverlay();
     card.style.transition = 'none';
 
-    // 400ms → drag mode; 550ms → select mode (if drag not started)
-    _lpTimer = setTimeout(() => {
-      if (!State.selectMode && !_active) {
-        _dragMode = true;
-        startDrag(card, _sx, _sy);
-      }
-    }, 400);
-    const selectTimer = setTimeout(() => {
-      if (!_dragMode && !_active) { enterSelectMode(); toggleSelect(card.dataset.id); }
+    // 550ms hold → select mode (drag on touch removed: hold = select)
+    card._selectTimer = setTimeout(() => {
+      if (!_active) { enterSelectMode(); toggleSelect(card.dataset.id); }
     }, 550);
-    // Store selectTimer so we can clear it when needed
-    card._selectTimer = selectTimer;
   }, { passive: true });
 
   card.addEventListener('touchmove', (ev) => {
@@ -839,9 +866,8 @@ function wireCard(card) {
     const dy = ev.touches[0].clientY - _sy;
     const dist = Math.hypot(dx, dy);
 
-    // Only cancel hold timers when the finger moves meaningfully (not jitter)
+    // Only cancel hold timer when the finger moves meaningfully (not jitter)
     if (dist > 10) {
-      clearTimeout(_lpTimer);
       clearTimeout(card._selectTimer);
     }
 
@@ -858,41 +884,19 @@ function wireCard(card) {
     }
     if (_dir !== 'h') return;
 
-    ev.preventDefault(); // prevent scroll as soon as horizontal direction confirmed
-    card.style.willChange = 'transform'; // promote layer only when actually swiping
+    const canArchive = State.view !== 'archive' && State.view !== 'trash';
+    if (!canArchive) return;
 
-    if (!_overlay && State.view !== 'archive' && State.view !== 'trash') {
-      const rect = card.getBoundingClientRect();
-      _overlay = document.createElement('div');
-      _overlay.className = 'swipe-reveal';
-      Object.assign(_overlay.style, {
-        top: rect.top + 'px', left: rect.left + 'px',
-        width: rect.width + 'px', height: rect.height + 'px',
-        borderRadius: getComputedStyle(card).borderRadius,
-      });
-      _overlay.innerHTML = `
-        <span class="swipe-reveal-icon swipe-reveal-icon-l">${ARCHIVE_ICON_SVG}</span>
-        <span class="swipe-reveal-icon swipe-reveal-icon-r">${ARCHIVE_ICON_SVG}</span>`;
-      document.body.appendChild(_overlay);
-      card.style.zIndex = '12';
-    }
-
-    if (!_overlay) return;
+    ev.preventDefault();
+    card.style.willChange = 'transform, opacity';
     _active = true;
 
     const pct = Math.min(Math.abs(dx) / card.offsetWidth, 1);
-    const rot = dx > 0 ? Math.min(pct * 4, 3) : -Math.min(pct * 4, 3);
-    card.style.transform = `translateX(${dx}px) rotate(${rot}deg)`;
-    card.style.boxShadow = `0 ${8 + pct * 16}px ${24 + pct * 24}px rgba(0,0,0,${0.3 + pct * 0.25})`;
-
-    const pastThreshold = pct >= SWIPE_THRESHOLD;
-    _overlay.style.background = pastThreshold ? SWIPE_ACTIVE_COLOR : 'rgba(67,160,71,0.55)';
-    _overlay.querySelector('.swipe-reveal-icon-l').style.opacity = dx > 0 ? '1' : '0';
-    _overlay.querySelector('.swipe-reveal-icon-r').style.opacity = dx < 0 ? '1' : '0';
+    card.style.transform = `translateX(${dx}px)`;
+    card.style.opacity = String(1 - pct * 0.6);
   }, { passive: false });
 
   card.addEventListener('touchend', (ev) => {
-    clearTimeout(_lpTimer);
     clearTimeout(card._selectTimer);
 
     if (_dragMode) {
@@ -907,32 +911,31 @@ function wireCard(card) {
     const dx = ev.changedTouches[0].clientX - _sx;
     const canArchive = State.view !== 'archive' && State.view !== 'trash';
 
-    if (Math.abs(dx) > card.offsetWidth * SWIPE_THRESHOLD && canArchive && _overlay) {
+    if (Math.abs(dx) > card.offsetWidth * SWIPE_THRESHOLD && canArchive) {
       const sign = dx > 0 ? 1 : -1;
-      card.style.transition = 'transform 0.22s cubic-bezier(0.4,0,1,1), box-shadow 0.22s';
-      card.style.transform = `translateX(${sign * (card.offsetWidth + 40)}px) rotate(${sign * 4}deg)`;
-      card.style.boxShadow = 'none';
-      _overlay.style.transition = 'opacity 0.22s';
-      _overlay.style.opacity = '0';
-
       const n = State.notes.find(x => x.id === card.dataset.id);
-      if (n) {
-        n.archived = true; n.last_modified = Date.now(); saveNoteLocal(n);
-        // Show toast immediately so rapid undo works
-        showUndoToast('Nota archivada', () => {
-          n.archived = false; n.last_modified = Date.now(); saveNoteLocal(n); render();
-        });
-        setTimeout(() => {
-          removeOverlay();
-          const h = card.offsetHeight;
-          card.style.transition = 'max-height 0.22s ease, margin-bottom 0.22s ease, opacity 0.1s';
-          card.style.overflow = 'hidden';
-          card.style.maxHeight = h + 'px';
-          card.style.opacity = '0';
-          requestAnimationFrame(() => { card.style.maxHeight = '0'; card.style.marginBottom = '0'; });
-          setTimeout(() => render(), 230);
-        }, 200);
-      }
+      if (!n) { resetCard(); return; }
+
+      card.style.transition = 'transform 0.22s ease-out, opacity 0.22s ease-out';
+      card.style.transform = `translateX(${sign * (card.offsetWidth + 80)}px)`;
+      card.style.opacity = '0';
+      card.style.pointerEvents = 'none';
+
+      n.archived = true; n.last_modified = Date.now(); saveNoteLocal(n);
+
+      let undone = false;
+      const renderTimer = setTimeout(() => { if (!undone) render(); }, 230);
+
+      showUndoToast('Nota archivada', () => {
+        undone = true;
+        clearTimeout(renderTimer);
+        n.archived = false; n.last_modified = Date.now(); saveNoteLocal(n);
+        card.style.transition = 'transform 0.18s ease-out, opacity 0.18s ease-out';
+        card.style.transform = '';
+        card.style.opacity = '';
+        card.style.pointerEvents = '';
+        setTimeout(() => render(), 200);
+      });
     } else {
       resetCard();
     }
@@ -940,7 +943,6 @@ function wireCard(card) {
   }, { passive: true });
 
   card.addEventListener('touchcancel', () => {
-    clearTimeout(_lpTimer);
     clearTimeout(card._selectTimer);
     if (_dragMode) { _dragMode = false; endDrag(); return; }
     resetCard();
