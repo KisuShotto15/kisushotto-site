@@ -1,4 +1,4 @@
-const CACHE = 'ks-notes-v12';
+const CACHE = 'ks-notes-v13';
 
 self.addEventListener('install', () => {
   self.skipWaiting();

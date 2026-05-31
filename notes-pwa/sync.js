@@ -17,6 +17,11 @@ export async function pull() {
   for (const n of data.notes || []) {
     const local = await idb.getOne('notes', n.id);
     if (!local || local.last_modified < n.last_modified) {
+      // Server schema has no sort_order column — preserve the local one so
+      // pulls don't rebuild it from last_modified and reshuffle the grid.
+      if (local && n.sort_order == null && local.sort_order != null) {
+        n.sort_order = local.sort_order;
+      }
       await idb.put('notes', n);
       changed = true;
       changedNoteIds.add(n.id);
@@ -76,8 +81,13 @@ export async function flushQueue() {
     // Push succeeded — now remove exactly these items from the queue
     await idb.dequeueIds(items.map(i => i.id));
 
-    // Apply server-canonical state back into IDB
+    // Apply server-canonical state back into IDB, preserving local sort_order
+    // (server schema does not persist this column).
     for (const n of result.notes || []) {
+      const local = await idb.getOne('notes', n.id);
+      if (local && n.sort_order == null && local.sort_order != null) {
+        n.sort_order = local.sort_order;
+      }
       await idb.put('notes', n);
     }
     for (const c of result.categories || []) {
