@@ -1560,6 +1560,10 @@ function isNoteEmpty(e) {
 }
 
 function closeEditor(fromPopState = false) {
+  const modal = $('#editor');
+  if (modal.hidden || modal._closing) return; // guard against double-close (popstate fires twice on edge gestures)
+  modal._closing = true;
+
   detachKeyboardListener();
   clearTimeout(saveTimer);
   saveTimer = null;
@@ -1583,16 +1587,12 @@ function closeEditor(fromPopState = false) {
   if (!fromPopState && history.state?.modal === 'editor') history.back();
   State.editing = null;
 
-  // Unlock scroll but keep paddingRight until the close animation ends
-  // so the grid doesn't shift left mid-animation.
-  const savedScrollY = parseInt(document.body.dataset.scrollY || '0', 10);
-  document.body.classList.remove('modal-open');
-  document.body.style.removeProperty('--scroll-y');
-  window.scrollTo(0, savedScrollY);
+  // Keep the body locked (position:fixed + paddingRight) during the FLIP so
+  // the grid never shifts horizontally. We restore scroll/unlock only when
+  // the animation has finished in onCloseEnd.
 
   hidePopups();
 
-  const modal = $('#editor');
   // Prefer a fresh measurement of the card in the current grid, so the
   // FLIP target accounts for scroll, reflow, or pulls that happened
   // while the editor was open. Fall back to the rect captured at open.
@@ -1611,9 +1611,16 @@ function closeEditor(fromPopState = false) {
   function onCloseEnd() {
     if (_closed) return;
     _closed = true;
-    document.body.style.paddingRight = ''; // remove scrollbar compensation only now
+    // Now unlock the body: this is the moment the grid would shift, but
+    // since the modal is gone the user does not see the reflow.
+    const savedScrollY = parseInt(document.body.dataset.scrollY || '0', 10);
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('--scroll-y');
+    document.body.style.paddingRight = '';
+    window.scrollTo(0, savedScrollY);
     modal.classList.remove('closing');
     modal.hidden = true;
+    modal._closing = false;
     if (modalCard) { modalCard.style.cssText = ''; }
     if (modalBg)   { modalBg.style.transition = ''; modalBg.style.opacity = ''; }
     $('#ed-checklist-list').contentEditable = 'inherit';
@@ -1635,17 +1642,22 @@ function closeEditor(fromPopState = false) {
     // Force reflow so browser registers current position before we add transition
     modalCard.getBoundingClientRect(); // eslint-disable-line no-unused-expressions
 
-    modalCard.style.transition = 'transform 0.26s cubic-bezier(0.2,0,0,1), opacity 0.2s ease';
+    modalCard.style.transition = 'transform 0.2s cubic-bezier(0.2,0,0,1), opacity 0.18s ease';
     modalCard.style.transformOrigin = 'center center';
     modalCard.style.transform = `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`;
     modalCard.style.opacity = '0';
 
-    modalCard.addEventListener('transitionend', onCloseEnd, { once: true });
-    setTimeout(onCloseEnd, 340); // fallback
+    const onTrans = (e) => {
+      if (e.propertyName !== 'transform') return;
+      modalCard.removeEventListener('transitionend', onTrans);
+      onCloseEnd();
+    };
+    modalCard.addEventListener('transitionend', onTrans);
+    setTimeout(onCloseEnd, 260); // fallback
   } else {
     modal.classList.add('closing');
     modalCard?.addEventListener('animationend', onCloseEnd, { once: true });
-    setTimeout(onCloseEnd, 250); // fallback
+    setTimeout(onCloseEnd, 200); // fallback
   }
 }
 
