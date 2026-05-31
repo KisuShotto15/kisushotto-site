@@ -663,9 +663,9 @@ function cardHash(s) {
 
 // ── Undo toast (archive / delete) ────────────────────────────────────────────
 let _undoToast = null, _undoToastTimer = null;
-function showUndoToast(message, undoFn) {
+function showUndoToast(message, undoFn, commitFn) {
   if (_undoToastTimer) clearTimeout(_undoToastTimer);
-  if (_undoToast) { _undoToast._dismiss(); }
+  if (_undoToast) { _undoToast._dismiss('commit'); }
 
   const backdrop = document.createElement('div');
   backdrop.className = 'swipe-toast-backdrop';
@@ -677,18 +677,22 @@ function showUndoToast(message, undoFn) {
   document.body.appendChild(toast);
   _undoToast = toast;
 
-  // Absorb stray synthesized click that may fire on the card below after touch
   const swallowNextClick = () => {
     const blocker = (e) => { e.preventDefault(); e.stopPropagation(); };
     document.addEventListener('click', blocker, { capture: true, once: true });
     setTimeout(() => document.removeEventListener('click', blocker, true), 500);
   };
 
-  const dismiss = () => {
+  let finished = false;
+  const dismiss = (kind) => {
+    if (finished) return;
+    finished = true;
     clearTimeout(_undoToastTimer);
     backdrop.remove();
     toast.classList.remove('swipe-toast-show');
     setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 280);
+    if (kind === 'undo') undoFn?.();
+    else commitFn?.();
   };
   toast._dismiss = dismiss;
 
@@ -698,8 +702,7 @@ function showUndoToast(message, undoFn) {
     e.preventDefault();
     e.stopPropagation();
     swallowNextClick();
-    dismiss();
-    undoFn();
+    dismiss('undo');
   });
 
   backdrop.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); });
@@ -707,11 +710,11 @@ function showUndoToast(message, undoFn) {
     e.preventDefault();
     e.stopPropagation();
     swallowNextClick();
-    dismiss();
+    dismiss('commit');
   });
 
   requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('swipe-toast-show')));
-  _undoToastTimer = setTimeout(dismiss, 10000);
+  _undoToastTimer = setTimeout(() => dismiss('commit'), 6000);
 }
 
 const ARCHIVE_ICON_SVG = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg>`;
@@ -831,6 +834,7 @@ function endDrag() {
 function wireCard(card) {
   let _sx = 0, _sy = 0, _dir = null, _active = false, _overlay = null;
   let _dragMode = false;
+  let _dragArmed = false; // set when select fires from hold; next move starts drag
 
   function removeOverlay() {
     if (_overlay) { _overlay.remove(); _overlay = null; }
@@ -851,14 +855,20 @@ function wireCard(card) {
   card.addEventListener('touchstart', (ev) => {
     _sx = ev.touches[0].clientX;
     _sy = ev.touches[0].clientY;
-    _dir = null; _active = false; _dragMode = false;
+    _dir = null; _active = false; _dragMode = false; _dragArmed = false;
     removeOverlay();
     card.style.transition = 'none';
 
-    // 550ms hold → select mode (drag on touch removed: hold = select)
+    // 280ms hold → enter select mode + select this card; arm drag for any
+    // subsequent finger movement while still pressing.
     card._selectTimer = setTimeout(() => {
-      if (!_active) { enterSelectMode(); toggleSelect(card.dataset.id); }
-    }, 550);
+      if (!_active) {
+        enterSelectMode();
+        toggleSelect(card.dataset.id);
+        _dragArmed = true;
+        navigator.vibrate?.(10);
+      }
+    }, 280);
   }, { passive: true });
 
   card.addEventListener('touchmove', (ev) => {
@@ -867,13 +877,22 @@ function wireCard(card) {
     const dist = Math.hypot(dx, dy);
 
     // Only cancel hold timer when the finger moves meaningfully (not jitter)
-    if (dist > 10) {
+    if (dist > 10 && !_dragArmed) {
       clearTimeout(card._selectTimer);
     }
 
     if (_dragMode) {
       ev.preventDefault();
       updateDrag(ev.touches[0].clientX, ev.touches[0].clientY);
+      return;
+    }
+
+    // Hold already triggered select on this touch — any movement starts drag
+    if (_dragArmed && dist > 6) {
+      _dragArmed = false;
+      _dragMode = true;
+      ev.preventDefault();
+      startDrag(card, ev.touches[0].clientX, ev.touches[0].clientY);
       return;
     }
 
@@ -916,26 +935,46 @@ function wireCard(card) {
       const n = State.notes.find(x => x.id === card.dataset.id);
       if (!n) { resetCard(); return; }
 
-      card.style.transition = 'transform 0.22s ease-out, opacity 0.22s ease-out';
+      const h = card.offsetHeight;
+      const mb = parseFloat(getComputedStyle(card).marginBottom) || 0;
+
+      card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
       card.style.transform = `translateX(${sign * (card.offsetWidth + 80)}px)`;
       card.style.opacity = '0';
       card.style.pointerEvents = 'none';
 
-      n.archived = true; n.last_modified = Date.now(); saveNoteLocal(n);
+      // After horizontal slide, collapse height so the grid reflows.
+      setTimeout(() => {
+        card.style.transition = 'max-height 0.18s ease, margin-bottom 0.18s ease';
+        card.style.overflow = 'hidden';
+        card.style.maxHeight = h + 'px';
+        card.style.marginBottom = mb + 'px';
+        requestAnimationFrame(() => {
+          card.style.maxHeight = '0';
+          card.style.marginBottom = '0';
+        });
+      }, 180);
 
-      let undone = false;
-      const renderTimer = setTimeout(() => { if (!undone) render(); }, 230);
-
-      showUndoToast('Nota archivada', () => {
-        undone = true;
-        clearTimeout(renderTimer);
-        n.archived = false; n.last_modified = Date.now(); saveNoteLocal(n);
-        card.style.transition = 'transform 0.18s ease-out, opacity 0.18s ease-out';
-        card.style.transform = '';
-        card.style.opacity = '';
-        card.style.pointerEvents = '';
-        setTimeout(() => render(), 200);
-      });
+      showUndoToast('Nota archivada',
+        () => {
+          card.style.transition = 'max-height 0.18s ease, margin-bottom 0.18s ease, transform 0.2s ease-out, opacity 0.2s ease-out';
+          card.style.maxHeight = '';
+          card.style.marginBottom = '';
+          card.style.transform = '';
+          card.style.opacity = '';
+          card.style.pointerEvents = '';
+          card.style.overflow = '';
+          setTimeout(() => {
+            card.style.transition = '';
+            card.style.willChange = '';
+          }, 220);
+        },
+        () => {
+          n.archived = true;
+          n.last_modified = Date.now();
+          saveNoteLocal(n);
+        }
+      );
     } else {
       resetCard();
     }
@@ -1138,6 +1177,8 @@ function updateSelectBar() {
   }
   bar.hidden = !State.selectMode;
   if (count) count.textContent = `${State.selected.size} seleccionada${State.selected.size !== 1 ? 's' : ''}`;
+  const archBtn = $('#select-archive');
+  if (archBtn) archBtn.title = State.view === 'archive' ? 'Desarchivar' : 'Archivar';
 }
 
 // ── view state ───────────────────────────────────────────────────────────────
@@ -2462,18 +2503,22 @@ function bindUI() {
   $('#bulk-cats-bg')?.addEventListener('click', () => closeBulkCatsModal());
   $('#select-archive')?.addEventListener('click', async () => {
     const ids = [...State.selected];
+    const unarchiving = State.view === 'archive';
+    const targetVal = !unarchiving;
     for (const id of ids) {
       const n = State.notes.find(x => x.id === id);
       if (!n) continue;
-      n.archived = true; n.last_modified = Date.now();
+      n.archived = targetVal; n.last_modified = Date.now();
       await saveNoteLocal(n);
     }
     exitSelectMode(); render();
-    const label = ids.length === 1 ? 'Nota archivada' : `${ids.length} notas archivadas`;
+    const verb = unarchiving ? 'desarchivada' : 'archivada';
+    const verbP = unarchiving ? 'desarchivadas' : 'archivadas';
+    const label = ids.length === 1 ? `Nota ${verb}` : `${ids.length} notas ${verbP}`;
     showUndoToast(label, async () => {
       for (const id of ids) {
         const n = State.notes.find(x => x.id === id);
-        if (n) { n.archived = false; n.last_modified = Date.now(); await saveNoteLocal(n); }
+        if (n) { n.archived = !targetVal; n.last_modified = Date.now(); await saveNoteLocal(n); }
       }
       render();
     });

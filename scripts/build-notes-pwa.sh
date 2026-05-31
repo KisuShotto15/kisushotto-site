@@ -20,9 +20,10 @@ cp notes/recorder.js "$OUT/recorder.js"
 # Adjust manifest path in index.html (subdominio uses /manifest.json at root)
 sed -i 's|href="/manifests/notes.json"|href="/manifest.json"|g' "$OUT/index.html"
 
-# Inject short commit hash into the version watermark
+# Inject short commit hash + build timestamp so the watermark is unique per build
 SHORT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "local")
-sed -i "s|BUILD_HASH|${SHORT_SHA}|g" "$OUT/index.html"
+BUILD_TS=$(date -u +%H%M%S)
+sed -i "s|BUILD_HASH|${SHORT_SHA}-${BUILD_TS}|g" "$OUT/index.html"
 
 # Manifest at root, with start_url/scope rewritten to "/"
 cp public/manifests/notes.json "$OUT/manifest.json"
@@ -30,7 +31,7 @@ sed -i 's|"start_url": "/notes/"|"start_url": "/"|; s|"scope": "/notes/"|"scope"
 
 # Service worker — notes-specific, network-first for JS/CSS so updates are picked up immediately
 cat > "$OUT/sw.js" << 'SWEOF'
-const CACHE = 'ks-notes-v8';
+const CACHE = 'ks-notes-v9';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
