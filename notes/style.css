@@ -294,9 +294,11 @@ main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
   border-radius: var(--r-lg);
   cursor: pointer;
   user-select: none; -webkit-user-select: none;
-  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
   transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
   position: relative;
+  will-change: transform;
 }
 .note-card * { cursor: inherit; }
 .note-card:hover {

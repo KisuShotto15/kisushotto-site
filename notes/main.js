@@ -630,7 +630,7 @@ function noteCardHtml(n) {
   let imgs = '';
   if (n.attachments?.length) {
     const imgAtts = n.attachments.filter(a => a.type === 'image');
-    if (imgAtts.length) imgs += `<div class="nc-imgs-row">${imgAtts.map(a => `<img class="nc-image-thumb" data-att="${a.id}" alt="" loading="lazy">`).join('')}</div>`;
+    if (imgAtts.length) imgs += `<div class="nc-imgs-row">${imgAtts.map(a => `<img class="nc-image-thumb" data-att="${a.id}" alt="" loading="lazy" draggable="false">`).join('')}</div>`;
     const audios = n.attachments.filter(a => a.type === 'audio');
     for (const a of audios) imgs += `<audio class="nc-audio" controls preload="none" data-att="${a.id}"></audio>`;
   }
