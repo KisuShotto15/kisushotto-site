@@ -266,7 +266,7 @@ body.sidebar-open .sidebar-item span { opacity: 1; }
 .btn-icon.active:hover { background: rgba(255,255,255,0.20); }
 
 /* Main */
-main { padding: 18px 16px 100px; max-width: 1400px; margin: 0 auto; }
+main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 .grid-section { margin-bottom: 28px; }
 .grid-section h2 {
   font-size: 12px; font-weight: 600;
