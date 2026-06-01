@@ -1091,6 +1091,7 @@ a { color: inherit; text-decoration: none; }
   border-top: 1px solid var(--hairline);
 }
 .footer-dot { color: var(--muted-2); }
+.app-version { color: var(--muted); font-size: 11px; letter-spacing: 0.05em; }
 
 /* ── MODALS ─────────────────────────────────────────────────────── */
 .modal-backdrop {

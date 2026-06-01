@@ -366,9 +366,8 @@ async function ensureMicros(ingredients) {
   // Detect entries populated from search results (no actual micro data)
   const isStale = c => {
     if (!c || Object.keys(c).length === 0) return true;
-    const MICRO_KEYS = ['vitaminA','vitaminD','vitaminE','vitaminK','vitaminC',
-      'vitaminB12','calcium','iron','zinc','epa','dha','choline','selenium'];
-    return MICRO_KEYS.every(k => !c[k]); // all micros are 0 → came from search, not detail
+    // epa+dha both 0 means search result, not detail endpoint (search returns null for fatty acids)
+    return !c.epa && !c.dha;
   };
   const needsFetch = i => {
     if (!i.fdcId) return false;
