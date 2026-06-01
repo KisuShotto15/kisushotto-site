@@ -623,12 +623,12 @@ function noteCardHtml(n) {
   if (n.locked && !isSessionUnlocked()) {
     body = `<div class="nc-body" style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span class="nc-locked"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span> Nota protegida</div>`;
   } else if (n.type === 'checklist') {
-    const items = (n.checklist_items || []).slice(0, 8);
+    const items = (n.checklist_items || []).slice(0, 24);
     body = `<div class="nc-body">` + items.map((it, idx) =>
       `<div class="nc-checklist-line ${it.done ? 'done' : ''}" data-idx="${idx}"><input type="checkbox" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
     ).join('') + (items.length < (n.checklist_items?.length || 0) ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">+${(n.checklist_items?.length || 0) - items.length} más</div>` : '') + `</div>`;
   } else {
-    body = `<div class="nc-body">${escapeHtml(htmlToText(n.body || '')).slice(0, 600)}</div>`;
+    body = `<div class="nc-body">${escapeHtml(htmlToText(n.body || '')).slice(0, 2000)}</div>`;
   }
 
   let imgs = '';
