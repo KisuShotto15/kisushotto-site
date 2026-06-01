@@ -362,9 +362,14 @@ window._applyTDEE = function(target) {
 async function ensureMicros(ingredients) {
   const apiKey = getApiKey(S.activeProfile);
   if (!apiKey) return;
-  const unique = [...new Set(
-    ingredients.filter(i => i.fdcId && !(i.fdcId in S.microCache)).map(i => i.fdcId)
-  )];
+  const needsFetch = i => {
+    if (!i.fdcId) return false;
+    if (!(i.fdcId in S.microCache)) return true;
+    const c = S.microCache[i.fdcId];
+    // Re-fetch if the cached entry is empty (failed fetch)
+    return !c || Object.keys(c).length === 0;
+  };
+  const unique = [...new Set(ingredients.filter(needsFetch).map(i => i.fdcId))];
   if (!unique.length) return;
   for (let i = 0; i < unique.length; i += 4) {
     await Promise.allSettled(
