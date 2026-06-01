@@ -764,13 +764,15 @@ function startDrag(card, x, y) {
     card,
     offsetX: x - rect.left,
     offsetY: y - rect.top,
+    w: rect.width,
+    h: rect.height,
     container: card.closest('#grid-pinned, #grid-others'),
   };
 }
 
 function updateDrag(x, y) {
   if (!_dragState) return;
-  const { ghost, card, offsetX, offsetY, container } = _dragState;
+  const { ghost, card, offsetX, offsetY, w, h, container } = _dragState;
 
   // Ghost follows cursor every frame (smooth)
   ghost.style.left = (x - offsetX) + 'px';
@@ -780,24 +782,41 @@ function updateDrag(x, y) {
   const now = Date.now();
   if (now - _dragReorderAt < 80) return;
 
-  // Clear in-progress FLIP transforms BEFORE elementsFromPoint so we hit
-  // cards at their true layout positions, not mid-animation visuals
+  // Clear in-progress FLIP transforms BEFORE hit-testing so we read cards
+  // at their true layout positions, not mid-animation visuals
   const cards = [...container.querySelectorAll('.note-card')];
   cards.forEach(c => { if (c !== card) { c.style.transition = 'none'; c.style.transform = ''; } });
   container.getBoundingClientRect(); // force reflow
 
-  ghost.style.visibility = 'hidden';
-  const els = document.elementsFromPoint(x, y);
-  ghost.style.visibility = '';
+  // Detect against the GHOST's center, not the raw cursor — when the card is
+  // grabbed off-center the cursor sits over a different card than the ghost.
+  const cx = x - offsetX + w / 2;
+  const cy = y - offsetY + h / 2;
 
-  const target = els.find(el => el.classList.contains('note-card') && el !== card && !el.dataset.ghost);
-  if (!target || !container?.contains(target)) return;
+  let target = null;
+  for (const c of cards) {
+    if (c === card) continue;
+    const r = c.getBoundingClientRect();
+    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) { target = c; break; }
+  }
+  // Fallback: nearest card center to the ghost center (handles column gaps)
+  if (!target) {
+    let best = Infinity;
+    for (const c of cards) {
+      if (c === card) continue;
+      const r = c.getBoundingClientRect();
+      const d = Math.hypot(cx - (r.left + r.width / 2), cy - (r.top + r.height / 2));
+      if (d < best) { best = d; target = c; }
+    }
+  }
+  if (!target) return;
 
   const targetRect = target.getBoundingClientRect();
-  const newNext = y < targetRect.top + targetRect.height / 2
+  const newNext = cy < targetRect.top + targetRect.height / 2
     ? target
     : target.nextElementSibling;
-  if (card.nextElementSibling === newNext) return; // already in this position
+  if (newNext === card) return;                       // would insert before self
+  if (card.nextElementSibling === newNext) return;    // already in this position
 
   _dragReorderAt = now;
 
