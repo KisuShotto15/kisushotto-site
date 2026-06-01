@@ -729,10 +729,11 @@ const SWIPE_ACTIVE_COLOR = 'rgba(67,160,71,0.92)';
 let _dragState = null; // { noteId, ghost, card, offsetX, offsetY, container }
 let _dragHappened = false;
 let _dragScrollBlock = null;
-let _dragReorderAt = 0; // timestamp of last reorder, for throttle
 
 function startDrag(card, x, y) {
   if (_dragState) return;
+  const container = card.closest('#grid-pinned, #grid-others');
+  if (!container) return;
   const rect = card.getBoundingClientRect();
   const ghost = card.cloneNode(true);
   ghost.removeAttribute('data-id');
@@ -742,7 +743,7 @@ function startDrag(card, x, y) {
     width: rect.width + 'px', height: rect.height + 'px',
     pointerEvents: 'none',
     zIndex: '500',
-    opacity: '0.92',
+    opacity: '0.95',
     boxShadow: '0 20px 60px rgba(0,0,0,0.55)',
     transform: 'scale(1.04)',
     transition: 'box-shadow 0.15s, transform 0.15s',
@@ -751,98 +752,87 @@ function startDrag(card, x, y) {
   });
   document.body.appendChild(ghost);
   document.body.classList.add('dragging-note');
-  card.style.opacity = '0.25';
-  card.style.pointerEvents = 'none';
   navigator.vibrate?.(18);
   // Prevent iOS from taking over scroll during drag
   _dragScrollBlock = (e) => e.preventDefault();
   document.addEventListener('touchmove', _dragScrollBlock, { passive: false });
-  _dragReorderAt = 0;
+
+  // Freeze the layout: snapshot every card's home slot. We never touch the DOM
+  // during the drag — only transform other cards to open a gap. This avoids the
+  // masonry column re-pack feedback loop that caused oscillation.
+  const order = [...container.querySelectorAll('.note-card')];
+  const slotRect = order.map(c => c.getBoundingClientRect());
+  const cols = [...new Set(slotRect.map(r => Math.round(r.left)))].sort((a, b) => a - b);
+  const fromIndex = order.indexOf(card);
+
+  // Hide the original but keep it in flow so the snapshot stays valid.
+  card.style.visibility = 'hidden';
+  order.forEach(c => { if (c !== card) c.style.willChange = 'transform'; });
+
   _dragState = {
     noteId: card.dataset.id,
-    ghost,
-    card,
+    ghost, card, container,
     offsetX: x - rect.left,
     offsetY: y - rect.top,
-    w: rect.width,
-    h: rect.height,
-    container: card.closest('#grid-pinned, #grid-others'),
+    w: rect.width, h: rect.height,
+    order, slotRect, cols, fromIndex,
+    lastIns: fromIndex,
   };
+}
+
+// Column index of an x-coordinate within the frozen layout.
+function dragColOf(cols, x) {
+  let idx = 0;
+  for (let k = 0; k < cols.length; k++) if (x >= cols[k] - 1) idx = k;
+  return idx;
 }
 
 function updateDrag(x, y) {
   if (!_dragState) return;
-  const { ghost, card, offsetX, offsetY, w, h, container } = _dragState;
+  const s = _dragState;
+  const { ghost, card, offsetX, offsetY, w, h, order, slotRect, cols, fromIndex } = s;
 
-  // Ghost follows cursor every frame (smooth)
+  // Ghost follows the cursor every frame.
   ghost.style.left = (x - offsetX) + 'px';
   ghost.style.top  = (y - offsetY) + 'px';
 
-  // Throttle reorder logic to max once every 80ms to prevent oscillation
-  const now = Date.now();
-  if (now - _dragReorderAt < 80) return;
+  // Where the ghost's center sits (not the raw cursor).
+  const gx = x - offsetX + w / 2;
+  const gy = y - offsetY + h / 2;
+  const gCol = dragColOf(cols, gx);
 
-  // Clear in-progress FLIP transforms BEFORE hit-testing so we read cards
-  // at their true layout positions, not mid-animation visuals
-  const cards = [...container.querySelectorAll('.note-card')];
-  cards.forEach(c => { if (c !== card) { c.style.transition = 'none'; c.style.transform = ''; } });
-  container.getBoundingClientRect(); // force reflow
+  // Insertion index among the non-dragged cards = how many of them precede the
+  // ghost center in reading order (column, then vertical).
+  let ins = 0;
+  for (let i = 0; i < order.length; i++) {
+    if (order[i] === card) continue;
+    const r = slotRect[i];
+    const cCol = dragColOf(cols, r.left + r.width / 2);
+    const cyc = r.top + r.height / 2;
+    if (cCol < gCol || (cCol === gCol && cyc < gy)) ins++;
+  }
+  if (ins === s.lastIns) return; // no change → leave transforms as they are
+  s.lastIns = ins;
 
-  // Detect against the GHOST's center, not the raw cursor — when the card is
-  // grabbed off-center the cursor sits over a different card than the ghost.
-  const cx = x - offsetX + w / 2;
-  const cy = y - offsetY + h / 2;
-
-  let target = null;
-  for (const c of cards) {
+  // Shift each non-dragged card from its home slot to the slot it occupies once
+  // the dragged card is inserted at `ins`. Reference positions are frozen, so
+  // there is no feedback loop and no oscillation.
+  let j = 0;
+  for (let i = 0; i < order.length; i++) {
+    const c = order[i];
     if (c === card) continue;
-    const r = c.getBoundingClientRect();
-    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) { target = c; break; }
+    const targetSlot = (j < ins) ? j : j + 1; // gap reserved at slot `ins`
+    const dx = slotRect[targetSlot].left - slotRect[i].left;
+    const dy = slotRect[targetSlot].top  - slotRect[i].top;
+    c.style.transition = 'transform 0.18s cubic-bezier(0.2,0,0,1)';
+    c.style.transform = (dx || dy) ? `translate(${dx}px,${dy}px)` : '';
+    j++;
   }
-  // Fallback: nearest card center to the ghost center (handles column gaps)
-  if (!target) {
-    let best = Infinity;
-    for (const c of cards) {
-      if (c === card) continue;
-      const r = c.getBoundingClientRect();
-      const d = Math.hypot(cx - (r.left + r.width / 2), cy - (r.top + r.height / 2));
-      if (d < best) { best = d; target = c; }
-    }
-  }
-  if (!target) return;
-
-  const targetRect = target.getBoundingClientRect();
-  const newNext = cy < targetRect.top + targetRect.height / 2
-    ? target
-    : target.nextElementSibling;
-  if (newNext === card) return;                       // would insert before self
-  if (card.nextElementSibling === newNext) return;    // already in this position
-
-  _dragReorderAt = now;
-
-  // FLIP: snapshot before DOM change
-  const before = new Map(cards.map(c => [c, c.getBoundingClientRect()]));
-  container.insertBefore(card, newNext);
-
-  // FLIP: animate displaced cards
-  cards.forEach(c => {
-    if (c === card) return;
-    const oldRect = before.get(c);
-    const newRect = c.getBoundingClientRect();
-    const dx = oldRect.left - newRect.left;
-    const dy = oldRect.top  - newRect.top;
-    if (Math.abs(dy) < 1 && Math.abs(dx) < 1) return;
-    c.style.transition = 'none';
-    c.style.transform = `translate(${dx}px,${dy}px)`;
-    c.getBoundingClientRect(); // force reflow
-    c.style.transition = 'transform 0.2s cubic-bezier(0.2,0,0,1)';
-    c.style.transform = '';
-  });
 }
 
 function endDrag() {
   if (!_dragState) return;
-  const { ghost, card, noteId } = _dragState;
+  const { ghost, card, noteId, container, order, slotRect, lastIns } = _dragState;
   _dragState = null;
   _dragHappened = true;
 
@@ -852,11 +842,19 @@ function endDrag() {
     if (State.selected.size === 0) exitSelectMode();
   }
 
-  // Animate ghost landing: scale down to 1 and fade out
-  const cardRect = card.getBoundingClientRect();
+  // Commit the new DOM order within this container.
+  const others = order.filter(c => c !== card);
+  const finalOrder = [...others.slice(0, lastIns), card, ...others.slice(lastIns)];
+  finalOrder.forEach(c => container.appendChild(c));
+
+  // Clear frozen-drag styling now that the DOM reflects the final order.
+  order.forEach(c => { c.style.transition = ''; c.style.transform = ''; c.style.willChange = ''; });
+  card.style.visibility = '';
+
+  // Land the ghost on the dragged card's final slot, then remove it.
+  const landRect = slotRect[Math.min(lastIns, slotRect.length - 1)] || slotRect[0];
   ghost.style.transition = 'left 0.16s ease, top 0.16s ease, transform 0.16s ease, opacity 0.16s ease';
-  ghost.style.left = cardRect.left + 'px';
-  ghost.style.top  = cardRect.top  + 'px';
+  if (landRect) { ghost.style.left = landRect.left + 'px'; ghost.style.top = landRect.top + 'px'; }
   ghost.style.transform = 'scale(1)';
   ghost.style.opacity = '0';
   setTimeout(() => ghost.remove(), 180);
@@ -867,17 +865,7 @@ function endDrag() {
     _dragScrollBlock = null;
   }
 
-  // Clear any FLIP transitions left on displaced cards
-  document.querySelectorAll('.note-card').forEach(c => {
-    if (c !== card) { c.style.transition = ''; c.style.transform = ''; }
-  });
-
-  card.style.transition = 'opacity 0.16s ease';
-  card.style.opacity = '';
-  card.style.pointerEvents = '';
-  setTimeout(() => { card.style.transition = ''; }, 180);
-
-  // Save sort_order based on new DOM positions
+  // Save sort_order based on the new combined DOM positions.
   const gridPinned = $('#grid-pinned');
   const gridOthers = $('#grid-others');
   const allCards = [
