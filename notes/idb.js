@@ -92,6 +92,22 @@ export async function dequeueIds(ids) {
   ids.forEach(id => store.delete(id));
   return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
 }
+// Delete only the queue records that have not changed since they were peeked.
+// If an item was re-enqueued during an in-flight push its queued_at differs, so
+// we keep it and let the next flush push the newer edit.
+export async function dequeueIfUnchanged(items) {
+  if (!items.length) return;
+  const t = await tx('queue', 'readwrite');
+  const store = t.objectStore('queue');
+  for (const it of items) {
+    const getReq = store.get(it.id);
+    getReq.onsuccess = () => {
+      const cur = getReq.result;
+      if (cur && cur.queued_at === it.queued_at) store.delete(it.id);
+    };
+  }
+  return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+}
 export async function queueSize() {
   const items = await getAll('queue');
   return items.length;

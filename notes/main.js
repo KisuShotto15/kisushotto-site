@@ -249,10 +249,14 @@ async function init() {
       if (!changed) return;
       const editorOpen = !$('#editor').hidden;
       if (editorOpen && State.editing && changedNoteIds?.has(State.editing.id)) {
-        // Only refresh the open note if the user isn't actively typing in it
+        // Only refresh the open note if the user isn't actively typing in it,
+        // it has no pending push, and the editor has no uncommitted changes —
+        // otherwise we'd clobber the user's unsynced edit.
         const userTyping = document.activeElement && $('#editor').contains(document.activeElement)
           && document.activeElement !== document.body;
-        if (!userTyping) {
+        const pendingIds = new Set((await idb.peekQueue()).map(i => i.id));
+        const dirty = noteContentHash(State.editing) !== State.editorOpenSnapshot;
+        if (!userTyping && !pendingIds.has(State.editing.id) && !dirty) {
           const fresh = await idb.getOne('notes', State.editing.id);
           if (fresh) {
             State.editing = fresh;
@@ -268,6 +272,17 @@ async function init() {
       }
     } catch {}
   }, 10000);
+
+  // Never strand a debounced save: when the app is hidden or the page is being
+  // unloaded, commit the open editor and flush the outbox (best-effort).
+  const flushOnHide = () => {
+    try { commitEditorIfDirty(); } catch {}
+    try { flushQueue(); } catch {}
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushOnHide();
+  });
+  window.addEventListener('pagehide', flushOnHide);
 
   // Open note from query param (push notification deep-link)
   const params = new URLSearchParams(location.search);
@@ -1634,6 +1649,21 @@ async function commitEditor() {
   $('#ed-status').textContent = 'Guardado';
   updateEditorMeta();
   if ($('#editor').hidden) renderGrid();
+}
+
+// Persist any uncommitted editor content immediately (used on close and when
+// the app is hidden/backgrounded so a debounced save is never stranded).
+function commitEditorIfDirty() {
+  const e = State.editing;
+  if (!e) return;
+  syncChecklistFromDom();
+  e.title = $('#ed-title')?.value || '';
+  e.body  = $('#ed-body')?.value  || '';
+  if (!isNoteEmpty(e) && noteContentHash(e) !== State.editorOpenSnapshot) {
+    clearTimeout(saveTimer); saveTimer = null;
+    commitEditor();
+    State.editorOpenSnapshot = noteContentHash(e);
+  }
 }
 
 function isNoteEmpty(e) {
