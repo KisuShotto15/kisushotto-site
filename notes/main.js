@@ -807,18 +807,21 @@ function updateDrag(x, y) {
   // moving the cursor anywhere inside it never crosses a neighbour threshold, so
   // the displaced card no longer snaps back when the cursor enters the gap.
   let ins = s.lastIns;
-  // Move the gap DOWN while the ghost clearly enters the card below it.
+  // Move the gap DOWN as soon as the ghost enters the card below it. The dead
+  // band that prevents snap-back is the full slot between neighbours (advance
+  // tests slotRect[ins+1], retreat tests slotRect[ins-1]), so a small 0.2
+  // margin keeps the gap tracking the cursor closely without flicker.
   while (ins < nOthers) {
     const r = slotRect[ins + 1];                 // displaced rect of card below gap
     const cCol = dragColOf(cols, r.left + r.width / 2);
-    if (gCol > cCol || (gCol === cCol && gy > r.top + 0.7 * r.height)) ins++;
+    if (gCol > cCol || (gCol === cCol && gy > r.top + 0.2 * r.height)) ins++;
     else break;
   }
-  // Move the gap UP while the ghost clearly enters the card above it.
+  // Move the gap UP as soon as the ghost enters the card above it.
   while (ins > 0) {
     const r = slotRect[ins - 1];                 // displaced rect of card above gap
     const cCol = dragColOf(cols, r.left + r.width / 2);
-    if (gCol < cCol || (gCol === cCol && gy < r.top + 0.3 * r.height)) ins--;
+    if (gCol < cCol || (gCol === cCol && gy < r.top + 0.8 * r.height)) ins--;
     else break;
   }
   if (ins === s.lastIns) return; // no change → leave transforms as they are
@@ -1064,37 +1067,22 @@ function wireCard(card) {
   card.addEventListener('mousedown', (ev) => {
     if (ev.button !== 0 || State.selectMode) return;
     const startX = ev.clientX, startY = ev.clientY;
-    const downAt = Date.now();
     let dragStarted = false;
 
-    const tryStartDrag = (x, y) => {
-      if (dragStarted || State.selectMode) return;
+    const onMove = (e) => {
+      if (dragStarted) return;
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) <= 4) return;
+      // Any movement while holding starts the drag immediately — no delay.
       dragStarted = true;
-      cleanup();
-      startDrag(card, x, y);
-      const onDragMove = (e) => updateDrag(e.clientX, e.clientY);
+      document.removeEventListener('mousemove', onMove);
+      startDrag(card, startX, startY);
+      const onDragMove = (e2) => updateDrag(e2.clientX, e2.clientY);
       const onDragUp = () => { document.removeEventListener('mousemove', onDragMove); endDrag(); };
       document.addEventListener('mousemove', onDragMove);
       document.addEventListener('mouseup', onDragUp, { once: true });
+      updateDrag(e.clientX, e.clientY);
     };
-
-    const onMove = (e) => {
-      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
-      if (dist > 8) {
-        if (Date.now() - downAt > 120) tryStartDrag(e.clientX, e.clientY);
-        else cleanup(); // moved too early — normal click/swipe
-      }
-    };
-    const cleanup = () => {
-      clearTimeout(mouseTimer);
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    const onUp = () => cleanup();
-
-    const mouseTimer = setTimeout(() => {
-      if (!dragStarted) tryStartDrag(startX, startY);
-    }, 150);
+    const onUp = () => document.removeEventListener('mousemove', onMove);
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp, { once: true });
