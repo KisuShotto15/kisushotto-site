@@ -71,6 +71,7 @@ let syncTimer = null;
 let searchTargetMealId = null;
 let pendingFood = null;
 let pendingDetailFetch = null;
+const _microFetchedSession = new Set(); // prevent re-fetching same fdcId twice per session
 
 // ── State helpers ─────────────────────────────────────────────────────────────
 function profile() { return S.profiles[S.activeProfile]; }
@@ -362,18 +363,25 @@ window._applyTDEE = function(target) {
 async function ensureMicros(ingredients) {
   const apiKey = getApiKey(S.activeProfile);
   if (!apiKey) return;
+  // Detect entries populated from search results (no actual micro data)
+  const isStale = c => {
+    if (!c || Object.keys(c).length === 0) return true;
+    const MICRO_KEYS = ['vitaminA','vitaminD','vitaminE','vitaminK','vitaminC',
+      'vitaminB12','calcium','iron','zinc','epa','dha','choline','selenium'];
+    return MICRO_KEYS.every(k => !c[k]); // all micros are 0 → came from search, not detail
+  };
   const needsFetch = i => {
     if (!i.fdcId) return false;
+    if (_microFetchedSession.has(i.fdcId)) return false; // already tried this session
     if (!(i.fdcId in S.microCache)) return true;
-    const c = S.microCache[i.fdcId];
-    // Re-fetch if the cached entry is empty (failed fetch)
-    return !c || Object.keys(c).length === 0;
+    return isStale(S.microCache[i.fdcId]);
   };
   const unique = [...new Set(ingredients.filter(needsFetch).map(i => i.fdcId))];
   if (!unique.length) return;
   for (let i = 0; i < unique.length; i += 4) {
     await Promise.allSettled(
       unique.slice(i, i + 4).map(async fdcId => {
+        _microFetchedSession.add(fdcId);
         try { S.microCache[fdcId] = await getFoodDetail(fdcId, apiKey); }
         catch { S.microCache[fdcId] = {}; }
       })
