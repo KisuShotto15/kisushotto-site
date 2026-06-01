@@ -729,6 +729,7 @@ const SWIPE_ACTIVE_COLOR = 'rgba(67,160,71,0.92)';
 let _dragState = null; // { noteId, ghost, card, offsetX, offsetY, container }
 let _dragHappened = false;
 let _dragScrollBlock = null;
+let _dragReorderAt = 0; // timestamp of last reorder, for throttle
 
 function startDrag(card, x, y) {
   if (_dragState) return;
@@ -756,6 +757,7 @@ function startDrag(card, x, y) {
   // Prevent iOS from taking over scroll during drag
   _dragScrollBlock = (e) => e.preventDefault();
   document.addEventListener('touchmove', _dragScrollBlock, { passive: false });
+  _dragReorderAt = 0;
   _dragState = {
     noteId: card.dataset.id,
     ghost,
@@ -769,8 +771,20 @@ function startDrag(card, x, y) {
 function updateDrag(x, y) {
   if (!_dragState) return;
   const { ghost, card, offsetX, offsetY, container } = _dragState;
+
+  // Ghost follows cursor every frame (smooth)
   ghost.style.left = (x - offsetX) + 'px';
   ghost.style.top  = (y - offsetY) + 'px';
+
+  // Throttle reorder logic to max once every 80ms to prevent oscillation
+  const now = Date.now();
+  if (now - _dragReorderAt < 80) return;
+
+  // Clear in-progress FLIP transforms BEFORE elementsFromPoint so we hit
+  // cards at their true layout positions, not mid-animation visuals
+  const cards = [...container.querySelectorAll('.note-card')];
+  cards.forEach(c => { if (c !== card) { c.style.transition = 'none'; c.style.transform = ''; } });
+  container.getBoundingClientRect(); // force reflow
 
   ghost.style.visibility = 'hidden';
   const els = document.elementsFromPoint(x, y);
@@ -785,10 +799,7 @@ function updateDrag(x, y) {
     : target.nextElementSibling;
   if (card.nextElementSibling === newNext) return; // already in this position
 
-  // Clear any in-progress FLIP transforms so rects reflect true layout positions
-  const cards = [...container.querySelectorAll('.note-card')];
-  cards.forEach(c => { if (c !== card) { c.style.transition = 'none'; c.style.transform = ''; } });
-  container.getBoundingClientRect(); // force reflow
+  _dragReorderAt = now;
 
   // FLIP: snapshot before DOM change
   const before = new Map(cards.map(c => [c, c.getBoundingClientRect()]));
