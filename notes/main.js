@@ -729,6 +729,7 @@ const SWIPE_ACTIVE_COLOR = 'rgba(67,160,71,0.92)';
 let _dragState = null; // { noteId, ghost, card, offsetX, offsetY, container }
 let _dragHappened = false;
 let _dragScrollBlock = null;
+let _lastDragTarget = null;
 
 function startDrag(card, x, y) {
   if (_dragState) return;
@@ -756,6 +757,7 @@ function startDrag(card, x, y) {
   // Prevent iOS from taking over scroll during drag
   _dragScrollBlock = (e) => e.preventDefault();
   document.addEventListener('touchmove', _dragScrollBlock, { passive: false });
+  _lastDragTarget = null;
   _dragState = {
     noteId: card.dataset.id,
     ghost,
@@ -777,13 +779,34 @@ function updateDrag(x, y) {
   ghost.style.visibility = '';
 
   const target = els.find(el => el.classList.contains('note-card') && el !== card && !el.dataset.ghost);
-  if (target && container?.contains(target)) {
+  if (target && container?.contains(target) && target !== _lastDragTarget) {
+    _lastDragTarget = target;
+
+    // FLIP: snapshot positions before DOM change
+    const cards = [...container.querySelectorAll('.note-card')];
+    const before = new Map(cards.map(c => [c, c.getBoundingClientRect()]));
+
     const targetRect = target.getBoundingClientRect();
     if (y < targetRect.top + targetRect.height / 2) {
       container.insertBefore(card, target);
     } else {
       container.insertBefore(card, target.nextElementSibling);
     }
+
+    // FLIP: animate displaced cards from old to new position
+    cards.forEach(c => {
+      if (c === card) return;
+      const oldRect = before.get(c);
+      const newRect = c.getBoundingClientRect();
+      const dx = oldRect.left - newRect.left;
+      const dy = oldRect.top  - newRect.top;
+      if (Math.abs(dy) < 1 && Math.abs(dx) < 1) return;
+      c.style.transition = 'none';
+      c.style.transform = `translate(${dx}px,${dy}px)`;
+      c.getBoundingClientRect(); // force reflow
+      c.style.transition = 'transform 0.2s cubic-bezier(0.2,0,0,1)';
+      c.style.transform = '';
+    });
   }
 }
 
@@ -791,6 +814,7 @@ function endDrag() {
   if (!_dragState) return;
   const { ghost, card, noteId } = _dragState;
   _dragState = null;
+  _lastDragTarget = null;
   _dragHappened = true;
 
   // Deselect the dragged card; exit select mode if nothing else remains.
@@ -813,6 +837,11 @@ function endDrag() {
     document.removeEventListener('touchmove', _dragScrollBlock);
     _dragScrollBlock = null;
   }
+
+  // Clear any FLIP transitions left on displaced cards
+  document.querySelectorAll('.note-card').forEach(c => {
+    if (c !== card) { c.style.transition = ''; c.style.transform = ''; }
+  });
 
   card.style.transition = 'opacity 0.16s ease';
   card.style.opacity = '';
@@ -869,13 +898,16 @@ function wireCard(card) {
     removeOverlay();
     card.style.transition = 'none';
 
-    // 280ms hold → enter select mode + select this card; arm drag for any
-    // subsequent finger movement while still pressing.
+    // 150ms hold → silently arm drag (no select mode yet)
+    card._dragArmTimer = setTimeout(() => {
+      if (!_active) _dragArmed = true;
+    }, 150);
+
+    // 280ms hold → enter select mode + select this card
     card._selectTimer = setTimeout(() => {
       if (!_active) {
         enterSelectMode();
         toggleSelect(card.dataset.id);
-        _dragArmed = true;
         navigator.vibrate?.(10);
       }
     }, 280);
@@ -886,8 +918,9 @@ function wireCard(card) {
     const dy = ev.touches[0].clientY - _sy;
     const dist = Math.hypot(dx, dy);
 
-    // Only cancel hold timer when the finger moves meaningfully (not jitter)
+    // Only cancel hold timers when the finger moves meaningfully (not jitter)
     if (dist > 10 && !_dragArmed) {
+      clearTimeout(card._dragArmTimer);
       clearTimeout(card._selectTimer);
     }
 
@@ -926,6 +959,7 @@ function wireCard(card) {
   }, { passive: false });
 
   card.addEventListener('touchend', (ev) => {
+    clearTimeout(card._dragArmTimer);
     clearTimeout(card._selectTimer);
 
     if (_dragMode) {
@@ -992,6 +1026,7 @@ function wireCard(card) {
   }, { passive: true });
 
   card.addEventListener('touchcancel', () => {
+    clearTimeout(card._dragArmTimer);
     clearTimeout(card._selectTimer);
     if (_dragMode) { _dragMode = false; endDrag(); return; }
     resetCard();
@@ -1002,10 +1037,26 @@ function wireCard(card) {
   card.addEventListener('mousedown', (ev) => {
     if (ev.button !== 0 || State.selectMode) return;
     const startX = ev.clientX, startY = ev.clientY;
-    let moved = false;
+    const downAt = Date.now();
+    let dragStarted = false;
+
+    const tryStartDrag = (x, y) => {
+      if (dragStarted || State.selectMode) return;
+      dragStarted = true;
+      cleanup();
+      startDrag(card, x, y);
+      const onDragMove = (e) => updateDrag(e.clientX, e.clientY);
+      const onDragUp = () => { document.removeEventListener('mousemove', onDragMove); endDrag(); };
+      document.addEventListener('mousemove', onDragMove);
+      document.addEventListener('mouseup', onDragUp, { once: true });
+    };
 
     const onMove = (e) => {
-      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) { moved = true; cleanup(); }
+      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+      if (dist > 8) {
+        if (Date.now() - downAt > 120) tryStartDrag(e.clientX, e.clientY);
+        else cleanup(); // moved too early — normal click/swipe
+      }
     };
     const cleanup = () => {
       clearTimeout(mouseTimer);
@@ -1015,15 +1066,8 @@ function wireCard(card) {
     const onUp = () => cleanup();
 
     const mouseTimer = setTimeout(() => {
-      cleanup();
-      if (!moved && !State.selectMode) {
-        startDrag(card, startX, startY);
-        const onDragMove = (e) => updateDrag(e.clientX, e.clientY);
-        const onDragUp   = () => { document.removeEventListener('mousemove', onDragMove); endDrag(); };
-        document.addEventListener('mousemove', onDragMove);
-        document.addEventListener('mouseup', onDragUp, { once: true });
-      }
-    }, 400);
+      if (!dragStarted) tryStartDrag(startX, startY);
+    }, 150);
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp, { once: true });
