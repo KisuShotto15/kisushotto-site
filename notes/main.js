@@ -729,7 +729,6 @@ const SWIPE_ACTIVE_COLOR = 'rgba(67,160,71,0.92)';
 let _dragState = null; // { noteId, ghost, card, offsetX, offsetY, container }
 let _dragHappened = false;
 let _dragScrollBlock = null;
-let _lastDragTarget = null;
 
 function startDrag(card, x, y) {
   if (_dragState) return;
@@ -757,7 +756,6 @@ function startDrag(card, x, y) {
   // Prevent iOS from taking over scroll during drag
   _dragScrollBlock = (e) => e.preventDefault();
   document.addEventListener('touchmove', _dragScrollBlock, { passive: false });
-  _lastDragTarget = null;
   _dragState = {
     noteId: card.dataset.id,
     ghost,
@@ -779,42 +777,43 @@ function updateDrag(x, y) {
   ghost.style.visibility = '';
 
   const target = els.find(el => el.classList.contains('note-card') && el !== card && !el.dataset.ghost);
-  if (target && container?.contains(target) && target !== _lastDragTarget) {
-    _lastDragTarget = target;
+  if (!target || !container?.contains(target)) return;
 
-    // FLIP: snapshot positions before DOM change
-    const cards = [...container.querySelectorAll('.note-card')];
-    const before = new Map(cards.map(c => [c, c.getBoundingClientRect()]));
+  const targetRect = target.getBoundingClientRect();
+  const newNext = y < targetRect.top + targetRect.height / 2
+    ? target
+    : target.nextElementSibling;
+  if (card.nextElementSibling === newNext) return; // already in this position
 
-    const targetRect = target.getBoundingClientRect();
-    if (y < targetRect.top + targetRect.height / 2) {
-      container.insertBefore(card, target);
-    } else {
-      container.insertBefore(card, target.nextElementSibling);
-    }
+  // Clear any in-progress FLIP transforms so rects reflect true layout positions
+  const cards = [...container.querySelectorAll('.note-card')];
+  cards.forEach(c => { if (c !== card) { c.style.transition = 'none'; c.style.transform = ''; } });
+  container.getBoundingClientRect(); // force reflow
 
-    // FLIP: animate displaced cards from old to new position
-    cards.forEach(c => {
-      if (c === card) return;
-      const oldRect = before.get(c);
-      const newRect = c.getBoundingClientRect();
-      const dx = oldRect.left - newRect.left;
-      const dy = oldRect.top  - newRect.top;
-      if (Math.abs(dy) < 1 && Math.abs(dx) < 1) return;
-      c.style.transition = 'none';
-      c.style.transform = `translate(${dx}px,${dy}px)`;
-      c.getBoundingClientRect(); // force reflow
-      c.style.transition = 'transform 0.2s cubic-bezier(0.2,0,0,1)';
-      c.style.transform = '';
-    });
-  }
+  // FLIP: snapshot before DOM change
+  const before = new Map(cards.map(c => [c, c.getBoundingClientRect()]));
+  container.insertBefore(card, newNext);
+
+  // FLIP: animate displaced cards
+  cards.forEach(c => {
+    if (c === card) return;
+    const oldRect = before.get(c);
+    const newRect = c.getBoundingClientRect();
+    const dx = oldRect.left - newRect.left;
+    const dy = oldRect.top  - newRect.top;
+    if (Math.abs(dy) < 1 && Math.abs(dx) < 1) return;
+    c.style.transition = 'none';
+    c.style.transform = `translate(${dx}px,${dy}px)`;
+    c.getBoundingClientRect(); // force reflow
+    c.style.transition = 'transform 0.2s cubic-bezier(0.2,0,0,1)';
+    c.style.transform = '';
+  });
 }
 
 function endDrag() {
   if (!_dragState) return;
   const { ghost, card, noteId } = _dragState;
   _dragState = null;
-  _lastDragTarget = null;
   _dragHappened = true;
 
   // Deselect the dragged card; exit select mode if nothing else remains.
