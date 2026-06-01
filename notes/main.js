@@ -777,6 +777,8 @@ function startDrag(card, x, y) {
     w: rect.width, h: rect.height,
     order, slotRect, cols, fromIndex,
     lastIns: fromIndex,
+    lastGy: rect.top + rect.height / 2,
+    dir: 1,
   };
 }
 
@@ -801,15 +803,21 @@ function updateDrag(x, y) {
   const gy = y - offsetY + h / 2;
   const gCol = dragColOf(cols, gx);
 
-  // Insertion index among the non-dragged cards = how many of them precede the
-  // ghost center in reading order (column, then vertical).
+  // Direction-aware threshold: dragging down triggers a swap once the ghost
+  // reaches the upper part of a card; dragging up, the lower part. The 0.25/0.75
+  // split also acts as hysteresis so small jitter never flips the gap.
+  const dir = gy > s.lastGy ? 1 : (gy < s.lastGy ? -1 : s.dir);
+  s.dir = dir; s.lastGy = gy;
+  const frac = dir < 0 ? 0.75 : 0.25;
+
+  // Insertion index among the non-dragged cards = how many precede the ghost in
+  // reading order (column, then a direction-biased vertical threshold).
   let ins = 0;
   for (let i = 0; i < order.length; i++) {
     if (order[i] === card) continue;
     const r = slotRect[i];
     const cCol = dragColOf(cols, r.left + r.width / 2);
-    const cyc = r.top + r.height / 2;
-    if (cCol < gCol || (cCol === gCol && cyc < gy)) ins++;
+    if (cCol < gCol || (cCol === gCol && gy > r.top + frac * r.height)) ins++;
   }
   if (ins === s.lastIns) return; // no change → leave transforms as they are
   s.lastIns = ins;
