@@ -465,6 +465,7 @@ function renderSummary() {
       <div class="macro-unit">CARBS</div>
       <div class="macro-label">${m.calories ? fmt(m.carbs * 4 / m.calories * 100) : 0}% kcal</div>
     </div>`;
+  renderMicros();
 }
 
 // ── Meals ─────────────────────────────────────────────────────────────────────
@@ -548,7 +549,7 @@ window._toggleMeal = function(id) {
 window._deleteMeal = async function(id) {
   if (!(await window.customConfirm('¿Eliminar esta comida?'))) return;
   day().meals = day().meals.filter(m => m.id !== id);
-  save(); renderSummary(); renderMeals(); renderMicros();
+  save(); renderSummary(); renderMeals();
 };
 
 window._moveMeal = function(id, dir) {
@@ -594,7 +595,7 @@ window._deleteIng = function(mealId, ingId) {
   const meal = day().meals.find(m => m.id === mealId);
   if (!meal) return;
   meal.ingredients = meal.ingredients.filter(i => i.id !== ingId);
-  save(); renderSummary(); renderMeals(); renderMicros();
+  save(); renderSummary(); renderMeals();
   setTimeout(() => {
     const body = document.getElementById(`body-${mealId}`);
     const chev = document.getElementById(`chev-${mealId}`);
@@ -609,7 +610,7 @@ window._toggleIngredient = function(mealId, ingId) {
   const ing = meal.ingredients.find(i => i.id === ingId);
   if (!ing) return;
   ing.disabled = !ing.disabled;
-  save(); renderSummary(); renderMicros();
+  save(); renderSummary();
   // Update in-place to avoid closing the meal card
   const li = document.getElementById(`ii-${ingId}`);
   if (li) {
@@ -768,7 +769,6 @@ window._confirmIngredient = async function() {
   window._closeSearch();
   renderSummary();
   renderMeals();
-  renderMicros(); // Call directly to ensure it runs after renderMeals completes
   setTimeout(() => {
     const body = document.getElementById(`body-${searchTargetMealId}`);
     const chev = document.getElementById(`chev-${searchTargetMealId}`);
