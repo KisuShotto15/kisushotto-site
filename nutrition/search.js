@@ -66,8 +66,8 @@ function extractPer100g(nutrients) {
     vitaminA:  get(1106), vitaminD:  get(1114), vitaminE:  get(1109), vitaminK:  get(1185),
     vitaminC:  get(1162), vitaminB6: get(1175), vitaminB12:get(1178), folate:    get(1190),
     choline:   get(1180), calcium:   get(1087), iron:      get(1089), magnesium: get(1090),
-    zinc:      get(1095), potassium: get(1092), selenium:  get(1103), epa:       get(1278),
-    dha:       get(1272),
+    zinc:      get(1095), potassium: get(1092), selenium:  get(1103), epa:       get(1278) * 1000,
+    dha:       get(1272) * 1000,
   };
 }
 

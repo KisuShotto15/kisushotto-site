@@ -98,6 +98,10 @@ function migrateState(s) {
     }
   });
   if (!s.microCache) s.microCache = {};
+  if (!s.microCacheVersion || s.microCacheVersion < 2) {
+    s.microCache = {};
+    s.microCacheVersion = 2;
+  }
   return s;
 }
 
