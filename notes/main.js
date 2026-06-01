@@ -1373,8 +1373,13 @@ function animateEditorOpen(fromRect) {
     if (modalBg) modalBg.style.opacity = '1';
     const clear = () => {
       modalCard.style.transition = ''; modalCard.style.transform = '';
-      modalCard.style.transformOrigin = ''; modalCard.style.willChange = ''; modalCard.style.animation = '';
-      if (modalBg) { modalBg.style.transition = ''; modalBg.style.opacity = ''; modalBg.style.animation = ''; }
+      modalCard.style.transformOrigin = ''; modalCard.style.willChange = '';
+      // Keep animation disabled: resetting to '' re-applies the CSS `editorIn`
+      // keyframe (the element still matches .modal:not([hidden]) .modal-card),
+      // which replays the open animation — the "weird refresh". onCloseEnd's
+      // cssText reset clears this once the modal is hidden.
+      modalCard.style.animation = 'none';
+      if (modalBg) { modalBg.style.transition = ''; modalBg.style.opacity = ''; modalBg.style.animation = 'none'; }
     };
     modalCard.addEventListener('transitionend', clear, { once: true });
     setTimeout(clear, 320);
@@ -2644,10 +2649,21 @@ function bindUI() {
   });
   $('#btn-new')?.addEventListener('click', openNew);
 
+  // Restore the desktop sidebar state (persists until the user toggles it),
+  // without animating on load.
+  if (window.innerWidth >= 900 && localStorage.getItem('notes_sidebar_open') === '1') {
+    const sb = document.getElementById('sidebar');
+    document.body.style.transition = 'none'; if (sb) sb.style.transition = 'none';
+    document.body.classList.add('sidebar-open');
+    document.body.offsetWidth; // reflow so the next change is the only animated one
+    document.body.style.transition = ''; if (sb) sb.style.transition = '';
+  }
+
   // Sidebar toggle
   $('#sidebar-toggle')?.addEventListener('click', () => {
-    if (document.body.classList.contains('sidebar-open')) closeSidebar();
-    else openSidebar();
+    const willOpen = !document.body.classList.contains('sidebar-open');
+    if (willOpen) openSidebar(); else closeSidebar();
+    if (window.innerWidth >= 900) localStorage.setItem('notes_sidebar_open', willOpen ? '1' : '0');
   });
   $('#sidebar-backdrop')?.addEventListener('click', () => closeSidebar());
   // Wire static sidebar nav items (categories are wired in renderSidebarNav)
