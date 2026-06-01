@@ -1396,6 +1396,9 @@ function openEditor(n) {
   // Capture card position for FLIP close animation
   const originCard = document.querySelector(`.note-card[data-id="${n.id}"]`);
   State.editorOriginRect = originCard ? originCard.getBoundingClientRect() : null;
+  // Leave an empty gap where the note was, so it looks lifted out (Keep-style).
+  // visibility:hidden keeps the card's layout box, so the grid doesn't reflow.
+  if (originCard) originCard.style.visibility = 'hidden';
 
   // Push history entry so Android back button closes editor instead of exiting
   history.pushState({ modal: 'editor' }, '');
@@ -1815,6 +1818,11 @@ function closeEditor(fromPopState = false) {
     if (modalBg)   { modalBg.style.transition = ''; modalBg.style.opacity = ''; }
     $('#ed-checklist-list').contentEditable = 'inherit';
     if (State.editorDirty) { State.editorDirty = false; renderGrid(); }
+    // Restore the lifted-out card (renderGrid may have replaced it already).
+    if (editedId) {
+      const c = document.querySelector(`.note-card[data-id="${editedId}"]`);
+      if (c) c.style.visibility = '';
+    }
   }
 
   // Always play the minimize animation — including the Android back gesture —
