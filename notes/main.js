@@ -1337,6 +1337,50 @@ function noteContentHash(n) {
 }
 
 // ── editor ───────────────────────────────────────────────────────────────────
+
+// Origin rect for the open/close minimize animation: the note's grid card if it
+// exists, otherwise the + FAB (new notes).
+function editorAnchorRect(noteId) {
+  const card = noteId && document.querySelector(`.note-card[data-id="${noteId}"]`);
+  if (card) { const r = card.getBoundingClientRect(); if (r.width > 0 && r.height > 0) return r; }
+  const fab = document.getElementById('fab-new');
+  if (fab) { const r = fab.getBoundingClientRect(); if (r.width > 0) return r; }
+  return null;
+}
+
+// Google Keep-style open: the card expands from `fromRect` to the modal size.
+function animateEditorOpen(fromRect) {
+  const modal = $('#editor');
+  const modalCard = modal.querySelector('.modal-card');
+  const modalBg   = modal.querySelector('.modal-bg');
+  if (!modalCard) return;
+  modalCard.style.animation = 'none'; // we drive this via JS, not the CSS keyframe
+  if (!fromRect) return;
+  const to = modalCard.getBoundingClientRect();
+  if (!to.width || !to.height) return;
+  const scaleX = Math.max(fromRect.width  / to.width,  0.01);
+  const scaleY = Math.max(fromRect.height / to.height, 0.01);
+  const tx = fromRect.left + fromRect.width  / 2 - (to.left + to.width  / 2);
+  const ty = fromRect.top  + fromRect.height / 2 - (to.top  + to.height / 2);
+  modalCard.style.transformOrigin = 'center center';
+  modalCard.style.transform = `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`;
+  modalCard.style.willChange = 'transform';
+  if (modalBg) { modalBg.style.animation = 'none'; modalBg.style.opacity = '0'; modalBg.style.transition = 'opacity 0.2s ease'; }
+  modalCard.getBoundingClientRect(); // force reflow so the transition runs from here
+  requestAnimationFrame(() => {
+    modalCard.style.transition = 'transform 0.24s cubic-bezier(0.2,0,0,1)';
+    modalCard.style.transform = 'translate(0px, 0px) scale(1, 1)';
+    if (modalBg) modalBg.style.opacity = '1';
+    const clear = () => {
+      modalCard.style.transition = ''; modalCard.style.transform = '';
+      modalCard.style.transformOrigin = ''; modalCard.style.willChange = ''; modalCard.style.animation = '';
+      if (modalBg) { modalBg.style.transition = ''; modalBg.style.opacity = ''; modalBg.style.animation = ''; }
+    };
+    modalCard.addEventListener('transitionend', clear, { once: true });
+    setTimeout(clear, 320);
+  });
+}
+
 function openEditor(n) {
   State.editing = JSON.parse(JSON.stringify(n));
   State.editingSnapshotTime = n.last_modified || 0;
@@ -1381,6 +1425,9 @@ function openEditor(n) {
   renderAttachments();
   updateEditorMeta();
   $('#ed-status').textContent = '';
+
+  // Expand from the note's card (or the + FAB for new notes).
+  animateEditorOpen(State.editorOriginRect || editorAnchorRect(n.id));
 
   setTimeout(() => {
     // On mobile, don't auto-focus to avoid keyboard popping up immediately
@@ -1725,13 +1772,20 @@ function closeEditor(fromPopState = false) {
   // the position the grid will have once the body is unlocked again.
   // Querying the live card now would give a position shifted by the
   // scrollbar-compensation padding that's still applied to body.
-  let originRect = State.editorOriginRect;
-  if (!originRect && editedId) {
+  // Prefer the live grid card so the note "falls into its place"; fall back to
+  // the rect captured at open, then to the + FAB (new/empty notes).
+  let originRect = null;
+  if (editedId) {
     const freshCard = document.querySelector(`.note-card[data-id="${editedId}"]`);
     if (freshCard) {
       const r = freshCard.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) originRect = r;
     }
+  }
+  if (!originRect) originRect = State.editorOriginRect;
+  if (!originRect) {
+    const fab = document.getElementById('fab-new');
+    if (fab) { const r = fab.getBoundingClientRect(); if (r.width > 0) originRect = r; }
   }
   State.editorOriginRect = null;
 
@@ -1758,15 +1812,9 @@ function closeEditor(fromPopState = false) {
     if (State.editorDirty) { State.editorDirty = false; renderGrid(); }
   }
 
-  // When the user closes via the Android back gesture or system back
-  // button, popstate fires here. The browser already played its own
-  // page-back animation, so running our FLIP on top causes a visible
-  // re-show + double-animate. Hide the modal immediately in that case.
-  if (fromPopState) {
-    onCloseEnd();
-    return;
-  }
-
+  // Always play the minimize animation — including the Android back gesture —
+  // so closing is visually consistent. (This is an in-app modal, not a real
+  // page navigation, so there is no native page animation to conflict with.)
   if (originRect && modalCard && !noteWasEmpty) {
     const cardRect = modalCard.getBoundingClientRect();
     const scaleX = Math.max(originRect.width  / cardRect.width,  0.01);
@@ -1774,16 +1822,17 @@ function closeEditor(fromPopState = false) {
     const tx = originRect.left + originRect.width  / 2 - (cardRect.left + cardRect.width  / 2);
     const ty = originRect.top  + originRect.height / 2 - (cardRect.top  + cardRect.height / 2);
 
+    modalCard.style.animation = 'none'; // override the CSS keyframe
     modalCard.style.overflow = 'hidden';
     modalCard.style.pointerEvents = 'none';
-    if (modalBg) { modalBg.style.transition = 'opacity 0.16s ease'; modalBg.style.opacity = '0'; }
+    // Scrim fades; the card keeps its content visible as it shrinks into place.
+    if (modalBg) { modalBg.style.animation = 'none'; modalBg.style.transition = 'opacity 0.2s ease'; modalBg.style.opacity = '0'; }
 
     modalCard.getBoundingClientRect(); // force reflow
 
-    modalCard.style.transition = 'transform 0.18s cubic-bezier(0.2,0,0,1), opacity 0.16s ease';
+    modalCard.style.transition = 'transform 0.24s cubic-bezier(0.2,0,0,1)';
     modalCard.style.transformOrigin = 'center center';
     modalCard.style.transform = `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`;
-    modalCard.style.opacity = '0';
 
     const onTrans = (e) => {
       if (e.propertyName !== 'transform') return;
@@ -1791,7 +1840,7 @@ function closeEditor(fromPopState = false) {
       onCloseEnd();
     };
     modalCard.addEventListener('transitionend', onTrans);
-    setTimeout(onCloseEnd, 240); // fallback
+    setTimeout(onCloseEnd, 320); // fallback
   } else {
     modal.classList.add('closing');
     modalCard?.addEventListener('animationend', onCloseEnd, { once: true });
