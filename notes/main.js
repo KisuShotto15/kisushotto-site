@@ -777,8 +777,6 @@ function startDrag(card, x, y) {
     w: rect.width, h: rect.height,
     order, slotRect, cols, fromIndex,
     lastIns: fromIndex,
-    lastGy: rect.top + rect.height / 2,
-    dir: 1,
   };
 }
 
@@ -802,22 +800,26 @@ function updateDrag(x, y) {
   const gx = x - offsetX + w / 2;
   const gy = y - offsetY + h / 2;
   const gCol = dragColOf(cols, gx);
+  const nOthers = order.length - 1;
 
-  // Direction-aware threshold: dragging down triggers a swap once the ghost
-  // reaches the upper part of a card; dragging up, the lower part. The 0.25/0.75
-  // split also acts as hysteresis so small jitter never flips the gap.
-  const dir = gy > s.lastGy ? 1 : (gy < s.lastGy ? -1 : s.dir);
-  s.dir = dir; s.lastGy = gy;
-  const frac = dir < 0 ? 0.75 : 0.25;
-
-  // Insertion index among the non-dragged cards = how many precede the ghost in
-  // reading order (column, then a direction-biased vertical threshold).
-  let ins = 0;
-  for (let i = 0; i < order.length; i++) {
-    if (order[i] === card) continue;
-    const r = slotRect[i];
+  // Walk the gap toward the ghost using the DISPLACED (visual) positions of the
+  // neighbouring cards, with a dead band. The gap itself sits at slotRect[ins];
+  // moving the cursor anywhere inside it never crosses a neighbour threshold, so
+  // the displaced card no longer snaps back when the cursor enters the gap.
+  let ins = s.lastIns;
+  // Move the gap DOWN while the ghost clearly enters the card below it.
+  while (ins < nOthers) {
+    const r = slotRect[ins + 1];                 // displaced rect of card below gap
     const cCol = dragColOf(cols, r.left + r.width / 2);
-    if (cCol < gCol || (cCol === gCol && gy > r.top + frac * r.height)) ins++;
+    if (gCol > cCol || (gCol === cCol && gy > r.top + 0.7 * r.height)) ins++;
+    else break;
+  }
+  // Move the gap UP while the ghost clearly enters the card above it.
+  while (ins > 0) {
+    const r = slotRect[ins - 1];                 // displaced rect of card above gap
+    const cCol = dragColOf(cols, r.left + r.width / 2);
+    if (gCol < cCol || (gCol === cCol && gy < r.top + 0.3 * r.height)) ins--;
+    else break;
   }
   if (ins === s.lastIns) return; // no change → leave transforms as they are
   s.lastIns = ins;
