@@ -1359,11 +1359,23 @@ function openEditor(n) {
   card.style.background = e.color || '';
   card.classList.toggle('colored', !!e.color);
   $('#ed-title').value = e.title || '';
-  $('#ed-body').value  = htmlToText(e.body || '');
-  autoGrow($('#ed-body'));
   const isChecklist = e.type === 'checklist';
+  // Unhide the textarea BEFORE measuring — autoGrow reads scrollHeight, which is
+  // 0 while the element is display:none (e.g. coming from a checklist note),
+  // which would collapse a long note until reopened.
   $('#ed-body').hidden = isChecklist;
   $('#ed-checklist-list').hidden = !isChecklist;
+  $('#ed-body').value  = htmlToText(e.body || '');
+  if (!isChecklist) {
+    autoGrow($('#ed-body'));
+    // Re-measure once layout settles and once webfonts load (metrics change).
+    requestAnimationFrame(() => {
+      if (State.editing === e && !$('#ed-body').hidden) autoGrow($('#ed-body'));
+    });
+    document.fonts?.ready.then(() => {
+      if (State.editing === e && !$('#ed-body').hidden) autoGrow($('#ed-body'));
+    });
+  }
 
   renderChecklist();
   renderAttachments();
