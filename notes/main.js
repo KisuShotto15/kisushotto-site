@@ -1848,7 +1848,12 @@ function closeEditor(fromPopState = false) {
     const recent = Date.now() - _lastTouchStartT < 1500;
     const fromLeftEdge = recent && _lastTouchStartX >= 0 && _lastTouchStartX < 40;
     if (fromLeftEdge) {
-      onCloseEnd();
+      // Brave runs its own page-back slide; the FLIP fights it. Don't hard-cut
+      // (the lifted-out card pops back = the "flick") — fade the modal + scrim
+      // out quickly, then tear down so the card restores under cover of the fade.
+      if (modalCard) { modalCard.style.animation = 'none'; modalCard.style.pointerEvents = 'none'; modalCard.style.transition = 'opacity 0.14s ease'; modalCard.style.opacity = '0'; }
+      if (modalBg)   { modalBg.style.animation = 'none'; modalBg.style.transition = 'opacity 0.14s ease'; modalBg.style.opacity = '0'; }
+      setTimeout(onCloseEnd, 150);
       return;
     }
   }
