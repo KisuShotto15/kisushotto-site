@@ -691,7 +691,7 @@ input:focus {
         <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
         <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
         <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-        <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="100000" step="100000"></div>
+        <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="0" step="100000"></div>
         <div class="cfg-row"><span>Compra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
         <div class="cfg-row"><span>Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
         <div class="cfg-row"><span>Secc. Compra — mínimo (VES)</span><input type="number" id="cfg-buy-amount" value="2000000" min="100000" step="100000"></div>
@@ -2325,7 +2325,8 @@ function saveConfig() {
   CFG.spreadThr     = parseFloat(document.getElementById('cfg-spr').value) || 0.5;
   CFG.overboughtThr = parseFloat(document.getElementById('cfg-ob').value)  || 1.0;
   CFG.weaknessThr   = parseFloat(document.getElementById('cfg-wk').value)  || 0.5;
-  CFG.mayAmount   = parseFloat(document.getElementById('cfg-may-amount').value)   || 2000000;
+  var mayVal = document.getElementById('cfg-may-amount').value;
+  CFG.mayAmount   = mayVal === '' ? 2000000 : (parseFloat(mayVal) || 0);
   CFG.smallAmount = parseFloat(document.getElementById('cfg-small-amount').value) || 59999;
   CFG.commission  = parseFloat(document.getElementById('cfg-commission').value)   || 0;
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
