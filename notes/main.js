@@ -2219,10 +2219,18 @@ function bindEditorActions() {
     }
   });
 
-  // close
-  $$('#editor [data-close]').forEach(el => el.addEventListener('click', closeEditor));
+  // close — the back/close button always closes
+  $('#ed-close')?.addEventListener('click', () => closeEditor());
+  // Backdrop: only close on a genuine click that STARTED on the backdrop. A text
+  // selection drag that begins inside the note and is released on the backdrop
+  // must NOT close the editor.
+  let _editorPressOnBg = false;
+  $('#editor').addEventListener('pointerdown', (e) => {
+    _editorPressOnBg = e.target.classList.contains('modal-bg') || e.target === $('#editor');
+  });
   $('#editor').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeEditor();
+    const onBg = e.target.classList.contains('modal-bg') || e.target === e.currentTarget;
+    if (onBg && _editorPressOnBg) closeEditor();
   });
   $('#ed-title').addEventListener('focus',   () => EditorHistory.mark());
   $('#ed-body').addEventListener('focus',    () => EditorHistory.mark());
