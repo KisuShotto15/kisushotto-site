@@ -1,0 +1,16 @@
+{
+  "name": "KS Notes",
+  "short_name": "Notes",
+  "id": "ks-notes",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111114",
+  "theme_color": "#111114",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/images/notes-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/notes-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/notes-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
