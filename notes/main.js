@@ -1746,16 +1746,6 @@ function closeEditor(fromPopState = false) {
   const modal = $('#editor');
   if (modal.hidden || modal._closing) return; // guard against double-close (popstate fires twice on edge gestures)
   modal._closing = true;
-  modal._closedFromPopState = fromPopState;
-
-  // When the close was triggered by the Android back gesture, Brave is in the
-  // middle of its own page-back animation, which applies a transform to <body>
-  // and visually slides the editor off-screen. Reparent the modal to <html>
-  // so the body's transform stops affecting it and our FLIP animation is
-  // visible. We restore the modal back to body in onCloseEnd.
-  if (fromPopState && modal.parentElement !== document.documentElement) {
-    document.documentElement.appendChild(modal);
-  }
 
   detachKeyboardListener();
   clearTimeout(saveTimer);
@@ -1833,17 +1823,18 @@ function closeEditor(fromPopState = false) {
       const c = document.querySelector(`.note-card[data-id="${editedId}"]`);
       if (c) c.style.visibility = '';
     }
-    // If we reparented the modal to <html> for the gesture-close, put it back
-    // under <body> so the next open finds it where the rest of the UI lives.
-    if (modal._closedFromPopState && modal.parentElement === document.documentElement) {
-      document.body.appendChild(modal);
-    }
-    modal._closedFromPopState = false;
   }
 
-  // Always play the minimize animation — including the Android back gesture —
-  // so closing is visually consistent. (This is an in-app modal, not a real
-  // page navigation, so there is no native page animation to conflict with.)
+  // Skip the FLIP when popstate fires (Android back gesture). Brave runs its
+  // own page-back slide at the viewport level and our shrink-to-card on top
+  // looks like a stutter/refresh. The system slide is the close animation in
+  // that case; the FLIP only plays for in-app closes (X button, tap on backdrop,
+  // Esc), where there is no competing animation.
+  if (fromPopState) {
+    onCloseEnd();
+    return;
+  }
+
   if (originRect && modalCard && !noteWasEmpty) {
     const cardRect = modalCard.getBoundingClientRect();
     const scaleX = Math.max(originRect.width  / cardRect.width,  0.01);
