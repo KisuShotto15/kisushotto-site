@@ -1742,6 +1742,20 @@ function isNoteEmpty(e) {
   return true;
 }
 
+// Track the X of the last touchstart so we can tell whether a popstate-driven
+// close came from the right-edge gesture (no browser page-back animation, our
+// FLIP is the close animation) vs the left-edge gesture (Brave runs its own
+// slide and our FLIP on top looks like a stutter).
+let _lastTouchStartX = -1;
+let _lastTouchStartT = 0;
+if (typeof window !== 'undefined') {
+  window.addEventListener('touchstart', (e) => {
+    if (!e.touches.length) return;
+    _lastTouchStartX = e.touches[0].clientX;
+    _lastTouchStartT = Date.now();
+  }, { passive: true, capture: true });
+}
+
 function closeEditor(fromPopState = false) {
   const modal = $('#editor');
   if (modal.hidden || modal._closing) return; // guard against double-close (popstate fires twice on edge gestures)
@@ -1825,14 +1839,19 @@ function closeEditor(fromPopState = false) {
     }
   }
 
-  // Skip the FLIP when popstate fires (Android back gesture). Brave runs its
-  // own page-back slide at the viewport level and our shrink-to-card on top
-  // looks like a stutter/refresh. The system slide is the close animation in
-  // that case; the FLIP only plays for in-app closes (X button, tap on backdrop,
-  // Esc), where there is no competing animation.
+  // When popstate fires, decide whether to play the FLIP based on which edge
+  // the gesture started from. Right-edge gestures fire popstate cleanly (no
+  // competing browser animation) — FLIP looks good. Left-edge gestures are
+  // intercepted by Brave's own page-back slide, which fights with our FLIP
+  // and produces a stutter — skip FLIP in that case.
   if (fromPopState) {
-    onCloseEnd();
-    return;
+    const recent = Date.now() - _lastTouchStartT < 1500;
+    const w = window.innerWidth;
+    const fromRightEdge = recent && _lastTouchStartX > w - 40;
+    if (!fromRightEdge) {
+      onCloseEnd();
+      return;
+    }
   }
 
   if (originRect && modalCard && !noteWasEmpty) {
