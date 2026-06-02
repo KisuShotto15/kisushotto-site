@@ -6,6 +6,14 @@ import { apiSyncPull, apiSyncPush } from './api.js';
 let pushTimer = null;
 let pushing = false;
 
+export function isPushing() { return pushing; }
+
+function emitSyncState() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('notes-sync-state'));
+  }
+}
+
 function isOnline() { return typeof navigator !== 'undefined' ? navigator.onLine !== false : true; }
 
 export async function pull() {
@@ -62,6 +70,7 @@ export async function flushQueue() {
   if (pushing) return;
   if (!isOnline()) return;
   pushing = true;
+  emitSyncState();
   try {
     const items = await idb.peekQueue(); // read without removing — safe on failure
     if (!items.length) return;
@@ -119,6 +128,7 @@ export async function flushQueue() {
     // Items remain in queue; next flushQueue call will retry them
   } finally {
     pushing = false;
+    emitSyncState();
   }
 }
 
@@ -126,6 +136,7 @@ export async function saveNoteLocal(note) {
   try {
     await idb.put('notes', note);
     await idb.enqueue({ type: 'note', id: note.id });
+    emitSyncState();
   } catch (e) {
     console.warn('IDB write failed (Brave Shields?)', e);
   }
@@ -136,6 +147,7 @@ export async function saveCategoryLocal(cat) {
   try {
     await idb.put('categories', cat);
     await idb.enqueue({ type: 'category', id: cat.id });
+    emitSyncState();
   } catch (e) {
     console.warn('IDB write failed (Brave Shields?)', e);
   }
