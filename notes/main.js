@@ -1839,16 +1839,15 @@ function closeEditor(fromPopState = false) {
     }
   }
 
-  // When popstate fires, decide whether to play the FLIP based on which edge
-  // the gesture started from. Right-edge gestures fire popstate cleanly (no
-  // competing browser animation) — FLIP looks good. Left-edge gestures are
-  // intercepted by Brave's own page-back slide, which fights with our FLIP
-  // and produces a stutter — skip FLIP in that case.
+  // Play the FLIP on popstate by default (right-edge gesture, back button).
+  // Only skip it when we can POSITIVELY confirm a left-edge gesture, because
+  // Brave runs its own page-back slide there and our FLIP on top stutters.
+  // Edge gestures often don't deliver touchstart to the page, so _lastTouchStartX
+  // may be stale — defaulting to FLIP guarantees the right-edge case animates.
   if (fromPopState) {
     const recent = Date.now() - _lastTouchStartT < 1500;
-    const w = window.innerWidth;
-    const fromRightEdge = recent && _lastTouchStartX > w - 40;
-    if (!fromRightEdge) {
+    const fromLeftEdge = recent && _lastTouchStartX >= 0 && _lastTouchStartX < 40;
+    if (fromLeftEdge) {
       onCloseEnd();
       return;
     }
