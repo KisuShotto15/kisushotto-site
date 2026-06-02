@@ -11,7 +11,7 @@ import {
   apiListPasskeys, apiRenamePasskey, apiDeletePasskey,
   getUserEmail,
 } from './api.js';
-import { pull, flushQueue, saveNoteLocal, saveCategoryLocal, onConnectionChange, isPushing } from './sync.js';
+import { pull, flushQueue, saveNoteLocal, saveCategoryLocal, onConnectionChange } from './sync.js';
 import {
   isSessionUnlocked, lockSession,
   setPin, verifyPin,
@@ -381,154 +381,17 @@ function updateNetBanner(online) {
 }
 
 // ── render ───────────────────────────────────────────────────────────────────
-
-// Map of color names (es/en) to the hex palette in index.html. A name matches
-// the note if its color hex is in the bucket.
-const COLOR_NAME_MAP = {
-  red:      ['#5E2020', '#852D2D'],
-  rojo:     ['#5E2020', '#852D2D'],
-  brown:    ['#5C3520', '#44301F', '#824D23', '#5C3D2E'],
-  marron:   ['#5C3520', '#44301F', '#824D23', '#5C3D2E'],
-  marrón:   ['#5C3520', '#44301F', '#824D23', '#5C3D2E'],
-  yellow:   ['#4F4118', '#6B591D'],
-  amarillo: ['#4F4118', '#6B591D'],
-  mustard:  ['#4F4118', '#6B591D'],
-  green:    ['#1F4A28', '#226333'],
-  verde:    ['#1F4A28', '#226333'],
-  teal:     ['#194446', '#1A5E63'],
-  blue:     ['#20316E', '#2D4494'],
-  azul:     ['#20316E', '#2D4494'],
-  slate:    ['#28313F', '#334155'],
-  purple:   ['#2A2360', '#3F2260', '#585FAA', '#453995', '#3E3282', '#5B3082'],
-  morado:   ['#2A2360', '#3F2260', '#585FAA', '#453995', '#3E3282', '#5B3082'],
-  violeta:  ['#2A2360', '#3F2260', '#585FAA', '#453995', '#3E3282', '#5B3082'],
-  gray:     ['#2E2E33', '#3F3F46'],
-  grey:     ['#2E2E33', '#3F3F46'],
-  gris:     ['#2E2E33', '#3F3F46'],
-  pink:     ['#5C2049', '#822D61'],
-  rosa:     ['#5C2049', '#822D61'],
-  magenta:  ['#5C2049', '#822D61'],
-};
-
-function parseDateToken(s) {
-  const t = String(s || '').toLowerCase().trim();
-  const now = Date.now();
-  const day = 86400000;
-  if (t === 'today')     return now - (now % day);
-  if (t === 'yesterday') return now - (now % day) - day;
-  if (t === 'week')      return now - 7 * day;
-  if (t === 'month')     return now - 30 * day;
-  const m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) {
-    const d = new Date(+m[1], +m[2] - 1, +m[3]);
-    return isNaN(d) ? null : d.getTime();
-  }
-  return null;
-}
-
-// Parse a query string into structured filters and remaining free text.
-// Unknown operator keys fall back into text so typos don't drop matches.
-function parseSearchQuery(q) {
-  const filters = [];
-  const textParts = [];
-  // Tokenize respecting "quoted strings"
-  const tokens = [];
-  const re = /"([^"]*)"|(\S+)/g;
-  let m;
-  while ((m = re.exec(q)) !== null) tokens.push(m[1] != null ? `"${m[1]}"` : m[2]);
-
-  for (const tok of tokens) {
-    const quoted = tok.startsWith('"') && tok.endsWith('"');
-    if (quoted) { textParts.push(tok.slice(1, -1)); continue; }
-    const i = tok.indexOf(':');
-    if (i <= 0) { textParts.push(tok); continue; }
-    const key = tok.slice(0, i).toLowerCase();
-    const val = tok.slice(i + 1).toLowerCase();
-    if (!val) { textParts.push(tok); continue; }
-    switch (key) {
-      case 'color': {
-        const hexes = COLOR_NAME_MAP[val] || (val.startsWith('#') ? [val.toUpperCase()] : null);
-        if (!hexes) { textParts.push(tok); break; }
-        filters.push(n => n.color && hexes.includes(n.color.toUpperCase()));
-        break;
-      }
-      case 'category':
-      case 'cat': {
-        if (key === 'cat' && val.length > 8) {
-          filters.push(n => (n.categories || []).includes(val));
-        } else {
-          const me = getUserEmail();
-          const match = State.categories.find(c => c.owner_email === me && (c.name || '').toLowerCase() === val);
-          if (!match) { filters.push(_ => false); break; }
-          filters.push(n => (n.categories || []).includes(match.id));
-        }
-        break;
-      }
-      case 'has': {
-        if (val === 'image' || val === 'audio') {
-          filters.push(n => (n.attachments || []).some(a => a.type === val));
-        } else if (val === 'attachment' || val === 'attach') {
-          filters.push(n => (n.attachments || []).length > 0);
-        } else if (val === 'checklist') {
-          filters.push(n => n.type === 'checklist');
-        } else if (val === 'reminder') {
-          filters.push(n => n.reminder_at && n.reminder_at > Date.now());
-        } else { textParts.push(tok); }
-        break;
-      }
-      case 'before': {
-        const t = parseDateToken(val);
-        if (t == null) { textParts.push(tok); break; }
-        filters.push(n => (n.created_at || 0) < t);
-        break;
-      }
-      case 'after': {
-        const t = parseDateToken(val);
-        if (t == null) { textParts.push(tok); break; }
-        filters.push(n => (n.created_at || 0) > t);
-        break;
-      }
-      case 'archived': {
-        if (val === 'true')       filters.push({ _override: 'includeArchived' });
-        else if (val === 'false') filters.push(n => !n.archived);
-        else textParts.push(tok);
-        break;
-      }
-      case 'pinned': {
-        if (val === 'true')       filters.push(n => !!n.pinned);
-        else if (val === 'false') filters.push(n => !n.pinned);
-        else textParts.push(tok);
-        break;
-      }
-      case 'is': {
-        if (val === 'locked')      filters.push(n => !!n.locked);
-        else if (val === 'shared') {
-          const me = getUserEmail();
-          filters.push(n => n.owner_email !== me || (n.shares?.length > 0));
-        } else if (val === 'pinned') filters.push(n => !!n.pinned);
-        else textParts.push(tok);
-        break;
-      }
-      default:
-        textParts.push(tok);
-    }
-  }
-  return { filters, text: textParts.join(' ').trim().toLowerCase() };
-}
-
 function getCurrentNotes() {
   const v = State.view;
+  const q = State.search.trim().toLowerCase();
   const me = getUserEmail();
-  const parsed = parseSearchQuery(State.search || '');
-  const includeArchived = parsed.filters.some(f => f && f._override === 'includeArchived');
-  const predicates = parsed.filters.filter(f => typeof f === 'function');
 
   return State.notes.filter(n => {
     if (v === 'trash')   return !!n.trashed_at;
     if (n.trashed_at)    return false;
     if (v === 'archive') return !!n.archived && !n.locked;
     if (v === 'locked')  return !!n.locked;
-    if (n.archived && !v.startsWith('cat:') && !includeArchived) return false;
+    if (n.archived && !v.startsWith('cat:')) return false;
     if (v === 'shared')  return n.owner_email !== me || (n.shares?.length > 0);
     if (v.startsWith('cat:')) {
       const id = v.slice(4);
@@ -536,14 +399,14 @@ function getCurrentNotes() {
     }
     // 'all'
     return true;
-  }).filter(n => predicates.every(p => p(n))).filter(n => {
-    if (!parsed.text) return true;
+  }).filter(n => {
+    if (!q) return true;
     const hay = (
       (n.title || '') + ' ' +
       (n.body || '') + ' ' +
       (n.checklist_items || []).map(c => c.text).join(' ')
     ).toLowerCase();
-    return hay.includes(parsed.text);
+    return hay.includes(q);
   });
 }
 
@@ -2801,31 +2664,6 @@ function bindDrawer() {
   $('#drawer-logout')?.addEventListener('click', () => window.logout());
 }
 
-// ── sync status indicator ────────────────────────────────────────────────────
-async function updateSyncStatus() {
-  const btn = $('#sync-status');
-  if (!btn) return;
-  const online = navigator.onLine !== false;
-  let queueLen = 0;
-  try { queueLen = (await idb.peekQueue()).length; } catch {}
-  let state, label;
-  if (!online && queueLen > 0)      { state = 'pending';  label = `${queueLen} pendiente${queueLen !== 1 ? 's' : ''}`; }
-  else if (!online)                 { state = 'offline';  label = 'Sin conexión'; }
-  else if (isPushing() || queueLen) { state = 'syncing';  label = 'Sincronizando'; }
-  else                              { state = 'synced';   label = 'Sincronizado'; }
-  btn.dataset.state = state;
-  const lbl = btn.querySelector('.sync-label');
-  if (lbl) lbl.textContent = label;
-
-  const popup = $('#popup-sync-status');
-  if (popup && !popup.hidden) {
-    $('#sync-detail-state').textContent = label;
-    $('#sync-detail-queue').textContent = String(queueLen);
-    const last = await idb.getMeta('lastSyncedAt');
-    $('#sync-detail-last').textContent = last ? new Date(last).toLocaleString() : '—';
-  }
-}
-
 // ── search + nav ─────────────────────────────────────────────────────────────
 function bindUI() {
   $('#search').addEventListener('input', (e) => {
@@ -2833,33 +2671,6 @@ function bindUI() {
     renderGrid();
   });
   $('#btn-new')?.addEventListener('click', openNew);
-
-  $('#search-help')?.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    const popup = $('#popup-search-help');
-    if (!popup) return;
-    if (!popup.hidden) { hidePopups(); return; }
-    showPopupAt('#popup-search-help', ev.currentTarget);
-  });
-
-  $('#sync-status')?.addEventListener('click', async (ev) => {
-    ev.stopPropagation();
-    const popup = $('#popup-sync-status');
-    if (!popup) return;
-    if (!popup.hidden) { hidePopups(); return; }
-    await updateSyncStatus(); // refresh detail before showing
-    showPopupAt('#popup-sync-status', ev.currentTarget);
-  });
-
-  $('#sync-retry')?.addEventListener('click', async () => {
-    await flushQueue();
-    await updateSyncStatus();
-  });
-
-  window.addEventListener('notes-sync-state', updateSyncStatus);
-  window.addEventListener('online',  updateSyncStatus);
-  window.addEventListener('offline', updateSyncStatus);
-  updateSyncStatus();
 
   // Restore the desktop sidebar state (persists until the user toggles it),
   // without animating on load.
