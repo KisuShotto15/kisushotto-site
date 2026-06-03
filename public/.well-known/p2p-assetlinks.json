@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.kisushotto.p2p",
+    "sha256_cert_fingerprints": ["6D:06:77:70:9A:FE:0E:E1:57:70:17:6B:D9:C2:9C:C4:B7:FF:54:59:22:62:64:80:4D:71:41:19:47:10:4B:91"]
+  }
+}]
