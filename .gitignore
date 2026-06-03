@@ -3,6 +3,14 @@ dist/
 .env
 .env.local
 
+# Build artifacts
+notes-pwa/
+habits-pwa/
+p2p-pwa/
+KsNotes.apk
+KsHabits.apk
+KsP2pMonitor.apk
+
 # TWA build artifacts (keystores must never be committed)
 notes-twa.keystore
 notes-twa/app/build/
@@ -12,3 +20,7 @@ habits-twa.keystore
 habits-twa/app/build/
 habits-twa/.gradle/
 habits-twa/build/
+p2p-twa.keystore
+p2p-twa/app/build/
+p2p-twa/.gradle/
+p2p-twa/build/

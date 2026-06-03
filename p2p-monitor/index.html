@@ -1011,9 +1011,9 @@ async function fetchTier(transAmount, maxPages, payTypesOverride) {
       page: page,
       rows: 20,
       tradeType: 'SELL',
-      transAmount: transAmount,
       payTypes: pays
     };
+    if (transAmount && parseFloat(transAmount) > 0) body.transAmount = transAmount;
     var r = await fetch(PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Api-Secret': VERCEL_SECRET },

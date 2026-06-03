@@ -1,0 +1,30 @@
+{
+  "packageId": "com.kisushotto.p2p",
+  "host": "p2p.kisushotto.com",
+  "name": "KS P2P Monitor",
+  "launcherName": "P2P",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#000000",
+  "backgroundColor": "#000000",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://p2p.kisushotto.com/icons/p2p-512.png",
+  "maskableIconUrl": "https://p2p.kisushotto.com/icons/p2p-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "../p2p-twa.keystore",
+    "alias": "p2p-key"
+  },
+  "appVersionCode": 1,
+  "appVersionName": "1.0.0",
+  "shortcuts": [],
+  "alphaDependencies": { "enabled": false },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://p2p.kisushotto.com/",
+  "minSdkVersion": 19,
+  "webManifestUrl": "https://p2p.kisushotto.com/manifest.json",
+  "fallbackType": "customtabs"
+}
