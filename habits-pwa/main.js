@@ -1,5 +1,5 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=13';
-import { ensurePushSubscription } from './push.js?v=13';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=14';
+import { ensurePushSubscription } from './push.js?v=14';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
@@ -115,23 +115,9 @@ function freqLabel(habit) {
 }
 
 // ── Streak calculation ────────────────────────────────────────────────────────
+// Streak is computed server-side over the full history (habit.streak).
 function calcStreak(habit) {
-  let streak = 0;
-  const check = new Date();
-  check.setHours(0, 0, 0, 0);
-
-  for (let i = 0; i < 365; i++) {
-    const ds = `${check.getFullYear()}-${String(check.getMonth()+1).padStart(2,'0')}-${String(check.getDate()).padStart(2,'0')}`;
-    if (isDueOn(habit, ds)) {
-      if (completions[ds]?.[habit.id] != null) {
-        streak++;
-      } else {
-        if (ds !== today()) break; // allow today's incomplete
-      }
-    }
-    check.setDate(check.getDate() - 1);
-  }
-  return streak;
+  return habit?.streak ?? 0;
 }
 
 function bestStreakAll() {
@@ -361,8 +347,14 @@ window.onHabitClick = async function(id) {
 
   try {
     await toggleComplete({ habit_id: id, date: t });
+    if (t === today() && isDueOn(habit, t)) {
+      habit.streak = Math.max(0, (habit.streak ?? 0) + (wasDone ? -1 : 1));
+    } else {
+      try { const { habits: hh } = await getHabits(today()); habits = hh; } catch {}
+    }
     delete calDailyCache[t.slice(0, 7)];
     await loadCalMonth();
+    renderToday();
     renderCalendar();
     renderStats();
   } catch (e) {
@@ -384,8 +376,16 @@ window.adjustCount = async function(id, delta) {
 
   try {
     await setComplete({ habit_id: id, date: t, value: newVal });
+    if ((oldVal > 0) !== (newVal > 0)) {
+      if (t === today() && isDueOn(habit, t)) {
+        habit.streak = Math.max(0, (habit.streak ?? 0) + (newVal > 0 ? 1 : -1));
+      } else {
+        try { const { habits: hh } = await getHabits(today()); habits = hh; } catch {}
+      }
+    }
     delete calDailyCache[t.slice(0, 7)];
     await loadCalMonth();
+    renderToday();
     renderCalendar();
     renderStats();
   } catch (e) {
@@ -778,7 +778,7 @@ async function init() {
 
   try {
     const [{ habits: h }] = await Promise.all([
-      getHabits(),
+      getHabits(today()),
       loadCompletions(currMonth),
       loadCompletions(prev1Month),
       loadCompletions(prev2Month),

@@ -75,6 +75,25 @@ function isDueOn(habit, dateISO) {
   return true;
 }
 
+function isoUTC(d) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+
+// Current streak: walk back from today over the full completion history.
+function calcStreak(habit, doneSet, todayISO) {
+  let streak = 0;
+  const d = new Date(todayISO + 'T00:00:00Z');
+  for (let i = 0; i < 3660; i++) {        // cap ~10 years
+    const ds = isoUTC(d);
+    if (isDueOn(habit, ds)) {
+      if (doneSet.has(ds)) streak++;
+      else if (ds !== todayISO) break;     // today may still be incomplete
+    }
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  return streak;
+}
+
 // ── VAPID / Web Push ──────────────────────────────────────────────────────────
 function b64urlToBytes(s) {
   s = s.replace(/-/g, '+').replace(/_/g, '/');
@@ -161,10 +180,26 @@ async function migrate(env) {
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
-async function getHabits(env, uid) {
+async function getHabits(request, env, uid) {
   const { results } = await env.DB.prepare(
     `SELECT * FROM habits WHERE active = 1 AND user_id = ? ORDER BY sort_order, created_at`
   ).bind(uid).all();
+
+  const url      = new URL(request.url);
+  const todayISO = url.searchParams.get('today') || isoUTC(new Date());
+
+  const { results: comps } = await env.DB.prepare(
+    `SELECT habit_id, date FROM completions WHERE user_id = ? AND value > 0`
+  ).bind(uid).all();
+
+  const doneByHabit = {};
+  for (const c of comps) {
+    (doneByHabit[c.habit_id] ||= new Set()).add(c.date);
+  }
+  for (const h of results) {
+    h.streak = calcStreak(h, doneByHabit[h.id] || new Set(), todayISO);
+  }
+
   return json({ habits: results });
 }
 
@@ -336,7 +371,7 @@ export default {
       if (path === '/me/push' && method === 'POST') return await setPushSubscription(request, env, uid);
       if (path === '/vapid'   && method === 'GET')  return await getVapidPublic(env);
 
-      if (path === '/habits' && method === 'GET')  return await getHabits(env, uid);
+      if (path === '/habits' && method === 'GET')  return await getHabits(request, env, uid);
       if (path === '/habits' && method === 'POST') return await createHabit(request, env, uid);
       if (seg[0] === 'habits' && seg[1] && method === 'PUT')    return await updateHabit(seg[1], request, env, uid);
       if (seg[0] === 'habits' && seg[1] && method === 'DELETE') return await deleteHabit(seg[1], env, uid);
