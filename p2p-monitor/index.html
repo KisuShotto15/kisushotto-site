@@ -549,6 +549,7 @@ input:focus {
   <span id="topbar-bot-price" style="display:none;font-size:14px;font-weight:700;color:var(--gold);background:var(--gold-d);border:1px solid var(--gold-b);border-radius:6px;padding:2px 10px;font-variant-numeric:tabular-nums">—</span>
   <span style="font-size:15px;color:var(--text-3)" id="last-update"></span>
   <div class="spacer"></div>
+  <button class="btn btn-sm" id="btn-activity" onclick="toggleActivityGuard()" title="Alertas de actividad / apagado por inactividad" style="font-size:17px;padding:5px 10px">🛡️</button>
   <button class="btn btn-gold" id="btn-start" onclick="toggleMonitor()">▶ Iniciar</button>
   <button class="btn btn-sm" onclick="fetchOnce()" title="Actualizar">&#8635;</button>
   <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative;font-size:17px;padding:5px 10px" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
@@ -1432,7 +1433,7 @@ function checkAlerts() {
         );
         push('Spread P2P ' + spread.toFixed(3) + '%', 'Vende a ' + fmt(bestMay) + ' Bs — compra ref. ' + fmt(bestSmall) + ' Bs');
       }
-    } else { COOLDOWN.spread = 0; }
+    }
   }
 
   // Sobrecomprado / debilidad
@@ -1542,10 +1543,41 @@ var ACTIVITY = {
   lastActivity: Date.now(),
   checkTimer: null,
   countdownTimer: null,
+  enabled: true,
   INACTIVE_MS: 5 * 60 * 1000,
   GRACE_MS: 60 * 1000,
   CHECK_MS: 30 * 1000
 };
+
+function loadActivityGuard() {
+  try {
+    var v = localStorage.getItem('p2p_activity_guard');
+    if (v === 'false') ACTIVITY.enabled = false;
+  } catch(e) {}
+  updateActivityBtn();
+}
+
+function updateActivityBtn() {
+  var b = document.getElementById('btn-activity');
+  if (!b) return;
+  if (ACTIVITY.enabled) {
+    b.textContent = '🛡️';
+    b.style.opacity = '1';
+    b.title = 'Alertas de actividad activas (click para desactivar)';
+  } else {
+    b.textContent = '🛡️';
+    b.style.opacity = '0.35';
+    b.title = 'Alertas de actividad DESACTIVADAS (click para activar)';
+  }
+}
+
+function toggleActivityGuard() {
+  ACTIVITY.enabled = !ACTIVITY.enabled;
+  try { localStorage.setItem('p2p_activity_guard', ACTIVITY.enabled ? 'true' : 'false'); } catch(e) {}
+  updateActivityBtn();
+  if (!ACTIVITY.enabled) hidePresenceModal();
+  toast(ACTIVITY.enabled ? 'Apagado por inactividad: ON' : 'Apagado por inactividad: OFF');
+}
 
 function bumpActivity() { ACTIVITY.lastActivity = Date.now(); }
 
@@ -1640,6 +1672,7 @@ async function pollOrders() {
 
 function activityCheck() {
   if (!BOT.running) return;
+  if (!ACTIVITY.enabled) return;
   var modal = document.getElementById('presence-modal');
   if (modal && modal.style.display === 'flex') return;
   if (Date.now() - ACTIVITY.lastActivity >= ACTIVITY.INACTIVE_MS) showPresenceModal();
@@ -2655,7 +2688,7 @@ if (!ST.deFastTimer) ST.deFastTimer = setInterval(fastEventTick, 15000);
 setInterval(checkOpenTradesPrompt, 60000);
 hydrateServerHistory();
 
-loadConfig(); loadTgConfig(); loadBotConfig(); loadPayMethod(); updateCommissionLabels(); updNotifSt(); renderAlerts();
+loadConfig(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts();
 if (window.DJ) refreshCalibration();
 renderOB('ob-may',   [], 'best');
 renderOB('ob-small', [], 'best-buy');
