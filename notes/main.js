@@ -374,6 +374,31 @@ function placeCursorAtStart(el) {
   sel.addRange(range);
 }
 
+// Caret character offset within a single-line contenteditable, and the inverse.
+function caretOffset(el) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return 0;
+  const r = sel.getRangeAt(0);
+  const pre = document.createRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(r.startContainer, r.startOffset);
+  return pre.toString().length;
+}
+function placeCursorAtOffset(el, offset) {
+  const node = el.firstChild;
+  const sel = window.getSelection();
+  const range = document.createRange();
+  if (node && node.nodeType === Node.TEXT_NODE) {
+    range.setStart(node, Math.min(offset, node.textContent.length));
+    range.collapse(true);
+  } else {
+    range.selectNodeContents(el);
+    range.collapse(true);
+  }
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 function updateNetBanner(online) {
   const el = $('#net-banner');
   if (!el) return;
@@ -2274,6 +2299,19 @@ function bindEditorActions() {
   cl.addEventListener('focusin', () => EditorHistory.mark());
   cl.addEventListener('input',   () => { syncChecklistFromDom(); EditorHistory.schedule(); scheduleSave(); });
   cl.addEventListener('keydown', (ev) => {
+    if ((ev.key === 'ArrowUp' || ev.key === 'ArrowDown') && ev.target.matches('.ed-check-text')) {
+      const rows = Array.from(cl.querySelectorAll('.ed-check-text'));
+      const idx = rows.indexOf(ev.target);
+      const targetIdx = ev.key === 'ArrowUp' ? idx - 1 : idx + 1;
+      if (idx < 0 || targetIdx < 0 || targetIdx >= rows.length) return; // edges: default
+      ev.preventDefault();
+      const offset = caretOffset(ev.target);
+      const target = rows[targetIdx];
+      target.focus();
+      placeCursorAtOffset(target, offset);
+      target.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     if (ev.key === 'Enter' && !ev.shiftKey) {
       ev.preventDefault();
       const e = State.editing;
