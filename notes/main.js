@@ -374,7 +374,7 @@ function placeCursorAtStart(el) {
   sel.addRange(range);
 }
 
-// Caret character offset within a single-line contenteditable, and the inverse.
+// Caret character offset within a single-line contenteditable.
 function caretOffset(el) {
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount) return 0;
@@ -383,20 +383,6 @@ function caretOffset(el) {
   pre.selectNodeContents(el);
   pre.setEnd(r.startContainer, r.startOffset);
   return pre.toString().length;
-}
-function placeCursorAtOffset(el, offset) {
-  const node = el.firstChild;
-  const sel = window.getSelection();
-  const range = document.createRange();
-  if (node && node.nodeType === Node.TEXT_NODE) {
-    range.setStart(node, Math.min(offset, node.textContent.length));
-    range.collapse(true);
-  } else {
-    range.selectNodeContents(el);
-    range.collapse(true);
-  }
-  sel.removeAllRanges();
-  sel.addRange(range);
 }
 
 function updateNetBanner(online) {
@@ -2299,17 +2285,31 @@ function bindEditorActions() {
   cl.addEventListener('focusin', () => EditorHistory.mark());
   cl.addEventListener('input',   () => { syncChecklistFromDom(); EditorHistory.schedule(); scheduleSave(); });
   cl.addEventListener('keydown', (ev) => {
-    if ((ev.key === 'ArrowUp' || ev.key === 'ArrowDown') && ev.target.matches('.ed-check-text')) {
+    if (/^Arrow(Up|Down|Left|Right)$/.test(ev.key) && ev.target.matches('.ed-check-text')) {
       const rows = Array.from(cl.querySelectorAll('.ed-check-text'));
       const idx = rows.indexOf(ev.target);
-      const targetIdx = ev.key === 'ArrowUp' ? idx - 1 : idx + 1;
-      if (idx < 0 || targetIdx < 0 || targetIdx >= rows.length) return; // edges: default
-      ev.preventDefault();
-      const offset = caretOffset(ev.target);
-      const target = rows[targetIdx];
-      target.focus();
-      placeCursorAtOffset(target, offset);
-      target.scrollIntoView({ block: 'nearest' });
+      if (idx < 0) return;
+      const sel = window.getSelection();
+      const collapsed = !sel || sel.isCollapsed;
+
+      const goPrevEnd = () => {
+        if (idx - 1 < 0) return false;
+        ev.preventDefault();
+        const t = rows[idx - 1]; t.focus(); placeCursorAtEnd(t); t.scrollIntoView({ block: 'nearest' });
+        return true;
+      };
+      const goNextStart = () => {
+        if (idx + 1 >= rows.length) return false;
+        ev.preventDefault();
+        const t = rows[idx + 1]; t.focus(); placeCursorAtStart(t); t.scrollIntoView({ block: 'nearest' });
+        return true;
+      };
+
+      if (ev.key === 'ArrowUp') { goPrevEnd(); return; }
+      if (ev.key === 'ArrowDown') { goNextStart(); return; }
+      // Left at start of line → previous line (end); Right at end → next line (start)
+      if (ev.key === 'ArrowLeft'  && collapsed && caretOffset(ev.target) === 0) { goPrevEnd(); return; }
+      if (ev.key === 'ArrowRight' && collapsed && caretOffset(ev.target) === ev.target.textContent.length) { goNextStart(); return; }
       return;
     }
     if (ev.key === 'Enter' && !ev.shiftKey) {
