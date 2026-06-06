@@ -487,6 +487,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   display: flex; align-items: flex-start; gap: 10px;
   padding: 6px 4px;
 }
+.ed-check-row.child { margin-left: 28px; }
 .ed-check-row input[type=checkbox] {
   appearance: none;
   -webkit-appearance: none;

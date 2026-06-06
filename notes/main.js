@@ -1335,7 +1335,7 @@ function noteContentHash(n) {
     body: n.body || '',
     type: n.type || 'text',
     checklist_items: (n.checklist_items || []).map(it => ({
-      id: it.id, text: it.text || '', done: !!it.done, order: it.order,
+      id: it.id, text: it.text || '', done: !!it.done, order: it.order, indent: it.indent || 0,
     })),
     color: n.color || null,
     pinned: !!n.pinned,
@@ -1508,21 +1508,6 @@ function syncChecklistFromDom() {
   });
 }
 
-function reorderChecklist(srcId, targetId) {
-  const e = State.editing;
-  if (!e) return;
-  EditorHistory.flush();
-  syncChecklistFromDom();
-  const items = e.checklist_items;
-  const srcIdx = items.findIndex(x => x.id === srcId);
-  const tgtIdx = items.findIndex(x => x.id === targetId);
-  if (srcIdx === -1 || tgtIdx === -1 || srcIdx === tgtIdx) return;
-  const [moved] = items.splice(srcIdx, 1);
-  items.splice(tgtIdx, 0, moved);
-  renderChecklist();
-  scheduleSave();
-}
-
 function renderChecklist() {
   const root = $('#ed-checklist-list');
   if (!root) return;
@@ -1533,7 +1518,7 @@ function renderChecklist() {
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const row = document.createElement('div');
-    row.className = `ed-check-row ${it.done ? 'done' : ''}`;
+    row.className = `ed-check-row ${it.done ? 'done' : ''}${(it.indent && i > 0) ? ' child' : ''}`;
     row.dataset.id = it.id;
     const handle = document.createElement('span');
     handle.className = 'drag-handle';
@@ -1583,15 +1568,41 @@ function renderChecklist() {
   // ── Drag-and-drop: pointer events (mouse + touch), handle only ───────────────
   // Ghost floats with the pointer; other rows animate with translateY in real-time.
   let activeDrag = null;
+  const clItems = () => (State.editing?.checklist_items || []);
 
   function endDrag() {
     if (!activeDrag) return;
-    const { srcRow, allRows, ghost, srcIdx, tIdx } = activeDrag;
+    const { allRows, ghost, blockStart, blockEnd, tIdx, indent, single } = activeDrag;
     activeDrag = null;
-    allRows.forEach(r => { r.style.transition = ''; r.style.transform = ''; });
-    srcRow.style.visibility = '';
+    allRows.forEach(r => { r.style.transition = ''; r.style.transform = ''; r.style.visibility = ''; });
     ghost.remove();
-    if (tIdx !== srcIdx) reorderChecklist(srcRow.dataset.id, allRows[tIdx].dataset.id);
+
+    const e = State.editing;
+    const its = clItems();
+    if (!e || tIdx == null) return;
+
+    const blockItems = [];
+    for (let i = blockStart; i <= blockEnd; i++) if (its[i]) blockItems.push(its[i]);
+    const blockIds = new Set(blockItems.map(x => x.id));
+    const targetId = allRows[tIdx]?.dataset.id;
+    const rest = its.filter(x => !blockIds.has(x.id));
+
+    const targetPos = rest.findIndex(x => x.id === targetId);
+    const insertAt = targetPos === -1 ? rest.length
+      : (tIdx > blockEnd ? targetPos + 1 : targetPos);
+    const newArr = [...rest.slice(0, insertAt), ...blockItems, ...rest.slice(insertAt)];
+
+    // A single dragged item can change its indent; a parent block keeps levels.
+    if (single) {
+      const finalIdx = newArr.findIndex(x => x.id === blockItems[0].id);
+      blockItems[0].indent = (finalIdx === 0) ? 0 : (indent ? 1 : 0);
+    }
+    if (newArr[0]) newArr[0].indent = 0;            // first item can't be a child
+    newArr.forEach((it, i) => { it.indent = it.indent ? 1 : 0; it.order = i; });
+
+    e.checklist_items = newArr;
+    renderChecklist();
+    scheduleSave();
   }
 
   root.querySelectorAll('.drag-handle').forEach(handle => {
@@ -1609,17 +1620,25 @@ function renderChecklist() {
       const allRows = Array.from(root.querySelectorAll('.ed-check-row'));
       const srcIdx  = allRows.indexOf(srcRow);
       const rects   = allRows.map(r => r.getBoundingClientRect());
-      const srcRect = rects[srcIdx];
-      const offsetY = ev.clientY - srcRect.top;
+      const its     = clItems();
+
+      // Block = the item, plus its contiguous children when it is a parent.
+      let blockStart = srcIdx, blockEnd = srcIdx;
+      if (!its[srcIdx]?.indent) {
+        while (blockEnd + 1 < allRows.length && its[blockEnd + 1]?.indent) blockEnd++;
+      }
+      const blockH  = rects[blockEnd].bottom - rects[blockStart].top;
+      const offsetY = ev.clientY - rects[blockStart].top;
       const cardEl  = document.querySelector('#editor .editor-card');
       const cardBg  = cardEl ? getComputedStyle(cardEl).backgroundColor : '';
 
-      const ghost = srcRow.cloneNode(true);
+      // Ghost shows the whole block.
+      const ghost = document.createElement('div');
       Object.assign(ghost.style, {
         position: 'fixed',
-        left: srcRect.left + 'px',
-        top:  srcRect.top  + 'px',
-        width: srcRect.width + 'px',
+        left: rects[blockStart].left + 'px',
+        top:  rects[blockStart].top  + 'px',
+        width: rects[blockStart].width + 'px',
         margin: '0',
         zIndex: '9999',
         pointerEvents: 'none',
@@ -1629,14 +1648,23 @@ function renderChecklist() {
         opacity: '0.97',
         transform: 'scale(1.02)',
       });
+      for (let i = blockStart; i <= blockEnd; i++) {
+        const c = allRows[i].cloneNode(true);
+        c.style.visibility = '';
+        ghost.appendChild(c);
+      }
       document.body.appendChild(ghost);
 
-      srcRow.style.visibility = 'hidden';
+      for (let i = blockStart; i <= blockEnd; i++) allRows[i].style.visibility = 'hidden';
       allRows.forEach((r, i) => {
-        if (i !== srcIdx) r.style.transition = 'transform .15s ease';
+        if (i < blockStart || i > blockEnd) r.style.transition = 'transform .15s ease';
       });
 
-      activeDrag = { handle, srcRow, allRows, rects, srcIdx, tIdx: srcIdx, ghost, offsetY };
+      activeDrag = {
+        handle, allRows, rects, blockStart, blockEnd, blockH, ghost, offsetY,
+        tIdx: blockStart, startX: ev.clientX, startIndent: its[srcIdx]?.indent || 0,
+        indent: its[srcIdx]?.indent || 0, single: blockStart === blockEnd,
+      };
       handle.setPointerCapture(ev.pointerId);
     }, { passive: false });
 
@@ -1644,27 +1672,37 @@ function renderChecklist() {
       if (!activeDrag || activeDrag.handle !== handle) return;
       ev.preventDefault();
 
-      const { ghost, allRows, rects, srcIdx, offsetY } = activeDrag;
+      const { ghost, allRows, rects, blockStart, blockEnd, blockH, offsetY, single, startX, startIndent } = activeDrag;
       const ghostTop    = ev.clientY - offsetY;
       ghost.style.top   = ghostTop + 'px';
-      const srcH        = rects[srcIdx].height;
-      const ghostCenter = ghostTop + srcH / 2;
+      const ghostCenter = ghostTop + blockH / 2;
 
-      // Closest row center → drop target (include srcIdx so ghost near origin = no-op)
-      let tIdx = srcIdx, minDist = Infinity;
+      // Closest non-block row center → drop target
+      let tIdx = null, minDist = Infinity;
       allRows.forEach((_, i) => {
+        if (i >= blockStart && i <= blockEnd) return;
         const mid = rects[i].top + rects[i].height / 2;
         const d = Math.abs(ghostCenter - mid);
         if (d < minDist) { minDist = d; tIdx = i; }
       });
+      if (tIdx == null) tIdx = blockStart;
       activeDrag.tIdx = tIdx;
 
-      // Shift rows to open gap at drop target
+      // Horizontal drag → indent (single item only)
+      let indent = startIndent;
+      if (single) {
+        const dx = ev.clientX - startX;
+        indent = Math.max(0, Math.min(1, startIndent + (dx > 24 ? 1 : dx < -24 ? -1 : 0)));
+        activeDrag.indent = indent;
+      }
+      ghost.style.transform = `scale(1.02) translateX(${indent ? 28 : 0}px)`;
+
+      // Shift non-block rows to open a gap at the drop target
       allRows.forEach((r, i) => {
-        if (i === srcIdx) return;
+        if (i >= blockStart && i <= blockEnd) return;
         let dy = 0;
-        if (tIdx > srcIdx && i > srcIdx && i <= tIdx) dy = -srcH;
-        if (tIdx < srcIdx && i >= tIdx && i < srcIdx) dy =  srcH;
+        if (tIdx > blockEnd  && i > blockEnd  && i <= tIdx) dy = -blockH;
+        if (tIdx < blockStart && i >= tIdx && i < blockStart) dy =  blockH;
         r.style.transform = dy ? `translateY(${dy}px)` : '';
       });
     }, { passive: false });
@@ -2352,7 +2390,7 @@ function bindEditorActions() {
         }
       }
 
-      const newItem = { id: crypto.randomUUID(), text: textAfter, done: false, order: 0 };
+      const newItem = { id: crypto.randomUUID(), text: textAfter, done: false, order: 0, indent: (curIdx > 0 ? (curItem?.indent || 0) : 0) };
       if (curIdx >= 0) e.checklist_items.splice(curIdx + 1, 0, newItem);
       else e.checklist_items.push(newItem);
       e.checklist_items.forEach((it, i) => { it.order = i; });
