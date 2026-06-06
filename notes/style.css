@@ -683,6 +683,16 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 }
 .ed-undo-redo { display: flex; gap: 4px; margin-left: auto; }
 
+/* Desktop: only the body scrolls; toolbar and bottom bar stay visible. (Mobile
+   already does this via its own flex rules.) */
+.editor-card { overflow: hidden; }
+.editor-card > .ed-toolbar,
+.editor-card > .ed-meta,
+.editor-card > .ed-title,
+.editor-card > .ed-attachments,
+.editor-card > .ed-bottom-bar { flex-shrink: 0; }
+.editor-card > .ed-body-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
 /* Popup menu (labeled items) */
 .popup-menu {
   display: flex; flex-direction: column; gap: 2px;
