@@ -13,7 +13,7 @@
 <link rel="icon" type="image/svg+xml" href="/images/notes-favicon.svg">
 <link rel="apple-touch-icon" href="/icons/notes-192.png">
 <link rel="manifest" href="/manifests/notes.json">
-<link rel="stylesheet" href="./style.css?v=22">
+<link rel="stylesheet" href="./style.css?v=23">
 <style>
 #__version_wm{position:fixed;bottom:6px;right:8px;font:600 10px/1 system-ui,sans-serif;
   color:#fff;background:rgba(220,38,38,.85);padding:3px 6px;border-radius:6px;
@@ -109,6 +109,7 @@
   <div class="modal-card editor-card">
     <div class="ed-toolbar">
       <button class="btn-icon" id="ed-close" data-close onclick="" title="Atrás"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"></path><polyline points="12 19 5 12 12 5"></polyline></svg></button>
+      <div class="ed-meta" id="ed-meta"></div>
       <span class="ed-status" id="ed-status"></span>
       <div class="ed-toolbar-right">
         <button class="btn-icon" id="ed-pin" title="Fijar" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
@@ -116,7 +117,6 @@
       </div>
     </div>
     <div class="ed-scroll">
-      <div class="ed-meta" id="ed-meta"></div>
       <input class="ed-title" id="ed-title" placeholder="Título" maxlength="200">
       <div class="ed-body-wrap">
         <textarea class="ed-body" id="ed-body" placeholder="Escribe..."></textarea>
@@ -340,8 +340,8 @@
   <img id="lightbox-img" alt="">
 </div>
 
-<div id="__version_wm">v45 · BUILD_HASH</div>
-<script type="module" src="./main.js?v=44"></script>
+<div id="__version_wm">v46 · BUILD_HASH</div>
+<script type="module" src="./main.js?v=46"></script>
 <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>

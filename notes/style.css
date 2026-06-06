@@ -462,7 +462,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   border: 1px solid var(--border);
 }
 .ed-meta-tag.danger { color: var(--danger); border-color: var(--danger); }
-.ed-meta-tag.shared { color: var(--accent); border-color: var(--accent); }
+.ed-meta-tag.shared { display: inline-flex; align-items: center; padding: 5px 8px; color: var(--muted2); }
 .ed-title {
   width: 100%;
   font-size: 22px;
