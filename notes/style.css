@@ -683,15 +683,19 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 }
 .ed-undo-redo { display: flex; gap: 4px; margin-left: auto; }
 
-/* Desktop: only the body scrolls; toolbar and bottom bar stay visible. (Mobile
-   already does this via its own flex rules.) */
-.editor-card { overflow: hidden; }
-.editor-card > .ed-toolbar,
-.editor-card > .ed-meta,
-.editor-card > .ed-title,
-.editor-card > .ed-attachments,
-.editor-card > .ed-bottom-bar { flex-shrink: 0; }
-.editor-card > .ed-body-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* Desktop only: the editor card scrolls as a whole, so pin the bottom bar to the
+   bottom of the scroll viewport — it stays visible on long notes. (Mobile keeps
+   it visible via its own flex layout.) background-color:inherit matches the
+   card, including colored notes, so scrolling content doesn't show through. */
+@media (min-width: 641px) {
+  .editor-card .ed-bottom-bar {
+    position: sticky;
+    bottom: -14px; /* cover the card's 14px bottom padding */
+    background-color: inherit;
+    padding-bottom: 16px;
+    z-index: 2;
+  }
+}
 
 /* Popup menu (labeled items) */
 .popup-menu {
