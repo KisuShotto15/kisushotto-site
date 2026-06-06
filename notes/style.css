@@ -677,8 +677,9 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 /* Editor bottom bar */
 .ed-bottom-bar {
   display: flex; align-items: center;
-  /* Symmetric vertical gap: 16px top = 2px here + 14px card padding below. */
-  padding: 16px 0 2px;
+  /* Symmetric ~8px gap: 8px top, and 14px card padding - 6px margin below. */
+  padding: 8px 0 0;
+  margin-bottom: -6px;
   border-top: 1px solid var(--border);
   gap: 4px;
 }
