@@ -1471,6 +1471,13 @@ function updateEditorMeta() {
   }
   $('#ed-meta').innerHTML = tags.join('');
 
+  const edEl = $('#ed-edited');
+  if (edEl) {
+    edEl.textContent = e.last_modified
+      ? 'Edited ' + new Date(e.last_modified).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '';
+  }
+
   // Active states on toolbar buttons
   const btn = id => document.getElementById(id);
   btn('ed-pin')?.classList.toggle('active', !!e.pinned);

@@ -683,38 +683,53 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 }
 .ed-undo-redo { display: flex; gap: 4px; margin-left: auto; }
 
-/* Desktop only: the editor card scrolls as a whole, so pin the bottom bar to the
-   bottom of the scroll viewport — it stays visible on long notes. (Mobile keeps
-   it visible via its own flex layout.) background-color:inherit matches the
-   card, including colored notes, so scrolling content doesn't show through. */
-@media (min-width: 641px) {
-  .editor-card .ed-bottom-bar {
-    position: sticky;
-    bottom: -14px; /* cover the card's 14px bottom padding */
-    background-color: inherit;
-    padding-bottom: 16px;
-    z-index: 2;
-  }
+/* Only the content scrolls; toolbar and bottom bar stay fixed, so the scrollbar
+   ends right at the bottom bar instead of running behind it. */
+.editor-card { overflow: hidden; }
+.editor-card > .ed-toolbar,
+.editor-card > .ed-bottom-bar { flex-shrink: 0; }
+.ed-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
+.ed-scroll > * { flex-shrink: 0; }
 
 /* Editor scrollbar: track matches the note background (covers any bleeding
    attachment image), thumb is semi-transparent. --ed-bg is set per note. */
-.editor-card {
+.ed-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.3) var(--ed-bg, var(--card));
 }
-.editor-card::-webkit-scrollbar { width: 12px; }
-.editor-card::-webkit-scrollbar-track { background: var(--ed-bg, var(--card)); }
-.editor-card::-webkit-scrollbar-thumb {
+.ed-scroll::-webkit-scrollbar { width: 12px; }
+.ed-scroll::-webkit-scrollbar-track { background: var(--ed-bg, var(--card)); }
+.ed-scroll::-webkit-scrollbar-thumb {
   background: rgba(255,255,255,0.3);
   border-radius: 8px;
   border: 3px solid var(--ed-bg, var(--card));
   background-clip: padding-box;
 }
-.editor-card::-webkit-scrollbar-thumb:hover {
+.ed-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(255,255,255,0.5);
   background-clip: padding-box;
 }
+
+/* Last-edited chip, left of the undo/redo group */
+.ed-edited {
+  font-size: 12px;
+  color: var(--muted2);
+  background: rgba(255,255,255,0.06);
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  align-self: center;
+  margin-right: 4px;
+}
+.ed-edited:empty { display: none; }
+.editor-card.colored .ed-edited { background: rgba(255,255,255,0.12); color: var(--text); }
 
 /* Popup menu (labeled items) */
 .popup-menu {
@@ -1304,22 +1319,14 @@ body.modal-open {
   }
   .ed-status { display: none; }
 
-  /* Editor body fill available space */
-  .ed-body-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
+  /* Editor content scrolls; toolbar + bottom bar stay fixed */
+  .ed-scroll {
     -webkit-overflow-scrolling: touch;
   }
   .ed-body {
-    overflow-y: auto !important;
     min-height: 120px;
     /* Don't let autoGrow push the card beyond its bounds */
     max-height: none;
-  }
-  .ed-checklist {
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
   }
   /* Bottom bar always visible — never scrolls out of view */
   .ed-bottom-bar {

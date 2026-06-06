@@ -13,7 +13,7 @@
 <link rel="icon" type="image/svg+xml" href="/images/notes-favicon.svg">
 <link rel="apple-touch-icon" href="/icons/notes-192.png">
 <link rel="manifest" href="/manifests/notes.json">
-<link rel="stylesheet" href="./style.css?v=20">
+<link rel="stylesheet" href="./style.css?v=21">
 <style>
 #__version_wm{position:fixed;bottom:6px;right:8px;font:600 10px/1 system-ui,sans-serif;
   color:#fff;background:rgba(220,38,38,.85);padding:3px 6px;border-radius:6px;
@@ -115,18 +115,21 @@
         <button class="btn-icon" id="ed-reminder" title="Recordatorio" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
       </div>
     </div>
-    <div class="ed-meta" id="ed-meta"></div>
-    <input class="ed-title" id="ed-title" placeholder="Título" maxlength="200">
-    <div class="ed-body-wrap">
-      <textarea class="ed-body" id="ed-body" placeholder="Escribe..."></textarea>
-      <div class="ed-checklist" id="ed-checklist-list" hidden></div>
+    <div class="ed-scroll">
+      <div class="ed-meta" id="ed-meta"></div>
+      <input class="ed-title" id="ed-title" placeholder="Título" maxlength="200">
+      <div class="ed-body-wrap">
+        <textarea class="ed-body" id="ed-body" placeholder="Escribe..."></textarea>
+        <div class="ed-checklist" id="ed-checklist-list" hidden></div>
+      </div>
+      <div class="ed-attachments" id="ed-attachments"></div>
     </div>
-    <div class="ed-attachments" id="ed-attachments"></div>
 
     <div class="ed-bottom-bar">
       <button class="btn-icon" id="ed-add" title="Agregar" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
       <button class="btn-icon" id="ed-color" title="Color" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg></button>
       <div class="ed-undo-redo">
+        <span class="ed-edited" id="ed-edited"></span>
         <button class="btn-icon" id="ed-undo" title="Deshacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg></button>
         <button class="btn-icon" id="ed-redo" title="Rehacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg></button>
         <button class="btn-icon" id="ed-more" title="Más opciones" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
@@ -337,8 +340,8 @@
   <img id="lightbox-img" alt="">
 </div>
 
-<div id="__version_wm">v43 · BUILD_HASH</div>
-<script type="module" src="./main.js?v=43"></script>
+<div id="__version_wm">v44 · BUILD_HASH</div>
+<script type="module" src="./main.js?v=44"></script>
 <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>
