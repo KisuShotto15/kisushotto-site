@@ -697,6 +697,25 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   }
 }
 
+/* Editor scrollbar: track matches the note background (covers any bleeding
+   attachment image), thumb is semi-transparent. --ed-bg is set per note. */
+.editor-card {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.3) var(--ed-bg, var(--card));
+}
+.editor-card::-webkit-scrollbar { width: 12px; }
+.editor-card::-webkit-scrollbar-track { background: var(--ed-bg, var(--card)); }
+.editor-card::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.3);
+  border-radius: 8px;
+  border: 3px solid var(--ed-bg, var(--card));
+  background-clip: padding-box;
+}
+.editor-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.5);
+  background-clip: padding-box;
+}
+
 /* Popup menu (labeled items) */
 .popup-menu {
   display: flex; flex-direction: column; gap: 2px;

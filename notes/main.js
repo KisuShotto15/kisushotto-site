@@ -171,6 +171,7 @@ const EditorHistory = {
     $('#ed-checklist-list').hidden = !isChecklist;
     const card = $('#editor .editor-card');
     card.style.background = snap.color || '';
+    card.style.setProperty('--ed-bg', snap.color || 'var(--card)');
     card.classList.toggle('colored', !!snap.color);
     renderChecklist();
     updateEditorMeta();
@@ -1420,6 +1421,7 @@ function openEditor(n) {
   _updateEditorViewport();
   const card = $('#editor .editor-card');
   card.style.background = e.color || '';
+  card.style.setProperty('--ed-bg', e.color || 'var(--card)');
   card.classList.toggle('colored', !!e.color);
   $('#ed-title').value = e.title || '';
   const isChecklist = e.type === 'checklist';
@@ -2099,6 +2101,7 @@ function bindEditorActions() {
       const c = State.editing.color;
       const ec = $('#editor .editor-card');
       ec.style.background = c || '';
+      ec.style.setProperty('--ed-bg', c || 'var(--card)');
       ec.classList.toggle('colored', !!c);
       hidePopups();
       scheduleSave();
