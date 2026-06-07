@@ -1572,24 +1572,19 @@ function renderChecklist() {
 
   function endDrag() {
     if (!activeDrag) return;
-    const { allRows, ghost, blockStart, blockEnd, tIdx, indent, single } = activeDrag;
+    const { allRows, ghost, blockStart, blockEnd, ins, indent, single } = activeDrag;
     activeDrag = null;
     allRows.forEach(r => { r.style.transition = ''; r.style.transform = ''; r.style.visibility = ''; });
     ghost.remove();
 
     const e = State.editing;
     const its = clItems();
-    if (!e || tIdx == null) return;
+    if (!e) return;
 
-    const blockItems = [];
-    for (let i = blockStart; i <= blockEnd; i++) if (its[i]) blockItems.push(its[i]);
+    const blockItems = its.slice(blockStart, blockEnd + 1);
     const blockIds = new Set(blockItems.map(x => x.id));
-    const targetId = allRows[tIdx]?.dataset.id;
     const rest = its.filter(x => !blockIds.has(x.id));
-
-    const targetPos = rest.findIndex(x => x.id === targetId);
-    const insertAt = targetPos === -1 ? rest.length
-      : (tIdx > blockEnd ? targetPos + 1 : targetPos);
+    const insertAt = Math.max(0, Math.min(ins, rest.length));
     const newArr = [...rest.slice(0, insertAt), ...blockItems, ...rest.slice(insertAt)];
 
     // A single dragged item can change its indent; a parent block keeps levels.
@@ -1662,7 +1657,7 @@ function renderChecklist() {
 
       activeDrag = {
         handle, allRows, rects, blockStart, blockEnd, blockH, ghost, offsetY,
-        tIdx: blockStart, startX: ev.clientX, startIndent: its[srcIdx]?.indent || 0,
+        ins: blockStart, startX: ev.clientX, startIndent: its[srcIdx]?.indent || 0,
         indent: its[srcIdx]?.indent || 0, single: blockStart === blockEnd,
       };
       handle.setPointerCapture(ev.pointerId);
@@ -1677,16 +1672,17 @@ function renderChecklist() {
       ghost.style.top   = ghostTop + 'px';
       const ghostCenter = ghostTop + blockH / 2;
 
-      // Closest non-block row center → drop target
-      let tIdx = null, minDist = Infinity;
-      allRows.forEach((_, i) => {
-        if (i >= blockStart && i <= blockEnd) return;
-        const mid = rects[i].top + rects[i].height / 2;
-        const d = Math.abs(ghostCenter - mid);
-        if (d < minDist) { minDist = d; tIdx = i; }
-      });
-      if (tIdx == null) tIdx = blockStart;
-      activeDrag.tIdx = tIdx;
+      // Remaining rows (non-block), in document order, with frozen home rects.
+      const remaining = [];
+      allRows.forEach((_, i) => { if (i < blockStart || i > blockEnd) remaining.push(i); });
+
+      // Insertion index among remaining = how many remaining centers are above
+      // the ghost center (ordered, so we can stop early).
+      let ins = 0;
+      for (const i of remaining) {
+        if (rects[i].top + rects[i].height / 2 < ghostCenter) ins++; else break;
+      }
+      activeDrag.ins = ins;
 
       // Horizontal drag → indent (single item only)
       let indent = startIndent;
@@ -1697,13 +1693,15 @@ function renderChecklist() {
       }
       ghost.style.transform = `scale(1.02) translateX(${indent ? 28 : 0}px)`;
 
-      // Shift non-block rows to open a gap at the drop target
-      allRows.forEach((r, i) => {
-        if (i >= blockStart && i <= blockEnd) return;
-        let dy = 0;
-        if (tIdx > blockEnd  && i > blockEnd  && i <= tIdx) dy = -blockH;
-        if (tIdx < blockStart && i >= tIdx && i < blockStart) dy =  blockH;
-        r.style.transform = dy ? `translateY(${dy}px)` : '';
+      // FLIP: lay out the remaining rows with a blockH gap reserved at `ins`,
+      // then translate each from its frozen home position to that final spot.
+      const listTop = rects[0].top;
+      let cursor = listTop;
+      remaining.forEach((i, k) => {
+        if (k === ins) cursor += blockH;          // reserve the gap for the block
+        const dy = cursor - rects[i].top;
+        allRows[i].style.transform = dy ? `translateY(${dy}px)` : '';
+        cursor += rects[i].height;
       });
     }, { passive: false });
 
