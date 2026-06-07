@@ -1693,15 +1693,21 @@ function renderChecklist() {
       }
       ghost.style.transform = `scale(1.02) translateX(${indent ? 28 : 0}px)`;
 
-      // FLIP: lay out the remaining rows with a blockH gap reserved at `ins`,
-      // then translate each from its frozen home position to that final spot.
-      const listTop = rects[0].top;
-      let cursor = listTop;
+      // Vertical space the block occupies (height + the inter-row gap that
+      // collapses when it's removed). Using this keeps rows from compacting.
+      const gap = allRows.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 0;
+      const blockOccupied = (blockEnd + 1 < allRows.length)
+        ? rects[blockEnd + 1].top - rects[blockStart].top
+        : (rects[blockEnd].bottom - rects[blockStart].top) + gap;
+
+      // Net shift: a remaining row moves up if the block was removed above it,
+      // and down if the block is reinserted at/before it. At the home position
+      // both cancel out, so nothing moves until the drop target changes.
       remaining.forEach((i, k) => {
-        if (k === ins) cursor += blockH;          // reserve the gap for the block
-        const dy = cursor - rects[i].top;
+        let dy = 0;
+        if (i > blockEnd) dy -= blockOccupied;
+        if (k >= ins)     dy += blockOccupied;
         allRows[i].style.transform = dy ? `translateY(${dy}px)` : '';
-        cursor += rects[i].height;
       });
     }, { passive: false });
 
