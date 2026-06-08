@@ -133,7 +133,13 @@ body {
 .hero-cell { display:flex; flex-direction:column; justify-content:center; padding:0 20px; }
 .hero-cell + .hero-cell { border-left:1px solid var(--border); }
 .hero-cell:first-child { padding-left:0; }
-@media(max-width:900px){ .hero-main { flex-direction:column; align-items:flex-start; gap:8px; } .hero-cell { padding:0; border-left:none !important; } }
+@media(max-width:900px){
+  .hero-main { display:grid; grid-template-columns: 1fr 1fr; gap:10px 14px; align-items:start; }
+  .hero-cell { padding:0; border-left:none !important; }
+  .hero-cell.span2 { grid-column: 1 / -1; }
+  .hero-main > .hero-cell:nth-child(3) { grid-column: 1 / -1; } /* PRECIOS full width */
+  .hero-main > .hero-cell:last-child   { grid-column: 1 / -1; } /* Pill full width */
+}
 .col { display: flex; flex-direction: column; gap: 10px; }
 
 /* ── Panels ─────────────────────────────────────────── */
@@ -442,7 +448,9 @@ input:focus {
   .layout { padding: 8px; gap: 8px; }
 
   .spread-hero-full { padding: 12px; }
-  .sh-pct { font-size: 40px; }
+  .sh-pct { font-size: 32px !important; }
+  #hero-net { font-size: 28px !important; }
+  #st-diff, #st-delta { font-size: 18px !important; }
 
   .ob-head, .ob-row { grid-template-columns: 1fr 80px 70px; padding: 8px 8px; }
   .ob-head span:nth-child(1), .ob-row > span:nth-child(1),
@@ -724,7 +732,7 @@ input:focus {
         <div class="ptitle" style="margin-bottom:10px">Sección Compra</div>
         <div class="buy-section-row">
           <div class="buy-ob-wrap">
-            <div class="ob-side-title buyads">🟡 Vender en el verde</div>
+            <div class="ob-side-title buyads">🟢 SELL</div>
             <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
             <div id="ob-buy"></div>
           </div>
@@ -1164,7 +1172,7 @@ function fmtAmount(n) {
 
 function renderAll() {
   document.getElementById('label-may').textContent   = '🏦 Mayoristas (' + fmtAmount(CFG.mayAmount) + ' VES)';
-  document.getElementById('label-small').textContent = '📉 Compra (' + fmtAmount(CFG.smallAmount) + ' VES)';
+  document.getElementById('label-small').textContent = '📉 BUY (' + Math.round(CFG.smallAmount).toLocaleString('es-VE') + ' VES)';
   renderSpreadHero();
   renderStats();
   renderOB('ob-may',   ST.mayoristas, 'best');
