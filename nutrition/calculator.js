@@ -44,22 +44,22 @@ export function totalMacros(meals) {
 // ── Micronutrients ───────────────────────────────────────────────────────────
 
 export const MICROS_DEF = [
-  { key: 'vitaminA',  label: 'Vitamina A',        unit: 'µg', rda: { male: 900,  female: 700  } },
-  { key: 'vitaminD',  label: 'Vitamina D',        unit: 'µg', rdaFn: (age) => age >= 70 ? 20 : 15 },
-  { key: 'vitaminE',  label: 'Vitamina E',        unit: 'mg', rda: { male: 15,   female: 15   } },
-  { key: 'vitaminK',  label: 'Vitamina K',        unit: 'µg', rda: { male: 120,  female: 90   } },
-  { key: 'vitaminC',  label: 'Vitamina C',        unit: 'mg', rda: { male: 90,   female: 75   } },
-  { key: 'vitaminB6', label: 'Vitamina B6',       unit: 'mg', rdaFn: (age, g) => age >= 51 ? (g === 'male' ? 1.7 : 1.5) : 1.3 },
-  { key: 'vitaminB12',label: 'Vitamina B12',      unit: 'µg', rda: { male: 2.4,  female: 2.4  } },
-  { key: 'folate',    label: 'Folato (B9)',        unit: 'µg', rda: { male: 400,  female: 400  } },
-  { key: 'choline',   label: 'Colina',            unit: 'mg', rda: { male: 550,  female: 425  } },
-  { key: 'calcium',   label: 'Calcio',            unit: 'mg', rdaFn: (age) => age >= 51 ? 1200 : 1000 },
-  { key: 'iron',      label: 'Hierro',            unit: 'mg', rdaFn: (age, g) => (g === 'female' && age <= 50) ? 18 : 8 },
-  { key: 'magnesium', label: 'Magnesio',          unit: 'mg', rda: { male: 420,  female: 320  } },
-  { key: 'zinc',      label: 'Zinc',              unit: 'mg', rda: { male: 11,   female: 8    } },
-  { key: 'potassium', label: 'Potasio',           unit: 'mg', rda: { male: 3400, female: 2600 } },
-  { key: 'selenium',  label: 'Selenio',           unit: 'µg', rda: { male: 55,   female: 55   } },
-  { key: 'omega3',    label: 'Omega-3 (EPA+DHA)', unit: 'mg', rda: { male: 1600, female: 1100 } },
+  { key: 'vitaminA',  label: 'Vitamina A',        unit: 'µg', rda: { male: 900,  female: 700  }, ul: 3000  },
+  { key: 'vitaminD',  label: 'Vitamina D',        unit: 'µg', rdaFn: (age) => age >= 70 ? 20 : 15,        ul: 100   },
+  { key: 'vitaminE',  label: 'Vitamina E',        unit: 'mg', rda: { male: 15,   female: 15   }, ul: 1000  },
+  { key: 'vitaminK',  label: 'Vitamina K',        unit: 'µg', rda: { male: 120,  female: 90   }, ul: null  },
+  { key: 'vitaminC',  label: 'Vitamina C',        unit: 'mg', rda: { male: 90,   female: 75   }, ul: 2000  },
+  { key: 'vitaminB6', label: 'Vitamina B6',       unit: 'mg', rdaFn: (age, g) => age >= 51 ? (g === 'male' ? 1.7 : 1.5) : 1.3, ul: 100 },
+  { key: 'vitaminB12',label: 'Vitamina B12',      unit: 'µg', rda: { male: 2.4,  female: 2.4  }, ul: null  },
+  { key: 'folate',    label: 'Folato (B9)',        unit: 'µg', rda: { male: 400,  female: 400  }, ul: 1000  },
+  { key: 'choline',   label: 'Colina',            unit: 'mg', rda: { male: 550,  female: 425  }, ul: 3500  },
+  { key: 'calcium',   label: 'Calcio',            unit: 'mg', rdaFn: (age) => age >= 51 ? 1200 : 1000,    ul: 2500  },
+  { key: 'iron',      label: 'Hierro',            unit: 'mg', rdaFn: (age, g) => (g === 'female' && age <= 50) ? 18 : 8, ul: 45 },
+  { key: 'magnesium', label: 'Magnesio',          unit: 'mg', rda: { male: 420,  female: 320  }, ul: null  },
+  { key: 'zinc',      label: 'Zinc',              unit: 'mg', rda: { male: 11,   female: 8    }, ul: 40    },
+  { key: 'potassium', label: 'Potasio',           unit: 'mg', rda: { male: 3400, female: 2600 }, ul: null  },
+  { key: 'selenium',  label: 'Selenio',           unit: 'µg', rda: { male: 55,   female: 55   }, ul: 400   },
+  { key: 'omega3',    label: 'Omega-3 (EPA+DHA)', unit: 'mg', rda: { male: 1600, female: 1100 }, ul: 3000  },
 ];
 
 export function calcRDA(age, gender) {

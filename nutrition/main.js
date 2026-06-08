@@ -420,7 +420,8 @@ async function renderMicros() {
     const rdaVal = rda[def.key] || 1;
     const pct    = Math.round(total / rdaVal * 100);
     const barPct = Math.min(100, pct);
-    const status = pct < 70 ? 'warn' : pct > 200 ? 'exc' : pct > 120 ? 'sup' : 'ok';
+    const isExc  = def.ul != null && total >= def.ul;
+    const status = isExc ? 'exc' : pct < 70 ? 'warn' : pct > 120 ? 'sup' : 'ok';
     const label  = status === 'ok' ? 'Cubierto' : status === 'warn' ? 'Bajo' : status === 'exc' ? 'Exceso' : 'Óptimo';
     const sources = [];
     for (const meal of meals) {
