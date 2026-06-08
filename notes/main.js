@@ -403,7 +403,7 @@ function getCurrentNotes() {
     if (n.trashed_at)    return false;
     if (v === 'archive') return !!n.archived && !n.locked;
     if (v === 'locked')  return !!n.locked;
-    if (n.archived && !v.startsWith('cat:')) return false;
+    if (n.archived && !v.startsWith('cat:') && !q) return false; // include archived when searching
     if (v === 'shared')  return n.owner_email !== me || (n.shares?.length > 0);
     if (v.startsWith('cat:')) {
       const id = v.slice(4);
@@ -1570,10 +1570,57 @@ function renderChecklist() {
   let activeDrag = null;
   const clItems = () => (State.editing?.checklist_items || []);
 
+  // Lazily start the actual drag on the first clear movement, deciding the mode:
+  //  - clear VERTICAL on a parent → block move (carry its children)
+  //  - otherwise → single item (horizontal drag indents/outdents)
+  function beginDrag(ev) {
+    const ad = activeDrag;
+    const { allRows, rects, srcIdx, its, startX, startY } = ad;
+    const dx = ev.clientX - startX, dy = ev.clientY - startY;
+    const vertical = Math.abs(dy) >= Math.abs(dx);
+    const isParent = !its[srcIdx]?.indent && !!its[srcIdx + 1]?.indent;
+
+    let blockStart = srcIdx, blockEnd = srcIdx;
+    const mode = (vertical && isParent) ? 'block' : 'single';
+    if (mode === 'block') {
+      while (blockEnd + 1 < allRows.length && its[blockEnd + 1]?.indent) blockEnd++;
+    }
+    const blockH  = rects[blockEnd].bottom - rects[blockStart].top;
+    const offsetY = startY - rects[blockStart].top;
+    const cardEl  = document.querySelector('#editor .editor-card');
+    const cardBg  = cardEl ? getComputedStyle(cardEl).backgroundColor : '';
+
+    const ghost = document.createElement('div');
+    Object.assign(ghost.style, {
+      position: 'fixed',
+      left: rects[blockStart].left + 'px',
+      top:  rects[blockStart].top  + 'px',
+      width: rects[blockStart].width + 'px',
+      margin: '0', zIndex: '9999', pointerEvents: 'none',
+      background: cardBg || 'var(--surface)',
+      boxShadow: '0 8px 28px rgba(0,0,0,.4)',
+      borderRadius: '6px', opacity: '0.97', transform: 'scale(1.02)',
+    });
+    for (let i = blockStart; i <= blockEnd; i++) {
+      const c = allRows[i].cloneNode(true);
+      c.style.visibility = '';
+      ghost.appendChild(c);
+    }
+    document.body.appendChild(ghost);
+
+    for (let i = blockStart; i <= blockEnd; i++) allRows[i].style.visibility = 'hidden';
+    allRows.forEach((r, i) => { if (i < blockStart || i > blockEnd) r.style.transition = 'transform .15s ease'; });
+
+    Object.assign(ad, { started: true, mode, blockStart, blockEnd, blockH, offsetY, ghost, ins: blockStart, indent: ad.startIndent });
+  }
+
   function endDrag() {
     if (!activeDrag) return;
-    const { allRows, ghost, blockStart, blockEnd, ins, indent } = activeDrag;
+    const ad = activeDrag;
     activeDrag = null;
+    if (!ad.started) return; // a tap without a real drag — nothing to undo
+
+    const { allRows, ghost, blockStart, blockEnd, ins, indent, mode } = ad;
     allRows.forEach(r => { r.style.transition = ''; r.style.transform = ''; r.style.visibility = ''; });
     ghost.remove();
 
@@ -1587,11 +1634,12 @@ function renderChecklist() {
     const insertAt = Math.max(0, Math.min(ins, rest.length));
     const newArr = [...rest.slice(0, insertAt), ...blockItems, ...rest.slice(insertAt)];
 
-    // The grabbed item takes the dragged indent — unless it ends up first
-    // (the first item has no parent above, so it can't be a child).
-    const grabbed = blockItems[0];
-    const finalIdx = newArr.findIndex(x => x.id === grabbed.id);
-    grabbed.indent = (finalIdx === 0) ? 0 : (indent ? 1 : 0);
+    // Only a single-item drag changes indent; a block move keeps levels.
+    if (mode === 'single') {
+      const grabbed = blockItems[0];
+      const finalIdx = newArr.findIndex(x => x.id === grabbed.id);
+      grabbed.indent = (finalIdx === 0) ? 0 : (indent ? 1 : 0);
+    }
     if (newArr[0]) newArr[0].indent = 0;            // first item can't be a child
     newArr.forEach((it, i) => { it.indent = it.indent ? 1 : 0; it.order = i; });
 
@@ -1617,45 +1665,10 @@ function renderChecklist() {
       const rects   = allRows.map(r => r.getBoundingClientRect());
       const its     = clItems();
 
-      // Drag moves only the grabbed item (children are not auto-carried).
-      const blockStart = srcIdx, blockEnd = srcIdx;
-      const blockH  = rects[blockEnd].bottom - rects[blockStart].top;
-      const offsetY = ev.clientY - rects[blockStart].top;
-      const cardEl  = document.querySelector('#editor .editor-card');
-      const cardBg  = cardEl ? getComputedStyle(cardEl).backgroundColor : '';
-
-      // Ghost shows the grabbed row.
-      const ghost = document.createElement('div');
-      Object.assign(ghost.style, {
-        position: 'fixed',
-        left: rects[blockStart].left + 'px',
-        top:  rects[blockStart].top  + 'px',
-        width: rects[blockStart].width + 'px',
-        margin: '0',
-        zIndex: '9999',
-        pointerEvents: 'none',
-        background: cardBg || 'var(--surface)',
-        boxShadow: '0 8px 28px rgba(0,0,0,.4)',
-        borderRadius: '6px',
-        opacity: '0.97',
-        transform: 'scale(1.02)',
-      });
-      for (let i = blockStart; i <= blockEnd; i++) {
-        const c = allRows[i].cloneNode(true);
-        c.style.visibility = '';
-        ghost.appendChild(c);
-      }
-      document.body.appendChild(ghost);
-
-      for (let i = blockStart; i <= blockEnd; i++) allRows[i].style.visibility = 'hidden';
-      allRows.forEach((r, i) => {
-        if (i < blockStart || i > blockEnd) r.style.transition = 'transform .15s ease';
-      });
-
+      // Nothing is lifted yet — wait for a clear movement (beginDrag).
       activeDrag = {
-        handle, allRows, rects, blockStart, blockEnd, blockH, ghost, offsetY,
-        ins: blockStart, startX: ev.clientX, startIndent: its[srcIdx]?.indent || 0,
-        indent: its[srcIdx]?.indent || 0,
+        handle, allRows, rects, srcIdx, its, started: false,
+        startX: ev.clientX, startY: ev.clientY, startIndent: its[srcIdx]?.indent || 0,
       };
       handle.setPointerCapture(ev.pointerId);
     }, { passive: false });
@@ -1664,39 +1677,41 @@ function renderChecklist() {
       if (!activeDrag || activeDrag.handle !== handle) return;
       ev.preventDefault();
 
-      const { ghost, allRows, rects, blockStart, blockEnd, blockH, offsetY, startX, startIndent } = activeDrag;
+      const ad = activeDrag;
+      if (!ad.started) {
+        if (Math.hypot(ev.clientX - ad.startX, ev.clientY - ad.startY) < 6) return;
+        beginDrag(ev);
+      }
+
+      const { ghost, allRows, rects, blockStart, blockEnd, blockH, offsetY, startX, startIndent, mode } = ad;
       const ghostTop    = ev.clientY - offsetY;
       ghost.style.top   = ghostTop + 'px';
       const ghostCenter = ghostTop + blockH / 2;
 
-      // Remaining rows (non-block), in document order, with frozen home rects.
       const remaining = [];
       allRows.forEach((_, i) => { if (i < blockStart || i > blockEnd) remaining.push(i); });
 
-      // Insertion index among remaining = how many remaining centers are above
-      // the ghost center (ordered, so we can stop early).
       let ins = 0;
       for (const i of remaining) {
         if (rects[i].top + rects[i].height / 2 < ghostCenter) ins++; else break;
       }
-      activeDrag.ins = ins;
+      ad.ins = ins;
 
-      // Horizontal drag → indent the grabbed item (works for parents too).
-      const dx = ev.clientX - startX;
-      const indent = Math.max(0, Math.min(1, startIndent + (dx > 24 ? 1 : dx < -24 ? -1 : 0)));
-      activeDrag.indent = indent;
+      // Horizontal drag → indent (single-item mode only).
+      let indent = startIndent;
+      if (mode === 'single') {
+        const dx = ev.clientX - startX;
+        indent = Math.max(0, Math.min(1, startIndent + (dx > 24 ? 1 : dx < -24 ? -1 : 0)));
+        ad.indent = indent;
+      }
       ghost.style.transform = `scale(1.02) translateX(${indent ? 28 : 0}px)`;
 
-      // Vertical space the block occupies (height + the inter-row gap that
-      // collapses when it's removed). Using this keeps rows from compacting.
+      // Vertical space the block occupies (height + collapsing inter-row gap).
       const gap = allRows.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 0;
       const blockOccupied = (blockEnd + 1 < allRows.length)
         ? rects[blockEnd + 1].top - rects[blockStart].top
         : (rects[blockEnd].bottom - rects[blockStart].top) + gap;
 
-      // Net shift: a remaining row moves up if the block was removed above it,
-      // and down if the block is reinserted at/before it. At the home position
-      // both cancel out, so nothing moves until the drop target changes.
       remaining.forEach((i, k) => {
         let dy = 0;
         if (i > blockEnd) dy -= blockOccupied;
