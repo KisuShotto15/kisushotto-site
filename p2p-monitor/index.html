@@ -34,6 +34,9 @@
   --red-d:     rgba(246,70,93,.12);
   --red-b:     rgba(246,70,93,.3);
   --blue:      #58A6FF;
+  --purple:    #C792EA;
+  --purple-d:  rgba(199,146,234,.12);
+  --purple-b:  rgba(199,146,234,.3);
   --blue-d:    rgba(88,166,255,.12);
   --blue-b:    rgba(88,166,255,.3);
   --r:         12px;
@@ -245,6 +248,7 @@ body {
 .r { color: var(--red);   }
 .y { color: var(--gold);  }
 .b { color: var(--blue);  }
+.p { color: var(--purple);}
 
 /* ── Order Book ─────────────────────────────────────── */
 .ob-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -263,8 +267,8 @@ body {
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
 }
-.ob-side-title.mayoristas  { background: linear-gradient(90deg,rgba(29,158,117,.1),transparent); color: var(--green); }
-.ob-side-title.smallbuyers { background: linear-gradient(90deg,rgba(88,166,255,.1),transparent); color: var(--blue);  }
+.ob-side-title.mayoristas  { background: linear-gradient(90deg,rgba(246,70,93,.1),transparent);  color: var(--red);    }
+.ob-side-title.smallbuyers { background: linear-gradient(90deg,rgba(199,146,234,.1),transparent); color: var(--purple); }
 .ob-head {
   display: grid;
   grid-template-columns: 22px 1fr 62px 82px 115px;
@@ -529,7 +533,7 @@ input:focus {
 .bs-val { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); }
 .bs-val.bs-red { color: #E24B4A; }
 .bs-val-sm { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-2); }
-.ob-side-title.buyads { background: linear-gradient(90deg,rgba(240,185,11,.1),transparent); color: var(--gold); }
+.ob-side-title.buyads { background: linear-gradient(90deg,rgba(29,158,117,.1),transparent); color: var(--green); }
 .ob-row.best-buy-asc { background: linear-gradient(90deg,rgba(240,185,11,.07),transparent); }
 @media (max-width: 640px) {
   .buy-section-row { flex-direction: column; }
@@ -678,7 +682,7 @@ input:focus {
     <!-- Order book dividido -->
     <div class="panel" style="padding:11px;position:relative">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div class="ptitle" style="margin-bottom:0;font-size:13px">Libro de compradores — Sección Vender</div>
+        <div class="ptitle" style="margin-bottom:0;font-size:13px">Sección Vender</div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <span id="ob-commission-label" style="font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.04em;display:none">COMISIÓN —</span>
           <button id="ob-gear-btn" class="btn btn-sm" onclick="toggleObGear(event)" title="Configuración" style="font-size:15px;padding:3px 9px">⚙</button>
@@ -717,7 +721,7 @@ input:focus {
 
       <!-- Sección Compra (BUY) -->
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-        <div class="ptitle" style="margin-bottom:10px">Sección Compra (Binance Buy)</div>
+        <div class="ptitle" style="margin-bottom:10px">Sección Compra</div>
         <div class="buy-section-row">
           <div class="buy-ob-wrap">
             <div class="ob-side-title buyads">🟡 Vender en el verde</div>
@@ -1314,7 +1318,7 @@ function renderOB(id, ads, bestCls) {
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
-        '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'g' : 'b') : '') + '">' + fmtP(ad.price) + '</span>' +
+        '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'r' : 'p') : '') + '">' + fmtP(ad.price) + '</span>' +
         '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
       '</div>';
     } else {
@@ -1356,7 +1360,7 @@ function renderBuySection(ads) {
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
-        '<span class="price-c y">' + fmtP(ad.price) + '</span>' +
+        '<span class="price-c g">' + fmtP(ad.price) + '</span>' +
         '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
       '</div>';
     } else {
