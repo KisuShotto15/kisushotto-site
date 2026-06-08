@@ -1269,7 +1269,9 @@ body.modal-open {
     padding: 0 calc(8px + env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 12px));
   }
   .topbar-actions .btn-pri { padding: 9px 12px; font-size: 13px; }
-  .search-wrap { max-width: none; margin-left: 20px; }
+  /* Drop the logo/label on mobile and give the space to the search bar. */
+  .brand { display: none; }
+  .search-wrap { max-width: none; margin-left: 8px; }
 
   /* Editor: fullscreen on mobile */
   .modal {
