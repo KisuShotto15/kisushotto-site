@@ -1617,17 +1617,14 @@ function renderChecklist() {
       const rects   = allRows.map(r => r.getBoundingClientRect());
       const its     = clItems();
 
-      // Block = the item, plus its contiguous children when it is a parent.
-      let blockStart = srcIdx, blockEnd = srcIdx;
-      if (!its[srcIdx]?.indent) {
-        while (blockEnd + 1 < allRows.length && its[blockEnd + 1]?.indent) blockEnd++;
-      }
+      // Drag moves only the grabbed item (children are not auto-carried).
+      const blockStart = srcIdx, blockEnd = srcIdx;
       const blockH  = rects[blockEnd].bottom - rects[blockStart].top;
       const offsetY = ev.clientY - rects[blockStart].top;
       const cardEl  = document.querySelector('#editor .editor-card');
       const cardBg  = cardEl ? getComputedStyle(cardEl).backgroundColor : '';
 
-      // Ghost shows the whole block.
+      // Ghost shows the grabbed row.
       const ghost = document.createElement('div');
       Object.assign(ghost.style, {
         position: 'fixed',
