@@ -652,7 +652,7 @@ function noteCardHtml(n) {
   } else if (n.type === 'checklist') {
     const items = (n.checklist_items || []).slice(0, 24);
     body = `<div class="nc-body">` + items.map((it, idx) =>
-      `<div class="nc-checklist-line ${it.done ? 'done' : ''}" data-idx="${idx}"><input type="checkbox" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
+      `<div class="nc-checklist-line ${it.done ? 'done' : ''}${(it.indent && idx > 0) ? ' child' : ''}" data-idx="${idx}"><input type="checkbox" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
     ).join('') + (items.length < (n.checklist_items?.length || 0) ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">+${(n.checklist_items?.length || 0) - items.length} más</div>` : '') + `</div>`;
   } else {
     body = `<div class="nc-body">${escapeHtml(htmlToText(n.body || '')).slice(0, 2000)}</div>`;

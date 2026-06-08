@@ -358,6 +358,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   font-size: 14px; color: var(--muted2);
   margin-bottom: 3px;
 }
+.nc-checklist-line.child { margin-left: 20px; }
 .nc-checklist-line input[type=checkbox] {
   appearance: none;
   -webkit-appearance: none;
