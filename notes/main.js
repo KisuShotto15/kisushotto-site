@@ -1572,7 +1572,7 @@ function renderChecklist() {
 
   function endDrag() {
     if (!activeDrag) return;
-    const { allRows, ghost, blockStart, blockEnd, ins, indent, single } = activeDrag;
+    const { allRows, ghost, blockStart, blockEnd, ins, indent } = activeDrag;
     activeDrag = null;
     allRows.forEach(r => { r.style.transition = ''; r.style.transform = ''; r.style.visibility = ''; });
     ghost.remove();
@@ -1587,11 +1587,11 @@ function renderChecklist() {
     const insertAt = Math.max(0, Math.min(ins, rest.length));
     const newArr = [...rest.slice(0, insertAt), ...blockItems, ...rest.slice(insertAt)];
 
-    // A single dragged item can change its indent; a parent block keeps levels.
-    if (single) {
-      const finalIdx = newArr.findIndex(x => x.id === blockItems[0].id);
-      blockItems[0].indent = (finalIdx === 0) ? 0 : (indent ? 1 : 0);
-    }
+    // The grabbed item takes the dragged indent — unless it ends up first
+    // (the first item has no parent above, so it can't be a child).
+    const grabbed = blockItems[0];
+    const finalIdx = newArr.findIndex(x => x.id === grabbed.id);
+    grabbed.indent = (finalIdx === 0) ? 0 : (indent ? 1 : 0);
     if (newArr[0]) newArr[0].indent = 0;            // first item can't be a child
     newArr.forEach((it, i) => { it.indent = it.indent ? 1 : 0; it.order = i; });
 
@@ -1658,7 +1658,7 @@ function renderChecklist() {
       activeDrag = {
         handle, allRows, rects, blockStart, blockEnd, blockH, ghost, offsetY,
         ins: blockStart, startX: ev.clientX, startIndent: its[srcIdx]?.indent || 0,
-        indent: its[srcIdx]?.indent || 0, single: blockStart === blockEnd,
+        indent: its[srcIdx]?.indent || 0,
       };
       handle.setPointerCapture(ev.pointerId);
     }, { passive: false });
@@ -1667,7 +1667,7 @@ function renderChecklist() {
       if (!activeDrag || activeDrag.handle !== handle) return;
       ev.preventDefault();
 
-      const { ghost, allRows, rects, blockStart, blockEnd, blockH, offsetY, single, startX, startIndent } = activeDrag;
+      const { ghost, allRows, rects, blockStart, blockEnd, blockH, offsetY, startX, startIndent } = activeDrag;
       const ghostTop    = ev.clientY - offsetY;
       ghost.style.top   = ghostTop + 'px';
       const ghostCenter = ghostTop + blockH / 2;
@@ -1684,13 +1684,10 @@ function renderChecklist() {
       }
       activeDrag.ins = ins;
 
-      // Horizontal drag → indent (single item only)
-      let indent = startIndent;
-      if (single) {
-        const dx = ev.clientX - startX;
-        indent = Math.max(0, Math.min(1, startIndent + (dx > 24 ? 1 : dx < -24 ? -1 : 0)));
-        activeDrag.indent = indent;
-      }
+      // Horizontal drag → indent the grabbed item (works for parents too).
+      const dx = ev.clientX - startX;
+      const indent = Math.max(0, Math.min(1, startIndent + (dx > 24 ? 1 : dx < -24 ? -1 : 0)));
+      activeDrag.indent = indent;
       ghost.style.transform = `scale(1.02) translateX(${indent ? 28 : 0}px)`;
 
       // Vertical space the block occupies (height + the inter-row gap that
