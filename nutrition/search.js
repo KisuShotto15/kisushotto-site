@@ -37,6 +37,7 @@ const NUTRIENT_NUM_MAP = {
   '401':1162,'415':1175,'418':1178,'435':1190,
   '421':1180,'301':1087,'303':1089,'304':1090,
   '309':1095,'306':1092,'317':1103,'629':1278,'621':1272,
+  '606':1258,'645':1292,'646':1293, // sat/mono/poly fat
 };
 
 // nutrientId aliases for Foundation foods that use different IDs
@@ -68,6 +69,7 @@ function extractPer100g(nutrients) {
     choline:   get(1180), calcium:   get(1087), iron:      get(1089), magnesium: get(1090),
     zinc:      get(1095), potassium: get(1092), selenium:  get(1103), epa:       get(1278) * 1000,
     dha:       get(1272) * 1000,
+    satFat:    get(1258), monoFat:   get(1292), polyFat:   get(1293),
   };
 }
 

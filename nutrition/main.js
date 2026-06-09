@@ -1,6 +1,6 @@
 import { loadLocal, saveLocal, pull, push } from './sync.js';
 import { calcBMR, calcTDEE, calcTarget, mealMacros, totalMacros, scalePortions,
-         MICROS_DEF, calcRDA, totalMicros } from './calculator.js';
+         MICROS_DEF, calcRDA, totalMicros, totalFatTypes } from './calculator.js';
 import { searchFoods, getFoodDetail, getApiKey, setApiKey } from './search.js';
 import { FALLBACK_FOODS } from './data/fallback.js';
 
@@ -446,6 +446,46 @@ async function renderMicros() {
       <div class="micro-status">${label}</div>
     </div>`;
   }).join('');
+
+  renderFatTypes(meals);
+}
+
+function renderFatTypes(meals) {
+  const el = document.getElementById('fat-dist');
+  if (!el) return;
+  const { sat, mono, poly } = totalFatTypes(meals, S.microCache);
+  const known = sat + mono + poly;
+  if (known === 0) {
+    el.innerHTML = '<span class="fat-dist-empty">Sin datos de composicion de grasas aun.</span>';
+    return;
+  }
+  const pSat  = Math.round(sat  / known * 100);
+  const pMono = Math.round(mono / known * 100);
+  const pPoly = 100 - pSat - pMono;
+  const fmt1  = v => v.toFixed(1);
+  el.innerHTML = `
+    <div class="fat-dist-bar">
+      <div class="fat-dist-seg fds-sat"  style="width:${pSat}%"  title="Saturadas ${pSat}%"></div>
+      <div class="fat-dist-seg fds-mono" style="width:${pMono}%" title="Monoinsaturadas ${pMono}%"></div>
+      <div class="fat-dist-seg fds-poly" style="width:${pPoly}%" title="Poliinsaturadas ${pPoly}%"></div>
+    </div>
+    <div class="fat-dist-legend">
+      <div class="fat-dist-item">
+        <span class="fdi-dot fds-sat"></span>
+        <span class="fdi-label">Saturadas</span>
+        <span class="fdi-val">${fmt1(sat)}g · ${pSat}%</span>
+      </div>
+      <div class="fat-dist-item">
+        <span class="fdi-dot fds-mono"></span>
+        <span class="fdi-label">Monoinsaturadas</span>
+        <span class="fdi-val">${fmt1(mono)}g · ${pMono}%</span>
+      </div>
+      <div class="fat-dist-item">
+        <span class="fdi-dot fds-poly"></span>
+        <span class="fdi-label">Poliinsaturadas</span>
+        <span class="fdi-val">${fmt1(poly)}g · ${pPoly}%</span>
+      </div>
+    </div>`;
 }
 
 // ── Summary bar ───────────────────────────────────────────────────────────────

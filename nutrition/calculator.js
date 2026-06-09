@@ -94,6 +94,22 @@ export function totalMicros(meals, microCache) {
   return totals;
 }
 
+export function totalFatTypes(meals, microCache) {
+  let sat = 0, mono = 0, poly = 0;
+  for (const meal of meals) {
+    for (const ing of meal.ingredients) {
+      if (ing.disabled || !ing.fdcId) continue;
+      const c = microCache[ing.fdcId];
+      if (!c) continue;
+      const f = ing.amountG / 100;
+      sat  += (c.satFat  || 0) * f;
+      mono += (c.monoFat || 0) * f;
+      poly += (c.polyFat || 0) * f;
+    }
+  }
+  return { sat, mono, poly };
+}
+
 // ── Scale portions ────────────────────────────────────────────────────────────
 
 export function scalePortions(meals, targetKcal) {
