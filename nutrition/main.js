@@ -823,13 +823,15 @@ window._confirmIngredient = async function() {
   save();
   window._closeSearch();
   renderSummary();
+  const openMeals = new Set(
+    [...document.querySelectorAll('.meal-body.open')].map(el => el.id.replace('body-', ''))
+  );
+  openMeals.add(searchTargetMealId);
   renderMeals();
-  setTimeout(() => {
-    const body = document.getElementById(`body-${searchTargetMealId}`);
-    const chev = document.getElementById(`chev-${searchTargetMealId}`);
-    if (body) body.classList.add('open');
-    if (chev) chev.classList.add('open');
-  }, 30);
+  openMeals.forEach(id => {
+    document.getElementById(`body-${id}`)?.classList.add('open');
+    document.getElementById(`chev-${id}`)?.classList.add('open');
+  });
 };
 
 // ── API key modal ─────────────────────────────────────────────────────────────
