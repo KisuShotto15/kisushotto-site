@@ -98,9 +98,9 @@ function migrateState(s) {
     }
   });
   if (!s.microCache) s.microCache = {};
-  if (!s.microCacheVersion || s.microCacheVersion < 2) {
+  if (!s.microCacheVersion || s.microCacheVersion < 3) {
     s.microCache = {};
-    s.microCacheVersion = 2;
+    s.microCacheVersion = 3;
   }
   return s;
 }
@@ -791,9 +791,7 @@ window._selectFood = function(encoded) {
     const key = getApiKey(S.activeProfile);
     if (key) {
       pendingDetailFetch = getFoodDetail(pendingFood.fdcId, key).then(detail => {
-        if (detail && (detail.epa > 0 || detail.dha > 0)) {
-          pendingFood.per100g = detail;
-        }
+        if (detail) pendingFood.per100g = detail;
       }).catch(() => {});
     }
   }
