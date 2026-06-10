@@ -700,7 +700,7 @@ input:focus {
       <!-- Config popup -->
       <div id="ob-gear-popup" style="display:none;position:absolute;top:44px;right:11px;width:300px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.8);z-index:50">
         <div class="ptitle" style="margin-bottom:8px">Configuración</div>
-        <div class="cfg-row"><span>Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="15" max="300"></div>
+        <div class="cfg-row"><span>Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="10" max="300"></div>
         <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
         <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
         <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
@@ -2366,7 +2366,7 @@ function loadTgConfig() {
 
 // ── Config ────────────────────────────────────────────
 function saveConfig() {
-  CFG.interval      = Math.max(15, parseInt(document.getElementById('cfg-int').value) || 30);
+  CFG.interval      = Math.max(10, parseInt(document.getElementById('cfg-int').value) || 30);
   CFG.spreadThr     = parseFloat(document.getElementById('cfg-spr').value) || 0.5;
   CFG.overboughtThr = parseFloat(document.getElementById('cfg-ob').value)  || 1.0;
   CFG.weaknessThr   = parseFloat(document.getElementById('cfg-wk').value)  || 0.5;
