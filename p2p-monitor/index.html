@@ -1112,7 +1112,7 @@ async function fetchOnce() {
   try {
     var results = await Promise.all([
       fetchTier(CFG.mayAmount, 2),
-      fetchTier(CFG.smallAmount, 5),
+      fetchTier(CFG.smallAmount, 2),
       fetchBuySection()
     ]);
 
