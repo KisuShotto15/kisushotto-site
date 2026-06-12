@@ -1013,36 +1013,43 @@ var COOLDOWN = {};
 var COOLDOWN_MS = 5 * 60000;
 
 // ── API ──────────────────────────────────────────────
+// Construye el body de busqueda P2P
+function buildSearchBody(opts) {
+  var body = {
+    asset: 'USDT',
+    fiat: 'VES',
+    merchantCheck: false,
+    page: opts.page,
+    rows: 20,
+    tradeType: opts.tradeType || 'SELL',
+    payTypes: opts.pays
+  };
+  if (opts.transAmount && parseFloat(opts.transAmount) > 0) body.transAmount = opts.transAmount;
+  return body;
+}
+
+// Lote: 1 sola llamada Vercel para N paginas. Devuelve array alineado por indice (data[] por query).
+async function searchBatch(bodies) {
+  var r = await fetch(PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Api-Secret': VERCEL_SECRET },
+    body: JSON.stringify({ queries: bodies })
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  var d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return (d.results || []).map(function(res) { return (res && res.data) || []; });
+}
+
 async function fetchTier(transAmount, maxPages, payTypesOverride) {
   maxPages = maxPages || 2;
   var pays = (payTypesOverride && payTypesOverride.length) ? payTypesOverride : [ACTIVE_PAY];
-  async function onePage(page) {
-    var body = {
-      asset: 'USDT',
-      fiat: 'VES',
-      merchantCheck: false,
-      page: page,
-      rows: 20,
-      tradeType: 'SELL',
-      payTypes: pays
-    };
-    if (transAmount && parseFloat(transAmount) > 0) body.transAmount = transAmount;
-    var r = await fetch(PROXY, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Api-Secret': VERCEL_SECRET },
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    var d = await r.json();
-    if (d.error) throw new Error(d.error);
-    return d.data || [];
+  var bodies = [];
+  for (var i = 1; i <= maxPages; i++) {
+    bodies.push(buildSearchBody({ transAmount: transAmount, page: i, pays: pays, tradeType: 'SELL' }));
   }
-  var pages = [];
-  for (var i = 1; i <= maxPages; i++) pages.push(i);
-  var results = await Promise.allSettled(pages.map(onePage));
-  return results
-    .filter(function(r) { return r.status === 'fulfilled'; })
-    .flatMap(function(r) { return r.value; });
+  var results = await searchBatch(bodies);
+  return results.flatMap(function(arr) { return arr; });
 }
 
 function mapAds(raw) {
@@ -1067,27 +1074,7 @@ function mapAds(raw) {
 }
 
 // ── Sección Compra (BUY) ─────────────────────────────
-async function fetchBuySection() {
-  async function onePage(page) {
-    var body = {
-      asset: 'USDT', fiat: 'VES', merchantCheck: false,
-      page: page, rows: 20, tradeType: 'BUY',
-      transAmount: CFG.buyAmount, payTypes: [ACTIVE_PAY]
-    };
-    var r = await fetch(PROXY, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Api-Secret': VERCEL_SECRET },
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    var d = await r.json();
-    if (d.error) throw new Error(d.error);
-    return d.data || [];
-  }
-  var results = await Promise.allSettled([onePage(1), onePage(2)]);
-  var raw = results
-    .filter(function(r) { return r.status === 'fulfilled'; })
-    .flatMap(function(r) { return r.value; });
+function mapBuyAds(raw) {
   return raw.map(function(item) {
     return {
       price:   parseFloat(item.adv.price),
@@ -1107,18 +1094,24 @@ async function fetchBuySection() {
 }
 
 // ── Ciclo principal ───────────────────────────────────
+// Un solo batch combinado: paginas may + small + buy en 1 request Vercel
+var MAY_PAGES = 2, SMALL_PAGES = 3;
 async function fetchOnce() {
   document.getElementById('last-update').textContent = 'Cargando...';
   try {
-    var results = await Promise.all([
-      fetchTier(CFG.mayAmount, 2),
-      fetchTier(CFG.smallAmount, 2),
-      fetchBuySection()
-    ]);
+    var bodies = [];
+    for (var i = 1; i <= MAY_PAGES; i++)   bodies.push(buildSearchBody({ transAmount: CFG.mayAmount,   page: i, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
+    for (var j = 1; j <= SMALL_PAGES; j++) bodies.push(buildSearchBody({ transAmount: CFG.smallAmount, page: j, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
+    bodies.push(buildSearchBody({ transAmount: CFG.buyAmount, page: 1, pays: [ACTIVE_PAY], tradeType: 'BUY' }));
 
-    ST.mayoristas = mapAds(results[0]);
-    ST.smallAds   = mapAds(results[1]);
-    ST.buyAds     = results[2];
+    var batch = await searchBatch(bodies);
+    var mayRaw   = batch.slice(0, MAY_PAGES).flatMap(function(a){ return a; });
+    var smallRaw = batch.slice(MAY_PAGES, MAY_PAGES + SMALL_PAGES).flatMap(function(a){ return a; });
+    var buyRaw   = batch[MAY_PAGES + SMALL_PAGES] || [];
+
+    ST.mayoristas = mapAds(mayRaw);
+    ST.smallAds   = mapAds(smallRaw);
+    ST.buyAds     = mapBuyAds(buyRaw);
 
     ST.allAds     = ST.mayoristas; // para compatibilidad con historial
 
@@ -1614,7 +1607,7 @@ var ORDERS = {
   lastNotifTs: 0,
   timer: null,
   COOLDOWN_MS: 3 * 60 * 1000,
-  POLL_MS: 60 * 1000
+  POLL_MS: 120 * 1000
 };
 
 function startOrdersWatcher() {
@@ -2034,7 +2027,7 @@ async function botCycle() {
 
     // 2. Mercado público — 3 páginas, usando los métodos del anuncio del bot
     botSetStatus('Analizando mercado...', '#F0B90B');
-    var market = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3, BOT.adPayTypes));
+    var market = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 2, BOT.adPayTypes));
 
     // 3. Competidores: badge + match con métodos del anuncio, límite mínimo ≤ mío + umbral
     var myPays = BOT.adPayTypes && BOT.adPayTypes.length ? BOT.adPayTypes : [ACTIVE_PAY];
@@ -2158,7 +2151,7 @@ async function botInitialCycle(allowPaused) {
     document.getElementById('bot-cur-price').textContent  = BOT.currentPrice.toFixed(3) + ' Bs';
     updateBotPriceColor();
 
-    var market      = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 3, BOT.adPayTypes));
+    var market      = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 2, BOT.adPayTypes));
     var myPays = BOT.adPayTypes && BOT.adPayTypes.length ? BOT.adPayTypes : [ACTIVE_PAY];
     var competitors = market.filter(function(a) {
       var aTypes = a.payTypes || [];
