@@ -215,8 +215,8 @@ STEOF
 cat > "$TWA_DIR/app/src/main/res/values/colors.xml" << 'CEOF'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#111114</color>
-    <color name="backgroundColor">#111114</color>
+    <color name="colorPrimary">#0d0a13</color>
+    <color name="backgroundColor">#0d0a13</color>
 </resources>
 CEOF
 
@@ -238,7 +238,7 @@ cd "$REPO_ROOT"
 node -e "
 const sharp = require('sharp');
 const src = 'public/images/notes-icon.svg';
-const bg = { r: 17, g: 17, b: 20, alpha: 1 }; // #111114
+const bg = { r: 13, g: 10, b: 19, alpha: 1 }; // #0d0a13
 
 // Icon with background baked in: icon at 65% of canvas
 async function makeIcon(dst, canvas) {
@@ -274,7 +274,7 @@ Promise.all([
 cat > "$TWA_DIR/app/src/main/res/drawable/ic_launcher_background.xml" << 'DIBEOF'
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#111114"/>
+    <solid android:color="#0d0a13"/>
 </shape>
 DIBEOF
 
