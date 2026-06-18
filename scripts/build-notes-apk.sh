@@ -250,9 +250,10 @@ async function makeIcon(dst, canvas) {
     .toFile(dst);
 }
 
-// Adaptive foreground: transparent bg, icon at 50% of 432px canvas (safe zone = 288px)
+// Adaptive foreground: transparent bg, icon close to full canvas so the
+// background layer doesn't show as a ring around the icon's own shape.
 async function makeForeground(dst, canvas) {
-  const iconSize = Math.round(canvas * 0.65);
+  const iconSize = Math.round(canvas * 0.92);
   const iconBuf = await sharp(src).resize(iconSize, iconSize).png().toBuffer();
   return sharp({ create: { width: canvas, height: canvas, channels: 4, background: { r:0,g:0,b:0,alpha:0 } } })
     .composite([{ input: iconBuf, gravity: 'center' }])
@@ -274,7 +275,7 @@ Promise.all([
 cat > "$TWA_DIR/app/src/main/res/drawable/ic_launcher_background.xml" << 'DIBEOF'
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#0d0a13"/>
+    <solid android:color="#2f2356"/>
 </shape>
 DIBEOF
 
