@@ -1,7 +1,7 @@
 // notes/sync.js — pull/push with IndexedDB cache and offline queue.
 
 import * as idb from './idb.js';
-import { apiSyncPull, apiSyncPush } from './api.js';
+import { apiSyncPull, apiSyncPush, apiDeleteCat } from './api.js';
 
 let pushTimer = null;
 let pushing = false;
@@ -14,16 +14,18 @@ export async function pull() {
   const data = await apiSyncPull(since);
   let changed = false;
   const changedNoteIds = new Set();
-  // The outbox is authoritative: a note with a pending local change must NEVER
-  // be overwritten by server data, regardless of timestamps (client and server
-  // last_modified come from different clocks and are not comparable).
-  const pending = new Set(
-    (await idb.peekQueue())
-      .filter(i => i.type === 'note' || i.type === 'note-del')
-      .map(i => i.id)
+  // The outbox is authoritative: an entity with a pending local change must
+  // NEVER be overwritten (or, for categories, wiped) by server data — client
+  // and server last_modified come from different clocks and are not comparable.
+  const queueItems = await idb.peekQueue();
+  const pendingNotes = new Set(
+    queueItems.filter(i => i.type === 'note' || i.type === 'note-del').map(i => i.id)
+  );
+  const pendingCats = new Set(
+    queueItems.filter(i => i.type === 'category' || i.type === 'category-del').map(i => i.id)
   );
   for (const n of data.notes || []) {
-    if (pending.has(n.id)) continue; // local has unsynced changes — keep them
+    if (pendingNotes.has(n.id)) continue; // local has unsynced changes — keep them
     const local = await idb.getOne('notes', n.id);
     if (!local || (local.last_modified || 0) < (n.last_modified || 0)) {
       // Server schema has no sort_order column — preserve the local one so
@@ -36,18 +38,29 @@ export async function pull() {
       changedNoteIds.add(n.id);
     }
   }
+  // Categories: merge per-id (never clear+rebuild) so a category that was just
+  // created/edited/deleted locally and hasn't been pushed yet survives a pull
+  // that races with the debounced flush.
   const incomingCats = data.categories || [];
   const localCats = await idb.getAll('categories');
-  const catsChanged = incomingCats.length !== localCats.length ||
-    incomingCats.some((c, i) => !localCats[i] || localCats[i].updated_at !== c.updated_at);
-  if (catsChanged) {
-    const localMap = Object.fromEntries(localCats.map(c => [c.id, c]));
-    await idb.clear('categories');
-    for (const c of incomingCats) {
-      if (!c.icon && localMap[c.id]?.icon) c.icon = localMap[c.id].icon;
+  const localMap = Object.fromEntries(localCats.map(c => [c.id, c]));
+  const incomingIds = new Set();
+  for (const c of incomingCats) {
+    incomingIds.add(c.id);
+    if (pendingCats.has(c.id)) continue; // local create/edit/delete still in flight
+    const localC = localMap[c.id];
+    if (!c.icon && localC?.icon) c.icon = localC.icon;
+    if (!localC || localC.updated_at !== c.updated_at) {
       await idb.put('categories', c);
+      changed = true;
     }
-    changed = true;
+  }
+  for (const c of localCats) {
+    if (!incomingIds.has(c.id) && !pendingCats.has(c.id)) {
+      // Absent from the server and nothing pending locally — deleted elsewhere.
+      await idb.del('categories', c.id);
+      changed = true;
+    }
   }
   if (data.server_time) await idb.setMeta('lastSyncedAt', data.server_time);
   return { ok: true, changed, changedNoteIds };
@@ -66,54 +79,74 @@ export async function flushQueue() {
     const items = await idb.peekQueue(); // read without removing — safe on failure
     if (!items.length) return;
 
-    const noteIds = new Set();
-    const catIds = new Set();
-    for (const it of items) {
-      if (it.type === 'note')     noteIds.add(it.id);
-      if (it.type === 'note-del') noteIds.add(it.id);
-      if (it.type === 'category') catIds.add(it.id);
-    }
-    const notes = [];
-    for (const id of noteIds) {
-      const n = await idb.getOne('notes', id);
-      if (n) notes.push(n);
-    }
-    const categories = [];
-    for (const id of catIds) {
-      const c = await idb.getOne('categories', id);
-      if (c) categories.push(c);
-    }
+    const syncItems = items.filter(i => i.type === 'note' || i.type === 'category');
+    const delItems  = items.filter(i => i.type === 'category-del');
 
-    const since = (await idb.getMeta('lastSyncedAt')) || 0;
-    const result = await apiSyncPush({ notes, categories, since });
-
-    // Push succeeded — remove exactly the items we sent, but only if they have
-    // not been re-queued since (a fresh edit during the in-flight push updates
-    // queued_at; keep those so the new edit is pushed on the next flush).
-    await idb.dequeueIfUnchanged(items);
-
-    // Recompute pending after dequeue: notes still queued were edited again
-    // mid-flight and must not be clobbered by the now-stale server canonical.
-    const stillPending = new Set(
-      (await idb.peekQueue())
-        .filter(i => i.type === 'note' || i.type === 'note-del')
-        .map(i => i.id)
-    );
-
-    // Apply server-canonical state back into IDB, preserving local sort_order
-    // (server schema does not persist this column).
-    for (const n of result.notes || []) {
-      if (stillPending.has(n.id)) continue; // newer local edit pending — keep it
-      const local = await idb.getOne('notes', n.id);
-      if (local && n.sort_order == null && local.sort_order != null) {
-        n.sort_order = local.sort_order;
+    if (syncItems.length) {
+      const noteIds = new Set();
+      const catIds = new Set();
+      for (const it of syncItems) {
+        if (it.type === 'note')     noteIds.add(it.id);
+        if (it.type === 'category') catIds.add(it.id);
       }
-      await idb.put('notes', n);
+      const notes = [];
+      for (const id of noteIds) {
+        const n = await idb.getOne('notes', id);
+        if (n) notes.push(n);
+      }
+      const categories = [];
+      for (const id of catIds) {
+        const c = await idb.getOne('categories', id);
+        if (c) categories.push(c);
+      }
+
+      const since = (await idb.getMeta('lastSyncedAt')) || 0;
+      const result = await apiSyncPush({ notes, categories, since });
+
+      // Push succeeded — remove exactly the items we sent, but only if they have
+      // not been re-queued since (a fresh edit during the in-flight push updates
+      // queued_at; keep those so the new edit is pushed on the next flush).
+      await idb.dequeueIfUnchanged(syncItems);
+
+      // Recompute pending after dequeue: entries still queued were edited again
+      // mid-flight and must not be clobbered by the now-stale server canonical.
+      const queueAfter = await idb.peekQueue();
+      const stillPendingNotes = new Set(queueAfter.filter(i => i.type === 'note').map(i => i.id));
+      const stillPendingCats  = new Set(
+        queueAfter.filter(i => i.type === 'category' || i.type === 'category-del').map(i => i.id)
+      );
+
+      // Apply server-canonical state back into IDB, preserving local sort_order
+      // (server schema does not persist this column).
+      for (const n of result.notes || []) {
+        if (stillPendingNotes.has(n.id)) continue; // newer local edit pending — keep it
+        const local = await idb.getOne('notes', n.id);
+        if (local && n.sort_order == null && local.sort_order != null) {
+          n.sort_order = local.sort_order;
+        }
+        await idb.put('notes', n);
+      }
+      for (const c of result.categories || []) {
+        if (stillPendingCats.has(c.id)) continue; // newer local edit/delete pending — keep it
+        await idb.put('categories', c);
+      }
+      if (result.server_time) await idb.setMeta('lastSyncedAt', result.server_time);
     }
-    for (const c of result.categories || []) {
-      await idb.put('categories', c);
+
+    // Category deletions go through the single-item endpoint (the batch sync
+    // endpoint has no delete verb) with their own per-item retry: a transient
+    // failure leaves the item queued; "not found" means it's already gone.
+    for (const it of delItems) {
+      try {
+        await apiDeleteCat(it.id);
+        await idb.dequeueIfUnchanged([it]);
+      } catch (e) {
+        if (String(e?.message || '').startsWith('API 404')) {
+          await idb.dequeueIfUnchanged([it]);
+        }
+        // otherwise leave queued — retried on next flush
+      }
     }
-    if (result.server_time) await idb.setMeta('lastSyncedAt', result.server_time);
   } catch (e) {
     console.warn('flushQueue failed — will retry on next flush', e);
     // Items remain in queue; next flushQueue call will retry them
@@ -144,7 +177,8 @@ export async function saveCategoryLocal(cat) {
 
 export async function deleteCategoryLocal(id) {
   await idb.del('categories', id);
-  // best-effort: caller must also call apiDeleteCat
+  await idb.enqueue({ type: 'category-del', id });
+  pushQueueDebounced();
 }
 
 export function onConnectionChange(cb) {

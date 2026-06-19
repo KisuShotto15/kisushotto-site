@@ -3,7 +3,7 @@
 import * as idb from './idb.js';
 import {
   cfg,
-  apiGetMe, apiCreateCat, apiUpdateCat, apiDeleteCat,
+  apiGetMe,
   apiShareNote, apiRevokeShare,
   apiUploadAttachment, apiDeleteAttachment, apiAttachmentBlobUrl,
   apiTrashNote, apiRestoreNote, apiPurgeNote,
@@ -11,7 +11,7 @@ import {
   apiListPasskeys, apiRenamePasskey, apiDeletePasskey,
   getUserEmail,
 } from './api.js';
-import { pull, flushQueue, saveNoteLocal, saveCategoryLocal, onConnectionChange } from './sync.js';
+import { pull, flushQueue, saveNoteLocal, saveCategoryLocal, deleteCategoryLocal, onConnectionChange } from './sync.js';
 import {
   isSessionUnlocked, lockSession,
   setPin, verifyPin,
@@ -246,6 +246,12 @@ async function init() {
   setInterval(async () => {
     if (!navigator.onLine) return;
     try {
+      // Retry the outbox here too: a push can fail silently on a flaky
+      // connection (VPN drop) without the browser ever firing 'offline', so
+      // relying only on debounced-after-edit / online-event flushes can leave
+      // a change stranded indefinitely. This is a cheap no-op when the queue
+      // is empty or a flush is already in flight.
+      await flushQueue();
       const { changed, changedNoteIds } = await pull();
       if (!changed) return;
       const editorOpen = !$('#editor').hidden;
@@ -564,7 +570,6 @@ function renderDrawerCats() {
       cat.name = inp.value.trim() || cat.name;
       cat.updated_at = Date.now();
       await saveCategoryLocal(cat);
-      try { await apiUpdateCat(c.id, { name: cat.name }); } catch {}
       renderCategoriesStrip();
     });
 
@@ -575,9 +580,8 @@ function renderDrawerCats() {
 
     delBtn.addEventListener('click', async () => {
       if (!(await window.customConfirm('¿Eliminar categoría? Las notas no se borran.'))) return;
-      try { await apiDeleteCat(c.id); } catch {}
+      await deleteCategoryLocal(c.id);
       State.categories = State.categories.filter(x => x.id !== c.id);
-      await idb.del('categories', c.id);
       renderCategoriesStrip();
       renderDrawerCats();
       render();
@@ -2190,7 +2194,6 @@ function bindEditorActions() {
     };
     State.categories.push(cat);
     await saveCategoryLocal(cat);
-    try { await apiCreateCat({ id: cat.id, name: cat.name, icon: cat.icon, color: cat.color }); } catch {}
     inp.value = '';
     renderCategoriesPopup();
     renderCategoriesStrip();
@@ -2532,7 +2535,6 @@ function openIconPicker(catId, anchorBtn) {
         cat.updated_at = Date.now();
         anchorBtn.textContent = cat.icon;
         await saveCategoryLocal(cat);
-        try { await apiUpdateCat(catId, { icon: cat.icon }); } catch {}
         renderCategoriesStrip();
       }
       popup.hidden = true;
@@ -2651,7 +2653,6 @@ function bindDrawer() {
     };
     State.categories.push(cat);
     await saveCategoryLocal(cat);
-    try { await apiCreateCat({ id: cat.id, name, icon: cat.icon, color: cat.color }); } catch {}
     inp.value = '';
     renderDrawerCats();
     renderCategoriesStrip();
