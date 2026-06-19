@@ -306,6 +306,9 @@ body {
 .price-c { font-size:17px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
 .lim-c { font-size:14px; color: var(--text-3); text-align: center; white-space: nowrap; }
 .lim-amount { display: none; font-size:11px; color: var(--text-3); margin-top:2px; font-variant-numeric: tabular-nums; }
+.avail-arrow { font-size:10px; margin-right:3px; line-height:1; }
+.avail-arrow.up { color: #22c55e; }
+.avail-arrow.down { color: #ef4444; }
 .empty-ob { text-align: center; padding: 20px; color: var(--text-3); font-size:16px; }
 
 /* ── Alerts ─────────────────────────────────────────── */
@@ -1109,6 +1112,10 @@ async function fetchOnce() {
     var smallRaw = batch.slice(MAY_PAGES, MAY_PAGES + SMALL_PAGES).flatMap(function(a){ return a; });
     var buyRaw   = batch[MAY_PAGES + SMALL_PAGES] || [];
 
+    var prevMayAvail = {};
+    (ST.mayoristas || []).forEach(function(a){ prevMayAvail[a.merchant] = a.avail; });
+    ST.prevMayAvail = prevMayAvail;
+
     ST.mayoristas = mapAds(mayRaw);
     ST.smallAds   = mapAds(smallRaw);
     ST.buyAds     = mapBuyAds(buyRaw);
@@ -1316,9 +1323,19 @@ function renderOB(id, ads, bestCls) {
       var availStr = ad.avail >= 1000
         ? (ad.avail / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
         : Math.round(ad.avail).toLocaleString('es-VE');
+      var arrowHtml = '';
+      if (id === 'ob-may' && ST.prevMayAvail && ST.prevMayAvail[ad.merchant] !== undefined) {
+        var delta = ad.avail - ST.prevMayAvail[ad.merchant];
+        var aDelta = Math.abs(delta);
+        var deltaStr = aDelta >= 1000
+          ? (aDelta / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
+          : Math.round(aDelta).toLocaleString('es-VE');
+        if (delta > 0)      arrowHtml = '<span class="avail-arrow up"   title="Recargó +' + Math.round(delta) + ' USDT">▲+' + deltaStr + '</span>';
+        else if (delta < 0) arrowHtml = '<span class="avail-arrow down" title="Vendió '   + Math.round(delta) + ' USDT">▼-' + deltaStr + '</span>';
+      }
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
-        '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
+        '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + arrowHtml + availStr + '</span>' +
         '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'r' : 'p') : '') + '">' + fmtP(ad.price) + '</span>' +
         '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
       '</div>';
