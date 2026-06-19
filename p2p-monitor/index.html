@@ -1117,6 +1117,10 @@ async function fetchOnce() {
     (ST.mayoristas || []).forEach(function(a){ prevMayAvail[a.merchant] = a.avail; });
     ST.prevMayAvail = prevMayAvail;
 
+    var prevBuyAvail = {};
+    (ST.buyAds || []).forEach(function(a){ prevBuyAvail[a.merchant] = a.avail; });
+    ST.prevBuyAvail = prevBuyAvail;
+
     ST.mayoristas = mapAds(mayRaw);
     ST.smallAds   = mapAds(smallRaw);
     ST.buyAds     = mapBuyAds(buyRaw);
@@ -1376,9 +1380,19 @@ function renderBuySection(ads) {
       var availStr = ad.avail >= 1000
         ? (ad.avail / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
         : Math.round(ad.avail).toLocaleString('es-VE');
+      var arrowHtml = '';
+      if (ST.prevBuyAvail && ST.prevBuyAvail[ad.merchant] !== undefined) {
+        var delta = ad.avail - ST.prevBuyAvail[ad.merchant];
+        var aDelta = Math.abs(delta);
+        var deltaStr = aDelta >= 1000
+          ? (aDelta / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
+          : Math.round(aDelta).toLocaleString('es-VE');
+        if (delta > 0)      arrowHtml = '<span class="avail-arrow up"   title="Recargó +' + Math.round(delta) + ' USDT">▲+' + deltaStr + '</span>';
+        else if (delta < 0) arrowHtml = '<span class="avail-arrow down" title="Vendió '   + Math.round(delta) + ' USDT">▼-' + deltaStr + '</span>';
+      }
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
-        '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + availStr + '</span>' +
+        '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
         '<span class="price-c g">' + fmtP(ad.price) + '</span>' +
         '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
       '</div>';
