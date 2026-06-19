@@ -306,7 +306,8 @@ body {
 .price-c { font-size:17px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
 .lim-c { font-size:14px; color: var(--text-3); text-align: center; white-space: nowrap; }
 .lim-amount { display: none; font-size:11px; color: var(--text-3); margin-top:2px; font-variant-numeric: tabular-nums; }
-.avail-arrow { font-size:10px; margin-right:3px; line-height:1; }
+.avail-num { position: relative; }
+.avail-arrow { position: absolute; right: 100%; margin-right: 4px; font-size: 10px; line-height: 1; white-space: nowrap; top: 50%; transform: translateY(-50%); }
 .avail-arrow.up { color: #22c55e; }
 .avail-arrow.down { color: #ef4444; }
 .empty-ob { text-align: center; padding: 20px; color: var(--text-3); font-size:16px; }
@@ -1335,7 +1336,7 @@ function renderOB(id, ads, bestCls) {
       }
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
-        '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles">' + arrowHtml + availStr + '</span>' +
+        '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
         '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'r' : 'p') : '') + '">' + fmtP(ad.price) + '</span>' +
         '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
       '</div>';
