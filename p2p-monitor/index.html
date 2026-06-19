@@ -1117,6 +1117,10 @@ async function fetchOnce() {
     (ST.mayoristas || []).forEach(function(a){ prevMayAvail[a.merchant] = a.avail; });
     ST.prevMayAvail = prevMayAvail;
 
+    var prevSmallAvail = {};
+    (ST.smallAds || []).forEach(function(a){ prevSmallAvail[a.merchant] = a.avail; });
+    ST.prevSmallAvail = prevSmallAvail;
+
     var prevBuyAvail = {};
     (ST.buyAds || []).forEach(function(a){ prevBuyAvail[a.merchant] = a.avail; });
     ST.prevBuyAvail = prevBuyAvail;
@@ -1329,8 +1333,9 @@ function renderOB(id, ads, bestCls) {
         ? (ad.avail / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
         : Math.round(ad.avail).toLocaleString('es-VE');
       var arrowHtml = '';
-      if (id === 'ob-may' && ST.prevMayAvail && ST.prevMayAvail[ad.merchant] !== undefined) {
-        var delta = ad.avail - ST.prevMayAvail[ad.merchant];
+      var prevMap = id === 'ob-may' ? ST.prevMayAvail : (id === 'ob-small' ? ST.prevSmallAvail : null);
+      if (prevMap && prevMap[ad.merchant] !== undefined) {
+        var delta = ad.avail - prevMap[ad.merchant];
         var aDelta = Math.abs(delta);
         var deltaStr = aDelta >= 1000
           ? (aDelta / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
