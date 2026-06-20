@@ -6,14 +6,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0a0a10">
+<meta name="theme-color" content="#0d0a13">
 <meta name="color-scheme" content="dark">
 <title>Notes - KS</title>
 <meta name="apple-mobile-web-app-title" content="Notes">
 <link rel="icon" type="image/svg+xml" href="/images/notes-favicon.svg">
 <link rel="apple-touch-icon" href="/icons/notes-192.png">
 <link rel="manifest" href="/manifest.json">
-<link rel="stylesheet" href="./style.css?v=17">
+<link rel="stylesheet" href="./style.css?v=29">
 <style>
 #__version_wm{position:fixed;bottom:6px;right:8px;font:600 10px/1 system-ui,sans-serif;
   color:#fff;background:rgba(220,38,38,.85);padding:3px 6px;border-radius:6px;
@@ -41,6 +41,10 @@
 
 <aside class="sidebar" id="sidebar">
   <nav class="sidebar-nav" id="sidebar-nav">
+    <div class="sidebar-brand">
+      <img src="/images/notes-logo.svg" alt="" width="28" height="28">
+      <span>Notes</span>
+    </div>
     <button class="sidebar-item active" data-view="all">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
       <span>Notas</span>
@@ -109,24 +113,27 @@
   <div class="modal-card editor-card">
     <div class="ed-toolbar">
       <button class="btn-icon" id="ed-close" data-close onclick="" title="Atrás"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"></path><polyline points="12 19 5 12 12 5"></polyline></svg></button>
+      <div class="ed-meta" id="ed-meta"></div>
       <span class="ed-status" id="ed-status"></span>
       <div class="ed-toolbar-right">
         <button class="btn-icon" id="ed-pin" title="Fijar" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
         <button class="btn-icon" id="ed-reminder" title="Recordatorio" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
       </div>
     </div>
-    <div class="ed-meta" id="ed-meta"></div>
-    <input class="ed-title" id="ed-title" placeholder="Título" maxlength="200">
-    <div class="ed-body-wrap">
-      <textarea class="ed-body" id="ed-body" placeholder="Escribe..."></textarea>
-      <div class="ed-checklist" id="ed-checklist-list" hidden></div>
+    <div class="ed-scroll">
+      <input class="ed-title" id="ed-title" placeholder="Título" maxlength="200">
+      <div class="ed-body-wrap">
+        <textarea class="ed-body" id="ed-body" placeholder="Escribe..."></textarea>
+        <div class="ed-checklist" id="ed-checklist-list" hidden></div>
+      </div>
+      <div class="ed-attachments" id="ed-attachments"></div>
     </div>
-    <div class="ed-attachments" id="ed-attachments"></div>
 
     <div class="ed-bottom-bar">
       <button class="btn-icon" id="ed-add" title="Agregar" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
       <button class="btn-icon" id="ed-color" title="Color" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg></button>
       <div class="ed-undo-redo">
+        <span class="ed-edited" id="ed-edited"></span>
         <button class="btn-icon" id="ed-undo" title="Deshacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg></button>
         <button class="btn-icon" id="ed-redo" title="Rehacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg></button>
         <button class="btn-icon" id="ed-more" title="Más opciones" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
@@ -161,21 +168,18 @@
 <!-- Color picker mini-popup -->
 <div class="popup" id="popup-color" hidden>
   <div class="color-grid">
-    <button class="color-swatch" data-color=""           style="background:transparent;border:1px dashed #555" onclick="">∅</button>
-    <button class="color-swatch" data-color="#5C3520"    style="background:#5C3520" onclick=""></button>
-    <button class="color-swatch" data-color="#4F4118"    style="background:#4F4118" onclick=""></button>
-    <button class="color-swatch" data-color="#1F4A28"    style="background:#1F4A28" onclick=""></button>
-    <button class="color-swatch" data-color="#194446"    style="background:#194446" onclick=""></button>
-    <button class="color-swatch" data-color="#20316E"    style="background:#20316E" onclick=""></button>
-    <button class="color-swatch" data-color="#2A2360"    style="background:#2A2360" onclick=""></button>
-    <button class="color-swatch" data-color="#3F2260"    style="background:#3F2260" onclick=""></button>
-    <button class="color-swatch" data-color="#5E2020"    style="background:#5E2020" onclick=""></button>
-    <button class="color-swatch" data-color="#44301F"    style="background:#44301F" onclick=""></button>
-    <button class="color-swatch" data-color="#2E2E33"    style="background:#2E2E33" onclick=""></button>
-    <button class="color-swatch" data-color="#28313F"    style="background:#28313F" onclick=""></button>
-    <button class="color-swatch" data-color="#5C2049"    style="background:#5C2049" onclick=""></button>
-    <button class="color-swatch" data-color="#585FAA"    style="background:#585FAA" onclick=""></button>
-    <button class="color-swatch" data-color="#453995"    style="background:#453995" onclick=""></button>
+    <button class="color-swatch" data-color=""         style="background:transparent;border:1px dashed #555" onclick="">∅</button>
+    <button class="color-swatch" data-color="#2b2040"  style="background:#2b2040" onclick=""></button>
+    <button class="color-swatch" data-color="#2c1c3d"  style="background:#2c1c3d" onclick=""></button>
+    <button class="color-swatch" data-color="#341a30"  style="background:#341a30" onclick=""></button>
+    <button class="color-swatch" data-color="#391b27"  style="background:#391b27" onclick=""></button>
+    <button class="color-swatch" data-color="#3a2417"  style="background:#3a2417" onclick=""></button>
+    <button class="color-swatch" data-color="#322712"  style="background:#322712" onclick=""></button>
+    <button class="color-swatch" data-color="#173021"  style="background:#173021" onclick=""></button>
+    <button class="color-swatch" data-color="#123130"  style="background:#123130" onclick=""></button>
+    <button class="color-swatch" data-color="#16273f"  style="background:#16273f" onclick=""></button>
+    <button class="color-swatch" data-color="#1f2350"  style="background:#1f2350" onclick=""></button>
+    <button class="color-swatch" data-color="#1d2230"  style="background:#1d2230" onclick=""></button>
   </div>
 </div>
 
@@ -337,8 +341,8 @@
   <img id="lightbox-img" alt="">
 </div>
 
-<div id="__version_wm">v36 · 5478fa4-050645</div>
-<script type="module" src="./main.js?v=33"></script>
+<div id="__version_wm">v58</div>
+<script type="module" src="./main.js?v=54"></script>
 <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>

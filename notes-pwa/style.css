@@ -2,23 +2,26 @@
 
 :root {
   color-scheme: dark;
-  --bg:        #09090e;
-  --surface:   #111118;
-  --card:      #16161f;
-  --card2:     #1c1c28;
+  --bg:        #0d0a13;
+  --surface:   #171320;
+  --card:      #171320;
+  --card2:     #221c30;
   --border:    rgba(255,255,255,0.06);
-  --border-2:  rgba(255,255,255,0.10);
-  --text:      #ece9ff;
-  --muted:     #6f6f8a;
-  --muted2:    #a0a0bf;
-  --accent:    #8B9CFF;
-  --accent-2:  #4A5294;
+  --border-2:  rgba(255,255,255,0.11);
+  --text:      #ece9f5;
+  --muted:     #6f6b85;
+  --muted2:    #b6b1cc;
+  --text2:     #8b87a0;
+  --text-dim:  #6f6b85;
+  --hover:     rgba(255,255,255,0.05);
+  --accent:    #a374ff;
+  --accent-2:  #7c4dd0;
   --danger:    #f87171;
   --ok:        #34d399;
-  --r-sm:      8px;
-  --r:         12px;
-  --r-lg:      16px;
-  --shadow:    0 4px 18px rgba(0,0,0,0.35);
+  --r-sm:      9px;
+  --r:         13px;
+  --r-lg:      18px;
+  --shadow:    0 8px 26px rgba(0,0,0,0.4);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -48,8 +51,8 @@ body::before {
   position: fixed; inset: 0;
   pointer-events: none; z-index: -1;
   background:
-    radial-gradient(ellipse 60% 40% at 50% -10%, rgba(139,156,255,0.10) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 30% at 0% 100%, rgba(74,82,148,0.06) 0%, transparent 50%);
+    radial-gradient(ellipse 65% 42% at 50% -12%, rgba(163,116,255,0.13) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 32% at 100% 108%, rgba(124,77,200,0.08) 0%, transparent 55%);
 }
 
 button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
@@ -97,16 +100,16 @@ input, textarea, select {
 
 .search-wrap {
   flex: 1;
-  max-width: 480px;
-  margin-left: 113px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  padding: 6px 4px;
-  height: 40px;
-  display: flex; align-items: center; gap: 8px;
+  max-width: 460px;
+  margin-left: 40px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 0 16px;
+  height: 42px;
+  display: flex; align-items: center; gap: 10px;
 }
+.search-wrap:focus-within { border-color: rgba(163,116,255,0.40); background: rgba(255,255,255,0.06); }
 .search-icon { flex: 0 0 auto; color: var(--muted); }
 .search-wrap input { width: 100%; background: transparent; border: none; outline: none; }
 .search-wrap input::placeholder { color: var(--muted); }
@@ -139,6 +142,8 @@ input, textarea, select {
   scrollbar-width: none;
 }
 .sidebar-nav::-webkit-scrollbar { display: none; }
+.sidebar-brand { display: none; }  /* shown only on mobile (in the drawer) */
+.sidebar-brand img { flex: 0 0 auto; }
 
 .sidebar-item {
   display: flex; align-items: center; gap: 18px;
@@ -167,12 +172,12 @@ input, textarea, select {
 .sidebar-item .sidebar-cat-icon { opacity: 1; flex: 0 0 22px; }
 .sidebar-item:hover { background: var(--card2); color: var(--text); }
 .sidebar-item.active {
-  background: var(--card2);
+  background: linear-gradient(145deg, rgba(163,116,255,0.20), rgba(124,77,208,0.10));
   color: var(--text);
   font-weight: 500;
 }
-.sidebar-item.active svg { stroke: var(--text); }
-.sidebar-item.active:hover { background: var(--card2); }
+.sidebar-item.active svg { stroke: var(--accent); }
+.sidebar-item.active:hover { background: linear-gradient(145deg, rgba(163,116,255,0.24), rgba(124,77,208,0.12)); }
 
 body.sidebar-open .sidebar { width: var(--sb-open); }
 body.sidebar-open .sidebar-item span { opacity: 1; }
@@ -226,15 +231,16 @@ body.sidebar-open .sidebar-item span { opacity: 1; }
 }
 
 .btn-pri {
-  background: var(--accent);
+  background: linear-gradient(145deg, var(--accent), var(--accent-2));
   color: #fff;
   border: none;
   border-radius: 999px;
   padding: 9px 16px;
   font-weight: 600;
   height: 38px;
+  box-shadow: 0 4px 14px rgba(124,77,208,0.35);
 }
-.btn-pri:hover { background: var(--accent-2); }
+.btn-pri:hover { filter: brightness(1.08); }
 
 .btn-ghost {
   background: transparent;
@@ -279,7 +285,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 /* Masonry */
 .masonry {
   column-width: 240px;
-  column-gap: 12px;
+  column-gap: 16px;
 }
 
 /* Note card */
@@ -287,8 +293,8 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   break-inside: avoid;
   display: block;
   width: 100%;
-  margin-bottom: 12px;
-  padding: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -310,8 +316,9 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 }
 .note-card .nc-title {
   font-weight: 600;
-  font-size: 18px;
-  margin-bottom: 6px;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  margin-bottom: 7px;
   word-wrap: break-word;
 }
 .note-card .nc-body {
@@ -358,6 +365,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   font-size: 14px; color: var(--muted2);
   margin-bottom: 3px;
 }
+.nc-checklist-line.child { margin-left: 20px; }
 .nc-checklist-line input[type=checkbox] {
   appearance: none;
   -webkit-appearance: none;
@@ -462,7 +470,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   border: 1px solid var(--border);
 }
 .ed-meta-tag.danger { color: var(--danger); border-color: var(--danger); }
-.ed-meta-tag.shared { color: var(--accent); border-color: var(--accent); }
+.ed-meta-tag.shared { display: inline-flex; align-items: center; padding: 5px 8px; color: var(--muted2); }
 .ed-title {
   width: 100%;
   font-size: 22px;
@@ -487,6 +495,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   display: flex; align-items: flex-start; gap: 10px;
   padding: 6px 4px;
 }
+.ed-check-row.child { margin-left: 28px; }
 .ed-check-row input[type=checkbox] {
   appearance: none;
   -webkit-appearance: none;
@@ -595,18 +604,18 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 .fab {
   position: fixed;
   bottom: 28px; right: 20px;
-  width: 56px; height: 56px;
-  border-radius: 50%;
-  background: var(--accent);
+  width: 58px; height: 58px;
+  border-radius: 19px;
+  background: linear-gradient(145deg, var(--accent), var(--accent-2));
   color: #fff;
   border: none;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  box-shadow: 0 8px 26px rgba(124,77,208,0.5);
   display: flex; align-items: center; justify-content: center;
   z-index: 70;
   touch-action: manipulation;
-  transition: transform 0.15s, background 0.15s;
+  transition: transform 0.15s, filter 0.15s;
 }
-.fab:hover { background: var(--accent-2); transform: scale(1.06); }
+.fab:hover { filter: brightness(1.08); transform: scale(1.06); }
 .fab:active { transform: scale(0.94); }
 
 /* Selection bar */
@@ -677,11 +686,58 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 /* Editor bottom bar */
 .ed-bottom-bar {
   display: flex; align-items: center;
-  padding: 6px 0 2px;
+  /* Symmetric ~8px gap: 8px top, and 14px card padding - 6px margin below. */
+  padding: 8px 0 0;
+  margin-bottom: -6px;
   border-top: 1px solid var(--border);
   gap: 4px;
 }
 .ed-undo-redo { display: flex; gap: 4px; margin-left: auto; }
+
+/* Only the content scrolls; toolbar and bottom bar stay fixed, so the scrollbar
+   ends right at the bottom bar instead of running behind it. */
+.editor-card { overflow: hidden; }
+.editor-card > .ed-toolbar,
+.editor-card > .ed-bottom-bar { flex-shrink: 0; }
+.ed-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ed-scroll > * { flex-shrink: 0; }
+
+/* Editor scrollbar: track matches the note background (covers any bleeding
+   attachment image), thumb is semi-transparent. --ed-bg is set per note. */
+.ed-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.3) var(--ed-bg, var(--card));
+}
+.ed-scroll::-webkit-scrollbar { width: 12px; }
+.ed-scroll::-webkit-scrollbar-track { background: var(--ed-bg, var(--card)); }
+.ed-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.3);
+  border-radius: 8px;
+  border: 3px solid var(--ed-bg, var(--card));
+  background-clip: padding-box;
+}
+.ed-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.5);
+  background-clip: padding-box;
+}
+
+/* Last-edited label, left of the undo/redo group — plain text */
+.ed-edited {
+  font-size: 12px;
+  color: var(--muted2);
+  white-space: nowrap;
+  align-self: center;
+  margin-right: 6px;
+}
+.ed-edited:empty { display: none; }
+.editor-card.colored .ed-edited { color: var(--text); }
 
 /* Popup menu (labeled items) */
 .popup-menu {
@@ -1220,7 +1276,15 @@ body.modal-open {
     padding: 0 calc(8px + env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 12px));
   }
   .topbar-actions .btn-pri { padding: 9px 12px; font-size: 13px; }
-  .search-wrap { max-width: none; margin-left: 20px; }
+  /* Drop the logo/label on mobile and give the space to the search bar. */
+  .brand { display: none; }
+  .search-wrap { max-width: none; margin-left: 8px; }
+  /* Show the brand inside the drawer instead, above "Notas". */
+  .sidebar-brand {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 25px 16px;
+    font-size: 20px; font-weight: 700; color: var(--text);
+  }
 
   /* Editor: fullscreen on mobile */
   .modal {
@@ -1271,22 +1335,14 @@ body.modal-open {
   }
   .ed-status { display: none; }
 
-  /* Editor body fill available space */
-  .ed-body-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
+  /* Editor content scrolls; toolbar + bottom bar stay fixed */
+  .ed-scroll {
     -webkit-overflow-scrolling: touch;
   }
   .ed-body {
-    overflow-y: auto !important;
     min-height: 120px;
     /* Don't let autoGrow push the card beyond its bounds */
     max-height: none;
-  }
-  .ed-checklist {
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
   }
   /* Bottom bar always visible — never scrolls out of view */
   .ed-bottom-bar {

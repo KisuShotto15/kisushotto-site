@@ -171,6 +171,7 @@ const EditorHistory = {
     $('#ed-checklist-list').hidden = !isChecklist;
     const card = $('#editor .editor-card');
     card.style.background = snap.color || '';
+    card.style.setProperty('--ed-bg', snap.color || 'var(--card)');
     card.classList.toggle('colored', !!snap.color);
     renderChecklist();
     updateEditorMeta();
@@ -374,6 +375,17 @@ function placeCursorAtStart(el) {
   sel.addRange(range);
 }
 
+// Caret character offset within a single-line contenteditable.
+function caretOffset(el) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return 0;
+  const r = sel.getRangeAt(0);
+  const pre = document.createRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(r.startContainer, r.startOffset);
+  return pre.toString().length;
+}
+
 function updateNetBanner(online) {
   const el = $('#net-banner');
   if (!el) return;
@@ -391,7 +403,7 @@ function getCurrentNotes() {
     if (n.trashed_at)    return false;
     if (v === 'archive') return !!n.archived && !n.locked;
     if (v === 'locked')  return !!n.locked;
-    if (n.archived && !v.startsWith('cat:')) return false;
+    if (n.archived && !v.startsWith('cat:') && !q) return false; // include archived when searching
     if (v === 'shared')  return n.owner_email !== me || (n.shares?.length > 0);
     if (v.startsWith('cat:')) {
       const id = v.slice(4);
@@ -640,7 +652,7 @@ function noteCardHtml(n) {
   } else if (n.type === 'checklist') {
     const items = (n.checklist_items || []).slice(0, 24);
     body = `<div class="nc-body">` + items.map((it, idx) =>
-      `<div class="nc-checklist-line ${it.done ? 'done' : ''}" data-idx="${idx}"><input type="checkbox" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
+      `<div class="nc-checklist-line ${it.done ? 'done' : ''}${(it.indent && idx > 0) ? ' child' : ''}" data-idx="${idx}"><input type="checkbox" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
     ).join('') + (items.length < (n.checklist_items?.length || 0) ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">+${(n.checklist_items?.length || 0) - items.length} más</div>` : '') + `</div>`;
   } else {
     body = `<div class="nc-body">${escapeHtml(htmlToText(n.body || '')).slice(0, 2000)}</div>`;
@@ -1323,7 +1335,7 @@ function noteContentHash(n) {
     body: n.body || '',
     type: n.type || 'text',
     checklist_items: (n.checklist_items || []).map(it => ({
-      id: it.id, text: it.text || '', done: !!it.done, order: it.order,
+      id: it.id, text: it.text || '', done: !!it.done, order: it.order, indent: it.indent || 0,
     })),
     color: n.color || null,
     pinned: !!n.pinned,
@@ -1409,6 +1421,7 @@ function openEditor(n) {
   _updateEditorViewport();
   const card = $('#editor .editor-card');
   card.style.background = e.color || '';
+  card.style.setProperty('--ed-bg', e.color || 'var(--card)');
   card.classList.toggle('colored', !!e.color);
   $('#ed-title').value = e.title || '';
   const isChecklist = e.type === 'checklist';
@@ -1451,12 +1464,19 @@ function updateEditorMeta() {
   if (e.locked)      tags.push('<span class="ed-meta-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Protegida</span>');
   if (e.archived)    tags.push('<span class="ed-meta-tag">📦 Archivada</span>');
   if (e.reminder_at) tags.push(`<span class="ed-meta-tag">⏰ ${fmtDate(e.reminder_at)}</span>`);
-  if (e.shares?.length) tags.push(`<span class="ed-meta-tag shared">👥 ${e.shares.length} compartido(s)</span>`);
+  if (e.shares?.length) tags.push(`<span class="ed-meta-tag shared" title="Compartida (${e.shares.length})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>`);
   for (const cid of (e.categories || [])) {
     const c = State.categories.find(x => x.id === cid);
     if (c) tags.push(`<span class="ed-meta-tag" style="border-color:${c.color}">${escapeHtml(c.name)}</span>`);
   }
   $('#ed-meta').innerHTML = tags.join('');
+
+  const edEl = $('#ed-edited');
+  if (edEl) {
+    edEl.textContent = e.last_modified
+      ? 'Edited ' + new Date(e.last_modified).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '';
+  }
 
   // Active states on toolbar buttons
   const btn = id => document.getElementById(id);
@@ -1488,21 +1508,6 @@ function syncChecklistFromDom() {
   });
 }
 
-function reorderChecklist(srcId, targetId) {
-  const e = State.editing;
-  if (!e) return;
-  EditorHistory.flush();
-  syncChecklistFromDom();
-  const items = e.checklist_items;
-  const srcIdx = items.findIndex(x => x.id === srcId);
-  const tgtIdx = items.findIndex(x => x.id === targetId);
-  if (srcIdx === -1 || tgtIdx === -1 || srcIdx === tgtIdx) return;
-  const [moved] = items.splice(srcIdx, 1);
-  items.splice(tgtIdx, 0, moved);
-  renderChecklist();
-  scheduleSave();
-}
-
 function renderChecklist() {
   const root = $('#ed-checklist-list');
   if (!root) return;
@@ -1513,7 +1518,7 @@ function renderChecklist() {
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const row = document.createElement('div');
-    row.className = `ed-check-row ${it.done ? 'done' : ''}`;
+    row.className = `ed-check-row ${it.done ? 'done' : ''}${(it.indent && i > 0) ? ' child' : ''}`;
     row.dataset.id = it.id;
     const handle = document.createElement('span');
     handle.className = 'drag-handle';
@@ -1563,15 +1568,84 @@ function renderChecklist() {
   // ── Drag-and-drop: pointer events (mouse + touch), handle only ───────────────
   // Ghost floats with the pointer; other rows animate with translateY in real-time.
   let activeDrag = null;
+  const clItems = () => (State.editing?.checklist_items || []);
+
+  // Lazily start the actual drag on the first clear movement, deciding the mode:
+  //  - clear VERTICAL on a parent → block move (carry its children)
+  //  - otherwise → single item (horizontal drag indents/outdents)
+  function beginDrag(ev) {
+    const ad = activeDrag;
+    const { allRows, rects, srcIdx, its, startX, startY } = ad;
+    const dx = ev.clientX - startX, dy = ev.clientY - startY;
+    const vertical = Math.abs(dy) >= Math.abs(dx);
+    const isParent = !its[srcIdx]?.indent && !!its[srcIdx + 1]?.indent;
+
+    let blockStart = srcIdx, blockEnd = srcIdx;
+    const mode = (vertical && isParent) ? 'block' : 'single';
+    if (mode === 'block') {
+      while (blockEnd + 1 < allRows.length && its[blockEnd + 1]?.indent) blockEnd++;
+    }
+    const blockH  = rects[blockEnd].bottom - rects[blockStart].top;
+    const offsetY = startY - rects[blockStart].top;
+    const cardEl  = document.querySelector('#editor .editor-card');
+    const cardBg  = cardEl ? getComputedStyle(cardEl).backgroundColor : '';
+
+    const ghost = document.createElement('div');
+    Object.assign(ghost.style, {
+      position: 'fixed',
+      left: rects[blockStart].left + 'px',
+      top:  rects[blockStart].top  + 'px',
+      width: rects[blockStart].width + 'px',
+      margin: '0', zIndex: '9999', pointerEvents: 'none',
+      background: cardBg || 'var(--surface)',
+      boxShadow: '0 8px 28px rgba(0,0,0,.4)',
+      borderRadius: '6px', opacity: '0.97', transform: 'scale(1.02)',
+    });
+    for (let i = blockStart; i <= blockEnd; i++) {
+      const c = allRows[i].cloneNode(true);
+      c.style.visibility = '';
+      ghost.appendChild(c);
+    }
+    document.body.appendChild(ghost);
+
+    for (let i = blockStart; i <= blockEnd; i++) allRows[i].style.visibility = 'hidden';
+    allRows.forEach((r, i) => { if (i < blockStart || i > blockEnd) r.style.transition = 'transform .15s ease'; });
+
+    Object.assign(ad, { started: true, mode, blockStart, blockEnd, blockH, offsetY, ghost, ins: blockStart, indent: ad.startIndent });
+  }
 
   function endDrag() {
     if (!activeDrag) return;
-    const { srcRow, allRows, ghost, srcIdx, tIdx } = activeDrag;
+    const ad = activeDrag;
     activeDrag = null;
-    allRows.forEach(r => { r.style.transition = ''; r.style.transform = ''; });
-    srcRow.style.visibility = '';
+    if (!ad.started) return; // a tap without a real drag — nothing to undo
+
+    const { allRows, ghost, blockStart, blockEnd, ins, indent, mode } = ad;
+    allRows.forEach(r => { r.style.transition = ''; r.style.transform = ''; r.style.visibility = ''; });
     ghost.remove();
-    if (tIdx !== srcIdx) reorderChecklist(srcRow.dataset.id, allRows[tIdx].dataset.id);
+
+    const e = State.editing;
+    const its = clItems();
+    if (!e) return;
+
+    const blockItems = its.slice(blockStart, blockEnd + 1);
+    const blockIds = new Set(blockItems.map(x => x.id));
+    const rest = its.filter(x => !blockIds.has(x.id));
+    const insertAt = Math.max(0, Math.min(ins, rest.length));
+    const newArr = [...rest.slice(0, insertAt), ...blockItems, ...rest.slice(insertAt)];
+
+    // Only a single-item drag changes indent; a block move keeps levels.
+    if (mode === 'single') {
+      const grabbed = blockItems[0];
+      const finalIdx = newArr.findIndex(x => x.id === grabbed.id);
+      grabbed.indent = (finalIdx === 0) ? 0 : (indent ? 1 : 0);
+    }
+    if (newArr[0]) newArr[0].indent = 0;            // first item can't be a child
+    newArr.forEach((it, i) => { it.indent = it.indent ? 1 : 0; it.order = i; });
+
+    e.checklist_items = newArr;
+    renderChecklist();
+    scheduleSave();
   }
 
   root.querySelectorAll('.drag-handle').forEach(handle => {
@@ -1589,34 +1663,13 @@ function renderChecklist() {
       const allRows = Array.from(root.querySelectorAll('.ed-check-row'));
       const srcIdx  = allRows.indexOf(srcRow);
       const rects   = allRows.map(r => r.getBoundingClientRect());
-      const srcRect = rects[srcIdx];
-      const offsetY = ev.clientY - srcRect.top;
-      const cardEl  = document.querySelector('#editor .editor-card');
-      const cardBg  = cardEl ? getComputedStyle(cardEl).backgroundColor : '';
+      const its     = clItems();
 
-      const ghost = srcRow.cloneNode(true);
-      Object.assign(ghost.style, {
-        position: 'fixed',
-        left: srcRect.left + 'px',
-        top:  srcRect.top  + 'px',
-        width: srcRect.width + 'px',
-        margin: '0',
-        zIndex: '9999',
-        pointerEvents: 'none',
-        background: cardBg || 'var(--surface)',
-        boxShadow: '0 8px 28px rgba(0,0,0,.4)',
-        borderRadius: '6px',
-        opacity: '0.97',
-        transform: 'scale(1.02)',
-      });
-      document.body.appendChild(ghost);
-
-      srcRow.style.visibility = 'hidden';
-      allRows.forEach((r, i) => {
-        if (i !== srcIdx) r.style.transition = 'transform .15s ease';
-      });
-
-      activeDrag = { handle, srcRow, allRows, rects, srcIdx, tIdx: srcIdx, ghost, offsetY };
+      // Nothing is lifted yet — wait for a clear movement (beginDrag).
+      activeDrag = {
+        handle, allRows, rects, srcIdx, its, started: false,
+        startX: ev.clientX, startY: ev.clientY, startIndent: its[srcIdx]?.indent || 0,
+      };
       handle.setPointerCapture(ev.pointerId);
     }, { passive: false });
 
@@ -1624,28 +1677,46 @@ function renderChecklist() {
       if (!activeDrag || activeDrag.handle !== handle) return;
       ev.preventDefault();
 
-      const { ghost, allRows, rects, srcIdx, offsetY } = activeDrag;
+      const ad = activeDrag;
+      if (!ad.started) {
+        if (Math.hypot(ev.clientX - ad.startX, ev.clientY - ad.startY) < 6) return;
+        beginDrag(ev);
+      }
+
+      const { ghost, allRows, rects, blockStart, blockEnd, blockH, offsetY, startX, startIndent, mode } = ad;
       const ghostTop    = ev.clientY - offsetY;
       ghost.style.top   = ghostTop + 'px';
-      const srcH        = rects[srcIdx].height;
-      const ghostCenter = ghostTop + srcH / 2;
+      const ghostCenter = ghostTop + blockH / 2;
 
-      // Closest row center → drop target (include srcIdx so ghost near origin = no-op)
-      let tIdx = srcIdx, minDist = Infinity;
-      allRows.forEach((_, i) => {
-        const mid = rects[i].top + rects[i].height / 2;
-        const d = Math.abs(ghostCenter - mid);
-        if (d < minDist) { minDist = d; tIdx = i; }
-      });
-      activeDrag.tIdx = tIdx;
+      const remaining = [];
+      allRows.forEach((_, i) => { if (i < blockStart || i > blockEnd) remaining.push(i); });
 
-      // Shift rows to open gap at drop target
-      allRows.forEach((r, i) => {
-        if (i === srcIdx) return;
+      let ins = 0;
+      for (const i of remaining) {
+        if (rects[i].top + rects[i].height / 2 < ghostCenter) ins++; else break;
+      }
+      ad.ins = ins;
+
+      // Horizontal drag → indent (single-item mode only).
+      let indent = startIndent;
+      if (mode === 'single') {
+        const dx = ev.clientX - startX;
+        indent = Math.max(0, Math.min(1, startIndent + (dx > 24 ? 1 : dx < -24 ? -1 : 0)));
+        ad.indent = indent;
+      }
+      ghost.style.transform = `scale(1.02) translateX(${indent ? 28 : 0}px)`;
+
+      // Vertical space the block occupies (height + collapsing inter-row gap).
+      const gap = allRows.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 0;
+      const blockOccupied = (blockEnd + 1 < allRows.length)
+        ? rects[blockEnd + 1].top - rects[blockStart].top
+        : (rects[blockEnd].bottom - rects[blockStart].top) + gap;
+
+      remaining.forEach((i, k) => {
         let dy = 0;
-        if (tIdx > srcIdx && i > srcIdx && i <= tIdx) dy = -srcH;
-        if (tIdx < srcIdx && i >= tIdx && i < srcIdx) dy =  srcH;
-        r.style.transform = dy ? `translateY(${dy}px)` : '';
+        if (i > blockEnd) dy -= blockOccupied;
+        if (k >= ins)     dy += blockOccupied;
+        allRows[i].style.transform = dy ? `translateY(${dy}px)` : '';
       });
     }, { passive: false });
 
@@ -1839,17 +1910,21 @@ function closeEditor(fromPopState = false) {
     }
   }
 
-  // When popstate fires, decide whether to play the FLIP based on which edge
-  // the gesture started from. Right-edge gestures fire popstate cleanly (no
-  // competing browser animation) — FLIP looks good. Left-edge gestures are
-  // intercepted by Brave's own page-back slide, which fights with our FLIP
-  // and produces a stutter — skip FLIP in that case.
+  // Play the FLIP on popstate by default (right-edge gesture, back button).
+  // Only skip it when we can POSITIVELY confirm a left-edge gesture, because
+  // Brave runs its own page-back slide there and our FLIP on top stutters.
+  // Edge gestures often don't deliver touchstart to the page, so _lastTouchStartX
+  // may be stale — defaulting to FLIP guarantees the right-edge case animates.
   if (fromPopState) {
     const recent = Date.now() - _lastTouchStartT < 1500;
-    const w = window.innerWidth;
-    const fromRightEdge = recent && _lastTouchStartX > w - 40;
-    if (!fromRightEdge) {
-      onCloseEnd();
+    const fromLeftEdge = recent && _lastTouchStartX >= 0 && _lastTouchStartX < 40;
+    if (fromLeftEdge) {
+      // Brave runs its own page-back slide; the FLIP fights it. Don't hard-cut
+      // (the lifted-out card pops back = the "flick") — fade the modal + scrim
+      // out quickly, then tear down so the card restores under cover of the fade.
+      if (modalCard) { modalCard.style.animation = 'none'; modalCard.style.pointerEvents = 'none'; modalCard.style.transition = 'opacity 0.14s ease'; modalCard.style.opacity = '0'; }
+      if (modalBg)   { modalBg.style.animation = 'none'; modalBg.style.transition = 'opacity 0.14s ease'; modalBg.style.opacity = '0'; }
+      setTimeout(onCloseEnd, 150);
       return;
     }
   }
@@ -2084,6 +2159,7 @@ function bindEditorActions() {
       const c = State.editing.color;
       const ec = $('#editor .editor-card');
       ec.style.background = c || '';
+      ec.style.setProperty('--ed-bg', c || 'var(--card)');
       ec.classList.toggle('colored', !!c);
       hidePopups();
       scheduleSave();
@@ -2270,6 +2346,33 @@ function bindEditorActions() {
   cl.addEventListener('focusin', () => EditorHistory.mark());
   cl.addEventListener('input',   () => { syncChecklistFromDom(); EditorHistory.schedule(); scheduleSave(); });
   cl.addEventListener('keydown', (ev) => {
+    if (/^Arrow(Up|Down|Left|Right)$/.test(ev.key) && ev.target.matches('.ed-check-text')) {
+      const rows = Array.from(cl.querySelectorAll('.ed-check-text'));
+      const idx = rows.indexOf(ev.target);
+      if (idx < 0) return;
+      const sel = window.getSelection();
+      const collapsed = !sel || sel.isCollapsed;
+
+      const goPrevEnd = () => {
+        if (idx - 1 < 0) return false;
+        ev.preventDefault();
+        const t = rows[idx - 1]; t.focus(); placeCursorAtEnd(t); t.scrollIntoView({ block: 'nearest' });
+        return true;
+      };
+      const goNextStart = () => {
+        if (idx + 1 >= rows.length) return false;
+        ev.preventDefault();
+        const t = rows[idx + 1]; t.focus(); placeCursorAtStart(t); t.scrollIntoView({ block: 'nearest' });
+        return true;
+      };
+
+      if (ev.key === 'ArrowUp') { goPrevEnd(); return; }
+      if (ev.key === 'ArrowDown') { goNextStart(); return; }
+      // Left at start of line → previous line (end); Right at end → next line (start)
+      if (ev.key === 'ArrowLeft'  && collapsed && caretOffset(ev.target) === 0) { goPrevEnd(); return; }
+      if (ev.key === 'ArrowRight' && collapsed && caretOffset(ev.target) === ev.target.textContent.length) { goNextStart(); return; }
+      return;
+    }
     if (ev.key === 'Enter' && !ev.shiftKey) {
       ev.preventDefault();
       const e = State.editing;
@@ -2300,7 +2403,7 @@ function bindEditorActions() {
         }
       }
 
-      const newItem = { id: crypto.randomUUID(), text: textAfter, done: false, order: 0 };
+      const newItem = { id: crypto.randomUUID(), text: textAfter, done: false, order: 0, indent: (curIdx > 0 ? (curItem?.indent || 0) : 0) };
       if (curIdx >= 0) e.checklist_items.splice(curIdx + 1, 0, newItem);
       else e.checklist_items.push(newItem);
       e.checklist_items.forEach((it, i) => { it.order = i; });
