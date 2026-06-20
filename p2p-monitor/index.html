@@ -1011,6 +1011,7 @@ var ST = {
   priceHist: [],   // {ts, price}
   alerts: [],
   lastFetch: null,
+  consecFails: 0,
   deHistory: [],   // Decision Engine snapshots (ring buffer)
   deDecision: null,
   deFastTimer: null
@@ -1036,8 +1037,42 @@ function buildSearchBody(opts) {
 }
 
 // Lote: 1 sola llamada Vercel para N paginas. Devuelve array alineado por indice (data[] por query).
+// ── Red con timeout + reintento ───────────────────────
+async function fetchWithTimeout(url, opts, ms) {
+  ms = ms || 8000;
+  var ctrl = new AbortController();
+  var t = setTimeout(function(){ ctrl.abort(); }, ms);
+  try {
+    return await fetch(url, Object.assign({}, opts, { signal: ctrl.signal }));
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Timeout');
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function fetchRetry(url, opts, ms, retries) {
+  retries = (retries == null) ? 1 : retries;
+  var lastErr;
+  for (var i = 0; i <= retries; i++) {
+    try {
+      var r = await fetchWithTimeout(url, opts, ms);
+      if (r.status >= 500 || r.status === 429) {
+        if (i < retries) { await new Promise(function(res){ setTimeout(res, 600); }); continue; }
+      }
+      return r;
+    } catch (e) {
+      lastErr = e;
+      if (i < retries) { await new Promise(function(res){ setTimeout(res, 600); }); continue; }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
 async function searchBatch(bodies) {
-  var r = await fetch(PROXY, {
+  var r = await fetchRetry(PROXY, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Secret': VERCEL_SECRET },
     body: JSON.stringify({ queries: bodies })
@@ -1185,13 +1220,24 @@ async function fetchOnce() {
     }
 
     ST.lastFetch = new Date();
+    ST.consecFails = 0;
     renderAll();
     runDecisionEngine();
     checkAlerts();
     var emptyNote = (!ST.mayoristas.length && !ST.smallAds.length) ? ' — sin anuncios en rango' : '';
-    document.getElementById('last-update').textContent = 'Actualizado ' + ST.lastFetch.toLocaleTimeString('es-VE') + emptyNote;
+    var lu = document.getElementById('last-update');
+    lu.style.color = '';
+    lu.textContent = 'Actualizado ' + ST.lastFetch.toLocaleTimeString('es-VE') + emptyNote;
   } catch(e) {
-    document.getElementById('last-update').textContent = '⚠ ' + e.message;
+    ST.consecFails++;
+    var lu2 = document.getElementById('last-update');
+    if (ST.consecFails >= 2) {
+      var okStr = ST.lastFetch ? ' (último OK ' + ST.lastFetch.toLocaleTimeString('es-VE') + ')' : '';
+      lu2.style.color = 'var(--red)';
+      lu2.textContent = '⚠ Sin conexión — datos viejos' + okStr;
+    } else {
+      lu2.textContent = '⚠ ' + e.message;
+    }
     addAlert('info', 'Error de conexión', e.message);
   }
 }
@@ -1909,7 +1955,7 @@ function botUpdateCeiling() {
 }
 
 async function botCallWorker(path, body) {
-  var r = await fetch(BOT_CFG.url, {
+  var r = await fetchRetry(BOT_CFG.url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Bot-Token': BOT_CFG.token },
     body: JSON.stringify({ path: path, params: body || {} })
