@@ -14,22 +14,20 @@ export function saveLocal(state) {
 }
 
 export async function pull() {
-  try {
-    const r = await fetch(DATA_URL, {
-      headers: { Authorization: `Bearer ${TOKEN}` }
-    });
-    if (!r.ok) return null;
-    const res = await r.json();
-    return res.data || null;
-  } catch { return null; }
+  const r = await fetch(DATA_URL, {
+    headers: { Authorization: `Bearer ${TOKEN}` }
+  });
+  if (!r.ok) throw new Error('pull failed: ' + r.status);
+  const res = await r.json();
+  return res.data || null;
 }
 
 export async function push(state) {
-  try {
-    await fetch(DATA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
-      body: JSON.stringify(state)
-    });
-  } catch {}
+  const r = await fetch(DATA_URL, {
+    method: 'POST',
+    keepalive: true,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify(state)
+  });
+  if (!r.ok) throw new Error('push failed: ' + r.status);
 }

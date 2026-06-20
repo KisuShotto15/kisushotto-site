@@ -78,6 +78,31 @@ body::before {
 }
 .btn-new:hover { opacity: 0.82; }
 
+.sync-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--muted); transition: background 0.2s;
+}
+.sync-dot.synced  { background: var(--green); }
+.sync-dot.syncing { background: var(--amber); animation: pulse 1s infinite; }
+.sync-dot.error, .sync-dot.offline { background: var(--red); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.btn-week {
+  background: none; border: 1px solid var(--border); color: var(--text2);
+  border-radius: 999px; padding: 7px 14px; font-size: 13px; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s; flex-shrink: 0;
+}
+.btn-week:hover, .btn-week.active { border-color: var(--violet); color: var(--violet); }
+.btn-week.active { background: rgba(167,139,250,0.1); }
+
+.btn-export {
+  width: 32px; height: 32px; border: 1px solid var(--border); background: none;
+  color: var(--text2); border-radius: 8px; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-export:hover { border-color: var(--violet); color: var(--violet); }
+
 /* ── Focus banner ── */
 .focus-banner {
   display: flex; align-items: center; gap: 12px;
@@ -110,6 +135,22 @@ body::before {
   min-width: 30px; flex-shrink: 0;
 }
 
+/* ── Week view ── */
+.week-view { margin: 16px 20px 0; max-width: 1200px; margin-left: auto; margin-right: auto; }
+.week-row { cursor: pointer; }
+.week-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.week-title {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.week-parent { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-date { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.week-date.overdue { color: var(--red); font-weight: 600; }
+.week-empty {
+  padding: 24px; text-align: center; color: var(--muted); font-size: 14px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r);
+}
+
 /* ── Content ── */
 .content {
   position: relative; z-index: 1;
@@ -136,6 +177,8 @@ body::before {
   border-radius: 0;
 }
 .node-row:hover { background: rgba(139,92,246,0.05); }
+.node-row[draggable="true"] { cursor: grab; }
+.node-row.drag-over { background: rgba(167,139,250,0.1); }
 
 .chevron {
   width: 20px; height: 20px;
@@ -201,6 +244,7 @@ body::before {
   font-size: 13px; color: var(--muted);
   padding: 0 16px 6px; display: flex; align-items: center; gap: 4px;
 }
+.node-due.overdue { color: var(--red); font-weight: 600; }
 
 /* ── Children ── */
 .kids {
@@ -355,6 +399,10 @@ body::before {
   font-family: inherit; line-height: 1.55; transition: border-color 0.15s;
 }
 .dp-notes:focus { border-color: var(--violet); }
+.dp-notes-preview {
+  font-size: 12px; color: var(--violet); display: flex; flex-wrap: wrap; gap: 8px;
+}
+.dp-notes-preview a { color: var(--violet); text-decoration: underline; }
 
 /* ── Modal ── */
 .modal-bg {
@@ -419,6 +467,8 @@ body::before {
   .menu-btn { order: 7; }
   .chevron { order: 1; }
   .dot { order: 2; }
+  .btn-week span { display: none; }
+  .week-row { flex-wrap: nowrap; }
 }
 </style>
 </head>
@@ -430,6 +480,9 @@ body::before {
   </a>
   <span class="topbar-title">Goal Planner</span>
   <div class="topbar-spacer"></div>
+  <span class="sync-dot" id="sync-status" title="Sincronizado"></span>
+  <button class="btn-week" id="btn-week" onclick="toggleWeekView()">📋 <span>Semana</span></button>
+  <button class="btn-export" onclick="exportData()" title="Exportar backup">⬇</button>
   <button class="btn-new" onclick="openNewGoal()">+ Goal</button>
 </div>
 
@@ -439,6 +492,8 @@ body::before {
   <div class="fb-bar"><div class="fb-fill" id="fb-fill" style="width:0%"></div></div>
   <span class="fb-pct" id="fb-pct">0%</span>
 </div>
+
+<div class="week-view" id="week-view" hidden></div>
 
 <div class="content" id="content"></div>
 
@@ -479,6 +534,7 @@ body::before {
     <div class="dp-field">
       <label>Notes</label>
       <textarea class="dp-notes" id="dp-notes" oninput="dpNotesChange()" placeholder="Notes, links, context…"></textarea>
+      <div class="dp-notes-preview" id="dp-notes-preview"></div>
     </div>
   </div>
 </div>
@@ -522,6 +578,13 @@ let ctxId = null;
 const uuid = () => crypto.randomUUID();
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const $ = id => document.getElementById(id);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const addDays = (dateStr, days) => {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+const isOverdue = node => !!node.dueDate && node.status !== 'done' && node.dueDate < todayStr();
 
 window.customConfirm = function(msg) {
   return new Promise(resolve => {
@@ -569,13 +632,47 @@ function pct(node) {
   return Math.round(node.children.reduce((s, c) => s + pct(c), 0) / node.children.length);
 }
 
+function findContainer(id, arr) {
+  arr = arr || S.goals;
+  const i = arr.findIndex(n => n.id === id);
+  if (i !== -1) return { arr, i };
+  for (const n of arr) {
+    const r = findContainer(id, n.children);
+    if (r) return r;
+  }
+  return null;
+}
+
 // ── Persistence ─────────────────────────────────────────
+const SYNC_LABEL = {
+  synced: 'Sincronizado', syncing: 'Sincronizando…', pending: 'Cambios sin guardar',
+  error: 'Error de sincronización', offline: 'Sin conexión (datos locales)'
+};
+function setSyncStatus(state) {
+  const el = $('sync-status'); if (!el) return;
+  el.className = 'sync-dot ' + state;
+  el.title = SYNC_LABEL[state] || '';
+}
+
+async function doPush() {
+  setSyncStatus('syncing');
+  try { await push(S); setSyncStatus('synced'); }
+  catch { setSyncStatus('error'); }
+}
+
 function save() {
   S.lastModified = Date.now();
   saveLocal(S);
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => push(S), 1500);
+  setSyncStatus('pending');
+  pushTimer = setTimeout(doPush, 1500);
 }
+
+window.addEventListener('beforeunload', () => {
+  if (!pushTimer) return;
+  clearTimeout(pushTimer);
+  push(S).catch(() => {});
+});
 
 // ── Status helpers ──────────────────────────────────────
 const SL = { 'todo': 'Todo', 'in-progress': 'In Progress', 'done': 'Done' };
@@ -595,6 +692,8 @@ function render() {
   } else {
     fb.hidden = true;
   }
+
+  renderWeekView();
 
   const c = $('content');
   if (!S.goals.length) {
@@ -626,8 +725,16 @@ function renderTree(node, depth) {
   // only rotate if collapsed and has kids
   const chevronClass = hasKids ? `chevron${node.collapsed ? ' rot' : ''}` : 'chevron hidden-op';
 
+  const overdue = isOverdue(node);
+
   let html = `
-    <div class="node-row" style="padding-left:${ind}px">
+    <div class="node-row" draggable="true"
+         ondragstart="onDragStart(event,'${node.id}')"
+         ondragover="onDragOver(event)"
+         ondragenter="onDragEnter(event)"
+         ondragleave="onDragLeave(event)"
+         ondrop="onDrop(event,'${node.id}')"
+         style="padding-left:${ind}px">
       <button class="${chevronClass}" onclick="toggleCol('${node.id}')">
         <svg width="12" height="12" viewBox="0 0 12 12">
           <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -645,7 +752,7 @@ function renderTree(node, depth) {
         </button>` : ''}
       <button class="menu-btn" onclick="openCtx(event,'${node.id}',${isRoot})">···</button>
     </div>
-    ${node.dueDate ? `<div class="node-due" style="padding-left:${ind+28}px">📅 ${node.dueDate}</div>` : ''}`;
+    ${node.dueDate ? `<div class="node-due${overdue ? ' overdue' : ''}" style="padding-left:${ind+28}px">📅 ${node.dueDate}${overdue ? ' · vencido' : ''}</div>` : ''}`;
 
   if (!node.collapsed) {
     if (hasKids) {
@@ -699,6 +806,98 @@ function cycleStatus(id) {
 function pinGoal(id) {
   S.goals.forEach(g => { g.pinned = g.id === id ? !g.pinned : false; });
   save(); render();
+}
+
+// ── Drag & drop reorder (siblings only) ─────────────────
+let dragId = null;
+
+function onDragStart(e, id) {
+  dragId = id;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onDragOver(e) { e.preventDefault(); }
+function onDragEnter(e) { e.currentTarget.classList.add('drag-over'); }
+function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function onDrop(e, targetId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const id = dragId;
+  dragId = null;
+  if (!id || id === targetId) return;
+  const src = findContainer(id);
+  const tgt = findContainer(targetId);
+  if (!src || !tgt || src.arr !== tgt.arr) return;
+  const arr = src.arr;
+  const fromIdx = arr.findIndex(n => n.id === id);
+  const [moved] = arr.splice(fromIdx, 1);
+  const toIdx = arr.findIndex(n => n.id === targetId);
+  arr.splice(toIdx, 0, moved);
+  save(); render();
+}
+
+// ── Week view ────────────────────────────────────────────
+let showWeekView = false;
+
+function collectWeekItems() {
+  const today = todayStr();
+  const weekEnd = addDays(today, 7);
+  const items = [];
+  function walk(node, rootTitle, depth) {
+    const due = node.dueDate;
+    const overdue = isOverdue(node);
+    const dueSoon = !!due && node.status !== 'done' && due >= today && due <= weekEnd;
+    const active = node.status === 'in-progress';
+    if (overdue || dueSoon || active) items.push({ node, rootTitle, overdue, isRoot: depth === 0 });
+    node.children.forEach(c => walk(c, rootTitle, depth + 1));
+  }
+  S.goals.forEach(g => walk(g, g.title, 0));
+  items.sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    if (a.node.dueDate && b.node.dueDate) return a.node.dueDate < b.node.dueDate ? -1 : 1;
+    if (a.node.dueDate) return -1;
+    if (b.node.dueDate) return 1;
+    return 0;
+  });
+  return items;
+}
+
+function toggleWeekView() {
+  showWeekView = !showWeekView;
+  $('btn-week').classList.toggle('active', showWeekView);
+  renderWeekView();
+}
+
+function renderWeekView() {
+  const el = $('week-view');
+  if (!showWeekView) { el.hidden = true; return; }
+  el.hidden = false;
+  const items = collectWeekItems();
+  if (!items.length) {
+    el.innerHTML = `<div class="week-empty">Nada urgente esta semana 🎉</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="goal-card">` + items.map(({ node, rootTitle, overdue, isRoot }) => `
+    <div class="node-row week-row" onclick="openDetail('${node.id}')">
+      <span class="dot" style="background:${SD[node.status]}"></span>
+      <div class="week-info">
+        <span class="week-title">${esc(node.title)}</span>
+        ${!isRoot ? `<span class="week-parent">${esc(rootTitle)}</span>` : ''}
+      </div>
+      ${node.dueDate ? `<span class="week-date${overdue ? ' overdue' : ''}">📅 ${node.dueDate}</span>` : ''}
+      <span class="nstat s-${node.status}" onclick="event.stopPropagation();cycleStatus('${node.id}')">${SL[node.status]}</span>
+    </div>
+  `).join('') + `</div>`;
+}
+
+// ── Export ───────────────────────────────────────────────
+function exportData() {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `planner-backup-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── Inline add ──────────────────────────────────────────
@@ -805,6 +1004,13 @@ function closeDetail() {
   $('dp-panel').classList.remove('on');
 }
 
+function updateNotesPreview() {
+  const text = $('dp-notes').value;
+  const urls = text.match(/https?:\/\/[^\s<]+/g);
+  const prev = $('dp-notes-preview');
+  prev.innerHTML = urls ? urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`).join('') : '';
+}
+
 function refreshDetail() {
   const n = find(detailId); if (!n) return;
   const p = pct(n);
@@ -817,6 +1023,7 @@ function refreshDetail() {
   ['todo', 'in-progress', 'done'].forEach(s => {
     $('dsb-' + s).className = 'dp-status-btn' + (n.status === s ? ' on-' + s : '');
   });
+  updateNotesPreview();
 }
 
 function dpTitleChange() {
@@ -832,6 +1039,7 @@ function dpDateChange() {
 function dpNotesChange() {
   const n = find(detailId); if (!n) return;
   n.notes = $('dp-notes').value;
+  updateNotesPreview();
   save();
 }
 function dpStatus(s) {
@@ -871,12 +1079,18 @@ async function init() {
   const local = loadLocal();
   if (local) { S = local; render(); }
 
-  const remote = await pull();
-  if (remote && remote.lastModified > S.lastModified) {
-    S = remote; saveLocal(S); render();
+  setSyncStatus('syncing');
+  try {
+    const remote = await pull();
+    if (remote && remote.lastModified > S.lastModified) {
+      S = remote; saveLocal(S); render();
+    }
+    setSyncStatus('synced');
+    if (!local && !remote) render();
+  } catch {
+    setSyncStatus(local ? 'offline' : 'error');
+    if (!local) render();
   }
-
-  if (!local && !remote) render();
 }
 
 // Expose globals for inline onclick handlers
@@ -886,7 +1100,8 @@ Object.assign(window, {
   startAdd, cancelAdd, confirmAdd, inlineKey,
   openCtx, ctxEdit, ctxAddChild, ctxStat, ctxDel,
   openDetail, closeDetail, dpTitleChange, dpDateChange, dpNotesChange, dpStatus,
-  doAI
+  doAI, toggleWeekView, exportData,
+  onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop
 });
 
 init();
