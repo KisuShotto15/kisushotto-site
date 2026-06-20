@@ -1192,6 +1192,15 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
   cursor: pointer; border-radius: 999px;
 }
 .swipe-toast-undo:hover { background: rgba(255,255,255,0.08); }
+.swipe-toast-error {
+  border-color: rgba(244,67,54,0.55);
+  color: #ff8a80;
+}
+
+.nc-image-thumb.nc-att-error {
+  background: rgba(244,67,54,0.12);
+  border: 1px dashed rgba(244,67,54,0.5);
+}
 
 /* Net banner */
 .net-banner {

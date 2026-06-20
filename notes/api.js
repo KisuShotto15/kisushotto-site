@@ -4,9 +4,20 @@ const DEFAULT_BASE  = 'https://notes-worker.efrenalejandro2010.workers.dev';
 const DEFAULT_TOKEN = '151322';
 
 export const cfg = {
-  base:  () => localStorage.getItem('notes_url')   || DEFAULT_BASE,
-  token: () => localStorage.getItem('notes_token') || DEFAULT_TOKEN,
+  base:    () => localStorage.getItem('notes_url')     || DEFAULT_BASE,
+  token:   () => localStorage.getItem('notes_token')   || DEFAULT_TOKEN,
+  session: () => localStorage.getItem('notes_session') || null,
 };
+
+function authHeaders() {
+  const headers = {
+    'Authorization': `Bearer ${cfg.token()}`,
+    'X-User-Email':  getUserEmail(),
+  };
+  const session = cfg.session();
+  if (session) headers['X-Session-Token'] = session;
+  return headers;
+}
 
 export function getUserEmail() {
   const override = localStorage.getItem('notes_user');
@@ -29,8 +40,7 @@ async function api(path, opts = {}) {
   if (!email) throw new Error('Sin identidad de usuario. Abre la app desde el dominio protegido.');
   const url = cfg.base() + path;
   const headers = {
-    'Authorization': `Bearer ${cfg.token()}`,
-    'X-User-Email':  email,
+    ...authHeaders(),
     ...(opts.headers || {}),
   };
   if (!(opts.body instanceof ArrayBuffer) && !(opts.body instanceof Blob)) {
@@ -78,9 +88,8 @@ export async function apiUploadAttachment(noteId, blob, type = 'image') {
     method: 'POST',
     body: blob,
     headers: {
-      'Authorization': `Bearer ${cfg.token()}`,
-      'X-User-Email':  getUserEmail(),
-      'Content-Type':  blob.type || 'application/octet-stream',
+      ...authHeaders(),
+      'Content-Type': blob.type || 'application/octet-stream',
     },
   });
   if (!res.ok) throw new Error(`Upload ${res.status}: ${await res.text()}`);
@@ -97,12 +106,7 @@ export function apiAttachmentUrl(id) {
 }
 
 export async function apiAttachmentBlobUrl(id) {
-  const res = await fetch(apiAttachmentUrl(id), {
-    headers: {
-      'Authorization': `Bearer ${cfg.token()}`,
-      'X-User-Email':  getUserEmail(),
-    },
-  });
+  const res = await fetch(apiAttachmentUrl(id), { headers: authHeaders() });
   if (!res.ok) throw new Error('Attachment fetch failed');
   const blob = await res.blob();
   return URL.createObjectURL(blob);

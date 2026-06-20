@@ -656,7 +656,7 @@ function noteCardHtml(n) {
   } else if (n.type === 'checklist') {
     const items = (n.checklist_items || []).slice(0, 24);
     body = `<div class="nc-body">` + items.map((it, idx) =>
-      `<div class="nc-checklist-line ${it.done ? 'done' : ''}${(it.indent && idx > 0) ? ' child' : ''}" data-idx="${idx}"><input type="checkbox" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
+      `<div class="nc-checklist-line ${it.done ? 'done' : ''}${(it.indent && idx > 0) ? ' child' : ''}" data-idx="${idx}"><input type="checkbox" aria-label="${escapeHtmlAttr(it.text || 'ítem')}" ${it.done ? 'checked' : ''}> ${escapeHtml(it.text || '')}</div>`
     ).join('') + (items.length < (n.checklist_items?.length || 0) ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">+${(n.checklist_items?.length || 0) - items.length} más</div>` : '') + `</div>`;
   } else {
     body = `<div class="nc-body">${escapeHtml(htmlToText(n.body || '')).slice(0, 2000)}</div>`;
@@ -679,7 +679,7 @@ function noteCardHtml(n) {
 
   return `
     <article class="${cls}" ${style} data-id="${n.id}" onclick="">
-      <label class="nc-select-wrap"><input type="checkbox" class="nc-select-cb" data-id="${n.id}" ${isSelected ? 'checked' : ''}></label>
+      <label class="nc-select-wrap"><input type="checkbox" class="nc-select-cb" aria-label="Seleccionar nota" data-id="${n.id}" ${isSelected ? 'checked' : ''}></label>
       ${n.pinned ? '<span class="nc-pin"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></span>' : ''}
       ${archiveBadge}
       ${n.locked && !isSessionUnlocked() ? '' : (n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : '')}
@@ -750,6 +750,30 @@ function showUndoToast(message, undoFn, commitFn) {
 
   requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('swipe-toast-show')));
   _undoToastTimer = setTimeout(() => dismiss('commit'), 6000);
+}
+
+function showErrorToast(message) {
+  if (_undoToastTimer) clearTimeout(_undoToastTimer);
+  if (_undoToast) { _undoToast._dismiss('commit'); }
+
+  const toast = document.createElement('div');
+  toast.className = 'swipe-toast swipe-toast-error';
+  toast.innerHTML = `<span>${message}</span>`;
+  document.body.appendChild(toast);
+  _undoToast = toast;
+
+  let finished = false;
+  const dismiss = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(_undoToastTimer);
+    toast.classList.remove('swipe-toast-show');
+    setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 280);
+  };
+  toast._dismiss = dismiss;
+
+  requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('swipe-toast-show')));
+  _undoToastTimer = setTimeout(dismiss, 4000);
 }
 
 const ARCHIVE_ICON_SVG = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg>`;
@@ -1155,6 +1179,18 @@ function wireCard(card) {
   });
 }
 
+// Runs fn(item) over items with at most `limit` concurrent calls.
+async function runWithLimit(items, limit, fn) {
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const item = items[i++];
+      await fn(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
 function patchGrid(container, notes) {
   const existing = new Map();
   container.querySelectorAll('.note-card').forEach(el => existing.set(el.dataset.id, el));
@@ -1196,15 +1232,16 @@ function patchGrid(container, notes) {
   });
 
   // Restore attachment srcs (only on cards that are already in DOM)
-  container.querySelectorAll('img.nc-image-thumb[data-att]').forEach(async img => {
+  const imgs = [...container.querySelectorAll('img.nc-image-thumb[data-att]')].filter(img => img.dataset.att && !img.getAttribute('src'));
+  runWithLimit(imgs, 4, async img => {
     const id = img.dataset.att;
-    if (!id || img.getAttribute('src')) return;
     if (State.attachUrls[id]) { img.src = State.attachUrls[id]; return; }
-    try { const url = await apiAttachmentBlobUrl(id); State.attachUrls[id] = url; img.src = url; } catch {}
+    try { const url = await apiAttachmentBlobUrl(id); State.attachUrls[id] = url; img.src = url; }
+    catch { img.classList.add('nc-att-error'); }
   });
-  container.querySelectorAll('audio.nc-audio[data-att]').forEach(async audio => {
+  const audios = [...container.querySelectorAll('audio.nc-audio[data-att]')].filter(a => a.dataset.att && !a.getAttribute('src'));
+  runWithLimit(audios, 4, async audio => {
     const id = audio.dataset.att;
-    if (!id || audio.getAttribute('src')) return;
     if (State.attachUrls[id]) { audio.src = State.attachUrls[id]; return; }
     try { const url = await apiAttachmentBlobUrl(id); State.attachUrls[id] = url; audio.src = url; } catch {}
   });
@@ -1742,21 +1779,26 @@ function renderAttachments() {
     root.appendChild(div);
   }
   // load blobs
-  root.querySelectorAll('[data-att]').forEach(async el => {
+  const els = [...root.querySelectorAll('[data-att]')];
+  let failed = 0;
+  runWithLimit(els, 4, async el => {
     const id = el.dataset.att;
     if (State.attachUrls[id]) { el.src = State.attachUrls[id]; return; }
     try {
       const url = await apiAttachmentBlobUrl(id);
       State.attachUrls[id] = url;
       el.src = url;
-    } catch {}
+    } catch { failed++; }
+  }).then(() => {
+    if (failed > 0) showErrorToast(`No se pudo cargar ${failed === 1 ? 'un adjunto' : failed + ' adjuntos'}.`);
   });
   root.querySelectorAll('button[data-del]').forEach(btn => {
     btn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       const id = btn.dataset.del;
       if (!(await window.customConfirm('¿Eliminar adjunto?'))) return;
-      try { await apiDeleteAttachment(id); } catch {}
+      try { await apiDeleteAttachment(id); }
+      catch { showErrorToast('No se pudo eliminar el adjunto. Intenta de nuevo.'); return; }
       e.attachments = e.attachments.filter(a => a.id !== id);
       e.last_modified = Date.now();
       await saveNoteLocal(e);
@@ -2499,7 +2541,8 @@ function renderSharePopup() {
     row.className = 'share-row';
     row.innerHTML = `<span>${escapeHtml(s.email)}</span><button class="btn-icon" data-revoke="${escapeHtmlAttr(s.email)}">×</button>`;
     row.querySelector('button').addEventListener('click', async () => {
-      try { await apiRevokeShare(State.editing.id, s.email); } catch {}
+      try { await apiRevokeShare(State.editing.id, s.email); }
+      catch { showErrorToast('No se pudo revocar el acceso. Intenta de nuevo.'); return; }
       State.editing.shares = State.editing.shares.filter(x => x.email !== s.email);
       renderSharePopup();
       updateEditorMeta();
@@ -2789,9 +2832,11 @@ function bindDrawer() {
 
 // ── search + nav ─────────────────────────────────────────────────────────────
 function bindUI() {
+  let searchDebounceTimer = null;
   $('#search').addEventListener('input', (e) => {
     State.search = e.target.value;
-    renderGrid();
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(renderGrid, 180);
   });
   $('#btn-new')?.addEventListener('click', openNew);
 
@@ -3089,8 +3134,9 @@ async function doPasskeyLogin() {
       body: JSON.stringify({ credentialId: credId }),
     });
     if (!res.ok) throw new Error('Passkey no encontrada. Inicia sesion con tu email primero.');
-    const { email } = await res.json();
+    const { email, session } = await res.json();
     localStorage.setItem('notes_user', email);
+    if (session) localStorage.setItem('notes_session', session);
     localStorage.setItem('notes_webauthn_id', credId);
     document.getElementById('loginScreen').classList.add('hidden');
     init();
@@ -3164,6 +3210,8 @@ async function doRegisterPasskey() {
       body: JSON.stringify({ email, credentialId: credId }),
     });
     if (!res.ok) { console.error('passkey register failed', res.status, await res.text()); return false; }
+    const { session } = await res.json();
+    if (session) localStorage.setItem('notes_session', session);
     // Register same credential for note unlock
     await apiRegWebauthn(credId, null);
     localStorage.setItem('notes_webauthn_id', credId);
@@ -3176,6 +3224,7 @@ async function doRegisterPasskey() {
 
 window.logout = function() {
   localStorage.removeItem('notes_user');
+  localStorage.removeItem('notes_session');
   localStorage.removeItem('notes_unlocked_until');
   location.reload();
 };

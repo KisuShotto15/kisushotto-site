@@ -2,9 +2,9 @@
 // Routes are listed at the bottom in fetch(); cron trigger handles reminders + trash purge.
 
 const CORS = {
-  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Origin':  'https://notes.kisushotto.com',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-User-Email',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-User-Email,X-Session-Token',
   'Access-Control-Expose-Headers': 'Content-Type',
 };
 
@@ -21,7 +21,13 @@ function authToken(request, env) {
   const h = request.headers.get('Authorization') || '';
   return h === `Bearer ${env.TOKEN}`;
 }
-function getUser(request) {
+async function getUser(request, env) {
+  const token = request.headers.get('X-Session-Token');
+  if (token) {
+    const email = await verifySessionJwt(token, env);
+    if (email) return email;
+  }
+  // TODO(deploy 2): quitar este fallback — hoy permite suplantar identidad con solo el header.
   return (request.headers.get('X-User-Email') || '').toLowerCase().trim() || null;
 }
 
@@ -116,6 +122,44 @@ function randomSalt() {
   return btoa(String.fromCharCode(...b));
 }
 
+// ── Session JWT (HMAC-SHA256) ────────────────────────────────────────────────
+const SESSION_TTL_MS = 90 * 24 * 3600 * 1000;
+
+async function hmacKey(env) {
+  return crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(env.SESSION_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']
+  );
+}
+
+async function signSessionJwt(email, env) {
+  const header = { typ: 'JWT', alg: 'HS256' };
+  const payload = { email, iat: now(), exp: now() + SESSION_TTL_MS };
+  const enc = new TextEncoder();
+  const headB64 = bytesToB64url(enc.encode(JSON.stringify(header)));
+  const payB64  = bytesToB64url(enc.encode(JSON.stringify(payload)));
+  const data = enc.encode(`${headB64}.${payB64}`);
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(env), data);
+  return `${headB64}.${payB64}.${bytesToB64url(new Uint8Array(sig))}`;
+}
+
+async function verifySessionJwt(token, env) {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [headB64, payB64, sigB64] = parts;
+  try {
+    const enc = new TextEncoder();
+    const data = enc.encode(`${headB64}.${payB64}`);
+    const valid = await crypto.subtle.verify('HMAC', await hmacKey(env), b64urlToBytes(sigB64), data);
+    if (!valid) return null;
+    const payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(payB64)));
+    if (!payload.email || !payload.exp || payload.exp < now()) return null;
+    return payload.email;
+  } catch {
+    return null;
+  }
+}
+
 // ── Users ────────────────────────────────────────────────────────────────────
 async function ensureUser(env, email) {
   const existing = await env.DB.prepare(`SELECT * FROM users WHERE email = ?`).bind(email).first();
@@ -203,13 +247,13 @@ function rowToNote(r, categories = []) {
 
 async function fetchNotesForUser(env, email, since = 0) {
   const ownRes = await env.DB.prepare(
-    `SELECT * FROM notes WHERE owner_email = ? AND last_modified >= ? ORDER BY last_modified DESC`
+    `SELECT * FROM notes WHERE owner_email = ? AND last_modified >= ? ORDER BY last_modified DESC LIMIT 500`
   ).bind(email, since).all();
   const sharedRes = await env.DB.prepare(
     `SELECT n.* FROM notes n
      JOIN note_shares s ON s.note_id = n.id
      WHERE s.shared_with_email = ? AND (n.last_modified >= ? OR s.shared_at >= ?)
-     ORDER BY n.last_modified DESC`
+     ORDER BY n.last_modified DESC LIMIT 500`
   ).bind(email, since, since).all();
 
   const all = [...(ownRes.results || []), ...(sharedRes.results || [])];
@@ -290,11 +334,12 @@ async function upsertNote(env, email, n) {
   const existing = await env.DB.prepare(`SELECT last_modified, owner_email FROM notes WHERE id = ?`).bind(n.id).first();
 
   const serverNow = now();
+  const stmts = [];
   if (existing) {
     if (!(await canEdit(env, n.id, email))) {
       return { skipped: true, reason: 'forbidden' };
     }
-    await env.DB.prepare(
+    stmts.push(env.DB.prepare(
       `UPDATE notes SET title=?, body=?, type=?, checklist_items=?, color=?, pinned=?, archived=?, trashed_at=?, locked=?, reminder_at=?, reminder_sent=?, last_modified=? WHERE id=?`
     ).bind(
       n.title || null,
@@ -310,9 +355,9 @@ async function upsertNote(env, email, n) {
       n.reminder_sent ? 1 : 0,
       serverNow,
       n.id
-    ).run();
+    ));
   } else {
-    await env.DB.prepare(
+    stmts.push(env.DB.prepare(
       `INSERT INTO notes (id, owner_email, title, body, type, checklist_items, color, pinned, archived, trashed_at, locked, reminder_at, reminder_sent, last_modified, created_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).bind(
@@ -331,16 +376,17 @@ async function upsertNote(env, email, n) {
       n.reminder_sent ? 1 : 0,
       serverNow,
       n.created_at || serverNow
-    ).run();
+    ));
   }
 
   if (Array.isArray(n.categories)) {
-    await env.DB.prepare(`DELETE FROM note_categories WHERE note_id = ?`).bind(n.id).run();
+    stmts.push(env.DB.prepare(`DELETE FROM note_categories WHERE note_id = ?`).bind(n.id));
     for (const cid of n.categories) {
-      await env.DB.prepare(`INSERT OR IGNORE INTO note_categories (note_id, category_id) VALUES (?, ?)`)
-        .bind(n.id, cid).run();
+      stmts.push(env.DB.prepare(`INSERT OR IGNORE INTO note_categories (note_id, category_id) VALUES (?, ?)`)
+        .bind(n.id, cid));
     }
   }
+  await env.DB.batch(stmts);
   return { skipped: false };
 }
 
@@ -413,10 +459,12 @@ async function purgeNote(noteId, env, email) {
   for (const a of atts.results || []) {
     try { await env.BUCKET.delete(a.r2_key); } catch (_) {}
   }
-  await env.DB.prepare(`DELETE FROM attachments WHERE note_id = ?`).bind(noteId).run();
-  await env.DB.prepare(`DELETE FROM note_categories WHERE note_id = ?`).bind(noteId).run();
-  await env.DB.prepare(`DELETE FROM note_shares WHERE note_id = ?`).bind(noteId).run();
-  await env.DB.prepare(`DELETE FROM notes WHERE id = ?`).bind(noteId).run();
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM attachments WHERE note_id = ?`).bind(noteId),
+    env.DB.prepare(`DELETE FROM note_categories WHERE note_id = ?`).bind(noteId),
+    env.DB.prepare(`DELETE FROM note_shares WHERE note_id = ?`).bind(noteId),
+    env.DB.prepare(`DELETE FROM notes WHERE id = ?`).bind(noteId),
+  ]);
   return json({ ok: true });
 }
 
@@ -477,15 +525,22 @@ async function deleteCategory(catId, env, email) {
 }
 
 // ── Attachments (R2) ────────────────────────────────────────────────────────
+const MIME_WHITELIST = {
+  image: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+  audio: ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/mpeg', 'audio/wav'],
+};
+
 async function uploadAttachment(request, env, email) {
   const url = new URL(request.url);
   const noteId = url.searchParams.get('note_id');
   const type = url.searchParams.get('type') || 'image';
-  const mime = request.headers.get('Content-Type') || 'application/octet-stream';
+  const mime = (request.headers.get('Content-Type') || 'application/octet-stream').split(';')[0].trim();
   if (!noteId) return err('note_id required');
   if (!(await canEdit(env, noteId, email))) return err('forbidden', 403);
+  const allowed = MIME_WHITELIST[type];
+  if (!allowed || !allowed.includes(mime)) return err(`mime type no permitido: ${mime}`, 415);
   const id = uuid();
-  const ext = mime.split('/')[1]?.split(';')[0] || 'bin';
+  const ext = mime.split('/')[1] || 'bin';
   const key = `${email}/${noteId}/${id}.${ext}`;
   const buf = await request.arrayBuffer();
   if (buf.byteLength > 10 * 1024 * 1024) return err('file too large (max 10MB)', 413);
@@ -618,10 +673,12 @@ async function purgeOldTrash(env) {
     for (const a of atts.results || []) {
       try { await env.BUCKET.delete(a.r2_key); } catch (_) {}
     }
-    await env.DB.prepare(`DELETE FROM attachments WHERE note_id = ?`).bind(r.id).run();
-    await env.DB.prepare(`DELETE FROM note_categories WHERE note_id = ?`).bind(r.id).run();
-    await env.DB.prepare(`DELETE FROM note_shares WHERE note_id = ?`).bind(r.id).run();
-    await env.DB.prepare(`DELETE FROM notes WHERE id = ?`).bind(r.id).run();
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM attachments WHERE note_id = ?`).bind(r.id),
+      env.DB.prepare(`DELETE FROM note_categories WHERE note_id = ?`).bind(r.id),
+      env.DB.prepare(`DELETE FROM note_shares WHERE note_id = ?`).bind(r.id),
+      env.DB.prepare(`DELETE FROM notes WHERE id = ?`).bind(r.id),
+    ]);
   }
 }
 
@@ -635,7 +692,7 @@ async function loginPasskeyRegister(request, env) {
     `INSERT OR REPLACE INTO login_passkeys (credential_id, email, device_name, created_at, last_used_at) VALUES (?, ?, ?, ?, ?)`
   ).bind(credentialId, clean, deviceName || null, now, now).run();
   await ensureUser(env, clean);
-  return json({ ok: true });
+  return json({ ok: true, session: await signSessionJwt(clean, env) });
 }
 
 async function loginPasskeyCheck(request, env) {
@@ -657,7 +714,7 @@ async function loginPasskeyAuthenticate(request, env) {
   await env.DB.prepare(
     `UPDATE login_passkeys SET last_used_at = ? WHERE credential_id = ?`
   ).bind(Date.now(), credentialId).run();
-  return json({ email: row.email });
+  return json({ email: row.email, session: await signSessionJwt(row.email, env) });
 }
 
 async function loginPasskeyList(env, email) {
@@ -702,7 +759,7 @@ export default {
     if (path === '/auth/passkey/authenticate'  && m === 'POST') return await loginPasskeyAuthenticate(request, env);
     if (path === '/auth/passkey/check'         && m === 'POST') return await loginPasskeyCheck(request, env);
 
-    const email = getUser(request);
+    const email = await getUser(request, env);
     if (!email) return err('User identity required', 401);
     const seg = path.split('/').filter(Boolean);
 
