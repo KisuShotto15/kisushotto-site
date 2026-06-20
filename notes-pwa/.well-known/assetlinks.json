@@ -1,8 +1,0 @@
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "com.kisushotto.notes",
-    "sha256_cert_fingerprints": ["5A:5B:B4:59:E5:D5:5F:49:94:4B:D0:1B:EE:EC:C7:B6:7D:9C:9E:9C:23:B1:05:21:49:2A:43:81:FF:B5:44:AF"]
-  }
-}]
