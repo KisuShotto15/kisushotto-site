@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=15';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=16';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=15');
+    const m = await import('./push.js?v=16');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -247,9 +247,16 @@ function renderManage() {
   el.innerHTML = habits.map(h => {
     const color = COLORS[h.color] || COLORS.lavender;
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color 0.2s"
-           onmouseenter="this.style.borderColor='var(--border2)'" onmouseleave="this.style.borderColor='var(--border)'"
+      <div class="manage-row" data-hid="${h.id}" draggable="true"
+           ondragstart="onManageDragStart(event,'${h.id}')"
+           ondragover="onManageDragOver(event)"
+           ondragenter="onManageDragEnter(event)"
+           ondragleave="onManageDragLeave(event)"
+           ondrop="onManageDrop(event,'${h.id}')"
+           ondragend="onManageDragEnd(event)"
+           style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color 0.2s"
            onclick="openPanelById('${h.id}')">
+        <span style="color:var(--muted2);font-size:14px;cursor:grab" onclick="event.stopPropagation()">⠿</span>
         <span style="font-size:18px;line-height:1">${h.emoji || '✓'}</span>
         <span style="flex:1;font-size:13px;font-weight:600">${h.name}</span>
         <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted2)">${freqLabel(h)}</span>
@@ -257,6 +264,30 @@ function renderManage() {
       </div>`;
   }).join('');
 }
+
+// ── Drag & drop reorder (manage list) ─────────────────────────────────────────
+let manageDragId = null;
+window.onManageDragStart = function(e, id) { manageDragId = id; e.dataTransfer.effectAllowed = 'move'; };
+window.onManageDragOver  = function(e) { e.preventDefault(); };
+window.onManageDragEnter = function(e) { e.currentTarget.style.borderColor = 'var(--accent)'; };
+window.onManageDragLeave = function(e) { e.currentTarget.style.borderColor = 'var(--border)'; };
+window.onManageDragEnd   = function(e) { e.currentTarget.style.borderColor = 'var(--border)'; };
+window.onManageDrop = function(e, targetId) {
+  e.preventDefault();
+  e.currentTarget.style.borderColor = 'var(--border)';
+  const id = manageDragId;
+  manageDragId = null;
+  if (!id || id === targetId) return;
+  const fromIdx = habits.findIndex(h => h.id === id);
+  const toIdx   = habits.findIndex(h => h.id === targetId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = habits.splice(fromIdx, 1);
+  habits.splice(toIdx, 0, moved);
+  habits.forEach((h, i) => {
+    if (h.sort_order !== i) { h.sort_order = i; updateHabit(h.id, { sort_order: i }).catch(() => {}); }
+  });
+  renderManage();
+};
 
 // ── Render: stats ─────────────────────────────────────────────────────────────
 function renderStats() {
@@ -544,6 +575,7 @@ window.saveHabit = async function() {
                    : $('fFreq').value === 'custom'         ? (parseInt($('fEvery').value)   || 2)
                    : null,
     reminder_time:   $('fReminder').value           || null,
+    tz:              Intl.DateTimeFormat().resolvedOptions().timeZone || null,
     description:     $('fDesc').value.trim()        || null,
   };
 
@@ -766,6 +798,19 @@ async function loadCalMonth(force = false) {
   } catch { calDaily = {}; }
 }
 
+// One-time: existing habits with a reminder but no tz were created before tz tracking.
+// Patch them to the browser tz so the cron fires at the correct local time.
+function backfillTz() {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (!tz) return;
+  for (const h of habits) {
+    if (h.reminder_time && !h.tz) {
+      h.tz = tz;
+      updateHabit(h.id, { tz }).catch(() => {});
+    }
+  }
+}
+
 async function init() {
   if (!getUserEmail()) { showLogin(); return; }
 
@@ -792,6 +837,7 @@ async function init() {
     ]);
     habits = h;
     await loadCalMonth();
+    backfillTz();
   } catch (e) {
     toast('Error cargando datos: ' + e.message, 'err');
     habits = [];

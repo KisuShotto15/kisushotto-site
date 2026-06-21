@@ -30,6 +30,17 @@ function getUser(request) {
   return (request.headers.get('X-User-Email') || '').toLowerCase().trim() || null;
 }
 
+// Local date + HH:MM for a given IANA timezone (reminders are stored in local time)
+const DEFAULT_TZ = 'UTC';
+function localParts(tz) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz || DEFAULT_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  });
+  const p = Object.fromEntries(fmt.formatToParts(new Date()).map(x => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, hhmm: `${p.hour}:${p.minute}` };
+}
+
 // ── Frequency helper ──────────────────────────────────────────────────────────
 function isDueOn(habit, dateISO) {
   const d   = new Date(dateISO + 'T00:00:00Z');
@@ -147,24 +158,33 @@ async function getVapidPublic(env) {
 }
 
 async function dispatchReminders(env) {
-  const now = new Date();
-  const hhmm = `${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')}`;
-  const today = now.toISOString().slice(0, 10);
-
+  // Candidates: any active habit with a reminder pending today. Time/zone/due are
+  // evaluated per-habit below because reminder_time is stored in the user's local time.
   const { results } = await env.DB.prepare(
-    `SELECT id, user_id, name, reminder_time, reminder_last_sent FROM habits
-     WHERE active = 1 AND reminder_time = ? AND (reminder_last_sent IS NULL OR reminder_last_sent != ?)`
-  ).bind(hhmm, today).all();
+    `SELECT id, user_id, name, frequency, frequency_days, frequency_every, created_at,
+            reminder_time, reminder_last_sent, tz
+     FROM habits WHERE active = 1 AND reminder_time IS NOT NULL`
+  ).all();
 
   for (const h of results || []) {
+    const { date: localDate, hhmm } = localParts(h.tz);
+    if (h.reminder_time !== hhmm) continue;
+    if (h.reminder_last_sent === localDate) continue;
+    if (!isDueOn(h, localDate)) continue;
+
+    const done = await env.DB.prepare(
+      `SELECT 1 FROM completions WHERE user_id = ? AND habit_id = ? AND date = ? AND value > 0`
+    ).bind(h.user_id, h.id, localDate).first();
+    if (done) continue;
+
     const subRaw = await env.PUSH_KV.get(`push:${h.user_id}`);
     if (subRaw) {
       try {
         const sub = JSON.parse(subRaw);
-        await sendWebPush(env, sub, { title: h.name, body: 'Es hora de tu habito diario' });
+        await sendWebPush(env, sub, { title: h.name, body: 'Es hora de tu habito' });
       } catch (_) {}
     }
-    await env.DB.prepare(`UPDATE habits SET reminder_last_sent = ? WHERE id = ?`).bind(today, h.id).run();
+    await env.DB.prepare(`UPDATE habits SET reminder_last_sent = ? WHERE id = ?`).bind(localDate, h.id).run();
   }
 }
 
@@ -176,6 +196,7 @@ async function migrate(env) {
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN user_id TEXT NOT NULL DEFAULT ''").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE completions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN reminder_last_sent TEXT").run(); } catch (_) {}
+  try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN tz TEXT").run(); } catch (_) {}
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -209,7 +230,7 @@ async function createHabit(request, env, uid) {
   const now = Math.floor(Date.now() / 1000);
   const id  = uuid();
   await env.DB.prepare(
-    `INSERT INTO habits (id,user_id,name,description,type,target_value,target_unit,frequency,frequency_days,frequency_every,color,emoji,reminder_time,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO habits (id,user_id,name,description,type,target_value,target_unit,frequency,frequency_days,frequency_every,color,emoji,reminder_time,tz,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     id, uid,
     b.name.trim(),
@@ -223,6 +244,7 @@ async function createHabit(request, env, uid) {
     b.color || 'lavender',
     b.emoji || '✓',
     b.reminder_time || null,
+    b.tz || null,
     b.sort_order ?? 0,
     now
   ).run();
@@ -235,7 +257,7 @@ async function updateHabit(id, request, env, uid) {
   const fields = [];
   const vals   = [];
   const allowed = ['name','description','type','target_value','target_unit','frequency',
-                   'frequency_days','frequency_every','color','emoji','reminder_time','sort_order'];
+                   'frequency_days','frequency_every','color','emoji','reminder_time','tz','sort_order'];
   for (const k of allowed) {
     if (k in b) {
       fields.push(`${k} = ?`);
