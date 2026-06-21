@@ -812,19 +812,28 @@ input:focus {
             <button class="btn btn-sm" style="flex-shrink:0" onclick="authLogout()">Salir</button>
           </div>
           <div class="ptitle" style="margin:12px 0 6px">Binance</div>
-          <input class="auth-inp" type="password" id="cfg-bnc-key" autocomplete="off" data-bwignore data-1p-ignore placeholder="API Key">
-          <input class="auth-inp" type="password" id="cfg-bnc-secret" autocomplete="off" data-bwignore data-1p-ignore placeholder="API Secret">
-          <button class="btn btn-gold btn-sm" style="width:100%;margin-top:8px" onclick="binanceConnect()">Conectar Binance</button>
-          <span id="bnc-st" style="display:block;font-size:13px;color:#555;margin-top:6px"></span>
-          <div style="font-size:11px;color:var(--text-3);margin-top:6px">Usa una API key con permiso C2C, sin retiros.</div>
+          <div id="bnc-connected" style="display:none;align-items:center;justify-content:space-between;gap:8px;background:var(--surf-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 11px">
+            <span style="font-size:13px;color:#1D9E75">✓ Binance conectado</span>
+            <button class="btn btn-sm" type="button" style="flex-shrink:0" onclick="bncShowForm()">Cambiar</button>
+          </div>
+          <div id="bnc-form">
+            <input class="auth-inp" type="password" id="cfg-bnc-key" autocomplete="off" data-bwignore data-1p-ignore placeholder="API Key">
+            <input class="auth-inp" type="password" id="cfg-bnc-secret" autocomplete="off" data-bwignore data-1p-ignore placeholder="API Secret">
+            <button class="btn btn-gold btn-sm" style="width:100%;margin-top:8px" onclick="binanceConnect()">Conectar Binance</button>
+            <span id="bnc-st" style="display:block;font-size:13px;color:#555;margin-top:6px"></span>
+            <div style="font-size:11px;color:var(--text-3);margin-top:6px">Usa una API key con permiso C2C, sin retiros.</div>
+          </div>
         </div>
-        <div class="cfg-row" style="margin-top:8px"><span>Ad Number (opc.)</span><input type="text" id="cfg-bot-adno" placeholder="auto-detectado" style="font-size:13px"></div>
-        <div class="cfg-row"><span>Mi nick (Binance)</span><input type="text" id="cfg-bot-nick" placeholder="キスショット" style="font-size:13px"></div>
-        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-          <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Telegram</div>
-        </div>
-        <div class="cfg-row"><span>TG Token</span><input type="password" id="cfg-tg-token" placeholder="123:AAF..."></div>
-        <div class="cfg-row"><span>Chat ID</span><input type="text" id="cfg-tg-chat" placeholder="1547594870" style="width:110px"></div>
+        <div class="cfg-row" style="margin-top:8px"><span>Anuncio</span><div style="display:flex;gap:4px;align-items:center"><select id="cfg-bot-adsel" onchange="onAdSelect()" style="font-size:13px;max-width:160px"><option value="">Auto-detectar</option></select><button class="btn btn-sm" type="button" onclick="loadMyAds()" title="Cargar mis anuncios">↻</button></div></div>
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Opciones avanzadas</summary>
+          <div class="cfg-row"><span>Mi nick (Binance)</span><input type="text" id="cfg-bot-nick" placeholder="auto-detectado" style="font-size:13px"></div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+            <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Telegram</div>
+          </div>
+          <div class="cfg-row"><span>TG Token</span><input type="password" id="cfg-tg-token" placeholder="123:AAF..."></div>
+          <div class="cfg-row"><span>Chat ID</span><input type="text" id="cfg-tg-chat" placeholder="1547594870" style="width:110px"></div>
+        </details>
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
           <button class="btn btn-gold" style="flex:1" onclick="saveBotConfig()">Guardar</button>
           <span id="tg-st" style="font-size:13px;color:#555"></span>
@@ -851,12 +860,15 @@ input:focus {
 
       <!-- Config bot (campos visibles) -->
       <div class="cfg-row"><span>Límite mínimo (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
-      <div class="cfg-row"><span>Incremento (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',-1)">−</button><input type="number" id="cfg-bot-inc" value="0.001" min="0.001" step="0.001"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',1)">+</button></div></div>
-      <div class="cfg-row"><span>Gap máx. para seguir (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',-1)">−</button><input type="number" id="cfg-bot-gap" value="1.0" min="0.5" step="0.5"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',1)">+</button></div></div>
-      <div class="cfg-row"><span>Umbral límites (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" value="10000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
-      <div class="cfg-row"><span>Precio de venta (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="ej. 640" min="1" step="1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
-      <div class="cfg-row"><span>Spread mínimo (%)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" value="0.5" min="0.1" max="10" step="0.1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
+      <div class="cfg-row"><span style="display:flex;align-items:center;gap:6px">Precio de venta (Bs)<button class="btn btn-sm" type="button" onclick="botSuggestSell()" title="Sugerir desde el mercado" style="padding:1px 7px;font-size:11px">sugerir</button></span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="ej. 640" min="1" step="1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
       <div class="cfg-row"><span style="color:#777;font-size:14px">Techo calculado</span><span id="cfg-bot-ceil-display" style="color:#E24B4A;font-weight:700;font-size:16px">—</span></div>
+      <details style="margin-top:6px">
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Opciones avanzadas</summary>
+        <div class="cfg-row"><span>Incremento (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',-1)">−</button><input type="number" id="cfg-bot-inc" value="0.001" min="0.001" step="0.001"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',1)">+</button></div></div>
+        <div class="cfg-row"><span>Gap máx. para seguir (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',-1)">−</button><input type="number" id="cfg-bot-gap" value="1.0" min="0.5" step="0.5"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',1)">+</button></div></div>
+        <div class="cfg-row"><span>Umbral límites (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" value="10000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
+        <div class="cfg-row"><span>Spread mínimo (%)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" value="0.5" min="0.1" max="10" step="0.1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
+      </details>
       <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
         <button class="btn btn-gold" style="flex:1" onclick="saveBotConfig()">Guardar</button>
         <span id="bot-cfg-st" style="font-size:14px;color:#555"></span>
@@ -1116,7 +1128,32 @@ async function binanceConnect() {
     st.textContent = '✓ Conectado'; st.style.color = '#1D9E75';
     document.getElementById('cfg-bnc-key').value = '';
     document.getElementById('cfg-bnc-secret').value = '';
+    bncSetConnected(true);
+    loadMyAds();
   } catch(e) { st.textContent = '⚠ ' + e.message; st.style.color = 'var(--red)'; }
+}
+
+function bncSetConnected(connected) {
+  var c = document.getElementById('bnc-connected');
+  var f = document.getElementById('bnc-form');
+  if (!c || !f) return;
+  c.style.display = connected ? 'flex' : 'none';
+  f.style.display = connected ? 'none' : '';
+}
+
+function bncShowForm() {
+  var c = document.getElementById('bnc-connected');
+  var f = document.getElementById('bnc-form');
+  if (c) c.style.display = 'none';
+  if (f) f.style.display = '';
+}
+
+function botSuggestSell() {
+  var ref = ST.buyAds && ST.buyAds[0] ? ST.buyAds[0].price : null;
+  if (!ref) { toast('Sin datos de mercado aún'); return; }
+  var inp = document.getElementById('cfg-bot-sell');
+  inp.value = Math.round(ref);
+  botUpdateCeiling();
 }
 
 async function refreshAuthUI() {
@@ -1133,7 +1170,7 @@ async function refreshAuthUI() {
       if (r.status === 401) { authLogout(); return; }
       var d = await r.json().catch(function(){ return {}; });
       var bnc = document.getElementById('bnc-st');
-      if (d.connected) { bnc.textContent = '✓ Conectado'; bnc.style.color = '#1D9E75'; }
+      if (d.connected) { bnc.textContent = '✓ Conectado'; bnc.style.color = '#1D9E75'; bncSetConnected(true); loadMyAds(); }
     } catch(e) {}
   }
 }
@@ -1662,6 +1699,9 @@ function renderBuySpread() {
   if (sellEff) sellEff.textContent = fmt(effectiveSell) + ' Bs';
   if (sellRef) sellRef.textContent = fmt(sellPrice) + ' Bs';
   if (buyRef)  buyRef.textContent  = fmt(buyPrice)  + ' Bs';
+
+  var sellInp = document.getElementById('cfg-bot-sell');
+  if (sellInp && sellPrice) sellInp.placeholder = 'sug. ' + Math.round(sellPrice);
 }
 
 // ── Alertas ───────────────────────────────────────────
@@ -2024,7 +2064,7 @@ function stepInput(id, dir) {
 }
 
 function saveBotConfig() {
-  BOT_CFG.adNo           = document.getElementById('cfg-bot-adno').value.trim();
+  BOT_CFG.adNo           = document.getElementById('cfg-bot-adsel').value;
   BOT_CFG.myNick         = document.getElementById('cfg-bot-nick').value.trim();
   BOT_CFG.increment      = parseFloat(document.getElementById('cfg-bot-inc').value)     || 0.001;
   BOT_CFG.maxGap         = parseFloat(document.getElementById('cfg-bot-gap').value)     || 1.0;
@@ -2050,7 +2090,11 @@ function loadBotConfig() {
     if (!s) return;
     Object.assign(BOT_CFG, JSON.parse(s));
     BOT_CFG.url = 'https://kisushotto-site.vercel.app/api/binance-bot'; // fija (interna)
-    document.getElementById('cfg-bot-adno').value     = BOT_CFG.adNo || '';
+    var _sel = document.getElementById('cfg-bot-adsel');
+    if (BOT_CFG.adNo && !Array.prototype.some.call(_sel.options, function(o){ return o.value === BOT_CFG.adNo; })) {
+      var _o = document.createElement('option'); _o.value = BOT_CFG.adNo; _o.textContent = 'Ad ' + BOT_CFG.adNo; _sel.appendChild(_o);
+    }
+    _sel.value = BOT_CFG.adNo || '';
     document.getElementById('cfg-bot-nick').value     = BOT_CFG.myNick || '';
     document.getElementById('cfg-bot-inc').value      = BOT_CFG.increment;
     document.getElementById('cfg-bot-gap').value      = BOT_CFG.maxGap;
@@ -2098,6 +2142,48 @@ async function botCallWorker(path, body) {
   var data = await r.json().catch(function() { return {}; });
   if (!r.ok) throw new Error('Worker ' + r.status + (data.error ? ': ' + data.error : ''));
   return data;
+}
+
+async function loadMyAds() {
+  var sel = document.getElementById('cfg-bot-adsel');
+  var st  = document.getElementById('bot-cfg-st');
+  if (!SESSION.token) { if (st) { st.textContent = 'Inicia sesión primero'; st.style.color = '#E24B4A'; } return; }
+  if (st) { st.textContent = 'Cargando anuncios...'; st.style.color = '#555'; }
+  try {
+    var data = await botCallWorker('/my-ads');
+    var ads = Array.isArray(data.data) ? data.data
+            : (data.data && Array.isArray(data.data.data)) ? data.data.data : [];
+    sel.innerHTML = '<option value="">Auto-detectar</option>';
+    ads.forEach(function(a) {
+      var no    = String(a.adNumber || a.advNo);
+      var price = a.price != null ? (+a.price).toFixed(3) : '?';
+      var avail = parseFloat(a.surplusAmount || a.tradableQuantity || a.remainQuantity || 0);
+      var live  = a.advStatus === 'LIVE' || a.advStatus === 'ONLINE' || a.advStatus === 1 || a.adStatus === 1;
+      var o = document.createElement('option');
+      o.value = no;
+      o.textContent = (a.tradeType || '') + ' ' + price + ' · ' + Math.round(avail) + ' USDT' + (live ? '' : ' (pausado)');
+      sel.appendChild(o);
+    });
+    if (BOT_CFG.adNo && !Array.prototype.some.call(sel.options, function(o){ return o.value === BOT_CFG.adNo; })) {
+      var miss = document.createElement('option'); miss.value = BOT_CFG.adNo; miss.textContent = 'Ad ' + BOT_CFG.adNo; sel.appendChild(miss);
+    }
+    sel.value = BOT_CFG.adNo || '';
+    var nickEl = document.getElementById('cfg-bot-nick');
+    var detected = ads.map(function(a){ return a.advertiserNickName || a.nickName || (a.advertiser && a.advertiser.nickName) || a.merchantNickName; }).find(Boolean);
+    if (detected && nickEl && !nickEl.value.trim()) {
+      nickEl.value = detected;
+      BOT_CFG.myNick = detected;
+      localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
+    }
+    if (st) { st.textContent = ads.length + ' anuncio(s)'; st.style.color = '#1D9E75'; }
+  } catch (e) {
+    if (st) { st.textContent = e.message; st.style.color = '#E24B4A'; }
+  }
+}
+
+function onAdSelect() {
+  BOT_CFG.adNo = document.getElementById('cfg-bot-adsel').value;
+  localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
 }
 
 async function botGetMyAd(allowPaused) {
