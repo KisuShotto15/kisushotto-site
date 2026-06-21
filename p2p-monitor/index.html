@@ -1122,14 +1122,15 @@ function enterApp() {
 
 // Al cargar: si hay sesion valida (email autorizado), entra; si no, queda el muro.
 async function initAuth() {
-  if (!SESSION.token) return;
+  if (!SESSION.token) return;        // sin token: queda el muro
+  enterApp(); refreshAuthUI();       // optimista: entra ya, sin esperar a la red
   try {
     var r = await fetchRetry(API_BASE + '/api/auth/me', { headers: { 'Authorization': 'Bearer ' + SESSION.token } });
-    if (!r.ok) { authLogout(); return; }
+    if (r.status === 401 || r.status === 403) { authLogout(); return; } // token invalido/expirado
+    if (!r.ok) return;               // error transitorio del server: mantener sesion
     var d = await r.json().catch(function(){ return {}; });
-    if (d.email) { SESSION.email = d.email; saveSession(); }
-    enterApp(); refreshAuthUI();
-  } catch(e) { /* sin red: dejar el muro, no romper */ }
+    if (d.email) { SESSION.email = d.email; saveSession(); refreshAuthUI(); }
+  } catch(e) { /* sin red: mantener sesion, no cerrar */ }
 }
 
 async function binanceConnect() {
