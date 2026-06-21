@@ -1132,7 +1132,7 @@ function mapBuyAds(raw) {
   }).filter(function(a) {
     return a.badges && a.badges.length > 0 && a.maxVES >= CFG.buyAmount;
   }).sort(function(a, b) { return a.price - b.price; })  // ascendente: más barato primero
-    .slice(0, 3);
+    .slice(0, 8);
 }
 
 // ── Acumulador de variacion de avail ──────────────────
@@ -1450,7 +1450,7 @@ function renderBuySection(ads) {
   var wrap = document.getElementById('ob-buy');
   if (!wrap) return;
   var rows = '';
-  for (var i = 0; i < 3; i++) {
+  for (var i = 0; i < 8; i++) {
     var ad = ads[i];
     if (ad) {
       var cls = 'ob-row' + (i === 0 ? ' best-buy-asc' : '');
