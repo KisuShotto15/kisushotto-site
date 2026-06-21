@@ -405,6 +405,20 @@ input:focus {
   border: 1px solid var(--gold-b);
   letter-spacing: .03em;
 }
+#pay-method-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--surf-2);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23F0B90B' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding: 3px 24px 3px 10px;
+}
+#pay-method-select option {
+  background: var(--surf-1);
+  color: var(--text);
+  font-weight: 600;
+}
 .tag-ver {
   display: inline-flex;
   align-items: center;
@@ -449,7 +463,7 @@ input:focus {
   .top { height: auto; min-height: 48px; padding: 6px 10px; gap: 5px; }
   .top h1 { font-size: 15px; }
   .tag-ver, #last-update, .nav-pair { display: none; }
-  #pay-method-select { font-size: 13px; padding: 3px 6px; max-width: 130px; }
+  #pay-method-select { font-size: 13px; max-width: 130px; }
   .badge { font-size: 12px; padding: 2px 7px; }
   .btn { font-size: 14px; padding: 5px 10px; }
   .btn-sm { font-size: 13px; padding: 3px 8px; }
