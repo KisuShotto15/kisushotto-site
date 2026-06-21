@@ -1,4 +1,5 @@
 import { verifyJWT } from './crypto.js';
+import { isAllowed } from './allowlist.js';
 
 export function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,4 +17,11 @@ export function requireUser(req) {
   } catch (_) {
     const e = new Error('Sesion invalida'); e.status = 401; throw e;
   }
+}
+
+// Igual que requireUser pero ademas exige que el email este en la allowlist.
+export function requireAllowedUser(req) {
+  const u = requireUser(req);
+  if (!isAllowed(u.email)) { const e = new Error('Email no autorizado'); e.status = 403; throw e; }
+  return u;
 }

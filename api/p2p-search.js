@@ -1,3 +1,5 @@
+import { requireAllowedUser } from './_lib/auth.js';
+
 // ── Rate limit configurable por env (0 / sin setear = desactivado) ──
 const RL_MAX    = parseInt(process.env.RATE_LIMIT_MAX || '0', 10);
 const RL_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
@@ -20,7 +22,7 @@ function rateLimited(req) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Secret');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -31,10 +33,7 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Rate limit exceeded', retryAfter });
   }
 
-  const secret = process.env.API_SECRET;
-  if (secret && req.headers['x-api-secret'] !== secret) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  try { requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
 
   const BINANCE_URL = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
 
