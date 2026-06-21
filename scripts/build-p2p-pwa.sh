@@ -3,6 +3,8 @@
 set -e
 
 OUT="p2p-pwa"
+# Version unica por build: invalida la cache del SW en cada deploy
+BUILD_ID="$(date +%s)"
 
 mkdir -p "$OUT/icons" "$OUT/images"
 
@@ -85,6 +87,9 @@ self.addEventListener('fetch', e => {
   e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request)));
 });
 SWEOF
+
+# Sello de version unico para forzar actualizacion del SW en cada deploy
+sed -i "s/ks-p2p-v1/ks-p2p-${BUILD_ID}/" "$OUT/sw.js"
 
 # Cache headers
 cat > "$OUT/_headers" << 'HEADERS'
