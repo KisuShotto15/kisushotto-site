@@ -1,24 +1,35 @@
 import crypto from 'node:crypto';
+import { requireUser } from './_lib/auth.js';
+import { sql, ensureSchema } from './_lib/db.js';
+import { decrypt } from './_lib/crypto.js';
 
 const BINANCE = 'https://api.binance.com';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Bot-Token, X-Api-Secret');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const botToken = process.env.BOT_TOKEN;
-  if (botToken && req.headers['x-bot-token'] !== botToken) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
 
   const { path, params } = req.body || {};
-  const key = process.env.BINANCE_KEY;
-  const secret = process.env.BINANCE_SECRET;
-  if (!key || !secret) return res.status(500).json({ error: 'BINANCE_KEY/BINANCE_SECRET env vars not configured' });
+
+  // Credenciales Binance del usuario autenticado (cifradas en DB)
+  let key, secret;
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT enc_key, iv_key, tag_key, enc_secret, iv_secret, tag_secret FROM binance_creds WHERE user_id = ${user.uid}`;
+    if (!rows.length) return res.status(400).json({ error: 'Conecta tu cuenta Binance primero' });
+    const c = rows[0];
+    key = decrypt({ ct: c.enc_key, iv: c.iv_key, tag: c.tag_key });
+    secret = decrypt({ ct: c.enc_secret, iv: c.iv_secret, tag: c.tag_secret });
+  } catch (e) {
+    return res.status(500).json({ error: 'Error leyendo credenciales: ' + e.message });
+  }
 
   function sign(data) {
     return crypto.createHmac('sha256', secret).update(data).digest('hex');

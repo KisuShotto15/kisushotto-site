@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
+    "@neondatabase/serverless": "^0.10.4",
     "lightweight-charts": "^4.2.0"
   },
   "devDependencies": {

@@ -783,10 +783,31 @@ input:focus {
 
       <!-- Gear popup (Worker URL, Bot Token, Ad Number) -->
       <div id="bot-gear-popup" style="display:none;position:absolute;top:44px;right:14px;width:300px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.8);z-index:50">
-        <div class="ptitle" style="margin-bottom:8px">Config. API</div>
-        <div class="cfg-row"><span>Worker URL</span><input type="text" id="cfg-bot-url" value="https://kisushotto-site.vercel.app/api/binance-bot" style="width:140px;font-size:13px"></div>
-        <div class="cfg-row"><span>Bot Token</span><input type="password" id="cfg-bot-token" placeholder="mibot2024"></div>
-        <div class="cfg-row"><span>Ad Number</span><input type="text" id="cfg-bot-adno" placeholder="12855611..." style="font-size:13px"></div>
+        <div class="ptitle" style="margin-bottom:8px">Cuenta</div>
+        <!-- No logueado -->
+        <div id="auth-out">
+          <div class="cfg-row"><span>Email</span><input type="email" id="cfg-auth-email" placeholder="tu@email.com" style="font-size:13px"></div>
+          <div class="cfg-row"><span>Password</span><input type="password" id="cfg-auth-pass" placeholder="mín. 8 caracteres" style="font-size:13px"></div>
+          <div style="margin:6px 0;display:flex;gap:6px;align-items:center">
+            <button class="btn btn-gold btn-sm" style="flex:1" onclick="authLogin()">Entrar</button>
+            <button class="btn btn-sm" onclick="authRegister()">Crear cuenta</button>
+          </div>
+          <span id="auth-st" style="font-size:13px;color:#555"></span>
+        </div>
+        <!-- Logueado -->
+        <div id="auth-in" style="display:none">
+          <div class="cfg-row"><span>Sesión</span><span id="auth-email" style="font-size:13px;color:var(--text-2)"></span></div>
+          <div style="margin:6px 0"><button class="btn btn-sm" onclick="authLogout()">Cerrar sesión</button></div>
+          <div class="ptitle" style="margin:8px 0 6px">Binance</div>
+          <div class="cfg-row"><span>API Key</span><input type="password" id="cfg-bnc-key" placeholder="clave API" style="font-size:13px"></div>
+          <div class="cfg-row"><span>API Secret</span><input type="password" id="cfg-bnc-secret" placeholder="secreto API" style="font-size:13px"></div>
+          <div style="margin:6px 0;display:flex;gap:6px;align-items:center">
+            <button class="btn btn-gold btn-sm" style="flex:1" onclick="binanceConnect()">Conectar Binance</button>
+            <span id="bnc-st" style="font-size:13px;color:#555"></span>
+          </div>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:6px">Usa una API key con permiso C2C, sin retiros.</div>
+        </div>
+        <div class="cfg-row" style="margin-top:8px"><span>Ad Number (opc.)</span><input type="text" id="cfg-bot-adno" placeholder="auto-detectado" style="font-size:13px"></div>
         <div class="cfg-row"><span>Mi nick (Binance)</span><input type="text" id="cfg-bot-nick" placeholder="キスショット" style="font-size:13px"></div>
         <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
           <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Telegram</div>
@@ -999,6 +1020,90 @@ var CFG = {
 var PROXY = 'https://kisushotto-site.vercel.app/api/p2p-search';
 var HIST_API = 'https://kisushotto-site.vercel.app/api/p2p-history';
 var VERCEL_SECRET = 'ptk-2025-kisu';
+var API_BASE = 'https://kisushotto-site.vercel.app';
+
+// ── Sesion (multi-usuario) ────────────────────────────
+var SESSION = { token: null, email: null };
+try {
+  var _s = JSON.parse(localStorage.getItem('p2p_session') || 'null');
+  if (_s && _s.token) SESSION = _s;
+} catch(e) {}
+
+function saveSession() { try { localStorage.setItem('p2p_session', JSON.stringify(SESSION)); } catch(e) {} }
+
+async function apiPost(path, body, auth) {
+  var headers = { 'Content-Type': 'application/json' };
+  if (auth && SESSION.token) headers['Authorization'] = 'Bearer ' + SESSION.token;
+  var r = await fetchRetry(API_BASE + path, { method: 'POST', headers: headers, body: JSON.stringify(body || {}) });
+  var d = await r.json().catch(function(){ return {}; });
+  if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+
+async function authRegister() {
+  var st = document.getElementById('auth-st');
+  var email = document.getElementById('cfg-auth-email').value.trim();
+  var pass  = document.getElementById('cfg-auth-pass').value;
+  st.textContent = 'Creando cuenta...'; st.style.color = 'var(--text-3)';
+  try {
+    var d = await apiPost('/api/auth/register', { email: email, password: pass });
+    SESSION = { token: d.token, email: email }; saveSession();
+    st.textContent = '✓ Cuenta creada'; st.style.color = '#1D9E75';
+    refreshAuthUI();
+  } catch(e) { st.textContent = '⚠ ' + e.message; st.style.color = 'var(--red)'; }
+}
+
+async function authLogin() {
+  var st = document.getElementById('auth-st');
+  var email = document.getElementById('cfg-auth-email').value.trim();
+  var pass  = document.getElementById('cfg-auth-pass').value;
+  st.textContent = 'Entrando...'; st.style.color = 'var(--text-3)';
+  try {
+    var d = await apiPost('/api/auth/login', { email: email, password: pass });
+    SESSION = { token: d.token, email: email }; saveSession();
+    st.textContent = '✓ Sesión iniciada'; st.style.color = '#1D9E75';
+    refreshAuthUI();
+  } catch(e) { st.textContent = '⚠ ' + e.message; st.style.color = 'var(--red)'; }
+}
+
+function authLogout() {
+  SESSION = { token: null, email: null }; saveSession();
+  refreshAuthUI();
+}
+
+async function binanceConnect() {
+  var st = document.getElementById('bnc-st');
+  var apiKey = document.getElementById('cfg-bnc-key').value.trim();
+  var apiSecret = document.getElementById('cfg-bnc-secret').value.trim();
+  st.textContent = 'Validando con Binance...'; st.style.color = 'var(--text-3)';
+  try {
+    var d = await apiPost('/api/binance-connect', { apiKey: apiKey, apiSecret: apiSecret }, true);
+    st.textContent = '✓ Conectado'; st.style.color = '#1D9E75';
+    document.getElementById('cfg-bnc-key').value = '';
+    document.getElementById('cfg-bnc-secret').value = '';
+  } catch(e) { st.textContent = '⚠ ' + e.message; st.style.color = 'var(--red)'; }
+}
+
+async function refreshAuthUI() {
+  var inEl = document.getElementById('auth-in');
+  var outEl = document.getElementById('auth-out');
+  if (!inEl || !outEl) return;
+  var logged = !!SESSION.token;
+  inEl.style.display  = logged ? '' : 'none';
+  outEl.style.display = logged ? 'none' : '';
+  if (logged) {
+    document.getElementById('auth-email').textContent = SESSION.email || '';
+    try {
+      var r = await fetchRetry(API_BASE + '/api/binance-status', {
+        method: 'GET', headers: { 'Authorization': 'Bearer ' + SESSION.token }
+      });
+      if (r.status === 401) { authLogout(); return; }
+      var d = await r.json().catch(function(){ return {}; });
+      var bnc = document.getElementById('bnc-st');
+      if (d.connected) { bnc.textContent = '✓ Conectado'; bnc.style.color = '#1D9E75'; }
+    } catch(e) {}
+  }
+}
 
 // ── Estado ───────────────────────────────────────────
 var ST = {
@@ -1885,8 +1990,6 @@ function stepInput(id, dir) {
 }
 
 function saveBotConfig() {
-  BOT_CFG.url            = document.getElementById('cfg-bot-url').value.trim();
-  BOT_CFG.token          = document.getElementById('cfg-bot-token').value.trim();
   BOT_CFG.adNo           = document.getElementById('cfg-bot-adno').value.trim();
   BOT_CFG.myNick         = document.getElementById('cfg-bot-nick').value.trim();
   BOT_CFG.increment      = parseFloat(document.getElementById('cfg-bot-inc').value)     || 0.001;
@@ -1912,8 +2015,7 @@ function loadBotConfig() {
     var s = localStorage.getItem('p2p_bot_cfg');
     if (!s) return;
     Object.assign(BOT_CFG, JSON.parse(s));
-    document.getElementById('cfg-bot-url').value      = BOT_CFG.url;
-    document.getElementById('cfg-bot-token').value    = BOT_CFG.token;
+    BOT_CFG.url = 'https://kisushotto-site.vercel.app/api/binance-bot'; // fija (interna)
     document.getElementById('cfg-bot-adno').value     = BOT_CFG.adNo || '';
     document.getElementById('cfg-bot-nick').value     = BOT_CFG.myNick || '';
     document.getElementById('cfg-bot-inc').value      = BOT_CFG.increment;
@@ -1953,9 +2055,10 @@ function botUpdateCeiling() {
 }
 
 async function botCallWorker(path, body) {
+  if (!SESSION.token) throw new Error('Inicia sesión primero');
   var r = await fetchRetry(BOT_CFG.url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Bot-Token': BOT_CFG.token },
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SESSION.token },
     body: JSON.stringify({ path: path, params: body || {} })
   });
   var data = await r.json().catch(function() { return {}; });
@@ -2352,7 +2455,7 @@ async function botToggle() {
   } else {
     // ── START ────────────────────────────────────────────
     saveBotConfig();
-    if (!BOT_CFG.token)     { toast('Ingresa el Bot Token primero'); return; }
+    if (!SESSION.token)     { toast('Inicia sesión primero'); return; }
     if (!BOT_CFG.sellPrice) { toast('Ingresa el Precio de venta primero'); return; }
 
     document.getElementById('bot-toggle').textContent = '⏹ Detener Bot';
@@ -2803,7 +2906,7 @@ if (!ST.deFastTimer) ST.deFastTimer = setInterval(fastEventTick, 15000);
 setInterval(checkOpenTradesPrompt, 60000);
 hydrateServerHistory();
 
-loadConfig(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts();
+loadConfig(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI();
 if (window.DJ) refreshCalibration();
 renderOB('ob-may',   [], 'best');
 renderOB('ob-small', [], 'best-buy');
