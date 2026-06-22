@@ -272,6 +272,41 @@ body {
   letter-spacing: .06em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lbl-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-3);
+}
+.lbl-filter input {
+  width: 86px;
+  background: var(--surf-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 6px;
+  text-align: right;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.lbl-filter input::-webkit-outer-spin-button,
+.lbl-filter input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.lbl-filter input:focus { border-color: var(--gold); }
+.gear-filter { display: none; }
+@media (max-width: 640px) {
+  .lbl-filter { display: none; }
+  .gear-filter { display: block; }
 }
 .ob-side-title.mayoristas  { background: linear-gradient(90deg,rgba(246,70,93,.1),transparent);  color: var(--red);    }
 .ob-side-title.smallbuyers { background: linear-gradient(90deg,rgba(199,146,234,.1),transparent); color: var(--purple); }
@@ -769,14 +804,19 @@ input:focus {
       <div id="ob-gear-popup" style="display:none;position:absolute;top:44px;right:11px;width:300px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.8);z-index:50">
         <div class="ptitle" style="margin-bottom:8px">Configuración</div>
         <div class="cfg-row"><span>Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="10" max="300"></div>
-        <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-        <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-        <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-        <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="0" step="100000"></div>
-        <div class="cfg-row"><span>Compra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
         <div class="cfg-row"><span>Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
-        <div class="cfg-row"><span>Secc. Compra — mínimo (VES)</span><input type="number" id="cfg-buy-amount" value="2000000" min="100000" step="100000"></div>
         <div class="cfg-row"><span>Solo verificados</span><label class="sw"><input type="checkbox" id="cfg-verified" checked onchange="toggleVerified(this.checked)"><span class="sl"></span></label></div>
+        <details style="margin-top:6px">
+          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Alertas</summary>
+          <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+          <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+          <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+        </details>
+        <div class="gear-filter">
+          <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="0" step="100000"></div>
+          <div class="cfg-row"><span>Compra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
+          <div class="cfg-row"><span>Secc. Compra — mínimo (VES)</span><input type="number" id="cfg-buy-amount" value="2000000" min="100000" step="100000"></div>
+        </div>
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
           <button class="btn btn-gold" style="flex:1" onclick="saveConfig()">Guardar</button>
           <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
@@ -785,12 +825,12 @@ input:focus {
 
       <div class="ob-grid">
         <div class="ob-side">
-          <div id="label-may" class="ob-side-title mayoristas">🏦 Mayoristas</div>
+          <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">🏦 Mayoristas</span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="100000" onchange="setFilter('may',this.value)"> VES</span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
           <div id="ob-may"></div>
         </div>
         <div class="ob-side">
-          <div id="label-small" class="ob-side-title smallbuyers">📉 Compra</div>
+          <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">📉 BUY</span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="1000" onchange="setFilter('small',this.value)"> VES</span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
           <div id="ob-small"></div>
         </div>
@@ -801,7 +841,7 @@ input:focus {
         <div class="ptitle" style="margin-bottom:10px">Sección Compra</div>
         <div class="buy-section-row">
           <div class="buy-ob-wrap">
-            <div class="ob-side-title buyads">🟢 SELL</div>
+            <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">🟢 SELL</span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
             <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
             <div id="ob-buy"></div>
           </div>
@@ -1488,8 +1528,6 @@ function fmtAmount(n) {
 }
 
 function renderAll() {
-  document.getElementById('label-may').textContent   = '🏦 Mayoristas (' + fmtAmount(CFG.mayAmount) + ' VES)';
-  document.getElementById('label-small').textContent = '📉 BUY (' + Math.round(CFG.smallAmount).toLocaleString('es-VE') + ' VES)';
   renderSpreadHero();
   renderStats();
   renderOB('ob-may',   ST.mayoristas, 'best');
@@ -2745,6 +2783,7 @@ function saveConfig() {
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
   CFG.verifiedOnly = document.getElementById('cfg-verified').checked;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
+  syncFilterInputs();
   if (ST.running) { clearInterval(ST.timer); ST.timer = setInterval(fetchOnce, CFG.interval * 1000); }
   updateCommissionLabels();
   botUpdateCeiling();
@@ -2773,6 +2812,28 @@ function toggleVerified(on) {
   CFG.verifiedOnly = !!on;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   fetchOnce();
+}
+
+// Filtros inline (label en web) + tuerca (mobile): misma fuente CFG.
+function setFilter(which, raw) {
+  var map = { may: ['mayAmount', 2000000], small: ['smallAmount', 59999], buy: ['buyAmount', 2000000] };
+  var m = map[which]; if (!m) return;
+  var v = parseFloat(raw);
+  if (isNaN(v)) v = m[1];
+  CFG[m[0]] = v;
+  localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
+  syncFilterInputs();
+  fetchOnce();
+}
+
+function syncFilterInputs() {
+  [['flt-may','cfg-may-amount','mayAmount'],
+   ['flt-small','cfg-small-amount','smallAmount'],
+   ['flt-buy','cfg-buy-amount','buyAmount']].forEach(function(p) {
+    var a = document.getElementById(p[0]), b = document.getElementById(p[1]);
+    if (a) a.value = CFG[p[2]];
+    if (b) b.value = CFG[p[2]];
+  });
 }
 
 // ── Utils ─────────────────────────────────────────────
@@ -3075,7 +3136,7 @@ async function hydrateServerHistory() {
 if (!ST.deFastTimer) ST.deFastTimer = setInterval(fastEventTick, 15000);
 setInterval(checkOpenTradesPrompt, 60000);
 
-loadConfig(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI();
+loadConfig(); syncFilterInputs(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI();
 initAuth(); // valida sesion y, si es valida, oculta el muro e hidrata
 if (window.DJ) refreshCalibration();
 renderOB('ob-may',   [], 'best');
