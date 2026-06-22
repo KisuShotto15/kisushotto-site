@@ -492,13 +492,37 @@ input:focus {
   letter-spacing: .03em;
   cursor: pointer;
   user-select: none;
+  gap: 6px;
   transition: background .15s, color .15s, border-color .15s;
 }
+.tag-ver:hover { filter: brightness(1.18); }
 .tag-ver.off {
   background: var(--surf-2);
   color: var(--text-3);
   border-color: var(--border-2);
 }
+.ver-sw {
+  position: relative;
+  width: 26px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--green);
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.ver-sw::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 13px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left .15s;
+}
+.tag-ver.off .ver-sw { background: var(--text-3); }
+.tag-ver.off .ver-sw::after { left: 2px; }
 
 /* ── Scrollbar ──────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; }
@@ -667,7 +691,7 @@ input:focus {
   <h1>P2P Monitor</h1>
   <span class="nav-pair" style="font-size:16px;color:var(--text-3);font-weight:500">VES/USDT</span>
   <select id="pay-method-select" class="tag-bank" onchange="setPayMethod(this.value)" style="font-family:inherit;cursor:pointer;outline:none"></select>
-  <span class="tag-ver" id="ver-toggle" onclick="toggleVerified()" title="Filtrar solo comerciantes verificados">✓ Verificados</span>
+  <span class="tag-ver" id="ver-toggle" onclick="toggleVerified()" title="Filtrar solo comerciantes verificados"><span class="ver-sw"></span><span class="ver-lbl">Verificados</span></span>
   <span class="badge badge-off" id="live-badge"><span class="dot dot-off" id="live-dot"></span><span id="live-label">Detenido</span></span>
   <span id="topbar-bot-price" style="display:none;font-size:14px;font-weight:700;color:var(--gold);background:var(--gold-d);border:1px solid var(--gold-b);border-radius:6px;padding:2px 10px;font-variant-numeric:tabular-nums">—</span>
   <span style="font-size:15px;color:var(--text-3)" id="last-update"></span>
@@ -2830,7 +2854,6 @@ function updateVerToggle() {
   if (!el) return;
   var on = CFG.verifiedOnly !== false;
   el.classList.toggle('off', !on);
-  el.textContent = on ? '✓ Verificados' : 'Verificados';
   el.title = on ? 'Solo verificados — clic para incluir a todos' : 'Mostrando todos — clic para solo verificados';
 }
 
