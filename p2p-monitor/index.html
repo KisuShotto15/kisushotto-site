@@ -438,6 +438,12 @@ input:focus {
 #cfg-bot-adsel:hover { border-color: var(--gold-b); }
 #cfg-bot-adsel:focus { border-color: var(--gold); }
 #cfg-bot-adsel option { background: var(--surf-1); color: var(--text); font-weight: 600; }
+.sw { position:relative; display:inline-block; width:38px; height:20px; flex-shrink:0; }
+.sw input { opacity:0; width:0; height:0; }
+.sw .sl { position:absolute; cursor:pointer; inset:0; background:var(--surf-2); border:1px solid var(--border-2); border-radius:20px; transition:.2s; }
+.sw .sl:before { content:""; position:absolute; height:14px; width:14px; left:2px; top:2px; background:var(--text-3); border-radius:50%; transition:.2s; }
+.sw input:checked + .sl { background:var(--gold-d); border-color:var(--gold-b); }
+.sw input:checked + .sl:before { transform:translateX(18px); background:var(--gold); }
 .tag-ver {
   display: inline-flex;
   align-items: center;
@@ -770,6 +776,7 @@ input:focus {
         <div class="cfg-row"><span>Compra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
         <div class="cfg-row"><span>Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
         <div class="cfg-row"><span>Secc. Compra — mínimo (VES)</span><input type="number" id="cfg-buy-amount" value="2000000" min="100000" step="100000"></div>
+        <div class="cfg-row"><span>Solo verificados</span><label class="sw"><input type="checkbox" id="cfg-verified" checked onchange="toggleVerified(this.checked)"><span class="sl"></span></label></div>
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
           <button class="btn btn-gold" style="flex:1" onclick="saveConfig()">Guardar</button>
           <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
@@ -1070,7 +1077,8 @@ var CFG = {
   mayAmount:   2000000,  // Monto a filtrar en sección Mayoristas (VES)
   smallAmount: 59999,    // Monto a filtrar en sección Ref. Compra (VES)
   commission:  0.0,      // Comisión Binance por anuncio (%)
-  buyAmount:   2000000   // Monto mínimo para Sección Compra (VES)
+  buyAmount:   2000000,  // Monto mínimo para Sección Compra (VES)
+  verifiedOnly: true     // Solo comerciantes con insignia (aplica a monitor y bot)
 };
 
 var PROXY = 'https://kisushotto-site.vercel.app/api/p2p-search';
@@ -1320,8 +1328,8 @@ function mapAds(raw) {
     };
   }).filter(function(a) {
     // Solo comerciantes con insignia (Bronze/Silver/Gold/Block/Ordinary/PRO)
-    // badges: null = sin insignia → excluir
-    return a.badges && a.badges.length > 0;
+    // badges: null = sin insignia → excluir (si el filtro esta activo)
+    return !CFG.verifiedOnly || (a.badges && a.badges.length > 0);
   }).sort(function(a, b) { return b.price - a.price; });
 }
 
@@ -1340,7 +1348,7 @@ function mapBuyAds(raw) {
       vipLevel: item.advertiser.vipLevel
     };
   }).filter(function(a) {
-    return a.badges && a.badges.length > 0 && a.maxVES >= CFG.buyAmount;
+    return (!CFG.verifiedOnly || (a.badges && a.badges.length > 0)) && a.maxVES >= CFG.buyAmount;
   }).sort(function(a, b) { return a.price - b.price; })  // ascendente: más barato primero
     .slice(0, 8);
 }
@@ -2735,6 +2743,7 @@ function saveConfig() {
   CFG.smallAmount = parseFloat(document.getElementById('cfg-small-amount').value) || 59999;
   CFG.commission  = parseFloat(document.getElementById('cfg-commission').value)   || 0;
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
+  CFG.verifiedOnly = document.getElementById('cfg-verified').checked;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   if (ST.running) { clearInterval(ST.timer); ST.timer = setInterval(fetchOnce, CFG.interval * 1000); }
   updateCommissionLabels();
@@ -2756,7 +2765,14 @@ function loadConfig() {
     document.getElementById('cfg-small-amount').value = CFG.smallAmount;
     document.getElementById('cfg-commission').value   = CFG.commission;
     document.getElementById('cfg-buy-amount').value   = CFG.buyAmount;
+    document.getElementById('cfg-verified').checked   = CFG.verifiedOnly !== false;
   } catch(e) {}
+}
+
+function toggleVerified(on) {
+  CFG.verifiedOnly = !!on;
+  localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
+  fetchOnce();
 }
 
 // ── Utils ─────────────────────────────────────────────
