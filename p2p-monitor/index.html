@@ -2818,7 +2818,7 @@ function toggleVerified(on) {
 function setFilter(which, raw) {
   var map = { may: ['mayAmount', 2000000], small: ['smallAmount', 59999], buy: ['buyAmount', 2000000] };
   var m = map[which]; if (!m) return;
-  var v = parseFloat(raw);
+  var v = (raw === '' || raw == null) ? 0 : parseFloat(raw);
   if (isNaN(v)) v = m[1];
   CFG[m[0]] = v;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
