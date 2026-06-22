@@ -1474,6 +1474,7 @@ async function fetchTier(transAmount, maxPages, payTypesOverride) {
 function mapAds(raw) {
   return raw.map(function(item) {
     return {
+      advNo:    item.adv.advNo,
       price:    parseFloat(item.adv.price),
       minVES:   parseFloat(item.adv.minSingleTransAmount),
       maxVES:   parseFloat(item.adv.maxSingleTransAmount),
@@ -2569,7 +2570,8 @@ async function botCycle() {
     var competitors = market.filter(function(a) {
       var aTypes = a.payTypes || [];
       var match = myPays.some(function(p) { return aTypes.indexOf(p) !== -1; });
-      return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
+      return String(a.advNo) !== String(BOT.adNumber) &&
+             a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              match &&
              a.minVES < (BOT.myMinLimit + BOT_CFG.limitThreshold) &&
              a.avail >= 150;
@@ -2691,7 +2693,8 @@ async function botInitialCycle(allowPaused) {
     var competitors = market.filter(function(a) {
       var aTypes = a.payTypes || [];
       var match = myPays.some(function(p) { return aTypes.indexOf(p) !== -1; });
-      return a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
+      return String(a.advNo) !== String(BOT.adNumber) &&
+             a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
              match &&
              a.minVES < (BOT.myMinLimit + BOT_CFG.limitThreshold) &&
              a.avail >= 150;
