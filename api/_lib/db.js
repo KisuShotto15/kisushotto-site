@@ -29,5 +29,14 @@ export async function ensureSchema() {
     label TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // verified: default true para no bloquear usuarios pre-existentes; register inserta false explicito.
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT true`;
+  await sql`CREATE TABLE IF NOT EXISTS auth_tokens (
+    token TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+  )`;
   schemaReady = true;
 }

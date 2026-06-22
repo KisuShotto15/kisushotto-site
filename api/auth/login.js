@@ -25,9 +25,12 @@ export default async function handler(req, res) {
 
   try {
     await ensureSchema();
-    const rows = await sql`SELECT id, pass_hash FROM users WHERE email = ${mail}`;
+    const rows = await sql`SELECT id, pass_hash, verified FROM users WHERE email = ${mail}`;
     if (!rows.length || !verifyPassword(password, rows[0].pass_hash)) {
       return res.status(401).json({ error: 'Credenciales invalidas' });
+    }
+    if (!rows[0].verified) {
+      return res.status(403).json({ error: 'Verifica tu email antes de entrar', needVerify: true });
     }
     return res.status(200).json({ token: signJWT({ uid: rows[0].id, email: mail }) });
   } catch (e) {

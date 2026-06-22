@@ -36,6 +36,11 @@ export function verifyPassword(pw, stored) {
   return hash.length === hb.length && crypto.timingSafeEqual(hash, hb);
 }
 
+// ── Token aleatorio (verificacion / reset) ──
+export function randomToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
 // ── JWT HS256 (sin dependencias) ──
 function jwtSecret() {
   const s = process.env.JWT_SECRET;

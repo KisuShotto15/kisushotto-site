@@ -681,6 +681,13 @@ input:focus {
       <button class="btn btn-gold" type="submit" style="width:100%;margin-top:12px;padding:10px;font-size:15px;font-weight:700">Entrar</button>
       <button class="btn" type="button" style="width:100%;margin-top:7px" onclick="authRegister()">Crear cuenta</button>
       <span id="gate-st" style="display:block;text-align:center;font-size:13px;color:#555;margin-top:12px;min-height:16px"></span>
+      <div style="text-align:center;margin-top:6px"><a href="#" onclick="authForgot();return false" style="font-size:12px;color:var(--text-3);text-decoration:none">¿Olvidaste tu contraseña?</a></div>
+    </form>
+    <form id="gate-reset" autocomplete="on" style="display:none" onsubmit="authResetPassword();return false">
+      <div style="font-size:13px;color:var(--text-2);text-align:center;margin-bottom:10px">Elige una nueva contraseña</div>
+      <input class="auth-inp" type="password" id="reset-pass" name="new-password" autocomplete="new-password" placeholder="Nueva contraseña" minlength="8" required>
+      <button class="btn btn-gold" type="submit" style="width:100%;margin-top:12px;padding:10px;font-size:15px;font-weight:700">Cambiar contraseña</button>
+      <span id="reset-st" style="display:block;text-align:center;font-size:13px;color:#555;margin-top:12px;min-height:16px"></span>
     </form>
     <div style="text-align:center;font-size:11px;color:var(--text-3);margin-top:14px">Solo emails autorizados</div>
   </div>
@@ -1171,7 +1178,7 @@ async function apiPost(path, body, auth) {
   if (auth && SESSION.token) headers['Authorization'] = 'Bearer ' + SESSION.token;
   var r = await fetchRetry(API_BASE + path, { method: 'POST', headers: headers, body: JSON.stringify(body || {}) });
   var d = await r.json().catch(function(){ return {}; });
-  if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  if (!r.ok) { var err = new Error(d.error || ('HTTP ' + r.status)); err.data = d; throw err; }
   return d;
 }
 
@@ -1183,12 +1190,12 @@ function gateStatus(msg, color) {
 async function authRegister() {
   var email = document.getElementById('gate-email').value.trim();
   var pass  = document.getElementById('gate-pass').value;
+  if (!email || pass.length < 8) { gateStatus('⚠ Email y contraseña (min 8)', 'var(--red)'); return; }
   gateStatus('Creando cuenta...', 'var(--text-3)');
   try {
     var d = await apiPost('/api/auth/register', { email: email, password: pass });
-    SESSION = { token: d.token, email: email }; saveSession();
-    gateStatus('✓ Cuenta creada', '#1D9E75');
-    enterApp(); refreshAuthUI();
+    if (d.emailError) gateStatus('Cuenta creada, pero no se pudo enviar el email: ' + d.emailError, 'var(--red)');
+    else gateStatus('✓ Revisa tu email para verificar la cuenta', '#1D9E75');
   } catch(e) { gateStatus('⚠ ' + e.message, 'var(--red)'); }
 }
 
@@ -1201,7 +1208,88 @@ async function authLogin() {
     SESSION = { token: d.token, email: email }; saveSession();
     gateStatus('✓ Sesión iniciada', '#1D9E75');
     enterApp(); refreshAuthUI();
+  } catch(e) {
+    if (e.data && e.data.needVerify) {
+      gateStatus('Verifica tu email. ', 'var(--red)');
+      var st = document.getElementById('gate-st');
+      var a = document.createElement('a');
+      a.href = '#'; a.textContent = 'Reenviar verificación';
+      a.style.cssText = 'color:var(--gold);text-decoration:none';
+      a.onclick = function(){ authResend(); return false; };
+      st.appendChild(a);
+    } else gateStatus('⚠ ' + e.message, 'var(--red)');
+  }
+}
+
+async function authForgot() {
+  var email = document.getElementById('gate-email').value.trim();
+  if (!email) { gateStatus('Escribe tu email arriba primero', 'var(--text-3)'); return; }
+  gateStatus('Enviando enlace...', 'var(--text-3)');
+  try {
+    await apiPost('/api/auth/forgot-password', { email: email });
+    gateStatus('Si el email existe, te enviamos un enlace para restablecer', '#1D9E75');
   } catch(e) { gateStatus('⚠ ' + e.message, 'var(--red)'); }
+}
+
+async function authResend() {
+  var email = document.getElementById('gate-email').value.trim();
+  if (!email) { gateStatus('Escribe tu email arriba primero', 'var(--text-3)'); return; }
+  gateStatus('Reenviando...', 'var(--text-3)');
+  try {
+    await apiPost('/api/auth/resend-verification', { email: email });
+    gateStatus('Si la cuenta existe y no está verificada, te reenviamos el email', '#1D9E75');
+  } catch(e) { gateStatus('⚠ ' + e.message, 'var(--red)'); }
+}
+
+function resetStatus(msg, color) {
+  var st = document.getElementById('reset-st');
+  if (st) { st.textContent = msg; st.style.color = color; }
+}
+
+async function authResetPassword() {
+  var pass = document.getElementById('reset-pass').value;
+  if (pass.length < 8) { resetStatus('Mínimo 8 caracteres', 'var(--red)'); return; }
+  resetStatus('Cambiando...', 'var(--text-3)');
+  try {
+    var d = await apiPost('/api/auth/reset-password', { token: window._resetToken, password: pass });
+    if (d.token) { SESSION = { token: d.token, email: d.email }; saveSession(); resetStatus('✓ Listo', '#1D9E75'); cleanAuthUrl(); enterApp(); refreshAuthUI(); }
+    else { resetStatus('✓ Contraseña cambiada, inicia sesión', '#1D9E75'); showLoginForm(); }
+  } catch(e) { resetStatus('⚠ ' + e.message, 'var(--red)'); }
+}
+
+function showLoginForm() {
+  document.getElementById('gate-form').style.display = '';
+  document.getElementById('gate-reset').style.display = 'none';
+}
+
+function cleanAuthUrl() {
+  try { history.replaceState(null, '', location.pathname); } catch(e) {}
+}
+
+// Procesa ?verify=TOKEN y ?reset=TOKEN del enlace de email. Devuelve true si manejo algo.
+async function handleAuthLinks() {
+  var q = new URLSearchParams(location.search);
+  var verify = q.get('verify'), reset = q.get('reset');
+  if (verify) {
+    document.getElementById('login-gate').style.display = 'flex';
+    gateStatus('Verificando...', 'var(--text-3)');
+    try {
+      var d = await apiPost('/api/auth/verify-email', { token: verify });
+      cleanAuthUrl();
+      if (d.token) { SESSION = { token: d.token, email: d.email }; saveSession(); gateStatus('✓ Email verificado', '#1D9E75'); enterApp(); refreshAuthUI(); }
+      else gateStatus('✓ Email verificado, inicia sesión', '#1D9E75');
+    } catch(e) { cleanAuthUrl(); gateStatus('⚠ ' + e.message, 'var(--red)'); }
+    return true;
+  }
+  if (reset) {
+    window._resetToken = reset;
+    document.getElementById('login-gate').style.display = 'flex';
+    showLoginForm();
+    document.getElementById('gate-form').style.display = 'none';
+    document.getElementById('gate-reset').style.display = '';
+    return true;
+  }
+  return false;
 }
 
 function authLogout() {
@@ -3180,7 +3268,8 @@ if (!ST.deFastTimer) ST.deFastTimer = setInterval(fastEventTick, 15000);
 setInterval(checkOpenTradesPrompt, 60000);
 
 loadConfig(); syncFilterInputs(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI();
-initAuth(); // valida sesion y, si es valida, oculta el muro e hidrata
+// Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
+handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });
 if (window.DJ) refreshCalibration();
 renderOB('ob-may',   [], 'best');
 renderOB('ob-small', [], 'best-buy');
