@@ -490,6 +490,14 @@ input:focus {
   color: var(--green);
   border: 1px solid var(--green-b);
   letter-spacing: .03em;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.tag-ver.off {
+  background: var(--surf-2);
+  color: var(--text-3);
+  border-color: var(--border-2);
 }
 
 /* ── Scrollbar ──────────────────────────────────────── */
@@ -522,7 +530,7 @@ input:focus {
 
   .top { height: auto; min-height: 48px; padding: 6px 10px; gap: 5px; }
   .top h1 { font-size: 15px; }
-  .tag-ver, #last-update, .nav-pair { display: none; }
+  #last-update, .nav-pair { display: none; }
   #pay-method-select { font-size: 13px; max-width: 130px; }
   .badge { font-size: 12px; padding: 2px 7px; }
   .btn { font-size: 14px; padding: 5px 10px; }
@@ -659,7 +667,7 @@ input:focus {
   <h1>P2P Monitor</h1>
   <span class="nav-pair" style="font-size:16px;color:var(--text-3);font-weight:500">VES/USDT</span>
   <select id="pay-method-select" class="tag-bank" onchange="setPayMethod(this.value)" style="font-family:inherit;cursor:pointer;outline:none"></select>
-  <span class="tag-ver">✓ Verificados</span>
+  <span class="tag-ver" id="ver-toggle" onclick="toggleVerified()" title="Filtrar solo comerciantes verificados">✓ Verificados</span>
   <span class="badge badge-off" id="live-badge"><span class="dot dot-off" id="live-dot"></span><span id="live-label">Detenido</span></span>
   <span id="topbar-bot-price" style="display:none;font-size:14px;font-weight:700;color:var(--gold);background:var(--gold-d);border:1px solid var(--gold-b);border-radius:6px;padding:2px 10px;font-variant-numeric:tabular-nums">—</span>
   <span style="font-size:15px;color:var(--text-3)" id="last-update"></span>
@@ -805,7 +813,6 @@ input:focus {
         <div class="ptitle" style="margin-bottom:8px">Configuración</div>
         <div class="cfg-row"><span>Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="10" max="300"></div>
         <div class="cfg-row"><span>Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
-        <div class="cfg-row"><span>Solo verificados</span><label class="sw"><input type="checkbox" id="cfg-verified" checked onchange="toggleVerified(this.checked)"><span class="sl"></span></label></div>
         <details style="margin-top:6px">
           <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Alertas</summary>
           <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
@@ -2341,8 +2348,11 @@ async function manualSetQty() {
 async function botUpdateMinLimit(adNumber, minAmount) {
   var data = await botCallWorker('/update-limit', { advNo: adNumber, minSingleTransAmount: parseFloat(minAmount) });
   if (data.code && data.code !== '000000') {
-    botLog('Límite [' + data.code + ']: ' + (data.message || '?'), '#E24B4A');
-    throw new Error(data.message || 'Error al actualizar límite');
+    var msg = data.message || (String(data.code) === '-1002'
+      ? 'API key no autorizada: la cuenta no es comerciante P2P o la key no tiene permiso para editar anuncios'
+      : '?');
+    botLog('Límite [' + data.code + ']: ' + msg, '#E24B4A');
+    throw new Error(msg);
   }
   return true;
 }
@@ -2781,7 +2791,6 @@ function saveConfig() {
   CFG.smallAmount = parseFloat(document.getElementById('cfg-small-amount').value) || 59999;
   CFG.commission  = parseFloat(document.getElementById('cfg-commission').value)   || 0;
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
-  CFG.verifiedOnly = document.getElementById('cfg-verified').checked;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();
   if (ST.running) { clearInterval(ST.timer); ST.timer = setInterval(fetchOnce, CFG.interval * 1000); }
@@ -2804,14 +2813,25 @@ function loadConfig() {
     document.getElementById('cfg-small-amount').value = CFG.smallAmount;
     document.getElementById('cfg-commission').value   = CFG.commission;
     document.getElementById('cfg-buy-amount').value   = CFG.buyAmount;
-    document.getElementById('cfg-verified').checked   = CFG.verifiedOnly !== false;
   } catch(e) {}
+  updateVerToggle();
 }
 
-function toggleVerified(on) {
-  CFG.verifiedOnly = !!on;
+function toggleVerified() {
+  var on = CFG.verifiedOnly !== false;
+  CFG.verifiedOnly = !on;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
+  updateVerToggle();
   fetchOnce();
+}
+
+function updateVerToggle() {
+  var el = document.getElementById('ver-toggle');
+  if (!el) return;
+  var on = CFG.verifiedOnly !== false;
+  el.classList.toggle('off', !on);
+  el.textContent = on ? '✓ Verificados' : 'Verificados';
+  el.title = on ? 'Solo verificados — clic para incluir a todos' : 'Mostrando todos — clic para solo verificados';
 }
 
 // Filtros inline (label en web) + tuerca (mobile): misma fuente CFG.
