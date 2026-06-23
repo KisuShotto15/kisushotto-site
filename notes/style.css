@@ -1155,19 +1155,13 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
   transition: opacity 0.1s;
 }
 
-/* Backdrop blocks touches to notes below while undo toast is visible */
-.swipe-toast-backdrop {
-  position: fixed; inset: 0;
-  z-index: 199;
-  background: transparent;
-  touch-action: none;
-}
-
 /* Swipe-to-archive toast */
 .swipe-toast {
   position: fixed;
-  bottom: 80px; left: 50%;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px)); left: 50%;
   transform: translateX(-50%) translateY(16px);
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
   background: var(--card2);
   border: 1px solid var(--border-2);
   border-radius: 999px;

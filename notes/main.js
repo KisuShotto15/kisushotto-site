@@ -702,10 +702,6 @@ function showUndoToast(message, undoFn, commitFn) {
   if (_undoToastTimer) clearTimeout(_undoToastTimer);
   if (_undoToast) { _undoToast._dismiss('commit'); }
 
-  const backdrop = document.createElement('div');
-  backdrop.className = 'swipe-toast-backdrop';
-  document.body.appendChild(backdrop);
-
   const toast = document.createElement('div');
   toast.className = 'swipe-toast';
   toast.innerHTML = `<span>${message}</span><button class="swipe-toast-undo">Deshacer</button>`;
@@ -723,7 +719,6 @@ function showUndoToast(message, undoFn, commitFn) {
     if (finished) return;
     finished = true;
     clearTimeout(_undoToastTimer);
-    backdrop.remove();
     toast.classList.remove('swipe-toast-show');
     setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 280);
     if (kind === 'undo') undoFn?.();
@@ -738,14 +733,6 @@ function showUndoToast(message, undoFn, commitFn) {
     e.stopPropagation();
     swallowNextClick();
     dismiss('undo');
-  });
-
-  backdrop.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); });
-  backdrop.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    swallowNextClick();
-    dismiss('commit');
   });
 
   requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('swipe-toast-show')));
