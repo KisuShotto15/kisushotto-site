@@ -1053,51 +1053,34 @@ function wireCard(card) {
       const n = State.notes.find(x => x.id === card.dataset.id);
       if (!n) { resetCard(); return; }
 
-      const h = card.offsetHeight;
-      const mb = parseFloat(getComputedStyle(card).marginBottom) || 0;
-
+      // Slide the card off-screen (transform only — does NOT resize the page).
       card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
       card.style.transform = `translateX(${sign * (card.offsetWidth + 80)}px)`;
       card.style.opacity = '0';
       card.style.pointerEvents = 'none';
 
-      // After horizontal slide, collapse height so the grid reflows.
-      setTimeout(() => {
-        card.style.transition = 'max-height 0.18s ease, margin-bottom 0.18s ease';
-        card.style.overflow = 'hidden';
-        card.style.maxHeight = h + 'px';
-        card.style.marginBottom = mb + 'px';
-        requestAnimationFrame(() => {
-          card.style.maxHeight = '0';
-          card.style.marginBottom = '0';
-        });
-      }, 180);
-
-      // Archive immediately so a mid-window render() (e.g. background sync)
-      // keeps the note hidden instead of flashing it back.
+      // Archive in data right away so a mid-window render() (e.g. background
+      // sync) keeps the note hidden instead of flashing it back.
       n.archived = true;
       n.last_modified = Date.now();
       saveNoteLocal(n);
 
-      showUndoToast('Nota archivada',
-        () => {
-          n.archived = false;
-          n.last_modified = Date.now();
-          saveNoteLocal(n);
-          // The swipe left the card collapsed via inline styles; patchGrid
-          // reuses that same element, so clear them or it reappears invisible.
-          card.style.transition = '';
-          card.style.transform = '';
-          card.style.opacity = '';
-          card.style.pointerEvents = '';
-          card.style.overflow = '';
-          card.style.maxHeight = '';
-          card.style.marginBottom = '';
-          card.style.willChange = '';
-          render();
-        },
-        () => { render(); }
-      );
+      // Reflow the grid and show the toast only AFTER the slide finishes, so
+      // the toast never appears while the page is still resizing (which is what
+      // clipped it). This mirrors the editor/multi-select paths, which render()
+      // before showing the toast.
+      setTimeout(() => {
+        render();
+        showUndoToast('Nota archivada',
+          () => {
+            n.archived = false;
+            n.last_modified = Date.now();
+            saveNoteLocal(n);
+            render();
+          },
+          () => {}
+        );
+      }, 200);
     } else {
       resetCard();
     }
