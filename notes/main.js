@@ -1084,6 +1084,16 @@ function wireCard(card) {
           n.archived = false;
           n.last_modified = Date.now();
           saveNoteLocal(n);
+          // The swipe left the card collapsed via inline styles; patchGrid
+          // reuses that same element, so clear them or it reappears invisible.
+          card.style.transition = '';
+          card.style.transform = '';
+          card.style.opacity = '';
+          card.style.pointerEvents = '';
+          card.style.overflow = '';
+          card.style.maxHeight = '';
+          card.style.marginBottom = '';
+          card.style.willChange = '';
           render();
         },
         () => { render(); }
