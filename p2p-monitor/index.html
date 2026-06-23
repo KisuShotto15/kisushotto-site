@@ -287,7 +287,7 @@ body {
   text-transform: none;
   color: var(--text-3);
 }
-.lbl-filter input {
+.lbl-filter input[type=number] {
   width: 86px;
   background: var(--surf-2);
   border: 1px solid var(--border-2);
@@ -303,11 +303,8 @@ body {
 .lbl-filter input::-webkit-outer-spin-button,
 .lbl-filter input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .lbl-filter input:focus { border-color: var(--gold); }
+/* Filtro inline visible en web y mobile; el bloque de la tuerca queda oculto. */
 .gear-filter { display: none; }
-@media (max-width: 640px) {
-  .lbl-filter { display: none; }
-  .gear-filter { display: block; }
-}
 .ob-side-title.mayoristas  { background: linear-gradient(90deg,rgba(246,70,93,.1),transparent);  color: var(--red);    }
 .ob-side-title.smallbuyers { background: linear-gradient(90deg,rgba(199,146,234,.1),transparent); color: var(--purple); }
 .ob-head {
