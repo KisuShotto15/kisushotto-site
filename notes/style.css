@@ -1173,7 +1173,10 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
   opacity: 0;
   transition: transform 0.22s ease, opacity 0.22s ease;
   white-space: nowrap;
-  pointer-events: auto;
+  /* The pill sits where the thumb scrolls — let touches pass through to the
+     notes grid so the list stays scrollable while the toast is visible.
+     Only the Deshacer button re-enables pointer events. */
+  pointer-events: none;
 }
 .swipe-toast.swipe-toast-show {
   opacity: 1;
@@ -1184,6 +1187,7 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
   color: var(--accent); font-weight: 700;
   font-size: 14px; padding: 4px 10px;
   cursor: pointer; border-radius: 999px;
+  pointer-events: auto;
 }
 .swipe-toast-undo:hover { background: rgba(255,255,255,0.08); }
 .swipe-toast-error {
