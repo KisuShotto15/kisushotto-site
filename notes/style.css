@@ -1168,11 +1168,13 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
   padding: 10px 8px 10px 18px;
   display: flex; align-items: center; gap: 6px;
   font-size: 14px; color: var(--text);
+  text-align: center;
   box-shadow: 0 4px 20px rgba(0,0,0,0.45);
   z-index: 200;
   opacity: 0;
   transition: transform 0.22s ease, opacity 0.22s ease;
-  white-space: nowrap;
+  /* No nowrap: a long message must wrap inside max-width instead of
+     overflowing the pill and getting clipped at the screen edge. */
   /* The pill sits where the thumb scrolls — let touches pass through to the
      notes grid so the list stays scrollable while the toast is visible.
      Only the Deshacer button re-enables pointer events. */
@@ -1188,6 +1190,7 @@ hr { border: none; height: 1px; background: var(--border); margin: 12px 0; }
   font-size: 14px; padding: 4px 10px;
   cursor: pointer; border-radius: 999px;
   pointer-events: auto;
+  flex-shrink: 0; white-space: nowrap;
 }
 .swipe-toast-undo:hover { background: rgba(255,255,255,0.08); }
 .swipe-toast-error {
