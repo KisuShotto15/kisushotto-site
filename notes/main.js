@@ -720,7 +720,9 @@ function showUndoToast(message, undoFn, commitFn) {
     finished = true;
     clearTimeout(_undoToastTimer);
     toast.classList.remove('swipe-toast-show');
-    setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 280);
+    // Always remove THIS element; only clear the shared ref if it still points
+    // here (a replacing toast may have already taken over _undoToast).
+    setTimeout(() => { toast.remove(); if (_undoToast === toast) _undoToast = null; }, 280);
     if (kind === 'undo') undoFn?.();
     else commitFn?.();
   };
@@ -755,7 +757,7 @@ function showErrorToast(message) {
     finished = true;
     clearTimeout(_undoToastTimer);
     toast.classList.remove('swipe-toast-show');
-    setTimeout(() => { if (_undoToast === toast) { toast.remove(); _undoToast = null; } }, 280);
+    setTimeout(() => { toast.remove(); if (_undoToast === toast) _undoToast = null; }, 280);
   };
   toast._dismiss = dismiss;
 
@@ -1071,25 +1073,20 @@ function wireCard(card) {
         });
       }, 180);
 
+      // Archive immediately so a mid-window render() (e.g. background sync)
+      // keeps the note hidden instead of flashing it back.
+      n.archived = true;
+      n.last_modified = Date.now();
+      saveNoteLocal(n);
+
       showUndoToast('Nota archivada',
         () => {
-          card.style.transition = 'max-height 0.18s ease, margin-bottom 0.18s ease, transform 0.2s ease-out, opacity 0.2s ease-out';
-          card.style.maxHeight = '';
-          card.style.marginBottom = '';
-          card.style.transform = '';
-          card.style.opacity = '';
-          card.style.pointerEvents = '';
-          card.style.overflow = '';
-          setTimeout(() => {
-            card.style.transition = '';
-            card.style.willChange = '';
-          }, 220);
-        },
-        () => {
-          n.archived = true;
+          n.archived = false;
           n.last_modified = Date.now();
           saveNoteLocal(n);
-        }
+          render();
+        },
+        () => { render(); }
       );
     } else {
       resetCard();
