@@ -10,7 +10,7 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["BotScheduler"]
+new_sqlite_classes = ["BotScheduler"]
 
 # Self-heal: cada minuto re-asegura que la alarm este armada.
 [triggers]
