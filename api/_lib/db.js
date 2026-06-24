@@ -67,7 +67,10 @@ export async function ensureSchema() {
     status TEXT,
     log JSONB,
     last_tick TIMESTAMPTZ,
+    client_seen TIMESTAMPTZ,
     updated_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // client_seen: latido de la app abierta. Si esta fresco, el servidor NO busca (evita duplicar).
+  await sql`ALTER TABLE monitor_state ADD COLUMN IF NOT EXISTS client_seen TIMESTAMPTZ`;
   schemaReady = true;
 }

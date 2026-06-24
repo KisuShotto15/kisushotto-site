@@ -61,7 +61,7 @@ export default async function handler(req, res) {
   }
 
   // Control del monitor server-side (alertas Telegram 24/7). No requiere creds Binance.
-  if (path === '/monitor-enable' || path === '/monitor-disable' || path === '/monitor-state') {
+  if (path === '/monitor-enable' || path === '/monitor-disable' || path === '/monitor-state' || path === '/monitor-heartbeat') {
     try {
       await ensureSchema();
       if (path === '/monitor-enable') {
@@ -78,6 +78,11 @@ export default async function handler(req, res) {
       }
       if (path === '/monitor-disable') {
         await sql`UPDATE monitor_state SET enabled = false, status = 'Detenido', updated_at = now() WHERE user_id = ${user.uid}`;
+        return res.status(200).json({ ok: true });
+      }
+      if (path === '/monitor-heartbeat') {
+        // La app abierta avisa que esta refrescando; el servidor se queda quieto mientras tanto.
+        await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
         return res.status(200).json({ ok: true });
       }
       const rows = await sql`SELECT enabled, status, last_tick, log FROM monitor_state WHERE user_id = ${user.uid}`;

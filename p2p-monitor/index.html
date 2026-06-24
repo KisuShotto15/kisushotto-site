@@ -1591,6 +1591,7 @@ function availArrowHtml(d) {
 // Un solo batch combinado: paginas may + small + buy en 1 request Vercel
 var MAY_PAGES = 2, SMALL_PAGES = 3;
 async function fetchOnce() {
+  monitorHeartbeat();
   document.getElementById('last-update').textContent = 'Cargando...';
   try {
     var bodies = [];
@@ -3005,7 +3006,17 @@ function loadTgConfig() {
 }
 
 // ── Monitor 24/7 (server-side) ────────────────────────
-var MON24 = { enabled: false };
+var MON24 = { enabled: false, lastHb: 0 };
+
+// Latido: avisa al servidor que la app esta abierta y refrescando, para que NO duplique
+// la busqueda ni las alertas mientras tanto. Throttle ~30s.
+function monitorHeartbeat() {
+  if (!MON24.enabled || !SESSION.token) return;
+  var now = Date.now();
+  if (now - MON24.lastHb < 28000) return;
+  MON24.lastHb = now;
+  botCallWorker('/monitor-heartbeat').catch(function(){});
+}
 
 function monitorServerConfig() {
   return {
@@ -3029,7 +3040,7 @@ function monitorServerConfig() {
 async function monitorServerEnable() {
   if (!SESSION.token) { renderMon24(); return; }
   if (!TG.token || !TG.chatId) { MON24.enabled = false; renderMon24('Sin Telegram — solo vista local'); return; }
-  try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; renderMon24('Corriendo en el servidor'); }
+  try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; MON24.lastHb = Date.now(); botCallWorker('/monitor-heartbeat').catch(function(){}); renderMon24('Corriendo en el servidor'); }
   catch(e) { MON24.enabled = false; renderMon24('Error 24/7: ' + e.message); }
 }
 

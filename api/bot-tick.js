@@ -35,6 +35,12 @@ function inQuietHours(start, end, now) {
 
 async function tickMonitor(row, now) {
   const cfg = row.config || {};
+
+  // Si la app esta abierta y refrescando (latido fresco), el cliente cubre el monitor:
+  // el servidor no busca ni alerta (evita duplicar requests a Binance y mensajes Telegram).
+  const seenMs = row.client_seen ? now - new Date(row.client_seen).getTime() : Infinity;
+  if (seenMs < 70 * 1000) return null;
+
   const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now);
   const refreshSec = silent ? (cfg.quietRefreshSec || 180) : (cfg.refreshSec || 30);
 
@@ -199,7 +205,7 @@ export default async function handler(req, res) {
 
     // Monitor server-side (alertas Telegram 24/7 con silencio nocturno)
     const mrows = await sql`
-      SELECT user_id, config, price_hist, cooldowns, log, last_tick
+      SELECT user_id, config, price_hist, cooldowns, log, last_tick, client_seen
       FROM monitor_state WHERE enabled = true LIMIT ${MAX_USERS}`;
     let monitored = 0;
     for (const row of mrows) {
