@@ -1,0 +1,24 @@
+name = "p2p-bot-scheduler"
+main = "src/index.js"
+compatibility_date = "2025-04-10"
+
+# Durable Object que se auto-agenda (alarm) cada TICK_MS y dispara /api/bot-tick en Vercel.
+[durable_objects]
+bindings = [
+  { name = "SCHEDULER", class_name = "BotScheduler" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["BotScheduler"]
+
+# Self-heal: cada minuto re-asegura que la alarm este armada.
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+VERCEL_URL = "https://kisushotto-site.vercel.app"
+TICK_MS = "18000"
+
+# Secreto compartido con Vercel (header x-bot-secret). Setear con:
+#   wrangler secret put BOT_TICK_SECRET

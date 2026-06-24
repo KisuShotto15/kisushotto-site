@@ -38,5 +38,18 @@ export async function ensureSchema() {
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // Estado del bot por usuario (ejecucion server-side via /api/bot-tick).
+  await sql`CREATE TABLE IF NOT EXISTS bot_state (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    config JSONB,
+    ad_number TEXT,
+    current_price NUMERIC,
+    last_reprice TIMESTAMPTZ,
+    last_tick TIMESTAMPTZ,
+    status TEXT,
+    log JSONB,
+    updated_at TIMESTAMPTZ DEFAULT now()
+  )`;
   schemaReady = true;
 }

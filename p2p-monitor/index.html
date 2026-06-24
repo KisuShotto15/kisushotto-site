@@ -1300,7 +1300,7 @@ function authLogout() {
 function enterApp() {
   var g = document.getElementById('login-gate');
   if (g) g.style.display = 'none';
-  if (!window._appBooted) { window._appBooted = true; try { hydrateServerHistory(); } catch(e) {} }
+  if (!window._appBooted) { window._appBooted = true; try { hydrateServerHistory(); } catch(e) {} try { hydrateBotState(); } catch(e) {} }
 }
 
 // Al cargar: si hay sesion valida (email autorizado), entra; si no, queda el muro.
@@ -2734,19 +2734,29 @@ async function botInitialCycle(allowPaused) {
   }
 }
 
+function botServerConfig() {
+  return {
+    adNo: BOT_CFG.adNo,
+    sellPrice: BOT_CFG.sellPrice,
+    minSpread: BOT_CFG.minSpread,
+    minLimit: BOT_CFG.minLimit,
+    increment: BOT_CFG.increment,
+    maxGap: BOT_CFG.maxGap,
+    limitThreshold: BOT_CFG.limitThreshold,
+    myNick: BOT_CFG.myNick || BOT.myNick || '',
+    commission: CFG.commission || 0,
+    verifiedOnly: CFG.verifiedOnly !== false,
+    payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [ACTIVE_PAY]
+  };
+}
+
 async function botToggle() {
   if (BOT.running) {
     // ── STOP ────────────────────────────────────────────
     BOT.running = false;
-    clearInterval(BOT.timer);
-    BOT.timer = null;
-    keepAwakeStop();
+    stopBotPoller();
     stopActivityWatcher();
     stopOrdersWatcher();
-    BOT.basePrice = null;
-    BOT.ceiling = null;
-    BOT.cachedAd = null;
-    BOT.cachedAdAt = 0;
     BOT.adPayTypes = [];
     updateBotPayBadge();
     updateManualBalance();
@@ -2761,7 +2771,8 @@ async function botToggle() {
     botSetStatus('Deteniendo...', '#888');
     botLog('— Bot detenido —', '#555');
 
-    // Pausar el anuncio en Binance
+    // Detener el bot en el servidor primero, luego pausar el anuncio
+    try { await botCallWorker('/bot-disable'); } catch(e) {}
     if (BOT.adNumber) {
       try {
         var res = await botCallWorker('/toggle-ad', { advNo: BOT.adNumber, advStatus: 3 });
@@ -2787,40 +2798,35 @@ async function botToggle() {
 
     if (!BOT.adNumber && BOT_CFG.adNo) BOT.adNumber = BOT_CFG.adNo;
 
-    // 1. Leer el anuncio (aún PAUSADO) para obtener adNumber y datos actuales
-    if (!BOT.adNumber) {
+    // 1. Leer el anuncio (aún PAUSADO) para adNumber + métodos de pago
+    if (!BOT.adNumber || !BOT.adPayTypes.length) {
       botSetStatus('Leyendo anuncio...', '#F0B90B');
       try {
         var adPre = await botGetMyAd(true);
         if (adPre) {
           BOT.adNumber   = adPre.adNumber || adPre.advNo;
           BOT.myMinLimit = parseFloat(adPre.minSingleTransAmount);
+          BOT.adPayTypes = (adPre.tradeMethods || []).map(function(m){ return m.identifier; })
+                            .filter(function(id){ return id && GENERIC_PAY_IDS.indexOf(id) === -1; });
+          updateBotPayBadge();
         } else {
-          botLog('⚠ Configura el Ad Number para activar/pausar automáticamente', '#F0B90B');
+          botLog('⚠ Selecciona tu anuncio para activarlo/pausarlo', '#F0B90B');
         }
       } catch(e) {
         botLog('⚠ No se pudo leer el anuncio: ' + e.message, '#F6465D');
       }
     }
 
-    // 2. Aplicar límite mínimo mientras el anuncio está PAUSADO
+    // 2. Reprice inicial + límite mínimo mientras el anuncio está PAUSADO
     BOT.appliedMinLimit = 0;
     if (BOT_CFG.minLimit > 0 && BOT.adNumber) {
       botSetStatus('Aplicando límite mínimo...', '#F0B90B');
-      try {
-        await botUpdateMinLimit(BOT.adNumber, BOT_CFG.minLimit);
-        BOT.appliedMinLimit = BOT_CFG.minLimit;
-        botLog('📏 Límite mínimo → ' + fmtM(BOT_CFG.minLimit) + ' VES', '#8b949e');
-      } catch(e) {
-        botLog('⚠ Límite mínimo: ' + e.message, '#F6465D');
-      }
+      try { await botUpdateMinLimit(BOT.adNumber, BOT_CFG.minLimit); BOT.appliedMinLimit = BOT_CFG.minLimit; } catch(e) {}
     }
-
-    // 3. Reprice inicial mientras el anuncio está PAUSADO (Binance permite editar precio en pausa)
     botSetStatus('Posicionando...', '#F0B90B');
-    await botInitialCycle(true);
+    try { await botInitialCycle(true); } catch(e) {}
 
-    // 4. Activar el anuncio
+    // 3. Activar el anuncio
     botSetStatus('Activando anuncio...', '#F0B90B');
     try {
       if (BOT.adNumber) {
@@ -2833,14 +2839,89 @@ async function botToggle() {
       botLog('⚠ No se pudo activar el anuncio: ' + e.message, '#F6465D');
     }
 
+    // 4. Encender el bot en el SERVIDOR (repricia 24/7 aunque cierres la página)
+    try {
+      await botCallWorker('/bot-enable', { config: botServerConfig() });
+      botLog('☁ Bot corriendo en el servidor (~18s)', '#1D9E75');
+    } catch(e) {
+      botLog('⚠ No se pudo encender el bot en el servidor: ' + e.message, '#F6465D');
+    }
+
     BOT.running = true;
-    BOT.lastReprice = 0;
     botSetStatus('✓ Bot activo', '#1D9E75');
-    BOT.timer = setInterval(botCycle, 20000);
-    keepAwakeStart();
+    startBotPoller();
     startActivityWatcher();
     startOrdersWatcher();
   }
+}
+
+// ── Poller de estado del bot server-side ──────────────
+var BOT_POLL = { timer: null, lastLogTs: 0 };
+var BOT_LOG_COLORS = { up: '#1D9E75', down: '#5dade2', warn: '#F0B90B', error: '#E24B4A', info: '#8b949e' };
+
+function startBotPoller() {
+  stopBotPoller();
+  pollBotState();
+  BOT_POLL.timer = setInterval(pollBotState, 6000);
+}
+function stopBotPoller() {
+  if (BOT_POLL.timer) { clearInterval(BOT_POLL.timer); BOT_POLL.timer = null; }
+}
+
+async function pollBotState() {
+  if (!SESSION.token) return;
+  try {
+    var d = await botCallWorker('/bot-state');
+    renderBotState(d);
+  } catch(e) {}
+}
+
+function renderBotState(d) {
+  if (!d) return;
+  if (d.ad_number) BOT.adNumber = d.ad_number;
+  if (d.status) botSetStatus(d.status, d.status.indexOf('Error') === 0 || d.status.indexOf('Detenido:') === 0 ? '#E24B4A' : '#1D9E75');
+  if (d.current_price != null) {
+    var p = parseFloat(d.current_price);
+    BOT.currentPrice = p;
+    document.getElementById('bot-cur-price').textContent = p.toFixed(3) + ' Bs';
+    updateBotPriceColor();
+    updateTopbarBotPrice(p);
+  }
+  // Pintar entradas nuevas del log del servidor
+  if (Array.isArray(d.log)) {
+    d.log.forEach(function(e){
+      if (e && e.ts > BOT_POLL.lastLogTs) {
+        botLog(e.msg, BOT_LOG_COLORS[e.level] || '#8b949e');
+        if (TG.token && TG.chatId && (e.level === 'up' || e.level === 'down' || e.level === 'error')) sendTelegram('🤖 ' + e.msg);
+      }
+    });
+    var maxTs = d.log.reduce(function(m, e){ return e && e.ts > m ? e.ts : m; }, BOT_POLL.lastLogTs);
+    BOT_POLL.lastLogTs = maxTs;
+  }
+  // Si el servidor se auto-apagó (fondos bajos), reflejarlo en la UI
+  if (d.enabled === false && BOT.running) {
+    BOT.running = false;
+    stopBotPoller();
+    document.getElementById('bot-toggle').textContent = '▶ Iniciar Bot';
+    document.getElementById('bot-toggle').style.background = '';
+  }
+}
+
+// Al cargar: si el bot quedó encendido en el servidor, reflejar estado + reanudar poller.
+async function hydrateBotState() {
+  if (!SESSION.token) return;
+  try {
+    var d = await botCallWorker('/bot-state');
+    if (d && d.enabled) {
+      BOT.running = true;
+      document.getElementById('bot-toggle').textContent = '⏹ Detener Bot';
+      document.getElementById('bot-toggle').style.background = '#E24B4A';
+      document.getElementById('bot-live').style.display = 'grid';
+      BOT_POLL.lastLogTs = Array.isArray(d.log) ? d.log.reduce(function(m,e){ return e&&e.ts>m?e.ts:m; }, 0) : 0;
+      renderBotState(d);
+      startBotPoller();
+    }
+  } catch(e) {}
 }
 
 // ── Keep-awake: audio silencioso para que el OS no suspenda el tab ────────────

@@ -18,6 +18,29 @@ export default async function handler(req, res) {
 
   const { path, params } = req.body || {};
 
+  // Control del bot server-side (no requiere creds Binance descifradas aqui).
+  if (path === '/bot-enable' || path === '/bot-disable' || path === '/bot-state') {
+    try {
+      await ensureSchema();
+      if (path === '/bot-enable') {
+        const cfg = JSON.stringify((params && params.config) || {});
+        await sql`
+          INSERT INTO bot_state (user_id, enabled, config, status, updated_at)
+          VALUES (${user.uid}, true, ${cfg}::jsonb, 'Iniciando...', now())
+          ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfg}::jsonb, status = 'Iniciando...', updated_at = now()`;
+        return res.status(200).json({ ok: true });
+      }
+      if (path === '/bot-disable') {
+        await sql`UPDATE bot_state SET enabled = false, status = 'Detenido', updated_at = now() WHERE user_id = ${user.uid}`;
+        return res.status(200).json({ ok: true });
+      }
+      const rows = await sql`SELECT enabled, config, ad_number, current_price, last_reprice, last_tick, status, log FROM bot_state WHERE user_id = ${user.uid}`;
+      return res.status(200).json(rows[0] || { enabled: false });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   // Credenciales Binance del usuario autenticado (cifradas en DB)
   let key, secret;
   try {
