@@ -1683,6 +1683,18 @@ function toggleMonitor() {
   }
 }
 
+// Pestana oculta: pausa el fetch visual (sin apagar el monitor). Deja de latir → a los ~70s
+// el servidor toma el relevo (notificaciones siguen). Al volver, reanuda y el servidor cede.
+document.addEventListener('visibilitychange', function() {
+  if (!ST.running) return;
+  if (document.hidden) {
+    clearInterval(ST.timer); ST.timer = null;
+  } else if (!ST.timer) {
+    fetchOnce();
+    ST.timer = setInterval(fetchOnce, CFG.interval * 1000);
+  }
+});
+
 function setBadge(live) {
   document.getElementById('live-badge').className = 'badge ' + (live ? 'badge-live' : 'badge-off');
   document.getElementById('live-dot').className   = 'dot ' + (live ? 'dot-live' : 'dot-off');
@@ -3020,7 +3032,7 @@ function monitorHeartbeat() {
 
 function monitorServerConfig() {
   return {
-    refreshSec: CFG.interval || 30,
+    refreshSec: 30, // servidor (app cerrada/oculta): 30s. La vista abierta sigue a CFG.interval (10s).
     quietStart: document.getElementById('cfg-mon-qstart').value || '',
     quietEnd:   document.getElementById('cfg-mon-qend').value   || '',
     quietRefreshSec: parseInt(document.getElementById('cfg-mon-qref').value) || 180,
