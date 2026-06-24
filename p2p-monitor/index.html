@@ -2954,28 +2954,6 @@ async function hydrateBotState() {
   } catch(e) {}
 }
 
-// ── Keep-awake: audio silencioso para que el OS no suspenda el tab ────────────
-var _kaCtx = null, _kaNode = null;
-function keepAwakeStart() {
-  try {
-    if (_kaCtx) return;
-    _kaCtx = new (window.AudioContext || window.webkitAudioContext)();
-    var osc  = _kaCtx.createOscillator();
-    var gain = _kaCtx.createGain();
-    gain.gain.value = 0.001;
-    osc.connect(gain);
-    gain.connect(_kaCtx.destination);
-    osc.start();
-    _kaNode = osc;
-  } catch(e) {}
-}
-function keepAwakeStop() {
-  try {
-    if (_kaNode) { _kaNode.stop(); _kaNode = null; }
-    if (_kaCtx)  { _kaCtx.close(); _kaCtx  = null; }
-  } catch(e) {}
-}
-
 // ── Telegram ──────────────────────────────────────────
 var TG = { token: '', chatId: '' };
 
