@@ -849,12 +849,11 @@ input:focus {
         </details>
         <details style="margin-top:6px">
           <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Monitor 24/7</summary>
-          <div class="cfg-row"><span>Servidor</span><button class="btn btn-sm" id="mon24-toggle" type="button" onclick="monitorToggle()">Activar</button></div>
           <div id="mon24-status" style="font-size:11px;color:var(--text-3);margin:0 0 6px"></div>
           <div class="cfg-row"><span>Silencio desde</span><input type="time" id="cfg-mon-qstart" value="00:00" style="width:96px"></div>
           <div class="cfg-row"><span>Silencio hasta</span><input type="time" id="cfg-mon-qend" value="07:00" style="width:96px"></div>
           <div class="cfg-row"><span>Refresco nocturno (seg)</span><input type="number" id="cfg-mon-qref" value="180" min="60" max="600" step="30"></div>
-          <div style="font-size:11px;color:var(--text-3);margin-top:4px">Corre en el servidor 24/7 y avisa por el Telegram del bot. De noche silencia todas las alertas y refresca más lento.</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">Al pulsar Iniciar también corre 24/7 en el servidor y avisa por el Telegram del bot (requiere token+chat). De noche silencia las alertas y refresca más lento.</div>
         </details>
         <div class="gear-filter">
           <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="0" step="100000"></div>
@@ -1655,19 +1654,31 @@ async function fetchOnce() {
   }
 }
 
+function startMonitorView() {
+  if (ST.running) return;
+  ST.running = true;
+  fetchOnce();
+  ST.timer = setInterval(fetchOnce, CFG.interval * 1000);
+  document.getElementById('btn-start').textContent = '⏹ Detener';
+  setBadge(true);
+}
+
+function stopMonitorView() {
+  ST.running = false;
+  clearInterval(ST.timer); ST.timer = null;
+  document.getElementById('btn-start').textContent = '▶ Iniciar';
+  setBadge(false);
+}
+
+// Un solo boton: arranca/detiene la vista (tablas) Y el monitor 24/7 server-side.
 function toggleMonitor() {
   if (ST.running) {
-    ST.running = false;
-    clearInterval(ST.timer); ST.timer = null;
-    document.getElementById('btn-start').textContent = '▶ Iniciar';
-    setBadge(false);
+    stopMonitorView();
+    monitorServerDisable();
   } else {
     saveConfig();
-    ST.running = true;
-    fetchOnce();
-    ST.timer = setInterval(fetchOnce, CFG.interval * 1000);
-    document.getElementById('btn-start').textContent = '⏹ Detener';
-    setBadge(true);
+    startMonitorView();
+    monitorServerEnable();
   }
 }
 
@@ -3014,28 +3025,22 @@ function monitorServerConfig() {
   };
 }
 
-async function monitorToggle() {
-  if (!SESSION.token) { toast('Inicia sesión primero'); return; }
-  if (MON24.enabled) {
-    try { await botCallWorker('/monitor-disable'); MON24.enabled = false; toast('Monitor 24/7 detenido'); }
-    catch(e) { toast('Error: ' + e.message); return; }
-  } else {
-    if (!TG.token || !TG.chatId) { toast('Configura Telegram (token + chat) en el bot'); return; }
-    saveConfig();
-    try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; toast('Monitor 24/7 activo'); }
-    catch(e) { toast('Error: ' + e.message); return; }
-  }
-  renderMon24();
+// Encender/apagar el monitor server-side (lo dispara el boton Iniciar, no un boton aparte).
+async function monitorServerEnable() {
+  if (!SESSION.token) { renderMon24(); return; }
+  if (!TG.token || !TG.chatId) { MON24.enabled = false; renderMon24('Sin Telegram — solo vista local'); return; }
+  try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; renderMon24('Corriendo en el servidor'); }
+  catch(e) { MON24.enabled = false; renderMon24('Error 24/7: ' + e.message); }
+}
+
+async function monitorServerDisable() {
+  try { await botCallWorker('/monitor-disable'); } catch(e) {}
+  MON24.enabled = false; renderMon24();
 }
 
 function renderMon24(statusText) {
-  var btn = document.getElementById('mon24-toggle');
-  var st  = document.getElementById('mon24-status');
-  if (!btn) return;
-  btn.textContent = MON24.enabled ? '⏹ Detener' : 'Activar';
-  btn.style.background = MON24.enabled ? '#1D9E75' : '';
-  btn.style.color = MON24.enabled ? '#fff' : '';
-  if (st) st.textContent = MON24.enabled ? (statusText || 'Corriendo en el servidor') : '';
+  var st = document.getElementById('mon24-status');
+  if (st) st.textContent = MON24.enabled ? (statusText || 'Corriendo en el servidor') : (statusText || '');
 }
 
 async function hydrateMon24() {
@@ -3044,6 +3049,8 @@ async function hydrateMon24() {
     var d = await botCallWorker('/monitor-state');
     MON24.enabled = !!(d && d.enabled);
     renderMon24(d && d.status);
+    // Si el monitor 24/7 quedo activo, arranca la vista (tablas a CFG.interval) sin pulsar Iniciar.
+    if (MON24.enabled && !ST.running) startMonitorView();
   } catch(e) {}
 }
 
