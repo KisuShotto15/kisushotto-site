@@ -18,6 +18,25 @@ export default async function handler(req, res) {
 
   const { path, params } = req.body || {};
 
+  // Preferencias del usuario (sync entre dispositivos). No requiere creds Binance.
+  if (path === '/settings-get' || path === '/settings-save') {
+    try {
+      await ensureSchema();
+      if (path === '/settings-save') {
+        const data = JSON.stringify((params && params.data) || {});
+        await sql`
+          INSERT INTO user_settings (user_id, data, updated_at)
+          VALUES (${user.uid}, ${data}::jsonb, now())
+          ON CONFLICT (user_id) DO UPDATE SET data = ${data}::jsonb, updated_at = now()`;
+        return res.status(200).json({ ok: true });
+      }
+      const rows = await sql`SELECT data FROM user_settings WHERE user_id = ${user.uid}`;
+      return res.status(200).json({ data: rows[0] ? rows[0].data : null });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   // Control del bot server-side (no requiere creds Binance descifradas aqui).
   if (path === '/bot-enable' || path === '/bot-disable' || path === '/bot-state') {
     try {

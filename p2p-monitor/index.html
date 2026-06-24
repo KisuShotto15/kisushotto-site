@@ -1120,6 +1120,7 @@ function setPayMethod(id) {
   ACTIVE_PAY = id;
   try { localStorage.setItem('p2p_pay_method', id); } catch(e) {}
   if (typeof fetchOnce === 'function') fetchOnce();
+  saveUserSettings();
 }
 
 function updateBotPriceColor() {
@@ -1169,6 +1170,33 @@ try {
 } catch(e) {}
 
 function saveSession() { try { localStorage.setItem('p2p_session', JSON.stringify(SESSION)); } catch(e) {} }
+
+// ── Sync de preferencias por cuenta (last-write-wins) ──
+var _saveSettingsT = null;
+function saveUserSettings() {
+  if (!SESSION.token) return;
+  clearTimeout(_saveSettingsT);
+  _saveSettingsT = setTimeout(function() {
+    var data = { cfg: CFG, bot: BOT_CFG, pay: ACTIVE_PAY };
+    botCallWorker('/settings-save', { data: data }).catch(function(){});
+  }, 800);
+}
+
+async function loadUserSettings() {
+  if (!SESSION.token) return;
+  try {
+    var d = await botCallWorker('/settings-get');
+    var s = d && d.data;
+    if (!s) return;
+    if (s.cfg) localStorage.setItem('p2p_cfg2', JSON.stringify(s.cfg));
+    if (s.bot) localStorage.setItem('p2p_bot_cfg', JSON.stringify(s.bot));
+    if (s.pay) localStorage.setItem('p2p_pay_method', s.pay);
+    // Reusar los loaders existentes para repintar inputs desde localStorage
+    loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod();
+    updateCommissionLabels(); updateVerToggle(); botUpdateCeiling();
+    if (ST.running) fetchOnce();
+  } catch(e) {}
+}
 
 async function apiPost(path, body, auth) {
   var headers = { 'Content-Type': 'application/json' };
@@ -1300,7 +1328,7 @@ function authLogout() {
 function enterApp() {
   var g = document.getElementById('login-gate');
   if (g) g.style.display = 'none';
-  if (!window._appBooted) { window._appBooted = true; try { hydrateServerHistory(); } catch(e) {} try { hydrateBotState(); } catch(e) {} }
+  if (!window._appBooted) { window._appBooted = true; try { hydrateServerHistory(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} }
 }
 
 // Al cargar: si hay sesion valida (email autorizado), entra; si no, queda el muro.
@@ -2279,6 +2307,7 @@ function saveBotConfig() {
   st.textContent = '✓ Guardado'; st.style.color = '#1D9E75';
   var tgSt = document.getElementById('tg-st');
   if (tgSt) { tgSt.textContent = (TG.token && TG.chatId) ? '✓' : ''; }
+  saveUserSettings();
 }
 
 function loadBotConfig() {
@@ -2381,6 +2410,7 @@ async function loadMyAds() {
 function onAdSelect() {
   BOT_CFG.adNo = document.getElementById('cfg-bot-adsel').value;
   localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
+  saveUserSettings();
 }
 
 async function botGetMyAd(allowPaused) {
@@ -2990,6 +3020,7 @@ function saveConfig() {
   updateCommissionLabels();
   botUpdateCeiling();
   fetchOnce();
+  saveUserSettings();
   toast('Guardado');
 }
 
@@ -3016,6 +3047,7 @@ function toggleVerified() {
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   updateVerToggle();
   fetchOnce();
+  saveUserSettings();
 }
 
 function updateVerToggle() {
@@ -3036,6 +3068,7 @@ function setFilter(which, raw) {
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();
   fetchOnce();
+  saveUserSettings();
 }
 
 function syncFilterInputs() {

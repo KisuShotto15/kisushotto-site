@@ -38,6 +38,12 @@ export async function ensureSchema() {
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // Preferencias del usuario (config monitor + bot + metodo de pago) para sincronizar dispositivos.
+  await sql`CREATE TABLE IF NOT EXISTS user_settings (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    data JSONB,
+    updated_at TIMESTAMPTZ DEFAULT now()
+  )`;
   // Estado del bot por usuario (ejecucion server-side via /api/bot-tick).
   await sql`CREATE TABLE IF NOT EXISTS bot_state (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
