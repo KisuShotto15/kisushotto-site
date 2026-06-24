@@ -847,6 +847,15 @@ input:focus {
           <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
           <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
         </details>
+        <details style="margin-top:6px">
+          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Monitor 24/7</summary>
+          <div class="cfg-row"><span>Servidor</span><button class="btn btn-sm" id="mon24-toggle" type="button" onclick="monitorToggle()">Activar</button></div>
+          <div id="mon24-status" style="font-size:11px;color:var(--text-3);margin:0 0 6px"></div>
+          <div class="cfg-row"><span>Silencio desde</span><input type="time" id="cfg-mon-qstart" value="00:00" style="width:96px"></div>
+          <div class="cfg-row"><span>Silencio hasta</span><input type="time" id="cfg-mon-qend" value="07:00" style="width:96px"></div>
+          <div class="cfg-row"><span>Refresco nocturno (seg)</span><input type="number" id="cfg-mon-qref" value="180" min="60" max="600" step="30"></div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">Corre en el servidor 24/7 y avisa por el Telegram del bot. De noche silencia todas las alertas y refresca más lento.</div>
+        </details>
         <div class="gear-filter">
           <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="0" step="100000"></div>
           <div class="cfg-row"><span>Compra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
@@ -1154,7 +1163,10 @@ var CFG = {
   smallAmount: 59999,    // Monto a filtrar en sección Ref. Compra (VES)
   commission:  0.0,      // Comisión Binance por anuncio (%)
   buyAmount:   2000000,  // Monto mínimo para Sección Compra (VES)
-  verifiedOnly: true     // Solo comerciantes con insignia (aplica a monitor y bot)
+  verifiedOnly: true,    // Solo comerciantes con insignia (aplica a monitor y bot)
+  monQuietStart: '00:00',// Monitor 24/7: inicio del silencio nocturno (America/Caracas)
+  monQuietEnd:   '07:00',// Monitor 24/7: fin del silencio nocturno
+  monQuietRef:   180     // Monitor 24/7: refresco nocturno (seg)
 };
 
 var PROXY = 'https://kisushotto-site.vercel.app/api/p2p-search';
@@ -1328,7 +1340,7 @@ function authLogout() {
 function enterApp() {
   var g = document.getElementById('login-gate');
   if (g) g.style.display = 'none';
-  if (!window._appBooted) { window._appBooted = true; try { hydrateServerHistory(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} }
+  if (!window._appBooted) { window._appBooted = true; try { hydrateServerHistory(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} }
 }
 
 // Al cargar: si hay sesion valida (email autorizado), entra; si no, queda el muro.
@@ -2981,6 +2993,60 @@ function loadTgConfig() {
   } catch(e) {}
 }
 
+// ── Monitor 24/7 (server-side) ────────────────────────
+var MON24 = { enabled: false };
+
+function monitorServerConfig() {
+  return {
+    refreshSec: CFG.interval || 30,
+    quietStart: document.getElementById('cfg-mon-qstart').value || '',
+    quietEnd:   document.getElementById('cfg-mon-qend').value   || '',
+    quietRefreshSec: parseInt(document.getElementById('cfg-mon-qref').value) || 180,
+    spreadThr: CFG.spreadThr,
+    overboughtThr: CFG.overboughtThr,
+    weaknessThr: CFG.weaknessThr,
+    commission: CFG.commission || 0,
+    mayAmount: CFG.mayAmount,
+    smallAmount: CFG.smallAmount,
+    verifiedOnly: CFG.verifiedOnly !== false,
+    payTypes: [ACTIVE_PAY],
+    tg: { token: TG.token, chatId: TG.chatId }
+  };
+}
+
+async function monitorToggle() {
+  if (!SESSION.token) { toast('Inicia sesión primero'); return; }
+  if (MON24.enabled) {
+    try { await botCallWorker('/monitor-disable'); MON24.enabled = false; toast('Monitor 24/7 detenido'); }
+    catch(e) { toast('Error: ' + e.message); return; }
+  } else {
+    if (!TG.token || !TG.chatId) { toast('Configura Telegram (token + chat) en el bot'); return; }
+    saveConfig();
+    try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; toast('Monitor 24/7 activo'); }
+    catch(e) { toast('Error: ' + e.message); return; }
+  }
+  renderMon24();
+}
+
+function renderMon24(statusText) {
+  var btn = document.getElementById('mon24-toggle');
+  var st  = document.getElementById('mon24-status');
+  if (!btn) return;
+  btn.textContent = MON24.enabled ? '⏹ Detener' : 'Activar';
+  btn.style.background = MON24.enabled ? '#1D9E75' : '';
+  btn.style.color = MON24.enabled ? '#fff' : '';
+  if (st) st.textContent = MON24.enabled ? (statusText || 'Corriendo en el servidor') : '';
+}
+
+async function hydrateMon24() {
+  if (!SESSION.token) return;
+  try {
+    var d = await botCallWorker('/monitor-state');
+    MON24.enabled = !!(d && d.enabled);
+    renderMon24(d && d.status);
+  } catch(e) {}
+}
+
 // ── Config ────────────────────────────────────────────
 function saveConfig() {
   CFG.interval      = Math.max(10, parseInt(document.getElementById('cfg-int').value) || 30);
@@ -2992,6 +3058,9 @@ function saveConfig() {
   CFG.smallAmount = parseFloat(document.getElementById('cfg-small-amount').value) || 59999;
   CFG.commission  = parseFloat(document.getElementById('cfg-commission').value)   || 0;
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
+  CFG.monQuietStart = document.getElementById('cfg-mon-qstart').value || '00:00';
+  CFG.monQuietEnd   = document.getElementById('cfg-mon-qend').value   || '07:00';
+  CFG.monQuietRef   = parseInt(document.getElementById('cfg-mon-qref').value) || 180;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();
   if (ST.running) { clearInterval(ST.timer); ST.timer = setInterval(fetchOnce, CFG.interval * 1000); }
@@ -2999,6 +3068,7 @@ function saveConfig() {
   botUpdateCeiling();
   fetchOnce();
   saveUserSettings();
+  if (MON24.enabled) { botCallWorker('/monitor-enable', { config: monitorServerConfig() }).catch(function(){}); }
   toast('Guardado');
 }
 
@@ -3015,6 +3085,9 @@ function loadConfig() {
     document.getElementById('cfg-small-amount').value = CFG.smallAmount;
     document.getElementById('cfg-commission').value   = CFG.commission;
     document.getElementById('cfg-buy-amount').value   = CFG.buyAmount;
+    if (CFG.monQuietStart) document.getElementById('cfg-mon-qstart').value = CFG.monQuietStart;
+    if (CFG.monQuietEnd)   document.getElementById('cfg-mon-qend').value   = CFG.monQuietEnd;
+    if (CFG.monQuietRef)   document.getElementById('cfg-mon-qref').value   = CFG.monQuietRef;
   } catch(e) {}
   updateVerToggle();
 }

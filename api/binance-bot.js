@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema } from './_lib/db.js';
-import { decrypt } from './_lib/crypto.js';
+import { decrypt, encrypt } from './_lib/crypto.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -54,6 +54,33 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
       const rows = await sql`SELECT enabled, config, ad_number, current_price, last_reprice, last_tick, status, log FROM bot_state WHERE user_id = ${user.uid}`;
+      return res.status(200).json(rows[0] || { enabled: false });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // Control del monitor server-side (alertas Telegram 24/7). No requiere creds Binance.
+  if (path === '/monitor-enable' || path === '/monitor-disable' || path === '/monitor-state') {
+    try {
+      await ensureSchema();
+      if (path === '/monitor-enable') {
+        const cfg = (params && params.config) || {};
+        if (cfg.tg && cfg.tg.token) {
+          cfg.tg = { token_enc: encrypt(cfg.tg.token), chatId: cfg.tg.chatId || '' };
+        }
+        const cfgStr = JSON.stringify(cfg);
+        await sql`
+          INSERT INTO monitor_state (user_id, enabled, config, status, updated_at)
+          VALUES (${user.uid}, true, ${cfgStr}::jsonb, 'Iniciando...', now())
+          ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfgStr}::jsonb, status = 'Iniciando...', updated_at = now()`;
+        return res.status(200).json({ ok: true });
+      }
+      if (path === '/monitor-disable') {
+        await sql`UPDATE monitor_state SET enabled = false, status = 'Detenido', updated_at = now() WHERE user_id = ${user.uid}`;
+        return res.status(200).json({ ok: true });
+      }
+      const rows = await sql`SELECT enabled, status, last_tick, log FROM monitor_state WHERE user_id = ${user.uid}`;
       return res.status(200).json(rows[0] || { enabled: false });
     } catch (e) {
       return res.status(500).json({ error: e.message });

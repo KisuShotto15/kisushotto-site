@@ -57,5 +57,17 @@ export async function ensureSchema() {
     log JSONB,
     updated_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // Monitor server-side (alertas Telegram 24/7 con silencio nocturno), via /api/bot-tick.
+  await sql`CREATE TABLE IF NOT EXISTS monitor_state (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    config JSONB,
+    price_hist JSONB,
+    cooldowns JSONB,
+    status TEXT,
+    log JSONB,
+    last_tick TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT now()
+  )`;
   schemaReady = true;
 }

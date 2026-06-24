@@ -4,6 +4,8 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
+import { computeAlerts } from './_lib/monitor.js';
+import { sendTelegram } from './_lib/telegram.js';
 
 export const config = { maxDuration: 60 };
 
@@ -13,6 +15,56 @@ function pushLog(log, msg, level) {
   const arr = Array.isArray(log) ? log.slice(-19) : [];
   arr.push({ ts: Date.now(), msg, level: level || 'info' });
   return arr;
+}
+
+// ── Horario (America/Caracas, UTC-4 fijo) ──────────────
+function caracasMinutes(now) {
+  const d = new Date(now - 4 * 3600 * 1000);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+function hmToMin(hm) {
+  const [h, m] = String(hm || '').split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+function inQuietHours(start, end, now) {
+  if (!start || !end) return false;
+  const s = hmToMin(start), e = hmToMin(end), cur = caracasMinutes(now);
+  if (s === e) return false;
+  return s < e ? (cur >= s && cur < e) : (cur >= s || cur < e); // soporta franja nocturna
+}
+
+async function tickMonitor(row, now) {
+  const cfg = row.config || {};
+  const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now);
+  const refreshSec = silent ? (cfg.quietRefreshSec || 180) : (cfg.refreshSec || 30);
+
+  // Respetar la cadencia (el tick base es ~18s; aqui decidimos si toca refrescar).
+  if (row.last_tick && (now - new Date(row.last_tick).getTime()) < refreshSec * 1000) return null;
+
+  const pays = (cfg.payTypes && cfg.payTypes.length) ? cfg.payTypes : [];
+  const mayRaw = await publicSearch({ transAmount: cfg.mayAmount || 2000000, pays, maxPages: 2, tradeType: 'SELL' });
+  const smallRaw = await publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 3, tradeType: 'SELL' });
+
+  const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: row.price_hist, cooldowns: row.cooldowns, now, silent });
+
+  let log = row.log;
+  let token = '';
+  try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
+  const chatId = cfg.tg && cfg.tg.chatId;
+
+  if (!silent && out.alerts.length && token && chatId) {
+    for (const a of out.alerts) {
+      await sendTelegram(token, chatId, '<b>🟡 P2P — ' + a.title + '</b>\n' + a.desc);
+    }
+    log = pushLog(log, '📩 ' + out.alerts.length + ' alerta(s) → Telegram', 'info');
+  }
+
+  return {
+    priceHist: out.priceHist,
+    cooldowns: out.cooldowns,
+    log,
+    status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
+  };
 }
 
 function pickAd(ads, adNo) {
@@ -144,7 +196,34 @@ export default async function handler(req, res) {
         WHERE user_id = ${row.user_id}`;
       ticked++;
     }
-    return res.status(200).json({ ok: true, ticked });
+
+    // Monitor server-side (alertas Telegram 24/7 con silencio nocturno)
+    const mrows = await sql`
+      SELECT user_id, config, price_hist, cooldowns, log, last_tick
+      FROM monitor_state WHERE enabled = true LIMIT ${MAX_USERS}`;
+    let monitored = 0;
+    for (const row of mrows) {
+      let out;
+      try {
+        out = await tickMonitor(row, Date.now());
+      } catch (e) {
+        out = { priceHist: row.price_hist, cooldowns: row.cooldowns,
+                log: pushLog(row.log, 'Error: ' + e.message, 'error'), status: 'Error: ' + e.message };
+      }
+      if (out === null) continue; // no toca refrescar aun
+      await sql`
+        UPDATE monitor_state SET
+          price_hist = ${JSON.stringify(out.priceHist || [])}::jsonb,
+          cooldowns = ${JSON.stringify(out.cooldowns || {})}::jsonb,
+          log = ${JSON.stringify(out.log || [])}::jsonb,
+          status = ${out.status || null},
+          last_tick = now(),
+          updated_at = now()
+        WHERE user_id = ${row.user_id}`;
+      monitored++;
+    }
+
+    return res.status(200).json({ ok: true, ticked, monitored });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
