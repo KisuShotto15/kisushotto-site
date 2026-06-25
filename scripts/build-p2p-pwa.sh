@@ -10,8 +10,6 @@ mkdir -p "$OUT/icons" "$OUT/images"
 
 # App files
 cp p2p-monitor/index.html         "$OUT/index.html"
-cp p2p-monitor/decision-engine.js "$OUT/decision-engine.js"
-cp p2p-monitor/decision-journal.js "$OUT/decision-journal.js"
 
 # Rewrite manifest path: subdomain serves manifest.json at root
 sed -i 's|href="/manifests/p2p-monitor.json"|href="/manifest.json"|g' "$OUT/index.html"
