@@ -52,7 +52,10 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
     if (hist.length > 1) {
       let ref10 = null;
       for (let i = hist.length - 1; i >= 0; i--) {
-        if (now - hist[i].ts >= 9 * 60000) { ref10 = hist[i].price; break; }
+        const age = now - hist[i].ts;
+        // Solo una referencia real de ~10 min. Si la mas reciente "≥9 min" tiene >18 min,
+        // hubo un hueco (relevo/pausa): no hay momentum valido → evita falsas alertas.
+        if (age >= 9 * 60000) { if (age <= 18 * 60000) ref10 = hist[i].price; break; }
       }
       if (ref10 !== null) {
         const chg = (bestMay - ref10) / ref10 * 100;

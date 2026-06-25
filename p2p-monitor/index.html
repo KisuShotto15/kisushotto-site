@@ -1828,7 +1828,8 @@ function renderStats() {
     var now = Date.now();
     var ref = null;
     for (var i = ST.priceHist.length - 1; i >= 0; i--) {
-      if (now - ST.priceHist[i].ts >= 9 * 60000) { ref = ST.priceHist[i].price; break; }
+      var ageD = now - ST.priceHist[i].ts;
+      if (ageD >= 9 * 60000) { if (ageD <= 18 * 60000) ref = ST.priceHist[i].price; break; }
     }
     if (ref !== null) {
       var d = (bestMay - ref) / ref * 100;
@@ -1995,7 +1996,9 @@ function checkAlerts() {
   if (ST.priceHist.length > 1) {
     var ref10 = null;
     for (var i = ST.priceHist.length - 1; i >= 0; i--) {
-      if (now - ST.priceHist[i].ts >= 9 * 60000) { ref10 = ST.priceHist[i].price; break; }
+      var age10 = now - ST.priceHist[i].ts;
+      // Referencia valida solo si es de ~10 min (no de un hueco): ignora si tiene >18 min.
+      if (age10 >= 9 * 60000) { if (age10 <= 18 * 60000) ref10 = ST.priceHist[i].price; break; }
     }
     if (ref10 !== null) {
       var chg = (bestMay - ref10) / ref10 * 100;
