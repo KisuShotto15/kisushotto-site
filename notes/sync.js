@@ -10,10 +10,36 @@ function isOnline() { return typeof navigator !== 'undefined' ? navigator.onLine
 
 export async function pull() {
   if (!isOnline()) return { offline: true };
-  const since = (await idb.getMeta('lastSyncedAt')) || 0;
-  const data = await apiSyncPull(since);
   let changed = false;
   const changedNoteIds = new Set();
+  // The server caps each page (LIMIT). When `has_more` is set we page older
+  // rows via the `before` upper bound (since stays fixed) and only advance the
+  // cursor to server_time once the whole backlog is drained — otherwise the
+  // older notes would be silently stranded.
+  const since = (await idb.getMeta('lastSyncedAt')) || 0;
+  let before = null;
+  let serverTime = null;
+  let guard = 0;
+  while (guard++ < 200) {
+    const data = await apiSyncPull(since, before);
+    const res = await applyPulled(data, changedNoteIds);
+    if (res.changed) changed = true;
+    if (data.server_time) serverTime = data.server_time;
+    const notes = data.notes || [];
+    if (data.has_more && notes.length) {
+      const oldest = Math.min(...notes.map(n => n.last_modified || 0));
+      if (!isFinite(oldest) || (before != null && oldest >= before)) break; // no progress
+      before = oldest;
+      continue;
+    }
+    break;
+  }
+  if (serverTime != null) await idb.setMeta('lastSyncedAt', serverTime);
+  return { ok: true, changed, changedNoteIds };
+}
+
+async function applyPulled(data, changedNoteIds) {
+  let changed = false;
   // The outbox is authoritative: an entity with a pending local change must
   // NEVER be overwritten (or, for categories, wiped) by server data — client
   // and server last_modified come from different clocks and are not comparable.
@@ -62,8 +88,7 @@ export async function pull() {
       changed = true;
     }
   }
-  if (data.server_time) await idb.setMeta('lastSyncedAt', data.server_time);
-  return { ok: true, changed, changedNoteIds };
+  return { changed };
 }
 
 export async function pushQueueDebounced() {
@@ -130,7 +155,12 @@ export async function flushQueue() {
         if (stillPendingCats.has(c.id)) continue; // newer local edit/delete pending — keep it
         await idb.put('categories', c);
       }
-      if (result.server_time) await idb.setMeta('lastSyncedAt', result.server_time);
+      if (result.has_more) {
+        // Canonical state was truncated — leave the cursor where it was so the
+        // next pull() pages the remaining older notes before advancing it.
+      } else if (result.server_time) {
+        await idb.setMeta('lastSyncedAt', result.server_time);
+      }
     }
 
     // Category deletions go through the single-item endpoint (the batch sync

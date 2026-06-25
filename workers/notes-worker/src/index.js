@@ -17,6 +17,9 @@ const err = (msg, status = 400) => json({ error: msg }, status);
 const uuid = () => crypto.randomUUID();
 const now = () => Date.now();
 
+// Migrations are idempotent but cost ~10 DDL statements; run once per isolate.
+let migrated = false;
+
 function authToken(request, env) {
   const h = request.headers.get('Authorization') || '';
   return h === `Bearer ${env.TOKEN}`;
@@ -245,19 +248,28 @@ function rowToNote(r, categories = []) {
   };
 }
 
-async function fetchNotesForUser(env, email, since = 0) {
+const SYNC_PAGE = 500;
+
+async function fetchNotesForUser(env, email, since = 0, before = null) {
+  // `before` is an upper bound on last_modified for paging: DESC + LIMIT means
+  // each call returns the newest rows >= since, so the client walks `before`
+  // down to fetch older pages. Without this, a >SYNC_PAGE backlog would be
+  // truncated and the older notes stranded forever.
+  const hasBefore = before != null && Number.isFinite(before);
   const ownRes = await env.DB.prepare(
-    `SELECT * FROM notes WHERE owner_email = ? AND last_modified >= ? ORDER BY last_modified DESC LIMIT 500`
-  ).bind(email, since).all();
+    `SELECT * FROM notes WHERE owner_email = ? AND last_modified >= ?${hasBefore ? ' AND last_modified <= ?' : ''} ORDER BY last_modified DESC LIMIT ${SYNC_PAGE}`
+  ).bind(...(hasBefore ? [email, since, before] : [email, since])).all();
   const sharedRes = await env.DB.prepare(
     `SELECT n.* FROM notes n
      JOIN note_shares s ON s.note_id = n.id
-     WHERE s.shared_with_email = ? AND (n.last_modified >= ? OR s.shared_at >= ?)
-     ORDER BY n.last_modified DESC LIMIT 500`
-  ).bind(email, since, since).all();
+     WHERE s.shared_with_email = ? AND (n.last_modified >= ? OR s.shared_at >= ?)${hasBefore ? ' AND n.last_modified <= ?' : ''}
+     ORDER BY n.last_modified DESC LIMIT ${SYNC_PAGE}`
+  ).bind(...(hasBefore ? [email, since, since, before] : [email, since, since])).all();
+
+  const has_more = (ownRes.results?.length === SYNC_PAGE) || (sharedRes.results?.length === SYNC_PAGE);
 
   const all = [...(ownRes.results || []), ...(sharedRes.results || [])];
-  if (!all.length) return [];
+  if (!all.length) return { notes: [], has_more: false };
 
   const ids = all.map(n => n.id);
 
@@ -295,18 +307,21 @@ async function fetchNotesForUser(env, email, since = 0) {
     (attMap[row.note_id] ||= []).push(row);
   }
 
-  return all.map(n => ({
+  const notes = all.map(n => ({
     ...rowToNote(n, catMap[n.id] || []),
     shares: shareMap[n.id] || [],
     attachments: attMap[n.id] || [],
   }));
+  return { notes, has_more };
 }
 
 async function syncPull(request, env, email) {
   const url = new URL(request.url);
   const since = parseInt(url.searchParams.get('since') || '0', 10);
+  const beforeRaw = url.searchParams.get('before');
+  const before = beforeRaw ? parseInt(beforeRaw, 10) : null;
   await ensureUser(env, email);
-  const notes = await fetchNotesForUser(env, email, since);
+  const { notes, has_more } = await fetchNotesForUser(env, email, since, before);
   // Always return ALL categories — deletes are only visible via absence
   const catRes = await env.DB.prepare(
     `SELECT * FROM categories WHERE owner_email = ? ORDER BY sort_order ASC, created_at ASC`
@@ -315,6 +330,7 @@ async function syncPull(request, env, email) {
     notes,
     categories: catRes.results || [],
     server_time: now(),
+    has_more,
   });
 }
 
@@ -425,13 +441,13 @@ async function syncPush(request, env, email) {
 
   // Pull all changed records since client's "since" so it gets canonical state
   const since = parseInt(body.since || 0, 10);
-  const fresh = await fetchNotesForUser(env, email, since);
+  const { notes: fresh, has_more } = await fetchNotesForUser(env, email, since);
   // Always return ALL categories — deletes are only visible via absence
   const catRes = await env.DB.prepare(
     `SELECT * FROM categories WHERE owner_email = ? ORDER BY sort_order ASC, created_at ASC`
   ).bind(email).all();
 
-  return json({ results, notes: fresh, categories: catRes.results || [], server_time: now() });
+  return json({ results, notes: fresh, categories: catRes.results || [], server_time: now(), has_more });
 }
 
 async function trashNote(noteId, env, email) {
@@ -519,8 +535,15 @@ async function deleteCategory(catId, env, email) {
   const cat = await env.DB.prepare(`SELECT owner_email FROM categories WHERE id = ?`).bind(catId).first();
   if (!cat) return err('not found', 404);
   if (cat.owner_email !== email) return err('forbidden', 403);
-  await env.DB.prepare(`DELETE FROM note_categories WHERE category_id = ?`).bind(catId).run();
-  await env.DB.prepare(`DELETE FROM categories WHERE id = ?`).bind(catId).run();
+  // Bump notes that referenced this category so other devices re-pull them and
+  // drop the now-dangling chip (their last_modified would otherwise stay stale).
+  await env.DB.prepare(
+    `UPDATE notes SET last_modified = ? WHERE id IN (SELECT note_id FROM note_categories WHERE category_id = ?)`
+  ).bind(now(), catId).run();
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM note_categories WHERE category_id = ?`).bind(catId),
+    env.DB.prepare(`DELETE FROM categories WHERE id = ?`).bind(catId),
+  ]);
   return json({ ok: true });
 }
 
@@ -611,37 +634,88 @@ function vapidRawToJwk(privateB64url, publicB64url) {
   return { kty: 'EC', crv: 'P-256', d: privateB64url, x, y };
 }
 
+function concatBytes(...arrs) {
+  const total = arrs.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const a of arrs) { out.set(a, off); off += a.length; }
+  return out;
+}
+
+async function hkdf(salt, ikm, info, length) {
+  const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, key, length * 8);
+  return new Uint8Array(bits);
+}
+
+// RFC 8291 + RFC 8188: encrypt the payload for the subscription (aes128gcm).
+async function encryptPushPayload(subscription, payloadBytes) {
+  const enc = new TextEncoder();
+  const uaPublic   = b64urlToBytes(subscription.keys.p256dh); // 65-byte point
+  const authSecret = b64urlToBytes(subscription.keys.auth);   // 16 bytes
+
+  const asKeys = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const asPublicRaw = new Uint8Array(await crypto.subtle.exportKey('raw', asKeys.publicKey)); // 65 bytes
+  const uaKey = await crypto.subtle.importKey('raw', uaPublic, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const ecdhSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaKey }, asKeys.privateKey, 256));
+
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyInfo = concatBytes(enc.encode('WebPush: info\0'), uaPublic, asPublicRaw);
+  const ikm = await hkdf(authSecret, ecdhSecret, keyInfo, 32);
+  const cek = await hkdf(salt, ikm, enc.encode('Content-Encoding: aes128gcm\0'), 16);
+  const nonce = await hkdf(salt, ikm, enc.encode('Content-Encoding: nonce\0'), 12);
+
+  const plaintext = concatBytes(payloadBytes, new Uint8Array([0x02])); // single-record delimiter
+  const aesKey = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt']);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, tagLength: 128 }, aesKey, plaintext));
+
+  // aes128gcm header: salt(16) || record_size(4) || keyid_len(1) || keyid(as_public)
+  const header = new Uint8Array(16 + 4 + 1 + asPublicRaw.length);
+  header.set(salt, 0);
+  new DataView(header.buffer).setUint32(16, 4096, false);
+  header[20] = asPublicRaw.length;
+  header.set(asPublicRaw, 21);
+  return concatBytes(header, ciphertext);
+}
+
+// Returns the HTTP status (or 0 on local/network failure).
 async function sendWebPush(env, subscription, payload) {
   const hasPub = !!env.VAPID_PUBLIC;
   const hasJwk = !!env.VAPID_PRIVATE_JWK;
   const hasRaw = !!env.VAPID_PRIVATE;
-  if (!hasPub || (!hasJwk && !hasRaw)) return false;
+  if (!hasPub || (!hasJwk && !hasRaw)) return 0;
+  if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) return 0;
   let privateJwk;
   try {
     privateJwk = hasJwk
       ? JSON.parse(env.VAPID_PRIVATE_JWK)
       : vapidRawToJwk(env.VAPID_PRIVATE, env.VAPID_PUBLIC);
-  } catch { return false; }
+  } catch { return 0; }
   const url = new URL(subscription.endpoint);
   const aud = `${url.protocol}//${url.host}`;
   const exp = Math.floor(Date.now() / 1000) + 12 * 3600;
   const sub = env.VAPID_SUBJECT || 'mailto:admin@example.com';
   const jwt = await signVapidJwt({ aud, exp, sub }, privateJwk);
 
-  const body = new TextEncoder().encode(JSON.stringify(payload));
-  const headers = {
-    'Authorization': `vapid t=${jwt}, k=${env.VAPID_PUBLIC}`,
-    'Content-Encoding': 'aes128gcm',
-    'TTL': '86400',
-  };
-  // Note: a full implementation requires payload encryption with the user's
-  // p256dh+auth keys (RFC 8291). For simplicity we send a header-only push;
-  // most browsers will deliver an empty notification handled by the SW.
+  let body;
   try {
-    const res = await fetch(subscription.endpoint, { method: 'POST', headers, body: new Uint8Array(0) });
-    return res.ok;
+    body = await encryptPushPayload(subscription, new TextEncoder().encode(JSON.stringify(payload)));
+  } catch (_) { return 0; }
+
+  try {
+    const res = await fetch(subscription.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `vapid t=${jwt}, k=${env.VAPID_PUBLIC}`,
+        'Content-Encoding': 'aes128gcm',
+        'Content-Type': 'application/octet-stream',
+        'TTL': '86400',
+      },
+      body,
+    });
+    return res.status;
   } catch (_) {
-    return false;
+    return 0;
   }
 }
 
@@ -653,13 +727,25 @@ async function dispatchReminders(env) {
   ).bind(t).all();
   for (const n of due.results || []) {
     const subRaw = await env.PUSH_KV.get(`push:${n.owner_email}`);
+    let done = true; // no subscription → nothing to deliver, don't retry forever
     if (subRaw) {
+      done = false;
       try {
         const sub = JSON.parse(subRaw);
-        await sendWebPush(env, sub, { title: 'Recordatorio', body: n.title || 'Tienes una nota', noteId: n.id });
+        const status = await sendWebPush(env, sub, { title: 'Recordatorio', body: n.title || 'Tienes una nota', noteId: n.id });
+        if (status >= 200 && status < 300) {
+          done = true;
+        } else if (status === 404 || status === 410) {
+          // Subscription expired — drop it and stop retrying this reminder.
+          await env.PUSH_KV.delete(`push:${n.owner_email}`);
+          done = true;
+        }
+        // other statuses / 0 → transient: leave reminder_sent = 0 to retry next tick
       } catch (_) {}
     }
-    await env.DB.prepare(`UPDATE notes SET reminder_sent = 1 WHERE id = ?`).bind(n.id).run();
+    if (done) {
+      await env.DB.prepare(`UPDATE notes SET reminder_sent = 1 WHERE id = ?`).bind(n.id).run();
+    }
   }
 }
 
@@ -747,8 +833,10 @@ export default {
     }
     if (!authToken(request, env)) return err('Unauthorized', 401);
 
-    try { await migrate(env); }
-    catch (e) { return err('DB init failed: ' + e.message, 500); }
+    if (!migrated) {
+      try { await migrate(env); migrated = true; }
+      catch (e) { return err('DB init failed: ' + e.message, 500); }
+    }
 
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -817,7 +905,7 @@ export default {
   },
 
   async scheduled(event, env) {
-    try { await migrate(env); } catch (_) {}
+    if (!migrated) { try { await migrate(env); migrated = true; } catch (_) {} }
     await dispatchReminders(env);
     // Run trash purge once per day around hour 0 UTC
     const d = new Date(event.scheduledTime || Date.now());

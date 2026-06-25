@@ -66,7 +66,8 @@ export const apiDeletePasskey = (credId)          => api(`/auth/passkey/${encode
 export const apiSetPush      = (sub)              => api('/me/push',        { method: 'POST', body: JSON.stringify(sub) });
 export const apiVapid        = ()                 => api('/vapid');
 
-export const apiSyncPull     = (since = 0)        => api(`/sync?since=${since}`);
+export const apiSyncPull     = (since = 0, before = null) =>
+  api(`/sync?since=${since}${before != null ? `&before=${before}` : ''}`);
 export const apiSyncPush     = (payload)          => api('/sync',           { method: 'POST', body: JSON.stringify(payload) });
 
 export const apiCreateNote   = (note)             => api('/notes',          { method: 'POST', body: JSON.stringify(note) });
