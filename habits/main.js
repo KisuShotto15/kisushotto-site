@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=25';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=26';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=25');
+    const m = await import('./push.js?v=26');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -60,9 +60,13 @@ function esc(s) {
 }
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
+// NOTE: this mirrors the worker's isDueOn exactly (UTC-based) so the checklist,
+// streak, calendar and heatmap never disagree by a day across timezones.
 function isDueOn(habit, dateISO) {
-  const d   = new Date(dateISO + 'T00:00:00');
-  const dow = d.getDay(); // 0=Sun
+  const d   = new Date(dateISO + 'T00:00:00Z');
+  const dow = d.getUTCDay(); // 0=Sun
+  const dom = d.getUTCDate();
+  const mon = d.getUTCMonth() + 1;
 
   if (habit.frequency === 'daily') return true;
 
@@ -74,29 +78,29 @@ function isDueOn(habit, dateISO) {
   if (habit.frequency === 'custom') {
     const every  = habit.frequency_every || 1;
     const fd     = habit.frequency_days ? JSON.parse(habit.frequency_days) : [];
-    const origin = fd[0] ? new Date(fd[0] + 'T00:00:00') : new Date(habit.created_at * 1000);
+    const origin = fd[0] ? new Date(fd[0] + 'T00:00:00Z') : new Date(habit.created_at * 1000);
     const diff   = Math.floor((d - origin) / 86400000);
     return diff >= 0 && diff % every === 0;
   }
 
   if (habit.frequency === 'monthly') {
     const days = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1];
-    return days.includes(d.getDate());
+    return days.includes(dom);
   }
 
   if (habit.frequency === 'every_n_months') {
     const every  = habit.frequency_every || 3;
     const day    = habit.frequency_days ? JSON.parse(habit.frequency_days)[0] : 1;
-    if (d.getDate() !== day) return false;
+    if (dom !== day) return false;
     const origin      = new Date(habit.created_at * 1000);
-    const originMonth = origin.getFullYear() * 12 + origin.getMonth();
-    const checkMonth  = d.getFullYear() * 12 + d.getMonth();
+    const originMonth = origin.getUTCFullYear() * 12 + origin.getUTCMonth();
+    const checkMonth  = d.getUTCFullYear() * 12 + d.getUTCMonth();
     return (checkMonth - originMonth) % every === 0;
   }
 
   if (habit.frequency === 'yearly') {
     const [m, day] = habit.frequency_days ? JSON.parse(habit.frequency_days) : [1, 1];
-    return d.getMonth() + 1 === m && d.getDate() === day;
+    return mon === m && dom === day;
   }
 
   return true;
