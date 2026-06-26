@@ -477,9 +477,10 @@ body::before {
 /* ── Side panel (add/edit) ── */
 .panel-backdrop {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.55); z-index: 90;
-  backdrop-filter: blur(4px);
+  background: rgba(0,0,0,0.62); z-index: 90;
+  opacity: 0; transition: opacity 0.17s ease;
 }
+.panel-backdrop:not(.hidden) { opacity: 1; }
 .panel-backdrop.hidden { display: none; }
 
 .side-panel {
@@ -487,12 +488,14 @@ body::before {
   overflow-x: hidden; background: var(--surface);
   border-left: 1px solid var(--border2); z-index: 100;
   display: flex; flex-direction: column;
-  transform: translateX(100%);
-  transition: transform 0.17s cubic-bezier(0.32, 0.72, 0, 1);
+  transform: translate3d(100%, 0, 0);
+  transition: transform 0.2s cubic-bezier(0.33, 1, 0.68, 1);
   will-change: transform;
-  box-shadow: -16px 0 48px rgba(0,0,0,0.5);
+  backface-visibility: hidden;
+  contain: layout paint;
+  box-shadow: -12px 0 32px rgba(0,0,0,0.45);
 }
-.side-panel.open { transform: translateX(0); }
+.side-panel.open { transform: translate3d(0, 0, 0); }
 
 @media (max-width: 768px) {
   .side-panel {
@@ -500,9 +503,9 @@ body::before {
     top: auto; bottom: 0; height: 92dvh;
     border-left: none; border-radius: 22px 22px 0 0;
     border-top: 1px solid var(--border2);
-    transform: translateY(100%);
+    transform: translate3d(0, 100%, 0);
   }
-  .side-panel.open { transform: translateY(0); }
+  .side-panel.open { transform: translate3d(0, 0, 0); }
 }
 
 .panel-header {
