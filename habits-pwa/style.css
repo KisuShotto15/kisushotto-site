@@ -279,6 +279,18 @@ body::before {
   border-color: var(--border2);
   background: color-mix(in srgb, var(--card2) 85%, rgba(139,92,246,0.2));
 }
+
+/* Keyboard focus visibility (accessibility) */
+.habit-row:focus-visible,
+.manage-row:focus-visible,
+.btn:focus-visible,
+.counter-btn:focus-visible,
+.fab:focus-visible,
+.notif-bell:focus-visible,
+.logout-btn:focus-visible {
+  outline: 2px solid var(--amethyst);
+  outline-offset: 2px;
+}
 .habit-row.done { border-color: rgba(139,92,246,0.2); }
 
 /* Check button (also holds the habit emoji until completed) */

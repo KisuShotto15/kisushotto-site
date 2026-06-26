@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=23';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=24';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=23');
+    const m = await import('./push.js?v=24');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -215,7 +215,7 @@ function renderToday() {
     const noteVal = notes[t]?.[h.id];
     const canNote = h.type === 'count' ? getValue(h.id, t) > 0 : done_;
     const noteBtn = canNote
-      ? `<button onclick="event.stopPropagation();openNote('${h.id}')" title="${noteVal ? esc(noteVal) : 'Agregar nota'}" style="background:none;border:none;cursor:pointer;font-size:14px;opacity:${noteVal ? '1' : '0.32'};flex-shrink:0;padding:0 2px">📝</button>`
+      ? `<button onclick="event.stopPropagation();openNote('${h.id}')" aria-label="${noteVal ? 'Editar nota' : 'Agregar nota'}" title="${noteVal ? esc(noteVal) : 'Agregar nota'}" style="background:none;border:none;cursor:pointer;font-size:14px;opacity:${noteVal ? '1' : '0.32'};flex-shrink:0;padding:0 2px">📝</button>`
       : '';
 
     let rightSide = '';
@@ -225,17 +225,22 @@ function renderToday() {
       const isDoneCount = val >= target;
       rightSide = `
         <div class="habit-counter" onclick="event.stopPropagation()">
-          <button class="counter-btn" onclick="adjustCount('${h.id}',-1)">−</button>
-          <span class="counter-val">${val}${isDoneCount ? `<span style="color:var(--mint)">✓</span>` : `/${target}`}<span style="font-size:9px;color:var(--muted);margin-left:2px">${esc(h.target_unit||'')}</span></span>
-          <button class="counter-btn" onclick="adjustCount('${h.id}',+1)">+</button>
+          <button class="counter-btn" aria-label="Disminuir ${esc(h.name)}" onclick="adjustCount('${h.id}',-1)">−</button>
+          <span class="counter-val" aria-live="polite">${val}${isDoneCount ? `<span style="color:var(--mint)">✓</span>` : `/${target}`}<span style="font-size:9px;color:var(--muted);margin-left:2px">${esc(h.target_unit||'')}</span></span>
+          <button class="counter-btn" aria-label="Aumentar ${esc(h.name)}" onclick="adjustCount('${h.id}',+1)">+</button>
         </div>`;
     } else {
       rightSide = streakHtml;
     }
 
+    // Binary rows act as a toggle button (keyboard-operable); count rows use the +/- buttons.
+    const a11y = h.type === 'count'
+      ? `aria-label="${esc(h.name)}"`
+      : `role="button" tabindex="0" aria-pressed="${done_}" aria-label="${esc(h.name)}" onkeydown="rowKey(event,'${h.id}')"`;
+
     return `
       <div class="habit-row ${done_ ? 'done' : ''}"
-           data-hid="${h.id}"
+           data-hid="${h.id}" ${a11y}
            style="--habit-color:${color}"
            onclick="onHabitClick('${h.id}')">
         <div class="habit-check"><span class="habit-check-emoji">${esc(h.emoji || '')}</span></div>
@@ -271,6 +276,8 @@ function renderManage() {
     const meta = `🔥 ${streak} · récord ${record} · ${rate}%`;
     return `
       <div class="manage-row" data-hid="${h.id}" draggable="true"
+           role="button" tabindex="0" aria-label="Editar ${esc(h.name)}${h.paused ? ' (pausado)' : ''}"
+           onkeydown="manageKey(event,'${h.id}')"
            ondragstart="onManageDragStart(event,'${h.id}')"
            ondragover="onManageDragOver(event)"
            ondragenter="onManageDragEnter(event)"
@@ -279,7 +286,7 @@ function renderManage() {
            ondragend="onManageDragEnd(event)"
            style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color 0.2s${h.paused ? ';opacity:0.5' : ''}"
            onclick="openPanelById('${h.id}')">
-        <span style="color:var(--muted2);font-size:14px;cursor:grab" onclick="event.stopPropagation()">⠿</span>
+        <span aria-hidden="true" style="color:var(--muted2);font-size:14px;cursor:grab" onclick="event.stopPropagation()">⠿</span>
         <span style="font-size:18px;line-height:1">${esc(h.emoji || '✓')}</span>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600">${esc(h.name)}${pausedTag}</div>
@@ -403,6 +410,14 @@ window.selectDate = async function(iso) {
   }
   renderCalendar();
   renderToday();
+};
+
+// Enter/Space on a focused row toggles it (keyboard accessibility).
+window.rowKey = function(e, id) {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHabitClick(id); }
+};
+window.manageKey = function(e, id) {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPanelById(id); }
 };
 
 window.onHabitClick = async function(id) {
