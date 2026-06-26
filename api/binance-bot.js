@@ -44,10 +44,13 @@ export default async function handler(req, res) {
       await ensureSchema();
       if (path === '/bot-enable') {
         const cfg = JSON.stringify((params && params.config) || {});
+        // Reset de estado de la corrida anterior: si no, el poller pinta el precio/log viejos
+        // y sobrescribe el reprice inicial fresco del cliente.
         await sql`
           INSERT INTO bot_state (user_id, enabled, config, status, updated_at)
           VALUES (${user.uid}, true, ${cfg}::jsonb, 'Iniciando...', now())
-          ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfg}::jsonb, status = 'Iniciando...', updated_at = now()`;
+          ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfg}::jsonb, status = 'Iniciando...',
+            current_price = NULL, last_reprice = NULL, last_tick = NULL, ad_number = NULL, log = '[]'::jsonb, updated_at = now()`;
         return res.status(200).json({ ok: true });
       }
       if (path === '/bot-disable') {
