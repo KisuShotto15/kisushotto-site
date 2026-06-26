@@ -23,7 +23,7 @@ cp habits/push.js "$OUT/push.js"
 
 # Service worker — habits-specific with push notification support
 cat > "$OUT/sw.js" << 'SWEOF'
-const CACHE = 'ks-habits-v18';
+const CACHE = 'ks-habits-v19';
 
 self.addEventListener('install', () => { self.skipWaiting(); });
 
@@ -40,20 +40,29 @@ self.addEventListener('activate', e => {
 self.addEventListener('push', e => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch { data = {}; }
-  const title = data.title || 'Habitos';
-  const body  = data.body  || '';
+  const title = data.title || '⏰ Recordatorio de hábito';
+  const body  = data.body  || 'Es hora de completar tu hábito';
   e.waitUntil(self.registration.showNotification(title, {
     body,
-    tag: 'habits-reminder',
-    icon: '/images/habits-favicon.svg',
+    tag: data.tag || 'habits-reminder',
+    renotify: true,            // re-alerta aunque reemplace una con el mismo tag
+    requireInteraction: true,  // no se auto-descarta: queda hasta interactuar
+    vibrate: [300, 120, 300, 120, 300],
+    icon: '/icons/habits-192.png',
     badge: '/icons/habits-192.png',
+    actions: [{ action: 'open', title: 'Abrir' }],
     data: { url: '/' },
   }));
 });
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  e.waitUntil(clients.openWindow(e.notification?.data?.url || '/'));
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) { if ('focus' in c) return c.focus(); }
+      return clients.openWindow(e.notification?.data?.url || '/');
+    })
+  );
 });
 
 self.addEventListener('fetch', e => {

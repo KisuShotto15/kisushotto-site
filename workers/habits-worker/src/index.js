@@ -168,6 +168,48 @@ async function signVapidJwt(payload, privateJwk) {
   return `${headB64}.${payB64}.${bytesToB64url(new Uint8Array(sig))}`;
 }
 
+function concatBytes(...arrays) {
+  const total = arrays.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const a of arrays) { out.set(a, o); o += a.length; }
+  return out;
+}
+
+async function hkdf(salt, ikm, info, length) {
+  const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, key, length * 8);
+  return new Uint8Array(bits);
+}
+
+// Encrypt a payload for Web Push (RFC 8291 + aes128gcm RFC 8188).
+async function encryptPayload(subscription, payloadStr) {
+  const enc       = new TextEncoder();
+  const uaPublic  = b64urlToBytes(subscription.keys.p256dh); // 65 bytes
+  const auth      = b64urlToBytes(subscription.keys.auth);   // 16 bytes
+  const plaintext = enc.encode(payloadStr);
+
+  const asKeys   = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const asPublic = new Uint8Array(await crypto.subtle.exportKey('raw', asKeys.publicKey)); // 65 bytes
+  const uaKey    = await crypto.subtle.importKey('raw', uaPublic, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const ecdh     = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaKey }, asKeys.privateKey, 256));
+
+  const keyInfo = concatBytes(enc.encode('WebPush: info\0'), uaPublic, asPublic);
+  const ikm     = await hkdf(auth, ecdh, keyInfo, 32);
+
+  const salt  = crypto.getRandomValues(new Uint8Array(16));
+  const cek   = await hkdf(salt, ikm, enc.encode('Content-Encoding: aes128gcm\0'), 16);
+  const nonce = await hkdf(salt, ikm, enc.encode('Content-Encoding: nonce\0'), 12);
+
+  const aesKey = await crypto.subtle.importKey('raw', cek, { name: 'AES-GCM' }, false, ['encrypt']);
+  const record = concatBytes(plaintext, new Uint8Array([0x02])); // last-record delimiter
+  const ct     = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, tagLength: 128 }, aesKey, record));
+
+  // header: salt(16) | record_size(4=4096) | idlen(1=65) | keyid(asPublic)
+  const header = concatBytes(salt, new Uint8Array([0, 0, 0x10, 0]), new Uint8Array([asPublic.length]), asPublic);
+  return concatBytes(header, ct);
+}
+
 async function sendWebPush(env, subscription, payload) {
   if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE_JWK) return false;
   let privateJwk;
@@ -177,13 +219,23 @@ async function sendWebPush(env, subscription, payload) {
   const exp = Math.floor(Date.now() / 1000) + 12 * 3600;
   const sub = env.VAPID_SUBJECT || 'mailto:admin@example.com';
   const jwt = await signVapidJwt({ aud, exp, sub }, privateJwk);
+
+  let body = new Uint8Array(0);
   const headers = {
     'Authorization': `vapid t=${jwt}, k=${env.VAPID_PUBLIC}`,
     'Content-Encoding': 'aes128gcm',
     'TTL': '86400',
   };
+  // Encrypt the payload when the subscription exposes its keys; otherwise send a
+  // contentless push (the SW falls back to a generic message).
+  if (payload && subscription.keys?.p256dh && subscription.keys?.auth) {
+    try {
+      body = await encryptPayload(subscription, JSON.stringify(payload));
+      headers['Content-Type'] = 'application/octet-stream';
+    } catch { body = new Uint8Array(0); }
+  }
   try {
-    const res = await fetch(subscription.endpoint, { method: 'POST', headers, body: new Uint8Array(0) });
+    const res = await fetch(subscription.endpoint, { method: 'POST', headers, body });
     return res.ok;
   } catch { return false; }
 }
@@ -203,8 +255,8 @@ async function dispatchReminders(env) {
   // Candidates: any active habit with a reminder pending today. Time/zone/due are
   // evaluated per-habit below because reminder_time is stored in the user's local time.
   const { results } = await env.DB.prepare(
-    `SELECT id, user_id, name, type, target_value, frequency, frequency_days, frequency_every,
-            created_at, reminder_time, reminder_last_sent, tz
+    `SELECT id, user_id, name, emoji, description, type, target_value, frequency, frequency_days,
+            frequency_every, created_at, reminder_time, reminder_last_sent, tz
      FROM habits WHERE active = 1 AND paused = 0 AND reminder_time IS NOT NULL`
   ).all();
 
@@ -223,7 +275,11 @@ async function dispatchReminders(env) {
     if (subRaw) {
       try {
         const sub = JSON.parse(subRaw);
-        await sendWebPush(env, sub, { title: h.name, body: 'Es hora de tu habito' });
+        await sendWebPush(env, sub, {
+          title: `${h.emoji || '⏰'} ${h.name}`,
+          body:  h.description || 'Es hora de completar tu habito',
+          tag:   h.id,
+        });
       } catch (_) {}
     }
     await env.DB.prepare(`UPDATE habits SET reminder_last_sent = ? WHERE id = ?`).bind(localDate, h.id).run();
