@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://habits-worker.efrenalejandro2010.workers.dev" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap">
-<link rel="stylesheet" href="./style.css?v=26">
+<link rel="stylesheet" href="./style.css?v=27">
 </head>
 <body>
 <div class="container">
@@ -98,41 +98,36 @@
       </div>
     </div>
 
-    <!-- RIGHT: Calendar + manage -->
-    <div style="display:flex;flex-direction:column;gap:20px">
-
-      <!-- Calendar heatmap -->
-      <div class="card">
-        <div class="card-title">calendario</div>
-        <div class="calendar-wrap">
-          <div class="cal-header">
-            <span class="cal-month" id="calMonth">—</span>
-            <div class="cal-nav">
-              <button class="cal-nav-btn" onclick="shiftMonth(-1)">‹</button>
-              <button class="cal-nav-btn" onclick="shiftMonth(+1)">›</button>
-            </div>
+    <!-- MIDDLE: Calendar heatmap -->
+    <div class="card">
+      <div class="card-title">calendario</div>
+      <div class="calendar-wrap">
+        <div class="cal-header">
+          <span class="cal-month" id="calMonth">—</span>
+          <div class="cal-nav">
+            <button class="cal-nav-btn" onclick="shiftMonth(-1)">‹</button>
+            <button class="cal-nav-btn" onclick="shiftMonth(+1)">›</button>
           </div>
-          <div class="cal-days-header">
-            <div class="cal-day-label">Mon</div>
-            <div class="cal-day-label">Tue</div>
-            <div class="cal-day-label">Wed</div>
-            <div class="cal-day-label">Thu</div>
-            <div class="cal-day-label">Fri</div>
-            <div class="cal-day-label">Sat</div>
-            <div class="cal-day-label">Sun</div>
-          </div>
-          <div class="cal-grid" id="calGrid"></div>
         </div>
-      </div>
-
-      <!-- Manage habits -->
-      <div class="card">
-        <div class="card-title">hábitos</div>
-        <div id="manageList" style="display:flex;flex-direction:column;gap:6px">
-          <div class="loading">Cargando…</div>
+        <div class="cal-days-header">
+          <div class="cal-day-label">Mon</div>
+          <div class="cal-day-label">Tue</div>
+          <div class="cal-day-label">Wed</div>
+          <div class="cal-day-label">Thu</div>
+          <div class="cal-day-label">Fri</div>
+          <div class="cal-day-label">Sat</div>
+          <div class="cal-day-label">Sun</div>
         </div>
+        <div class="cal-grid" id="calGrid"></div>
       </div>
+    </div>
 
+    <!-- RIGHT: Manage habits -->
+    <div class="card">
+      <div class="card-title">hábitos</div>
+      <div id="manageList" style="display:flex;flex-direction:column;gap:6px">
+        <div class="loading">Cargando…</div>
+      </div>
     </div>
   </div>
 
@@ -360,7 +355,7 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=26"></script>
+<script type="module" src="./main.js?v=27"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");

@@ -184,12 +184,21 @@ body::before {
 /* ── Main layout ── */
 .habits-layout {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0, 1fr) 340px 320px;  /* hoy | calendario | gestion */
   gap: 20px;
   align-items: start;
 }
 .habits-layout > * { min-width: 0; }
-@media (max-width: 900px) { .habits-layout { grid-template-columns: 1fr; } }
+/* Medio: 2 columnas — hoy | (calendario arriba, gestion abajo) */
+@media (max-width: 1200px) {
+  .habits-layout { grid-template-columns: minmax(0, 1fr) 340px; }
+  .habits-layout > :nth-child(3) { grid-column: 2; }
+}
+/* Angosto: una columna */
+@media (max-width: 900px) {
+  .habits-layout { grid-template-columns: 1fr; }
+  .habits-layout > :nth-child(3) { grid-column: auto; }
+}
 
 @media (max-width: 600px) {
   .container { padding: 20px 20px 80px; }
@@ -514,17 +523,26 @@ body::before {
 .side-panel.open { transform: translate3d(0, 0, 0); }
 
 @media (max-width: 768px) {
+  /* Sliding the full 92vh sheet forces a costly raster of a huge layer on mobile.
+     Instead: a short rise + fade — tiny transform (GPU-cheap), fade hides any
+     micro-jank. visibility keeps it out of pointer/tab flow while closed. */
   .side-panel {
     left: 0; right: 0; width: 100%;
     top: auto; bottom: 0; height: 92dvh;
     border-left: none; border-radius: 22px 22px 0 0;
     border-top: 1px solid var(--border2);
-    transform: translate3d(0, 100%, 0);
-    /* Taller sheet needs a slightly longer eased slide to stay smooth */
-    transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+    transform: translate3d(0, 26px, 0);
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 0.16s ease, opacity 0.14s ease, visibility 0s linear 0.16s;
     box-shadow: 0 -8px 32px rgba(0,0,0,0.45);
   }
-  .side-panel.open { transform: translate3d(0, 0, 0); }
+  .side-panel.open {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+    visibility: visible;
+    transition: transform 0.16s ease, opacity 0.14s ease, visibility 0s;
+  }
 }
 
 .panel-header {
@@ -762,8 +780,9 @@ body::before {
 @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } }
 .page-header                     { animation: fadeUp 0.26s ease both 0.02s; }
 .stats-strip                     { animation: fadeUp 0.26s ease both 0.06s; }
-.habits-layout > div:first-child { animation: fadeUp 0.28s ease both 0.10s; }
-.habits-layout > div:last-child  { animation: fadeUp 0.28s ease both 0.14s; }
+.habits-layout > :nth-child(1) { animation: fadeUp 0.28s ease both 0.10s; }
+.habits-layout > :nth-child(2) { animation: fadeUp 0.28s ease both 0.14s; }
+.habits-layout > :nth-child(3) { animation: fadeUp 0.28s ease both 0.18s; }
 
 /* Staggered habit rows — only on first load (.entering added by JS once) */
 @keyframes rowIn { from { opacity: 0; transform: translateY(8px); } }
