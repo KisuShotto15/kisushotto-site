@@ -90,6 +90,12 @@ function isoUTC(d) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
 }
 
+// A completion counts as "done" only if a count habit reaches its target.
+function habitDone(habit, value) {
+  if (value == null) return false;
+  return habit.type === 'count' ? value >= (habit.target_value || 1) : value > 0;
+}
+
 // Current streak: walk back from today over the full completion history.
 function calcStreak(habit, doneSet, todayISO) {
   let streak = 0;
@@ -103,6 +109,34 @@ function calcStreak(habit, doneSet, todayISO) {
     d.setUTCDate(d.getUTCDate() - 1);
   }
   return streak;
+}
+
+// Record (longest-ever) streak across the full history.
+function calcRecord(habit, doneSet, todayISO) {
+  let best = 0, run = 0;
+  const d = new Date(todayISO + 'T00:00:00Z');
+  for (let i = 0; i < 3660; i++) {
+    const ds = isoUTC(d);
+    if (isDueOn(habit, ds)) {
+      if (doneSet.has(ds)) { run++; if (run > best) best = run; }
+      else if (ds !== todayISO) run = 0;   // a real miss breaks the run
+    }
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  return best;
+}
+
+// Completion rate over the last N scheduled (due) days, excluding today.
+function calcRate(habit, doneSet, todayISO, n) {
+  let due = 0, done = 0;
+  const d = new Date(todayISO + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);        // start yesterday (today may be pending)
+  for (let i = 0; i < 3660 && due < n; i++) {
+    const ds = isoUTC(d);
+    if (isDueOn(habit, ds)) { due++; if (doneSet.has(ds)) done++; }
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  return due ? Math.round(done / due * 100) : 0;
 }
 
 // ── VAPID / Web Push ──────────────────────────────────────────────────────────
@@ -161,9 +195,9 @@ async function dispatchReminders(env) {
   // Candidates: any active habit with a reminder pending today. Time/zone/due are
   // evaluated per-habit below because reminder_time is stored in the user's local time.
   const { results } = await env.DB.prepare(
-    `SELECT id, user_id, name, frequency, frequency_days, frequency_every, created_at,
-            reminder_time, reminder_last_sent, tz
-     FROM habits WHERE active = 1 AND reminder_time IS NOT NULL`
+    `SELECT id, user_id, name, type, target_value, frequency, frequency_days, frequency_every,
+            created_at, reminder_time, reminder_last_sent, tz
+     FROM habits WHERE active = 1 AND paused = 0 AND reminder_time IS NOT NULL`
   ).all();
 
   for (const h of results || []) {
@@ -172,10 +206,10 @@ async function dispatchReminders(env) {
     if (h.reminder_last_sent === localDate) continue;
     if (!isDueOn(h, localDate)) continue;
 
-    const done = await env.DB.prepare(
-      `SELECT 1 FROM completions WHERE user_id = ? AND habit_id = ? AND date = ? AND value > 0`
+    const comp = await env.DB.prepare(
+      `SELECT value FROM completions WHERE user_id = ? AND habit_id = ? AND date = ?`
     ).bind(h.user_id, h.id, localDate).first();
-    if (done) continue;
+    if (comp && habitDone(h, comp.value)) continue;   // already met target
 
     const subRaw = await env.PUSH_KV.get(`push:${h.user_id}`);
     if (subRaw) {
@@ -197,6 +231,7 @@ async function migrate(env) {
   try { await env.DB.prepare("ALTER TABLE completions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN reminder_last_sent TEXT").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN tz TEXT").run(); } catch (_) {}
+  try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN paused INTEGER NOT NULL DEFAULT 0").run(); } catch (_) {}
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -210,15 +245,23 @@ async function getHabits(request, env, uid) {
   const todayISO = url.searchParams.get('today') || isoUTC(new Date());
 
   const { results: comps } = await env.DB.prepare(
-    `SELECT habit_id, date FROM completions WHERE user_id = ? AND value > 0`
+    `SELECT habit_id, date, value FROM completions WHERE user_id = ? AND value > 0`
   ).bind(uid).all();
 
-  const doneByHabit = {};
+  // value map per habit so count habits only count as done when they reach target
+  const valByHabit = {};
   for (const c of comps) {
-    (doneByHabit[c.habit_id] ||= new Set()).add(c.date);
+    (valByHabit[c.habit_id] ||= new Map()).set(c.date, c.value);
   }
   for (const h of results) {
-    h.streak = calcStreak(h, doneByHabit[h.id] || new Set(), todayISO);
+    const vals = valByHabit[h.id] || new Map();
+    const doneSet = new Set();
+    for (const [date, value] of vals) {
+      if (habitDone(h, value)) doneSet.add(date);
+    }
+    h.streak        = calcStreak(h, doneSet, todayISO);
+    h.record_streak = calcRecord(h, doneSet, todayISO);
+    h.rate30        = calcRate(h, doneSet, todayISO, 30);
   }
 
   return json({ habits: results });
@@ -257,7 +300,7 @@ async function updateHabit(id, request, env, uid) {
   const fields = [];
   const vals   = [];
   const allowed = ['name','description','type','target_value','target_unit','frequency',
-                   'frequency_days','frequency_every','color','emoji','reminder_time','tz','sort_order'];
+                   'frequency_days','frequency_every','color','emoji','reminder_time','tz','sort_order','paused'];
   for (const k of allowed) {
     if (k in b) {
       fields.push(`${k} = ?`);
@@ -304,8 +347,8 @@ async function toggleCompletion(request, env, uid) {
     const id  = uuid();
     const now = Math.floor(Date.now() / 1000);
     await env.DB.prepare(
-      `INSERT OR REPLACE INTO completions (id,user_id,habit_id,date,value,created_at) VALUES (?,?,?,?,?,?)`
-    ).bind(id, uid, habit_id, date, value, now).run();
+      `INSERT OR REPLACE INTO completions (id,user_id,habit_id,date,value,note,created_at) VALUES (?,?,?,?,?,?,?)`
+    ).bind(id, uid, habit_id, date, value, b.note || null, now).run();
     return json({ toggled: 'on', date, habit_id, value });
   }
 }
@@ -320,11 +363,19 @@ async function setCompletion(request, env, uid) {
       .bind(uid, habit_id, date).run();
     return json({ ok: true, value: 0 });
   }
+  // Preserve an existing note when the caller (e.g. a count increment) omits it.
+  let note = b.note;
+  if (note === undefined) {
+    const ex = await env.DB.prepare(
+      `SELECT note FROM completions WHERE user_id = ? AND habit_id = ? AND date = ?`
+    ).bind(uid, habit_id, date).first();
+    note = ex?.note ?? null;
+  }
   const id  = uuid();
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
-    `INSERT OR REPLACE INTO completions (id,user_id,habit_id,date,value,created_at) VALUES (?,?,?,?,?,?)`
-  ).bind(id, uid, habit_id, date, value, now).run();
+    `INSERT OR REPLACE INTO completions (id,user_id,habit_id,date,value,note,created_at) VALUES (?,?,?,?,?,?,?)`
+  ).bind(id, uid, habit_id, date, value, note, now).run();
   return json({ ok: true, value });
 }
 

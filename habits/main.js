@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=16';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=17';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=16');
+    const m = await import('./push.js?v=17');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -11,6 +11,7 @@ async function ensurePushSubscription() {
 // ── State ─────────────────────────────────────────────────────────────────────
 let habits        = [];
 let completions   = {};   // { 'YYYY-MM-DD': { habitId: value } }
+let notes         = {};   // { 'YYYY-MM-DD': { habitId: noteText } }
 let loadedMonths  = new Set();
 let calYear       = 0;
 let calMonth      = 0;    // 1-12
@@ -51,6 +52,11 @@ function toast(msg, type = 'ok') {
 
 function dateStr(y, m, d) {
   return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+const ESC_MAP = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ESC_MAP[c]);
 }
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
@@ -134,7 +140,10 @@ function bestStreakAll() {
 
 // ── Completion helpers ────────────────────────────────────────────────────────
 function isDone(habitId, date = today()) {
-  return completions[date]?.[habitId] != null;
+  const v = completions[date]?.[habitId];
+  if (v == null) return false;
+  const h = habits.find(x => x.id === habitId);
+  return h && h.type === 'count' ? v >= (h.target_value || 1) : v > 0;
 }
 function getValue(habitId, date = today()) {
   return completions[date]?.[habitId] ?? 0;
@@ -148,7 +157,7 @@ function setLocal(habitId, date, value) {
 // ── Today stats ───────────────────────────────────────────────────────────────
 function todayStats() {
   const t    = selectedDate;
-  const due  = habits.filter(h => isDueOn(h, t));
+  const due  = habits.filter(h => !h.paused && isDueOn(h, t));
   const done = due.filter(h => isDone(h.id, t));
   const pct  = due.length ? Math.round(done.length / due.length * 100) : 0;
   return { due: due.length, done: done.length, pct };
@@ -174,7 +183,7 @@ function renderToday() {
   $('todayPct').textContent      = `${pct}%`;
   $('statToday').textContent     = `${done}/${due}`;
 
-  const dueHabits = habits.filter(h => isDueOn(h, t));
+  const dueHabits = habits.filter(h => !h.paused && isDueOn(h, t));
 
   const list = $('habitList');
   if (!habits.length) {
@@ -199,6 +208,12 @@ function renderToday() {
       ? `<span class="reminder-inline">⏰ ${h.reminder_time}</span>`
       : '';
 
+    const noteVal = notes[t]?.[h.id];
+    const canNote = h.type === 'count' ? getValue(h.id, t) > 0 : done_;
+    const noteBtn = canNote
+      ? `<button onclick="event.stopPropagation();openNote('${h.id}')" title="${noteVal ? esc(noteVal) : 'Agregar nota'}" style="background:none;border:none;cursor:pointer;font-size:14px;opacity:${noteVal ? '1' : '0.32'};flex-shrink:0;padding:0 2px">📝</button>`
+      : '';
+
     let rightSide = '';
     if (h.type === 'count') {
       const val = getValue(h.id, t);
@@ -207,7 +222,7 @@ function renderToday() {
       rightSide = `
         <div class="habit-counter" onclick="event.stopPropagation()">
           <button class="counter-btn" onclick="adjustCount('${h.id}',-1)">−</button>
-          <span class="counter-val">${val}${isDoneCount ? `<span style="color:var(--mint)">✓</span>` : `/${target}`}<span style="font-size:9px;color:var(--muted);margin-left:2px">${h.target_unit||''}</span></span>
+          <span class="counter-val">${val}${isDoneCount ? `<span style="color:var(--mint)">✓</span>` : `/${target}`}<span style="font-size:9px;color:var(--muted);margin-left:2px">${esc(h.target_unit||'')}</span></span>
           <button class="counter-btn" onclick="adjustCount('${h.id}',+1)">+</button>
         </div>`;
     } else {
@@ -221,11 +236,12 @@ function renderToday() {
            onclick="onHabitClick('${h.id}')">
         <div class="habit-pill"></div>
         <div class="habit-check"></div>
-        <span class="habit-emoji">${h.emoji || '✓'}</span>
+        <span class="habit-emoji">${esc(h.emoji || '✓')}</span>
         <div class="habit-info">
-          <div class="habit-name">${h.name}</div>
-          <div class="habit-freq">${h.description ? h.description : freqLabel(h)}${reminderInline}</div>
+          <div class="habit-name">${esc(h.name)}</div>
+          <div class="habit-freq">${h.description ? esc(h.description) : freqLabel(h)}${reminderInline}</div>
         </div>
+        ${noteBtn}
         ${rightSide}
       </div>`;
   }).join('');
@@ -245,7 +261,12 @@ function renderManage() {
     return;
   }
   el.innerHTML = habits.map(h => {
-    const color = COLORS[h.color] || COLORS.lavender;
+    const color   = COLORS[h.color] || COLORS.lavender;
+    const streak  = h.streak ?? 0;
+    const record  = h.record_streak ?? 0;
+    const rate    = h.rate30 ?? 0;
+    const pausedTag = h.paused ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--amber);border:1px solid var(--amber);border-radius:4px;padding:1px 4px">pausado</span>` : '';
+    const meta = `🔥 ${streak} · récord ${record} · ${rate}%`;
     return `
       <div class="manage-row" data-hid="${h.id}" draggable="true"
            ondragstart="onManageDragStart(event,'${h.id}')"
@@ -254,12 +275,14 @@ function renderManage() {
            ondragleave="onManageDragLeave(event)"
            ondrop="onManageDrop(event,'${h.id}')"
            ondragend="onManageDragEnd(event)"
-           style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color 0.2s"
+           style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color 0.2s${h.paused ? ';opacity:0.5' : ''}"
            onclick="openPanelById('${h.id}')">
         <span style="color:var(--muted2);font-size:14px;cursor:grab" onclick="event.stopPropagation()">⠿</span>
-        <span style="font-size:18px;line-height:1">${h.emoji || '✓'}</span>
-        <span style="flex:1;font-size:13px;font-weight:600">${h.name}</span>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted2)">${freqLabel(h)}</span>
+        <span style="font-size:18px;line-height:1">${esc(h.emoji || '✓')}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600">${esc(h.name)}${pausedTag}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted2);margin-top:2px">${freqLabel(h)} · ${meta}</div>
+        </div>
         <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
       </div>`;
   }).join('');
@@ -301,7 +324,7 @@ function renderStats() {
 
 // ── Calendar heatmap ──────────────────────────────────────────────────────────
 function isPerfectDay(iso) {
-  const due = habits.filter(h => isDueOn(h, iso));
+  const due = habits.filter(h => !h.paused && isDueOn(h, iso));
   return due.length > 0 && due.every(h => isDone(h.id, iso));
 }
 
@@ -377,6 +400,7 @@ window.onHabitClick = async function(id) {
   const t      = selectedDate;
   const wasDone = isDone(id, t);
   setLocal(id, t, wasDone ? null : 1);
+  if (wasDone && notes[t]) delete notes[t][id];
   renderToday();
   if (!wasDone) {
     const check = document.querySelector(`[data-hid="${id}"] .habit-check`);
@@ -500,6 +524,9 @@ window.openPanel = function(habit) {
   });
 
   $('btnDelete').classList.toggle('hidden', !editingId);
+  const pauseBtn = $('btnPause');
+  pauseBtn.classList.toggle('hidden', !editingId);
+  pauseBtn.textContent = habit?.paused ? 'Reanudar' : 'Pausar';
   onTypeChange();
   onFreqChange();
 
@@ -587,6 +614,24 @@ window.saveHabit = async function() {
     closePanel();
     await init();
   } catch (e) {
+    toast(e.message, 'err');
+  }
+};
+
+window.togglePause = async function() {
+  if (!editingId) return;
+  const habit = habits.find(h => h.id === editingId);
+  if (!habit) return;
+  const newPaused = habit.paused ? 0 : 1;
+  habit.paused = newPaused;
+  closePanel();
+  renderToday(); renderManage(); renderCalendar(); setupReminders();
+  try {
+    await updateHabit(habit.id, { paused: newPaused });
+    toast(newPaused ? 'Hábito pausado' : 'Hábito reanudado');
+  } catch (e) {
+    habit.paused = newPaused ? 0 : 1;
+    renderToday(); renderManage();
     toast(e.message, 'err');
   }
 };
@@ -746,27 +791,22 @@ function setupReminders() {
 
   const t = today();
   for (const habit of habits) {
-    if (!habit.reminder_time || !isDueOn(habit, t) || isDone(habit.id, t)) continue;
+    if (habit.paused || !habit.reminder_time || !isDueOn(habit, t) || isDone(habit.id, t)) continue;
 
     const [rh, rm] = habit.reminder_time.split(':').map(Number);
     const fire  = new Date(); fire.setHours(rh, rm, 0, 0);
     const ms    = fire - Date.now();
 
+    // Only log to the in-app drawer; the actual system notification is delivered
+    // by the server-side push (cron) to avoid double notifications.
     if (ms > 0) {
       reminderTimers.push(setTimeout(() => {
         if (!isDone(habit.id, today())) {
-          const title = `${habit.emoji || '⏰'} ${habit.name}`;
-          const body  = habit.description || '¡Es hora de completar tu hábito!';
-          showNotif(title, body);
-          pushNotif(title, body);
+          pushNotif(`${habit.emoji || '⏰'} ${habit.name}`, habit.description || '¡Es hora de completar tu hábito!');
         }
       }, ms));
     } else if (ms > -3600000) {
-      // Missed within last hour
-      const title = `${habit.emoji || '⏰'} ${habit.name}`;
-      const body  = `Recordatorio perdido — ${habit.reminder_time}`;
-      showNotif(title, body);
-      pushNotif(title, body);
+      pushNotif(`${habit.emoji || '⏰'} ${habit.name}`, `Recordatorio perdido — ${habit.reminder_time}`);
     }
   }
 }
@@ -782,6 +822,7 @@ async function loadCompletions(monthStr) {
   for (const r of rows) {
     if (!completions[r.date]) completions[r.date] = {};
     completions[r.date][r.habit_id] = r.value;
+    if (r.note) { (notes[r.date] ||= {})[r.habit_id] = r.note; }
   }
 }
 
@@ -820,6 +861,7 @@ async function init() {
   selectedDate = today();
 
   completions  = {};
+  notes        = {};
   loadedMonths = new Set();
 
   const currMonth  = today().slice(0, 7);
@@ -981,6 +1023,33 @@ window.logout = function() {
 })();
 
 init();
+
+// ── Completion notes ──────────────────────────────────────────────────────────
+let noteEditId = null;
+window.openNote = function(id) {
+  noteEditId = id;
+  $('note-text').value = notes[selectedDate]?.[id] || '';
+  $('note-bg').classList.add('open');
+  setTimeout(() => $('note-text').focus(), 100);
+};
+window.closeNote = function() {
+  $('note-bg').classList.remove('open');
+  noteEditId = null;
+};
+window.saveNote = async function() {
+  if (!noteEditId) return;
+  const id   = noteEditId;
+  const t    = selectedDate;
+  const text = $('note-text').value.trim();
+  const value = getValue(id, t) || 1;
+  if (text) { (notes[t] ||= {})[id] = text; }
+  else if (notes[t]) { delete notes[t][id]; }
+  closeNote();
+  renderToday();
+  try {
+    await setComplete({ habit_id: id, date: t, value, note: text || null });
+  } catch (e) { toast(e.message, 'err'); }
+};
 
 window.customConfirm = function(msg) {
   return new Promise(resolve => {

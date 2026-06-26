@@ -307,6 +307,7 @@
 
     <div class="panel-actions">
       <button class="btn btn-danger hidden" id="btnDelete" onclick="confirmDelete()">Eliminar</button>
+      <button class="btn hidden" id="btnPause" onclick="togglePause()">Pausar</button>
       <button class="btn btn-accent" onclick="saveHabit()">Guardar hábito</button>
     </div>
 
@@ -324,6 +325,18 @@
     <div class="confirm-actions">
       <button class="btn" id="confirm-cancel">Cancelar</button>
       <button class="btn btn-danger" id="confirm-ok">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Note Modal -->
+<div class="confirm-backdrop" id="note-bg">
+  <div class="confirm-modal">
+    <h3>Nota</h3>
+    <textarea id="note-text" rows="4" placeholder="¿Cómo te fue hoy?" style="width:100%;resize:vertical;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-family:inherit;font-size:13px"></textarea>
+    <div class="confirm-actions">
+      <button class="btn" id="note-cancel" onclick="closeNote()">Cancelar</button>
+      <button class="btn btn-accent" id="note-save" onclick="saveNote()">Guardar</button>
     </div>
   </div>
 </div>
@@ -347,7 +360,7 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=16"></script>
+<script type="module" src="./main.js?v=17"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
