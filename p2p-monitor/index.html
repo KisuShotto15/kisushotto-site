@@ -2828,6 +2828,7 @@ async function botToggle() {
   if (BOT.running) {
     // ── STOP ────────────────────────────────────────────
     BOT.running = false;
+    BOT.startSeq = (BOT.startSeq || 0) + 1; // cancela cualquier arranque aun en curso
     stopBotPoller();
     stopActivityWatcher();
     stopOrdersWatcher();
@@ -2866,6 +2867,11 @@ async function botToggle() {
     if (!SESSION.token)     { toast('Inicia sesión primero'); return; }
     if (!BOT_CFG.sellPrice) { toast('Ingresa el Precio de venta primero'); return; }
 
+    // Marcar corriendo YA, para que un segundo toque dispare Detener durante el arranque.
+    BOT.running = true;
+    BOT.startSeq = (BOT.startSeq || 0) + 1;
+    var startSeq = BOT.startSeq;
+
     document.getElementById('bot-toggle').textContent = '⏹ Detener Bot';
     document.getElementById('bot-toggle').style.background = '#E24B4A';
     document.getElementById('bot-live').style.display = 'grid';
@@ -2901,6 +2907,9 @@ async function botToggle() {
     botSetStatus('Posicionando...', '#F0B90B');
     try { await botInitialCycle(true); } catch(e) {}
 
+    // Si pulsaron Detener durante el arranque, abortar antes de activar/encender.
+    if (BOT.startSeq !== startSeq) { botLog('— Inicio cancelado —', '#888'); return; }
+
     // 3. Activar el anuncio
     botSetStatus('Activando anuncio...', '#F0B90B');
     try {
@@ -2912,6 +2921,13 @@ async function botToggle() {
       }
     } catch(e) {
       botLog('⚠ No se pudo activar el anuncio: ' + e.message, '#F6465D');
+    }
+
+    // Si cancelaron justo después de activar, pausar el anuncio y no encender el servidor.
+    if (BOT.startSeq !== startSeq) {
+      botLog('— Inicio cancelado — pausando anuncio', '#888');
+      if (BOT.adNumber) { try { await botCallWorker('/toggle-ad', { advNo: BOT.adNumber, advStatus: 3 }); } catch(e) {} }
+      return;
     }
 
     // 4. Encender el bot en el SERVIDOR (repricia 24/7 aunque cierres la página)
