@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=17';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=18';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=17');
+    const m = await import('./push.js?v=18');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -532,7 +532,7 @@ window.openPanel = function(habit) {
 
   $('panelBackdrop').classList.remove('hidden');
   requestAnimationFrame(() => $('sidePanel').classList.add('open'));
-  setTimeout(() => $('fName').focus(), 280);
+  setTimeout(() => $('fName').focus(), 150);
 };
 
 window.closePanel = function() {

@@ -488,7 +488,8 @@ body::before {
   border-left: 1px solid var(--border2); z-index: 100;
   display: flex; flex-direction: column;
   transform: translateX(100%);
-  transition: transform 0.26s cubic-bezier(0.22,1,0.36,1);
+  transition: transform 0.17s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
   box-shadow: -16px 0 48px rgba(0,0,0,0.5);
 }
 .side-panel.open { transform: translateX(0); }
@@ -578,7 +579,7 @@ body::before {
 .panel-divider { height: 1px; background: var(--border); }
 
 /* Action buttons */
-.panel-actions { display: flex; gap: 10px; }
+.panel-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn {
   font-family: 'IBM Plex Mono', monospace; font-size: 16px;
   letter-spacing: 0.05em; padding: 10px 20px; border-radius: 999px;
@@ -588,7 +589,7 @@ body::before {
 .btn:hover { border-color: var(--amethyst); color: var(--amethyst); }
 .btn-accent {
   border-color: rgba(191,148,255,0.4);
-  background: var(--amethyst-glow); color: var(--amethyst); flex: 1;
+  background: var(--amethyst-glow); color: var(--amethyst); flex: 1 1 100%;
 }
 .btn-accent:hover { background: rgba(191,148,255,0.18); border-color: var(--amethyst); }
 .btn-danger { border-color: rgba(252,165,165,0.3); color: var(--coral); }
