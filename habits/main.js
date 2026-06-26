@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=20';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=21';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=20');
+    const m = await import('./push.js?v=21');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -153,11 +153,15 @@ function setLocal(habitId, date, value) {
   if (value == null || value <= 0) delete completions[date][habitId];
   else completions[date][habitId] = value;
 }
+// Paused habits hide only from the pause date forward; earlier days keep history.
+function pausedOn(habit, date) {
+  return !!(habit.paused && habit.paused_at && date >= habit.paused_at);
+}
 
 // ── Today stats ───────────────────────────────────────────────────────────────
 function todayStats() {
   const t    = selectedDate;
-  const due  = habits.filter(h => !h.paused && isDueOn(h, t));
+  const due  = habits.filter(h => !pausedOn(h, t) && isDueOn(h, t));
   const done = due.filter(h => isDone(h.id, t));
   const pct  = due.length ? Math.round(done.length / due.length * 100) : 0;
   return { due: due.length, done: done.length, pct };
@@ -183,7 +187,7 @@ function renderToday() {
   $('todayPct').textContent      = `${pct}%`;
   $('statToday').textContent     = `${done}/${due}`;
 
-  const dueHabits = habits.filter(h => !h.paused && isDueOn(h, t));
+  const dueHabits = habits.filter(h => !pausedOn(h, t) && isDueOn(h, t));
 
   const list = $('habitList');
   if (!habits.length) {
@@ -322,7 +326,7 @@ function renderStats() {
 
 // ── Calendar heatmap ──────────────────────────────────────────────────────────
 function isPerfectDay(iso) {
-  const due = habits.filter(h => !h.paused && isDueOn(h, iso));
+  const due = habits.filter(h => !pausedOn(h, iso) && isDueOn(h, iso));
   return due.length > 0 && due.every(h => isDone(h.id, iso));
 }
 
@@ -340,6 +344,12 @@ function renderCalendar() {
 
   const grid = $('calGrid');
   grid.innerHTML = '';
+
+  // Mark the day each currently-paused habit was paused (emoji + pause icon).
+  const pausedByDay = {};
+  for (const h of habits) {
+    if (h.paused && h.paused_at) (pausedByDay[h.paused_at] ||= []).push(h.emoji || '✓');
+  }
 
   for (let i = startDow - 1; i >= 0; i--) {
     const cell = document.createElement('div');
@@ -362,7 +372,11 @@ function renderCalendar() {
     }
 
     cell.title = `${iso}: ${pct !== null ? pct + '%' : 'sin datos'}`;
-    cell.innerHTML = `<span class="cal-cell-num">${d}</span>${isPerfectDay(iso) ? '<span class="cal-perfect">✦</span>' : ''}`;
+    const paused = pausedByDay[iso];
+    const pauseHtml = paused
+      ? `<span class="cal-pause" title="Pausado">⏸<span class="cal-pause-emoji">${esc(paused[0])}</span></span>`
+      : '';
+    cell.innerHTML = `<span class="cal-cell-num">${d}</span>${isPerfectDay(iso) ? '<span class="cal-perfect">✦</span>' : ''}${pauseHtml}`;
     if (iso <= todayISO) {
       cell.style.cursor = 'pointer';
       cell.onclick = () => selectDate(iso);
@@ -620,16 +634,20 @@ window.togglePause = async function() {
   if (!editingId) return;
   const habit = habits.find(h => h.id === editingId);
   if (!habit) return;
-  const newPaused = habit.paused ? 0 : 1;
-  habit.paused = newPaused;
+  const newPaused   = habit.paused ? 0 : 1;
+  const newPausedAt = newPaused ? today() : null;
+  const prevPaused   = habit.paused;
+  const prevPausedAt = habit.paused_at;
+  habit.paused    = newPaused;
+  habit.paused_at = newPausedAt;
   closePanel();
   renderToday(); renderManage(); renderCalendar(); setupReminders();
   try {
-    await updateHabit(habit.id, { paused: newPaused });
+    await updateHabit(habit.id, { paused: newPaused, paused_at: newPausedAt });
     toast(newPaused ? 'Hábito pausado' : 'Hábito reanudado');
   } catch (e) {
-    habit.paused = newPaused ? 0 : 1;
-    renderToday(); renderManage();
+    habit.paused = prevPaused; habit.paused_at = prevPausedAt;
+    renderToday(); renderManage(); renderCalendar();
     toast(e.message, 'err');
   }
 };
@@ -789,7 +807,7 @@ function setupReminders() {
 
   const t = today();
   for (const habit of habits) {
-    if (habit.paused || !habit.reminder_time || !isDueOn(habit, t) || isDone(habit.id, t)) continue;
+    if (pausedOn(habit, t) || !habit.reminder_time || !isDueOn(habit, t) || isDone(habit.id, t)) continue;
 
     const [rh, rm] = habit.reminder_time.split(':').map(Number);
     const fire  = new Date(); fire.setHours(rh, rm, 0, 0);
@@ -837,16 +855,17 @@ async function loadCalMonth(force = false) {
   } catch { calDaily = {}; }
 }
 
-// One-time: existing habits with a reminder but no tz were created before tz tracking.
-// Patch them to the browser tz so the cron fires at the correct local time.
+// One-time backfills for habits created before a field existed:
+//  - tz: needed so the reminder cron fires at the correct local time.
+//  - paused_at: paused habits without a pause date would hide their whole history.
 function backfillTz() {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  if (!tz) return;
+  const t  = today();
   for (const h of habits) {
-    if (h.reminder_time && !h.tz) {
-      h.tz = tz;
-      updateHabit(h.id, { tz }).catch(() => {});
-    }
+    const patch = {};
+    if (tz && h.reminder_time && !h.tz) { h.tz = tz; patch.tz = tz; }
+    if (h.paused && !h.paused_at)       { h.paused_at = t; patch.paused_at = t; }
+    if (Object.keys(patch).length) updateHabit(h.id, patch).catch(() => {});
   }
 }
 

@@ -428,6 +428,13 @@ body::before {
   color: var(--amber);
   text-shadow: 0 0 8px rgba(252,211,77,0.9), 0 0 16px rgba(252,211,77,0.4);
 }
+.cal-pause {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 1px;
+  font-size: 11px; line-height: 1; color: var(--amber);
+  filter: drop-shadow(0 0 3px rgba(0,0,0,0.7));
+}
+.cal-pause-emoji { font-size: 11px; }
 
 /* ── Stats strip ── */
 .stats-strip {

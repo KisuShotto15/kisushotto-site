@@ -90,6 +90,14 @@ function isoUTC(d) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
 }
 
+// A habit is inactive only from its pause date forward; days before keep history.
+function pausedOn(habit, dateISO) {
+  return !!(habit.paused && habit.paused_at && dateISO >= habit.paused_at);
+}
+function activeDueOn(habit, dateISO) {
+  return isDueOn(habit, dateISO) && !pausedOn(habit, dateISO);
+}
+
 // A completion counts as "done" only if a count habit reaches its target.
 function habitDone(habit, value) {
   if (value == null) return false;
@@ -102,7 +110,7 @@ function calcStreak(habit, doneSet, todayISO) {
   const d = new Date(todayISO + 'T00:00:00Z');
   for (let i = 0; i < 3660; i++) {        // cap ~10 years
     const ds = isoUTC(d);
-    if (isDueOn(habit, ds)) {
+    if (activeDueOn(habit, ds)) {
       if (doneSet.has(ds)) streak++;
       else if (ds !== todayISO) break;     // today may still be incomplete
     }
@@ -117,7 +125,7 @@ function calcRecord(habit, doneSet, todayISO) {
   const d = new Date(todayISO + 'T00:00:00Z');
   for (let i = 0; i < 3660; i++) {
     const ds = isoUTC(d);
-    if (isDueOn(habit, ds)) {
+    if (activeDueOn(habit, ds)) {
       if (doneSet.has(ds)) { run++; if (run > best) best = run; }
       else if (ds !== todayISO) run = 0;   // a real miss breaks the run
     }
@@ -133,7 +141,7 @@ function calcRate(habit, doneSet, todayISO, n) {
   d.setUTCDate(d.getUTCDate() - 1);        // start yesterday (today may be pending)
   for (let i = 0; i < 3660 && due < n; i++) {
     const ds = isoUTC(d);
-    if (isDueOn(habit, ds)) { due++; if (doneSet.has(ds)) done++; }
+    if (activeDueOn(habit, ds)) { due++; if (doneSet.has(ds)) done++; }
     d.setUTCDate(d.getUTCDate() - 1);
   }
   return due ? Math.round(done / due * 100) : 0;
@@ -232,6 +240,7 @@ async function migrate(env) {
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN reminder_last_sent TEXT").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN tz TEXT").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN paused INTEGER NOT NULL DEFAULT 0").run(); } catch (_) {}
+  try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN paused_at TEXT").run(); } catch (_) {}
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -300,7 +309,7 @@ async function updateHabit(id, request, env, uid) {
   const fields = [];
   const vals   = [];
   const allowed = ['name','description','type','target_value','target_unit','frequency',
-                   'frequency_days','frequency_every','color','emoji','reminder_time','tz','sort_order','paused'];
+                   'frequency_days','frequency_every','color','emoji','reminder_time','tz','sort_order','paused','paused_at'];
   for (const k of allowed) {
     if (k in b) {
       fields.push(`${k} = ?`);
@@ -388,7 +397,7 @@ async function getStats(request, env, uid) {
   const to   = `${month}-31`;
 
   const { results: habits } = await env.DB.prepare(
-    `SELECT id, name, frequency, frequency_days, frequency_every, color, created_at FROM habits WHERE active = 1 AND user_id = ?`
+    `SELECT id, name, frequency, frequency_days, frequency_every, color, created_at, paused, paused_at FROM habits WHERE active = 1 AND user_id = ?`
   ).bind(uid).all();
   const { results: comps } = await env.DB.prepare(
     `SELECT habit_id, date, value FROM completions WHERE user_id = ? AND date >= ? AND date <= ?`
@@ -410,7 +419,7 @@ async function getStats(request, env, uid) {
   const daysInMonth = new Date(year, mon, 0).getDate();
   for (let d = 1; d <= daysInMonth; d++) {
     const date = `${month}-${String(d).padStart(2, '0')}`;
-    const due  = habits.filter(h => isDueOn(h, date));
+    const due  = habits.filter(h => activeDueOn(h, date));
     const done = due.filter(h => compMap[h.id]?.[date]).length;
     daily[date] = due.length > 0 ? Math.round(done / due.length * 100) : 0;
   }

@@ -1,4 +1,4 @@
-const CACHE = 'ks-habits-v12';
+const CACHE = 'ks-habits-v13';
 
 self.addEventListener('install', () => { self.skipWaiting(); });
 
