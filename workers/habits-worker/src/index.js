@@ -397,7 +397,7 @@ async function getStats(request, env, uid) {
   const to   = `${month}-31`;
 
   const { results: habits } = await env.DB.prepare(
-    `SELECT id, name, frequency, frequency_days, frequency_every, color, created_at, paused, paused_at FROM habits WHERE active = 1 AND user_id = ?`
+    `SELECT id, name, type, target_value, frequency, frequency_days, frequency_every, color, created_at, paused, paused_at FROM habits WHERE active = 1 AND user_id = ?`
   ).bind(uid).all();
   const { results: comps } = await env.DB.prepare(
     `SELECT habit_id, date, value FROM completions WHERE user_id = ? AND date >= ? AND date <= ?`
@@ -420,7 +420,7 @@ async function getStats(request, env, uid) {
   for (let d = 1; d <= daysInMonth; d++) {
     const date = `${month}-${String(d).padStart(2, '0')}`;
     const due  = habits.filter(h => activeDueOn(h, date));
-    const done = due.filter(h => compMap[h.id]?.[date]).length;
+    const done = due.filter(h => habitDone(h, compMap[h.id]?.[date])).length;
     daily[date] = due.length > 0 ? Math.round(done / due.length * 100) : 0;
   }
 
