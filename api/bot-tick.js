@@ -2,7 +2,7 @@
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
 import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
-import { getMyAds, updateAdPrice, updateMinLimit, publicSearch } from './_lib/binance.js';
+import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
 import { computeAlerts, pushHist24 } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
@@ -151,8 +151,12 @@ async function tickUser(row) {
 
   const surplus = parseFloat(ad.surplusAmount || ad.tradableQuantity || ad.remainQuantity || 0);
   if (surplus > 0 && surplus < 100) {
-    log = pushLog(log, '🛑 Fondos insuficientes (<100 USDT) — bot detenido', 'error');
-    return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: ad.advNo || ad.adNumber, currentPrice, lastReprice };
+    // Pausar el anuncio en Binance: que no quede vivo y mal posicionado al apagarse el bot.
+    const adNo = String(ad.advNo || ad.adNumber);
+    const off = await setAdStatus(key, secret, adNo, 3).catch(() => ({ ok: false }));
+    log = pushLog(log, off.ok ? '🛑 Fondos insuficientes (<100 USDT) — anuncio pausado y bot detenido'
+                              : '🛑 Fondos insuficientes — bot detenido (no se pudo pausar el anuncio)', 'error');
+    return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: adNo, currentPrice, lastReprice };
   }
 
   if (!cfg.sellPrice) {

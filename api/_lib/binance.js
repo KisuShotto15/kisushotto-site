@@ -71,6 +71,15 @@ export async function updateMinLimit(key, secret, advNo, minSingleTransAmount) {
   return { ok: r.ok, data };
 }
 
+// Cambia el estado del anuncio (3 = pausar/offline, 1 = activar). Igual que el toggle-ad del cliente.
+export async function setAdStatus(key, secret, advNo, advStatus) {
+  const { qs } = tsQs(secret);
+  const body = JSON.stringify({ advNos: [String(advNo)], advStatus: Number(advStatus) });
+  const r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/updateStatus?${qs}`, { method: 'POST', headers: headers(key), body });
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, data };
+}
+
 // Body de busqueda publica (espejo de buildSearchBody del cliente).
 export function buildSearchBody({ transAmount, page, pays, tradeType }) {
   const body = {
