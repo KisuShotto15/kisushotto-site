@@ -23,7 +23,7 @@ cp habits/push.js "$OUT/push.js"
 
 # Service worker — habits-specific with push notification support
 cat > "$OUT/sw.js" << 'SWEOF'
-const CACHE = 'ks-habits-v9';
+const CACHE = 'ks-habits-v10';
 
 self.addEventListener('install', () => { self.skipWaiting(); });
 
