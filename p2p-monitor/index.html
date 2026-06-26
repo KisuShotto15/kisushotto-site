@@ -828,6 +828,12 @@ input:focus {
           <div class="sc-v" id="sess-min" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
       </div>
+      <div id="spark-wrap" style="display:none;margin-top:8px">
+        <div class="hm-label" style="display:flex;justify-content:space-between;align-items:baseline">
+          <span>Últimas 24h (mayorista)</span><span id="spark-range" style="color:var(--text-3);font-weight:700"></span>
+        </div>
+        <svg id="spark" width="100%" height="46" preserveAspectRatio="none" viewBox="0 0 600 46" style="display:block;margin-top:4px"></svg>
+      </div>
       <span id="hero-small-lbl" style="display:none"></span>
     </div>
 </div>
@@ -857,6 +863,7 @@ input:focus {
           <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
           <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
           <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+          <div class="cfg-row"><span>Tendencia sostenida ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-sustain" value="1.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
         </details>
         <details style="margin-top:6px">
           <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Monitor 24/7</summary>
@@ -864,6 +871,7 @@ input:focus {
           <div class="cfg-row"><span>Silencio desde</span><input type="time" id="cfg-mon-qstart" value="00:00" style="width:96px"></div>
           <div class="cfg-row"><span>Silencio hasta</span><input type="time" id="cfg-mon-qend" value="07:00" style="width:96px"></div>
           <div class="cfg-row"><span>Refresco nocturno (seg)</span><input type="number" id="cfg-mon-qref" value="180" min="60" max="600" step="30"></div>
+          <div class="cfg-row"><span>Resumen diario</span><input type="time" id="cfg-mon-summary" value="08:00" style="width:96px"></div>
           <div style="font-size:11px;color:var(--text-3);margin-top:4px">Al pulsar Iniciar también corre 24/7 en el servidor y avisa por el Telegram del bot (requiere token+chat). De noche silencia las alertas y refresca más lento.</div>
         </details>
         <div class="gear-filter">
@@ -1131,6 +1139,7 @@ var CFG = {
   spreadThr: 0.5,
   overboughtThr: 1.0,
   weaknessThr: 0.5,
+  sustainThr: 1.5,       // Tendencia sostenida (~1h) en %
   mayAmount:   2000000,  // Monto a filtrar en sección Mayoristas (VES)
   smallAmount: 59999,    // Monto a filtrar en sección Ref. Compra (VES)
   commission:  0.0,      // Comisión Binance por anuncio (%)
@@ -1138,7 +1147,8 @@ var CFG = {
   verifiedOnly: true,    // Solo comerciantes con insignia (aplica a monitor y bot)
   monQuietStart: '00:00',// Monitor 24/7: inicio del silencio nocturno (America/Caracas)
   monQuietEnd:   '07:00',// Monitor 24/7: fin del silencio nocturno
-  monQuietRef:   180     // Monitor 24/7: refresco nocturno (seg)
+  monQuietRef:   180,    // Monitor 24/7: refresco nocturno (seg)
+  monSummary:    '08:00' // Monitor 24/7: hora del resumen diario por Telegram (Caracas)
 };
 
 var PROXY = 'https://kisushotto-site.vercel.app/api/p2p-search';
@@ -1598,14 +1608,16 @@ async function fetchOnce() {
     var bestMay = ST.mayoristas[0] ? ST.mayoristas[0].price : null;
     if (bestMay) {
       ST.priceHist.push({ ts: Date.now(), price: bestMay });
-      if (ST.priceHist.length > 200) ST.priceHist.shift();
+      if (ST.priceHist.length > 600) ST.priceHist.shift();
     }
 
     ST.lastFetch = new Date();
     ST.consecFails = 0;
     renderAll();
     checkAlerts();
-    var emptyNote = (!ST.mayoristas.length && !ST.smallAds.length) ? ' — sin anuncios en rango' : '';
+    renderSparkline();
+    refreshHist24();
+    var emptyNote =(!ST.mayoristas.length && !ST.smallAds.length) ? ' — sin anuncios en rango' : '';
     var lu = document.getElementById('last-update');
     lu.style.color = '';
     lu.textContent = 'Actualizado ' + ST.lastFetch.toLocaleTimeString('es-VE') + emptyNote;
@@ -1984,6 +1996,32 @@ function checkAlerts() {
           push('Debilidad P2P', chg.toFixed(3) + '% en 10 min');
         }
       } else { COOLDOWN.wk = 0; }
+    }
+  }
+
+  // Tendencia sostenida (~1h): cambio grande confirmado a mitad de ventana (filtra picos sueltos)
+  if (ST.priceHist.length > 2) {
+    var ref60 = null, ref30 = null;
+    for (var k = ST.priceHist.length - 1; k >= 0; k--) {
+      var ageT = now - ST.priceHist[k].ts;
+      if (ref30 === null && ageT >= 25 * 60000 && ageT <= 40 * 60000) ref30 = ST.priceHist[k].price;
+      if (ref60 === null && ageT >= 50 * 60000 && ageT <= 75 * 60000) ref60 = ST.priceHist[k].price;
+      if (ref30 !== null && ref60 !== null) break;
+    }
+    if (ref60 !== null && ref30 !== null) {
+      var chg60 = (bestMay - ref60) / ref60 * 100;
+      var chg30 = (bestMay - ref30) / ref30 * 100;
+      var TREND_CD = 20 * 60000;
+      if (Math.abs(chg60) >= CFG.sustainThr && Math.sign(chg30) === Math.sign(chg60)) {
+        if (!COOLDOWN.tr || now - COOLDOWN.tr > TREND_CD) {
+          COOLDOWN.tr = now;
+          var upT = chg60 > 0;
+          addAlert(upT ? 'overbought' : 'weakness',
+            upT ? '📈 Tendencia alcista sostenida' : '📉 Tendencia bajista sostenida',
+            (upT ? '+' : '') + chg60.toFixed(2) + '% en 1h · Precio actual: ' + fmt(bestMay) + ' Bs');
+          push('Tendencia P2P', (upT ? '+' : '') + chg60.toFixed(2) + '% en 1h');
+        }
+      } else { COOLDOWN.tr = 0; }
     }
   }
 }
@@ -2988,7 +3026,50 @@ function loadTgConfig() {
 }
 
 // ── Monitor 24/7 (server-side) ────────────────────────
-var MON24 = { enabled: false, lastHb: 0 };
+var MON24 = { enabled: false, lastHb: 0, lastHist: 0 };
+
+// ── Sparkline 24h (mejor mayorista) ───────────────────
+// HIST24 = serie servidor (24h, app cerrada/noche); se completa con los puntos vivos del cliente.
+var HIST24 = [];
+function sparkSeries() {
+  var s = Array.isArray(HIST24) ? HIST24.slice() : [];
+  var lastTs = s.length ? s[s.length - 1].ts : 0;
+  for (var i = 0; i < ST.priceHist.length; i++) {
+    if (ST.priceHist[i].ts > lastTs) s.push(ST.priceHist[i]);
+  }
+  return s.filter(function(p) { return p && p.price; });
+}
+function renderSparkline() {
+  var wrap = document.getElementById('spark-wrap');
+  var svg  = document.getElementById('spark');
+  if (!wrap || !svg) return;
+  var pts = sparkSeries();
+  if (pts.length < 2) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  var W = 600, H = 46, pad = 3;
+  var t0 = pts[0].ts, dt = (pts[pts.length - 1].ts - t0) || 1;
+  var min = pts[0].price, max = pts[0].price;
+  for (var i = 0; i < pts.length; i++) { if (pts[i].price < min) min = pts[i].price; if (pts[i].price > max) max = pts[i].price; }
+  var dp = (max - min) || 1, d = '';
+  for (var j = 0; j < pts.length; j++) {
+    var x = pad + (pts[j].ts - t0) / dt * (W - 2 * pad);
+    var y = pad + (1 - (pts[j].price - min) / dp) * (H - 2 * pad);
+    d += (j ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+  }
+  var col = pts[pts.length - 1].price >= pts[0].price ? '#2ebd85' : '#f6465d';
+  svg.innerHTML = '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
+  document.getElementById('spark-range').textContent = fmt(min) + ' – ' + fmt(max) + ' Bs';
+}
+// Refresca la serie de 24h desde el servidor (max 1 vez cada 5 min).
+function refreshHist24() {
+  if (!SESSION.token) return;
+  var now = Date.now();
+  if (now - MON24.lastHist < 5 * 60000) return;
+  MON24.lastHist = now;
+  botCallWorker('/monitor-state').then(function(d) {
+    if (d && Array.isArray(d.hist24)) { HIST24 = d.hist24; renderSparkline(); }
+  }).catch(function(){});
+}
 
 // Latido: avisa al servidor que la app esta abierta y refrescando, para que NO duplique
 // la busqueda ni las alertas mientras tanto. Throttle ~30s.
@@ -2997,7 +3078,9 @@ function monitorHeartbeat() {
   var now = Date.now();
   if (now - MON24.lastHb < 28000) return;
   MON24.lastHb = now;
-  botCallWorker('/monitor-heartbeat').catch(function(){});
+  // De paso, el precio que ve la app alimenta hist24 en el servidor (sparkline sin huecos de dia).
+  var p = (ST.mayoristas && ST.mayoristas[0]) ? ST.mayoristas[0].price : 0;
+  botCallWorker('/monitor-heartbeat', { price: p }).catch(function(){});
 }
 
 function monitorServerConfig() {
@@ -3006,9 +3089,11 @@ function monitorServerConfig() {
     quietStart: document.getElementById('cfg-mon-qstart').value || '',
     quietEnd:   document.getElementById('cfg-mon-qend').value   || '',
     quietRefreshSec: parseInt(document.getElementById('cfg-mon-qref').value) || 180,
+    summaryHour: document.getElementById('cfg-mon-summary').value || '',
     spreadThr: CFG.spreadThr,
     overboughtThr: CFG.overboughtThr,
     weaknessThr: CFG.weaknessThr,
+    sustainThr: CFG.sustainThr,
     commission: CFG.commission || 0,
     mayAmount: CFG.mayAmount,
     smallAmount: CFG.smallAmount,
@@ -3041,6 +3126,7 @@ async function hydrateMon24() {
   try {
     var d = await botCallWorker('/monitor-state');
     MON24.enabled = !!(d && d.enabled);
+    if (d && Array.isArray(d.hist24)) { HIST24 = d.hist24; MON24.lastHist = Date.now(); renderSparkline(); }
     renderMon24(d && d.status);
     // Si el monitor 24/7 quedo activo, arranca la vista (tablas a CFG.interval) sin pulsar Iniciar.
     if (MON24.enabled && !ST.running) startMonitorView();
@@ -3053,6 +3139,7 @@ function saveConfig() {
   CFG.spreadThr     = parseFloat(document.getElementById('cfg-spr').value) || 0.5;
   CFG.overboughtThr = parseFloat(document.getElementById('cfg-ob').value)  || 1.0;
   CFG.weaknessThr   = parseFloat(document.getElementById('cfg-wk').value)  || 0.5;
+  CFG.sustainThr    = parseFloat(document.getElementById('cfg-sustain').value) || 1.5;
   var mayVal = document.getElementById('cfg-may-amount').value;
   CFG.mayAmount   = mayVal === '' ? 2000000 : (parseFloat(mayVal) || 0);
   CFG.smallAmount = parseFloat(document.getElementById('cfg-small-amount').value) || 59999;
@@ -3061,6 +3148,7 @@ function saveConfig() {
   CFG.monQuietStart = document.getElementById('cfg-mon-qstart').value || '00:00';
   CFG.monQuietEnd   = document.getElementById('cfg-mon-qend').value   || '07:00';
   CFG.monQuietRef   = parseInt(document.getElementById('cfg-mon-qref').value) || 180;
+  CFG.monSummary    = document.getElementById('cfg-mon-summary').value || '08:00';
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();
   if (ST.running) { clearInterval(ST.timer); ST.timer = setInterval(fetchOnce, CFG.interval * 1000); }
@@ -3081,6 +3169,7 @@ function loadConfig() {
     document.getElementById('cfg-spr').value      = CFG.spreadThr;
     document.getElementById('cfg-ob').value       = CFG.overboughtThr;
     document.getElementById('cfg-wk').value       = CFG.weaknessThr;
+    if (CFG.sustainThr != null) document.getElementById('cfg-sustain').value = CFG.sustainThr;
     document.getElementById('cfg-may-amount').value   = CFG.mayAmount;
     document.getElementById('cfg-small-amount').value = CFG.smallAmount;
     document.getElementById('cfg-commission').value   = CFG.commission;
@@ -3088,6 +3177,7 @@ function loadConfig() {
     if (CFG.monQuietStart) document.getElementById('cfg-mon-qstart').value = CFG.monQuietStart;
     if (CFG.monQuietEnd)   document.getElementById('cfg-mon-qend').value   = CFG.monQuietEnd;
     if (CFG.monQuietRef)   document.getElementById('cfg-mon-qref').value   = CFG.monQuietRef;
+    if (CFG.monSummary)    document.getElementById('cfg-mon-summary').value = CFG.monSummary;
   } catch(e) {}
   updateVerToggle();
 }

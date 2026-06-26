@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
+import { pushHist24 } from './_lib/monitor.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -82,10 +83,18 @@ export default async function handler(req, res) {
       }
       if (path === '/monitor-heartbeat') {
         // La app abierta avisa que esta refrescando; el servidor se queda quieto mientras tanto.
-        await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
+        // De paso alimenta hist24 con el precio que ve el cliente, asi el sparkline no queda hueco de dia.
+        const price = Number((params && params.price) || 0);
+        if (price > 0) {
+          const cur = await sql`SELECT hist24 FROM monitor_state WHERE user_id = ${user.uid}`;
+          const h = pushHist24(cur[0] ? cur[0].hist24 : [], Date.now(), price);
+          await sql`UPDATE monitor_state SET client_seen = now(), hist24 = ${JSON.stringify(h)}::jsonb WHERE user_id = ${user.uid}`;
+        } else {
+          await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
+        }
         return res.status(200).json({ ok: true });
       }
-      const rows = await sql`SELECT enabled, status, last_tick, log FROM monitor_state WHERE user_id = ${user.uid}`;
+      const rows = await sql`SELECT enabled, status, last_tick, hist24, log FROM monitor_state WHERE user_id = ${user.uid}`;
       return res.status(200).json(rows[0] || { enabled: false });
     } catch (e) {
       return res.status(500).json({ error: e.message });

@@ -2,6 +2,19 @@
 // Entrada: { mayRaw, smallRaw, cfg, priceHist, cooldowns, now, silent }.
 // Salida: { alerts:[{type,title,desc}], priceHist, cooldowns, bestMay }.
 const COOLDOWN_MS = 5 * 60000;
+const TREND_CD_MS = 20 * 60000;
+const HIST24_MS = 25 * 3600 * 1000;
+
+// Serie comprimida de 24h (1 punto cada ~5 min) para el sparkline. La alimentan tanto
+// el tick del servidor como el latido del cliente (app abierta), asi nunca queda hueca.
+export function pushHist24(hist, ts, price) {
+  if (!price) return Array.isArray(hist) ? hist : [];
+  const arr = Array.isArray(hist) ? hist.slice() : [];
+  const last = arr[arr.length - 1];
+  if (!last || ts - last.ts >= 4.5 * 60000) arr.push({ ts, price });
+  while (arr.length && ts - arr[0].ts > HIST24_MS) arr.shift();
+  return arr;
+}
 
 function mapBest(raw, verifiedOnly) {
   return raw.map(item => ({
@@ -73,6 +86,33 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
               desc: chg.toFixed(3) + '% en 10 min · Precio actual: ' + bestMay.toFixed(2) + ' Bs' });
           }
         } else { cd.wk = 0; }
+      }
+    }
+
+    // Tendencia sostenida (~1h): cambio grande confirmado a mitad de ventana (filtra picos sueltos)
+    const sustainThr = cfg.sustainThr != null ? cfg.sustainThr : 1.5;
+    if (hist.length > 2) {
+      let ref60 = null, ref30 = null;
+      for (let i = hist.length - 1; i >= 0; i--) {
+        const age = now - hist[i].ts;
+        if (ref30 === null && age >= 25 * 60000 && age <= 40 * 60000) ref30 = hist[i].price;
+        if (ref60 === null && age >= 50 * 60000 && age <= 75 * 60000) ref60 = hist[i].price;
+        if (ref30 !== null && ref60 !== null) break;
+      }
+      if (ref60 !== null && ref30 !== null) {
+        const chg60 = (bestMay - ref60) / ref60 * 100;
+        const chg30 = (bestMay - ref30) / ref30 * 100;
+        if (Math.abs(chg60) >= sustainThr && Math.sign(chg30) === Math.sign(chg60)) {
+          if (!cd.tr || now - cd.tr > TREND_CD_MS) {
+            cd.tr = now;
+            const up = chg60 > 0;
+            alerts.push({
+              type: up ? 'overbought' : 'weakness',
+              title: up ? '📈 Tendencia alcista sostenida' : '📉 Tendencia bajista sostenida',
+              desc: (up ? '+' : '') + chg60.toFixed(2) + '% en 1h · Precio actual: ' + bestMay.toFixed(2) + ' Bs',
+            });
+          }
+        } else { cd.tr = 0; }
       }
     }
   }

@@ -4,7 +4,7 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
-import { computeAlerts } from './_lib/monitor.js';
+import { computeAlerts, pushHist24 } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
 
 export const config = { maxDuration: 60 };
@@ -32,6 +32,33 @@ function inQuietHours(start, end, now) {
   if (s === e) return false;
   return s < e ? (cur >= s && cur < e) : (cur >= s || cur < e); // soporta franja nocturna
 }
+function caracasDateStr(now) {
+  return new Date(now - 4 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function caracasHm(now) {
+  const d = new Date(now - 4 * 3600 * 1000);
+  return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+}
+// Resumen una vez al dia: ya paso la hora y no se mando hoy (zona Caracas).
+function shouldSendSummary(hour, lastSummary, now) {
+  if (!hour) return false;
+  if (caracasMinutes(now) < hmToMin(hour)) return false;
+  if (!lastSummary) return true;
+  return caracasDateStr(new Date(lastSummary).getTime()) !== caracasDateStr(now);
+}
+function buildSummary(hist, now) {
+  const pts = (hist || []).filter(p => p && p.price && now - p.ts <= 24 * 3600 * 1000);
+  if (pts.length < 2) return '<b>📊 Resumen P2P · últimas 24h</b>\nSin datos suficientes todavía.';
+  let max = pts[0], min = pts[0];
+  for (const p of pts) { if (p.price > max.price) max = p; if (p.price < min.price) min = p; }
+  const open = pts[0].price, close = pts[pts.length - 1].price;
+  const chg = (close - open) / open * 100;
+  return '<b>📊 Resumen P2P · últimas 24h</b>\n' +
+    '🔼 Máx: ' + max.price.toFixed(2) + ' Bs (' + caracasHm(max.ts) + ')\n' +
+    '🔽 Mín: ' + min.price.toFixed(2) + ' Bs (' + caracasHm(min.ts) + ')\n' +
+    'Apertura → cierre: ' + open.toFixed(2) + ' → ' + close.toFixed(2) + ' Bs (' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%)\n' +
+    'Rango: ' + (max.price - min.price).toFixed(2) + ' Bs';
+}
 
 async function tickMonitor(row, now) {
   const cfg = row.config || {};
@@ -52,6 +79,7 @@ async function tickMonitor(row, now) {
   const smallRaw = await publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 3, tradeType: 'SELL' });
 
   const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: row.price_hist, cooldowns: row.cooldowns, now, silent });
+  const hist24 = pushHist24(row.hist24, now, out.bestMay);
 
   let log = row.log;
   let token = '';
@@ -65,9 +93,19 @@ async function tickMonitor(row, now) {
     log = pushLog(log, '📩 ' + out.alerts.length + ' alerta(s) → Telegram', 'info');
   }
 
+  // Resumen diario (no depende del silencio nocturno; se manda a la hora configurada)
+  let lastSummary = row.last_summary;
+  if (shouldSendSummary(cfg.summaryHour, lastSummary, now)) {
+    if (token && chatId) await sendTelegram(token, chatId, buildSummary(hist24, now));
+    lastSummary = new Date(now).toISOString();
+    log = pushLog(log, '📊 Resumen diario → Telegram', 'info');
+  }
+
   return {
     priceHist: out.priceHist,
     cooldowns: out.cooldowns,
+    hist24,
+    lastSummary,
     log,
     status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
   };
@@ -205,7 +243,7 @@ export default async function handler(req, res) {
 
     // Monitor server-side (alertas Telegram 24/7 con silencio nocturno)
     const mrows = await sql`
-      SELECT user_id, config, price_hist, cooldowns, log, last_tick, client_seen
+      SELECT user_id, config, price_hist, cooldowns, hist24, last_summary, log, last_tick, client_seen
       FROM monitor_state WHERE enabled = true LIMIT ${MAX_USERS}`;
     let monitored = 0;
     for (const row of mrows) {
@@ -213,7 +251,7 @@ export default async function handler(req, res) {
       try {
         out = await tickMonitor(row, Date.now());
       } catch (e) {
-        out = { priceHist: row.price_hist, cooldowns: row.cooldowns,
+        out = { priceHist: row.price_hist, cooldowns: row.cooldowns, hist24: row.hist24, lastSummary: row.last_summary,
                 log: pushLog(row.log, 'Error: ' + e.message, 'error'), status: 'Error: ' + e.message };
       }
       if (out === null) continue; // no toca refrescar aun
@@ -221,6 +259,8 @@ export default async function handler(req, res) {
         UPDATE monitor_state SET
           price_hist = ${JSON.stringify(out.priceHist || [])}::jsonb,
           cooldowns = ${JSON.stringify(out.cooldowns || {})}::jsonb,
+          hist24 = ${JSON.stringify(out.hist24 || [])}::jsonb,
+          last_summary = ${out.lastSummary || null},
           log = ${JSON.stringify(out.log || [])}::jsonb,
           status = ${out.status || null},
           last_tick = now(),
