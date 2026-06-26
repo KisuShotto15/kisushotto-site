@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=18';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=19';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=18');
+    const m = await import('./push.js?v=19');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -234,9 +234,7 @@ function renderToday() {
            data-hid="${h.id}"
            style="--habit-color:${color}"
            onclick="onHabitClick('${h.id}')">
-        <div class="habit-pill"></div>
-        <div class="habit-check"></div>
-        <span class="habit-emoji">${esc(h.emoji || '✓')}</span>
+        <div class="habit-check"><span class="habit-check-emoji">${esc(h.emoji || '')}</span></div>
         <div class="habit-info">
           <div class="habit-name">${esc(h.name)}</div>
           <div class="habit-freq">${h.description ? esc(h.description) : freqLabel(h)}${reminderInline}</div>

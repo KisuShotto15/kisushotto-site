@@ -206,8 +206,7 @@ body::before {
     font-size: 12px;
     padding: 2px 8px;
   }
-  /* Tighten left items + let long names wrap to 2 lines instead of clipping */
-  .habit-emoji { font-size: 22px; }
+  /* Let long names wrap to 2 lines instead of clipping */
   .habit-name {
     white-space: normal;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -282,19 +281,9 @@ body::before {
 }
 .habit-row.done { border-color: rgba(139,92,246,0.2); }
 
-/* Pill color indicator — replaces ::before bar */
-.habit-row .habit-pill {
-  width: 4px;
-  height: 60%;
-  min-height: 28px;
-  border-radius: 999px;
-  background: var(--habit-color, var(--muted));
-  flex-shrink: 0;
-}
-
-/* Check button */
+/* Check button (also holds the habit emoji until completed) */
 .habit-check {
-  width: 28px; height: 28px;
+  width: 34px; height: 34px;
   border-radius: 50%;
   border: 2px solid var(--habit-color, var(--border2));
   background: transparent;
@@ -314,8 +303,9 @@ body::before {
   position: absolute; font-size: 18px; font-weight: 700; color: #09090e;
 }
 
-/* Emoji */
-.habit-emoji { font-size: 25px; flex-shrink: 0; line-height: 1; }
+/* Emoji lives inside the check circle; hidden once completed (✓ takes over) */
+.habit-check-emoji { font-size: 17px; line-height: 1; color: var(--text); }
+.habit-row.done .habit-check-emoji { display: none; }
 
 /* Name + meta */
 .habit-info { flex: 1; min-width: 0; }
