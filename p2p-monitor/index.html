@@ -2858,6 +2858,7 @@ async function botToggle() {
       }
     }
     botSetStatus('Detenido', '#555');
+    if (TG.token && TG.chatId) sendTelegram('🔴 <b>Bot apagado</b>');
 
   } else {
     // ── START ────────────────────────────────────────────
@@ -2923,6 +2924,7 @@ async function botToggle() {
 
     BOT.running = true;
     botSetStatus('✓ Bot activo', '#1D9E75');
+    if (TG.token && TG.chatId) sendTelegram('🟢 <b>Bot encendido</b>');
     startBotPoller();
     startActivityWatcher();
     startOrdersWatcher();
@@ -2966,7 +2968,8 @@ function renderBotState(d) {
     d.log.forEach(function(e){
       if (e && e.ts > BOT_POLL.lastLogTs) {
         botLog(e.msg, BOT_LOG_COLORS[e.level] || '#8b949e');
-        if (TG.token && TG.chatId && (e.level === 'up' || e.level === 'down' || e.level === 'error')) sendTelegram('🤖 ' + e.msg);
+        // Solo errores a Telegram. Los reprices (up/down) son demasiado frecuentes (spam).
+        if (TG.token && TG.chatId && e.level === 'error') sendTelegram('🤖 ' + e.msg);
       }
     });
     var maxTs = d.log.reduce(function(m, e){ return e && e.ts > m ? e.ts : m; }, BOT_POLL.lastLogTs);
@@ -2994,6 +2997,8 @@ async function hydrateBotState() {
       BOT_POLL.lastLogTs = Array.isArray(d.log) ? d.log.reduce(function(m,e){ return e&&e.ts>m?e.ts:m; }, 0) : 0;
       renderBotState(d);
       startBotPoller();
+      startActivityWatcher();
+      startOrdersWatcher();
     }
   } catch(e) {}
 }
