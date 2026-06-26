@@ -830,9 +830,9 @@ input:focus {
       </div>
       <div id="spark-wrap" style="display:none;margin-top:8px">
         <div class="hm-label" style="display:flex;justify-content:space-between;align-items:baseline">
-          <span>Últimas 24h (mayorista)</span><span id="spark-range" style="color:var(--text-3);font-weight:700"></span>
+          <span>Últimas 24h (mayorista)</span><span id="spark-range" style="font-weight:700"></span>
         </div>
-        <svg id="spark" width="100%" height="46" preserveAspectRatio="none" viewBox="0 0 600 46" style="display:block;margin-top:4px"></svg>
+        <svg id="spark" width="100%" height="96" viewBox="0 0 600 96" style="display:block;margin-top:4px"></svg>
       </div>
       <span id="hero-small-lbl" style="display:none"></span>
     </div>
@@ -3051,20 +3051,39 @@ function renderSparkline() {
   var pts = sparkSeries();
   if (pts.length < 2) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  var W = 600, H = 46, pad = 3;
+  // viewBox 1:1 con el ancho real → sin distorsion (la barra es full-width).
+  var H = 96, padX = 2, padT = 12, padB = 12;
+  var W = Math.max(120, Math.round(svg.clientWidth || 600));
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
   var t0 = pts[0].ts, dt = (pts[pts.length - 1].ts - t0) || 1;
-  var min = pts[0].price, max = pts[0].price;
-  for (var i = 0; i < pts.length; i++) { if (pts[i].price < min) min = pts[i].price; if (pts[i].price > max) max = pts[i].price; }
-  var dp = (max - min) || 1, d = '';
-  for (var j = 0; j < pts.length; j++) {
-    var x = pad + (pts[j].ts - t0) / dt * (W - 2 * pad);
-    var y = pad + (1 - (pts[j].price - min) / dp) * (H - 2 * pad);
-    d += (j ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
-  }
-  var col = pts[pts.length - 1].price >= pts[0].price ? '#2ebd85' : '#f6465d';
-  svg.innerHTML = '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
-  document.getElementById('spark-range').textContent = fmt(min) + ' – ' + fmt(max) + ' Bs';
+  var min = pts[0], max = pts[0];
+  for (var i = 0; i < pts.length; i++) { if (pts[i].price < min.price) min = pts[i]; if (pts[i].price > max.price) max = pts[i]; }
+  // Holgura vertical para que picos/valles no queden pegados al borde.
+  var span = (max.price - min.price) || 1, lo = min.price - span * 0.1, hi = max.price + span * 0.1, dp = hi - lo;
+  function X(ts) { return padX + (ts - t0) / dt * (W - 2 * padX); }
+  function Y(p)  { return padT + (1 - (p - lo) / dp) * (H - padT - padB); }
+  var line = '';
+  for (var j = 0; j < pts.length; j++) line += (j ? 'L' : 'M') + X(pts[j].ts).toFixed(1) + ' ' + Y(pts[j].price).toFixed(1) + ' ';
+  var x0 = X(pts[0].ts), xL = X(pts[pts.length - 1].ts), yBase = H - padB;
+  var area = 'M' + x0.toFixed(1) + ' ' + yBase + ' ' + line.substring(1) + 'L' + xL.toFixed(1) + ' ' + yBase + ' Z';
+  var open = pts[0].price, close = pts[pts.length - 1].price, chg = (close - open) / open * 100;
+  var up = close >= open, col = up ? '#2ebd85' : '#f6465d';
+  svg.innerHTML =
+    '<defs><linearGradient id="spg" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + col + '" stop-opacity="0.26"/>' +
+      '<stop offset="100%" stop-color="' + col + '" stop-opacity="0"/></linearGradient></defs>' +
+    '<line x1="' + padX + '" y1="' + Y(open).toFixed(1) + '" x2="' + (W - padX) + '" y2="' + Y(open).toFixed(1) +
+      '" stroke="#3a3f4b" stroke-width="1" stroke-dasharray="3 4"/>' +
+    '<path d="' + area + '" fill="url(#spg)"/>' +
+    '<path d="' + line + '" fill="none" stroke="' + col + '" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<circle cx="' + X(max.ts).toFixed(1) + '" cy="' + Y(max.price).toFixed(1) + '" r="2.4" fill="#2ebd85"/>' +
+    '<circle cx="' + X(min.ts).toFixed(1) + '" cy="' + Y(min.price).toFixed(1) + '" r="2.4" fill="#f6465d"/>' +
+    '<circle cx="' + xL.toFixed(1) + '" cy="' + Y(close).toFixed(1) + '" r="3" fill="' + col + '"/>';
+  document.getElementById('spark-range').innerHTML =
+    '<span style="color:' + col + '">' + fmt(close) + ' Bs (' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%)</span>' +
+    ' <span style="color:var(--text-3);font-weight:400">· ' + fmt(min.price) + '–' + fmt(max.price) + '</span>';
 }
+window.addEventListener('resize', function() { try { renderSparkline(); } catch(e) {} });
 // Refresca la serie de 24h desde el servidor (max 1 vez cada 5 min).
 function refreshHist24() {
   if (!SESSION.token) return;
