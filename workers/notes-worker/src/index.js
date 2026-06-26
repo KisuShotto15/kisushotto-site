@@ -30,8 +30,9 @@ async function getUser(request, env) {
     const email = await verifySessionJwt(token, env);
     if (email) return email;
   }
-  // TODO(deploy 2): quitar este fallback — hoy permite suplantar identidad con solo el header.
-  return (request.headers.get('X-User-Email') || '').toLowerCase().trim() || null;
+  // La identidad sale exclusivamente del JWT de sesion firmado (passkey login).
+  // El header X-User-Email ya no se acepta: era suplantable con solo el token.
+  return null;
 }
 
 // ── DB bootstrap (idempotent) ────────────────────────────────────────────────
