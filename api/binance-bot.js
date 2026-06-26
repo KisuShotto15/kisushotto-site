@@ -39,7 +39,7 @@ export default async function handler(req, res) {
   }
 
   // Control del bot server-side (no requiere creds Binance descifradas aqui).
-  if (path === '/bot-enable' || path === '/bot-disable' || path === '/bot-state') {
+  if (path === '/bot-enable' || path === '/bot-disable' || path === '/bot-state' || path === '/bot-config') {
     try {
       await ensureSchema();
       if (path === '/bot-enable') {
@@ -55,6 +55,12 @@ export default async function handler(req, res) {
       }
       if (path === '/bot-disable') {
         await sql`UPDATE bot_state SET enabled = false, status = 'Detenido', updated_at = now() WHERE user_id = ${user.uid}`;
+        return res.status(200).json({ ok: true });
+      }
+      if (path === '/bot-config') {
+        // Actualiza la config en caliente (sin resetear precio/log) para el bot ya corriendo.
+        const cfg = JSON.stringify((params && params.config) || {});
+        await sql`UPDATE bot_state SET config = ${cfg}::jsonb, updated_at = now() WHERE user_id = ${user.uid} AND enabled = true`;
         return res.status(200).json({ ok: true });
       }
       const rows = await sql`SELECT enabled, config, ad_number, current_price, last_reprice, last_tick, status, log FROM bot_state WHERE user_id = ${user.uid}`;

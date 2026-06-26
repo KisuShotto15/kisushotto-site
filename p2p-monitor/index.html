@@ -2347,6 +2347,8 @@ function saveBotConfig() {
   TG.chatId = document.getElementById('cfg-tg-chat').value.trim();
   localStorage.setItem('p2p_tg', JSON.stringify(TG));
   botUpdateCeiling();
+  // Si el bot ya corre en el servidor, empujar la config en caliente (limite, spread, etc.).
+  if (BOT.running) botCallWorker('/bot-config', { config: botServerConfig() }).catch(function(){});
   var st = document.getElementById('bot-cfg-st');
   st.textContent = '✓ Guardado'; st.style.color = '#1D9E75';
   var tgSt = document.getElementById('tg-st');
