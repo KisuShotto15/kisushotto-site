@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=19';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=20';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=19');
+    const m = await import('./push.js?v=20');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
