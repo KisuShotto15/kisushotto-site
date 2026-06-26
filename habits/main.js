@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=24';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=25';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=24');
+    const m = await import('./push.js?v=25');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -380,9 +380,12 @@ function renderCalendar() {
 
     cell.title = `${iso}: ${pct !== null ? pct + '%' : 'sin datos'}`;
     const paused = pausedByDay[iso];
-    const pauseHtml = paused
-      ? `<span class="cal-pause" title="Pausado">⏸<span class="cal-pause-emoji">${esc(paused[0])}</span></span>`
-      : '';
+    let pauseHtml = '';
+    if (paused) {
+      const shown = paused.slice(0, 3).map(e => `<span class="cal-pause-emoji">${esc(e)}</span>`).join('');
+      const more  = paused.length > 3 ? `<span class="cal-pause-emoji">+${paused.length - 3}</span>` : '';
+      pauseHtml = `<span class="cal-pause" title="Pausado (${paused.length})">⏸${shown}${more}</span>`;
+    }
     cell.innerHTML = `<span class="cal-cell-num">${d}</span>${isPerfectDay(iso) ? '<span class="cal-perfect">✦</span>' : ''}${pauseHtml}`;
     if (iso <= todayISO) {
       cell.style.cursor = 'pointer';
