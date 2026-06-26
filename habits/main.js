@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=22';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=23';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=22');
+    const m = await import('./push.js?v=23');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -135,7 +135,7 @@ function calcStreak(habit) {
 
 function bestStreakAll() {
   if (!habits.length) return 0;
-  return Math.max(0, ...habits.map(calcStreak));
+  return Math.max(0, ...habits.map(h => h.record_streak ?? h.streak ?? 0));
 }
 
 // ── Completion helpers ────────────────────────────────────────────────────────
@@ -450,9 +450,12 @@ window.adjustCount = async function(id, delta) {
 
   try {
     await setComplete({ habit_id: id, date: t, value: newVal });
-    if ((oldVal > 0) !== (newVal > 0)) {
+    const target  = habit.target_value || 1;
+    const wasDone = oldVal >= target;
+    const nowDone = newVal >= target;
+    if (wasDone !== nowDone) {
       if (t === today() && isDueOn(habit, t)) {
-        habit.streak = Math.max(0, (habit.streak ?? 0) + (newVal > 0 ? 1 : -1));
+        habit.streak = Math.max(0, (habit.streak ?? 0) + (nowDone ? 1 : -1));
       } else {
         try { const { habits: hh } = await getHabits(today()); habits = hh; } catch {}
       }
@@ -543,10 +546,12 @@ window.openPanel = function(habit) {
   onFreqChange();
 
   $('panelBackdrop').classList.remove('hidden');
-  requestAnimationFrame(() => $('sidePanel').classList.add('open'));
+  // Double rAF: let the just-populated panel paint into its layer BEFORE the
+  // slide starts, otherwise the first frames drop and the sheet looks choppy.
+  requestAnimationFrame(() => requestAnimationFrame(() => $('sidePanel').classList.add('open')));
   // Autofocus only on desktop; on mobile it pops the keyboard over the panel.
   if (!window.matchMedia('(max-width: 768px)').matches) {
-    setTimeout(() => $('fName').focus(), 120);
+    setTimeout(() => $('fName').focus(), 140);
   }
 };
 

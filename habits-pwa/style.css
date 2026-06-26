@@ -508,6 +508,9 @@ body::before {
     border-left: none; border-radius: 22px 22px 0 0;
     border-top: 1px solid var(--border2);
     transform: translate3d(0, 100%, 0);
+    /* Taller sheet needs a slightly longer eased slide to stay smooth */
+    transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.45);
   }
   .side-panel.open { transform: translate3d(0, 0, 0); }
 }
