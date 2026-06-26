@@ -482,7 +482,7 @@ body::before {
 .panel-backdrop {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.62); z-index: 90;
-  opacity: 0; transition: opacity 0.17s ease;
+  opacity: 0; transition: opacity 0.12s ease;
 }
 .panel-backdrop:not(.hidden) { opacity: 1; }
 .panel-backdrop.hidden { display: none; }
@@ -493,7 +493,7 @@ body::before {
   border-left: 1px solid var(--border2); z-index: 100;
   display: flex; flex-direction: column;
   transform: translate3d(100%, 0, 0);
-  transition: transform 0.2s cubic-bezier(0.33, 1, 0.68, 1);
+  transition: transform 0.14s cubic-bezier(0.33, 1, 0.68, 1);
   will-change: transform;
   backface-visibility: hidden;
   contain: layout paint;
@@ -745,22 +745,22 @@ body::before {
 
 /* ── Entrance animations ── */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } }
-.page-header                     { animation: fadeUp 0.4s ease both 0.04s; }
-.stats-strip                     { animation: fadeUp 0.4s ease both 0.10s; }
-.habits-layout > div:first-child { animation: fadeUp 0.42s ease both 0.16s; }
-.habits-layout > div:last-child  { animation: fadeUp 0.42s ease both 0.22s; }
+.page-header                     { animation: fadeUp 0.26s ease both 0.02s; }
+.stats-strip                     { animation: fadeUp 0.26s ease both 0.06s; }
+.habits-layout > div:first-child { animation: fadeUp 0.28s ease both 0.10s; }
+.habits-layout > div:last-child  { animation: fadeUp 0.28s ease both 0.14s; }
 
 /* Staggered habit rows — only on first load (.entering added by JS once) */
-@keyframes rowIn { from { opacity: 0; transform: translateY(10px); } }
-.habit-list.entering .habit-row                { animation: rowIn 0.26s ease both; }
-.habit-list.entering .habit-row:nth-child(1)   { animation-delay: 0.03s; }
-.habit-list.entering .habit-row:nth-child(2)   { animation-delay: 0.08s; }
-.habit-list.entering .habit-row:nth-child(3)   { animation-delay: 0.13s; }
-.habit-list.entering .habit-row:nth-child(4)   { animation-delay: 0.18s; }
-.habit-list.entering .habit-row:nth-child(5)   { animation-delay: 0.23s; }
-.habit-list.entering .habit-row:nth-child(6)   { animation-delay: 0.28s; }
-.habit-list.entering .habit-row:nth-child(7)   { animation-delay: 0.33s; }
-.habit-list.entering .habit-row:nth-child(n+8) { animation-delay: 0.38s; }
+@keyframes rowIn { from { opacity: 0; transform: translateY(8px); } }
+.habit-list.entering .habit-row                { animation: rowIn 0.18s ease both; }
+.habit-list.entering .habit-row:nth-child(1)   { animation-delay: 0.02s; }
+.habit-list.entering .habit-row:nth-child(2)   { animation-delay: 0.05s; }
+.habit-list.entering .habit-row:nth-child(3)   { animation-delay: 0.08s; }
+.habit-list.entering .habit-row:nth-child(4)   { animation-delay: 0.11s; }
+.habit-list.entering .habit-row:nth-child(5)   { animation-delay: 0.14s; }
+.habit-list.entering .habit-row:nth-child(6)   { animation-delay: 0.17s; }
+.habit-list.entering .habit-row:nth-child(7)   { animation-delay: 0.20s; }
+.habit-list.entering .habit-row:nth-child(n+8) { animation-delay: 0.22s; }
 
 /* Check pop — applied by JS on specific element only */
 @keyframes checkPop {
@@ -777,12 +777,12 @@ body::before {
 @keyframes enterFromRight { from { transform: translateX( 40px); opacity: 0; } }
 @keyframes enterFromLeft  { from { transform: translateX(-40px); opacity: 0; } }
 
-#habitList.exit-left        { animation: exitLeft        0.18s ease forwards; pointer-events: none; }
-#habitList.exit-right       { animation: exitRight       0.18s ease forwards; pointer-events: none; }
-#habitList.enter-from-right { animation: enterFromRight  0.22s ease both; }
-#habitList.enter-from-left  { animation: enterFromLeft   0.22s ease both; }
-#calGrid.exit-left          { animation: exitLeft        0.18s ease forwards; pointer-events: none; }
-#calGrid.exit-right         { animation: exitRight       0.18s ease forwards; pointer-events: none; }
-#calGrid.enter-from-right   { animation: enterFromRight  0.22s ease both; }
-#calGrid.enter-from-left    { animation: enterFromLeft   0.22s ease both; }
+#habitList.exit-left        { animation: exitLeft        0.12s ease forwards; pointer-events: none; }
+#habitList.exit-right       { animation: exitRight       0.12s ease forwards; pointer-events: none; }
+#habitList.enter-from-right { animation: enterFromRight  0.15s ease both; }
+#habitList.enter-from-left  { animation: enterFromLeft   0.15s ease both; }
+#calGrid.exit-left          { animation: exitLeft        0.12s ease forwards; pointer-events: none; }
+#calGrid.exit-right         { animation: exitRight       0.12s ease forwards; pointer-events: none; }
+#calGrid.enter-from-right   { animation: enterFromRight  0.15s ease both; }
+#calGrid.enter-from-left    { animation: enterFromLeft   0.15s ease both; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }

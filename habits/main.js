@@ -1,9 +1,9 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=21';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=22';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
   try {
-    const m = await import('./push.js?v=21');
+    const m = await import('./push.js?v=22');
     return await m.ensurePushSubscription();
   } catch { /* push optional */ }
 }
@@ -492,7 +492,7 @@ window.shiftMonth = function(dir) {
     g.classList.add(enterClass);
     g.addEventListener('animationend', () => g.classList.remove(enterClass), { once: true });
     loadCalMonth().then(() => { renderCalendar(); renderStats(); });
-  }, 185);
+  }, 120);
 };
 
 // ── Panel: add/edit habit ─────────────────────────────────────────────────────
@@ -544,7 +544,10 @@ window.openPanel = function(habit) {
 
   $('panelBackdrop').classList.remove('hidden');
   requestAnimationFrame(() => $('sidePanel').classList.add('open'));
-  setTimeout(() => $('fName').focus(), 150);
+  // Autofocus only on desktop; on mobile it pops the keyboard over the panel.
+  if (!window.matchMedia('(max-width: 768px)').matches) {
+    setTimeout(() => $('fName').focus(), 120);
+  }
 };
 
 window.closePanel = function() {
@@ -934,7 +937,7 @@ document.addEventListener('keydown', e => {
     void nl.offsetWidth;
     nl.classList.add(enterClass);
     nl.addEventListener('animationend', () => nl.classList.remove(enterClass), { once: true });
-  }, 185);
+  }, 120);
 });
 
 // ── Swipe to change day (mobile) ──────────────────────────────────────────────
@@ -981,7 +984,7 @@ document.addEventListener('keydown', e => {
       void nl.offsetWidth; // force reflow so animation restarts
       nl.classList.add(enterClass);
       nl.addEventListener('animationend', () => nl.classList.remove(enterClass), { once: true });
-    }, 185);
+    }, 120);
   }, { passive: true });
 })();
 
