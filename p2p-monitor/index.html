@@ -41,7 +41,8 @@
   --blue-b:    rgba(88,166,255,.3);
   --r:         12px;
   --r-sm:      8px;
-  --shadow:    none;
+  --r-lg:      16px;
+  --shadow:    0 2px 12px rgba(0,0,0,.30);
 }
 
 /* ── Reset & Base ───────────────────────────────────── */
@@ -59,17 +60,20 @@ body {
 .top {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  height: 52px;
-  background: var(--surf-1);
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 0 14px;
+  height: 56px;
+  background: rgba(13,17,23,.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-2);
   position: sticky;
   top: 0;
   z-index: 100;
 }
-.top h1 { font-size:19px; font-weight: 700; color: var(--gold); letter-spacing: -.01em; }
+.top h1 { font-size:18px; font-weight: 800; color: var(--gold); letter-spacing: -.02em; white-space:nowrap; }
+.top-controls { display:flex; align-items:center; gap:7px; flex-shrink:0; }
+.top-actions  { display:flex; align-items:center; gap:6px; flex-shrink:0; }
 .hub-back { display:inline-flex; align-items:center; color:var(--text-3); text-decoration:none; transition:color .15s; flex-shrink:0; }
 .hub-back:hover { color:var(--text); }
 .badge {
@@ -102,6 +106,11 @@ body {
   cursor: pointer;
   transition: all .15s;
   font-family: inherit;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 .btn:hover { background: var(--surf-3); color: var(--text); }
 .btn-gold {
@@ -122,30 +131,82 @@ body {
 /* ── Layout ─────────────────────────────────────────── */
 .layout {
   display: grid;
-  grid-template-columns: 1fr 36vw;
-  gap: 12px;
-  padding: 12px 12px 16px;
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 34vw, 480px);
+  gap: 14px;
+  padding: 14px;
   align-items: start;
+  max-width: 1640px;
+  margin: 0 auto;
 }
 @media(max-width:900px){ .layout { grid-template-columns: 1fr; } }
-.hero-stats { display:flex; flex-direction:column; justify-content:center; gap:10px; padding-left:20px; border-left:1px solid var(--border); min-width:130px; }
-.hero-main { display:flex; flex-direction:row; align-items:center; gap:0; flex:1; }
-.hero-cell { display:flex; flex-direction:column; justify-content:center; padding:0 20px; }
-.hero-cell + .hero-cell { border-left:1px solid var(--border); }
-.hero-cell:first-child { padding-left:0; }
-@media(max-width:900px){
-  .hero-main { display:grid; grid-template-columns: 1fr 1fr; gap:10px 14px; align-items:start; }
-  .hero-cell { padding:0; border-left:none !important; }
-  .hero-cell.span2 { grid-column: 1 / -1; }
-  .hero-main > .hero-cell:nth-child(3) { grid-column: 1 / -1; } /* PRECIOS full width */
-  .hero-main > .hero-cell:last-child   { grid-column: 1 / -1; } /* Pill full width */
+.hero-wrap { max-width: 1640px; margin: 0 auto; padding: 14px 14px 0; }
+.col { display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Bot config groups ──────────────────────────────── */
+.bot-group {
+  background: var(--surf-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 1px 11px 4px;
+  margin-top: 8px;
 }
-.col { display: flex; flex-direction: column; gap: 10px; }
+.bot-group-h {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 7px 0 3px;
+}
+.bot-group .cfg-row { border-bottom: 1px solid var(--border); }
+.bot-group .cfg-row:last-child { border-bottom: none; }
+
+.bot-details {
+  background: var(--surf-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0 12px;
+  margin-top: 10px;
+}
+.bot-details > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.bot-details > summary::-webkit-details-marker { display: none; }
+.bot-details > summary::after {
+  content: '\25be';
+  font-size: 11px;
+  color: var(--text-3);
+  transition: transform .15s;
+}
+.bot-details[open] > summary::after { transform: rotate(180deg); }
+.bot-details .cfg-row {
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+}
+.bot-details[open] { padding-bottom: 6px; }
+
+/* Compactar el panel Auto-Repricing */
+.bot-details { margin-top: 8px; }
+.bot-details > summary { padding: 8px 0; }
+#bot-panel .cfg-row { padding: 4px 0; }
+#bot-panel .stp-btn { height: 30px; }
+#bot-panel input[type=number] { padding: 3px 8px; }
+#bot-panel #bot-log { max-height: 100px; }
 
 /* ── Panels ─────────────────────────────────────────── */
 .panel {
   background: var(--surf-1);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-2);
   border-radius: var(--r);
   padding: 14px;
   box-shadow: var(--shadow);
@@ -161,59 +222,99 @@ body {
 
 /* ── Spread Hero (full-width) ───────────────────────── */
 .spread-hero-full {
-  background: var(--surf-1);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 14px 20px;
-  text-align: center;
+  background: linear-gradient(180deg, var(--surf-1), #0a0d13);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
   position: relative;
   overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+  box-shadow: var(--shadow);
 }
 .spread-hero-full::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 50% 0%, rgba(240,185,11,.06) 0%, transparent 60%);
+  background: radial-gradient(ellipse 55% 120% at 16% -10%, rgba(240,185,11,.10) 0%, transparent 65%);
   pointer-events: none;
 }
+.hero-lead {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  flex-shrink: 0;
+  min-width: 210px;
+  position: relative;
+}
 .sh-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-3);
-  letter-spacing: .14em;
+  letter-spacing: .12em;
   text-transform: uppercase;
-  margin-bottom: 10px;
 }
 .sh-pct {
-  font-size: 52px;
+  font-size: 46px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: .92;
   letter-spacing: -.03em;
   color: var(--gold);
 }
-.sh-prices {
+.sh-pill {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 10px;
-  font-size: 18px;
-  color: var(--text-2);
-}
-.sh-prices .sh-sell { color: var(--green); font-weight: 700; }
-.sh-prices .sh-buy  { color: var(--blue);  font-weight: 700; }
-.sh-prices .sh-arrow { color: var(--text-3); }
-.sh-pill {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
-  padding: 5px 16px;
-  border-radius: 20px;
-  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
   font-weight: 700;
-  margin-top: 14px;
-  letter-spacing: .02em;
+  letter-spacing: .01em;
+  align-self: flex-start;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.25;
+}
+.hero-sublabel { font-size: 12px; color: var(--text-3); }
+.hero-metrics {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr;
+  gap: 1px;
+  background: var(--border-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.hero-metric {
+  background: var(--surf-1);
+  padding: 12px 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+.hm-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.hm-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hm-prices { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; font-size: 16px; }
+.sh-sell { color: var(--green); font-weight: 700; font-variant-numeric: tabular-nums; }
+.sh-buy  { color: var(--blue);  font-weight: 700; font-variant-numeric: tabular-nums; }
+.sh-arrow { color: var(--text-3); }
+@media (max-width: 760px) {
+  .spread-hero-full { flex-direction: column; gap: 14px; padding: 14px 16px; }
+  .hero-lead { min-width: 0; }
+  .hero-lead .sh-pct { font-size: 40px; }
+  .hero-metrics { grid-template-columns: 1fr 1fr; }
+  .hero-metric.span { grid-column: 1 / -1; }
 }
 .opp-yes  { background: var(--gold-d);  border: 1px solid var(--gold-b);  color: var(--gold);  }
 .opp-no   { background: var(--surf-2);  border: 1px solid var(--border);  color: var(--text-3); }
@@ -549,8 +650,11 @@ input:focus {
 @media (max-width: 640px) {
   body { font-size: 16px; }
 
-  .top { height: auto; min-height: 48px; padding: 6px 10px; gap: 5px; }
+  .top { height: auto; min-height: 48px; padding: 7px 10px; gap: 6px; flex-wrap: wrap; }
   .top h1 { font-size: 15px; }
+  .top-controls, .top-actions { flex-wrap: wrap; gap: 5px; }
+  .top-actions { margin-left: auto; }
+  .spacer { display: none; }
   #last-update, .nav-pair { display: none; }
   #pay-method-select { font-size: 13px; max-width: 130px; }
   .badge { font-size: 12px; padding: 2px 7px; }
@@ -587,7 +691,22 @@ input:focus {
 /* ── Buy Section ─────────────────────────────────────── */
 .buy-section-row { display: flex; gap: 10px; align-items: stretch; }
 .buy-ob-wrap { flex: 0 0 calc(50% - 5px); background: var(--surf-2); border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
-.buy-spread-card { flex: 1; background: var(--surf-1); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.buy-spread-card { flex: 1; background: var(--surf-1); border: 1px solid var(--border-2); border-radius: var(--r-sm); padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.bsc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bsc-title { font-size: 12px; font-weight: 700; color: var(--text-3); letter-spacing: .08em; text-transform: uppercase; }
+.bsc-pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; letter-spacing: .02em; white-space: nowrap; }
+.bsc-lead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bsc-lead .bs-val { font-size: 32px; line-height: 1; }
+.bsc-abs { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; font-weight: 600; }
+.bsc-flow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 11px 12px; }
+.bsc-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.bsc-cell-lbl { font-size: 10px; font-weight: 700; color: var(--text-3); letter-spacing: .05em; text-transform: uppercase; }
+.bsc-cell-val { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bsc-cell-val.g2 { color: var(--green); }
+.bsc-cell-val.r2 { color: var(--red); }
+.bsc-arrow { color: var(--text-3); font-size: 15px; }
+.bsc-foot { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-3); padding-top: 2px; }
+.bsc-foot span:last-child { color: var(--text-2); font-variant-numeric: tabular-nums; font-weight: 600; }
 .bs-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .bs-lbl { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; white-space: nowrap; }
 .bs-val { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); }
@@ -632,16 +751,20 @@ input:focus {
   <a href="https://kisushotto.com" class="hub-back" title="Volver al Hub"><svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;border-radius:7px"><rect width="100" height="100" rx="22" fill="#0d0f14"/><line x1="50" y1="12" x2="50" y2="30" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="83" y1="31" x2="67" y2="40" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="83" y1="69" x2="67" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="50" y1="88" x2="50" y2="70" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="17" y1="69" x2="33" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="17" y1="31" x2="33" y2="40" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="50" y1="30" x2="50" y2="70" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="67" y1="40" x2="33" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="33" y1="40" x2="67" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><polygon points="50,30 67,40 67,60 50,70 33,60 33,40" fill="rgba(240,185,11,0.07)" stroke="#f0b90b" stroke-width="2" stroke-linejoin="round"/><polygon points="50,12 83,31 83,69 50,88 17,69 17,31" fill="none" stroke="#f0b90b" stroke-width="2.5" stroke-linejoin="round"/><circle cx="50" cy="50" r="7" fill="none" stroke="#f0b90b" stroke-width="2.2"/><circle cx="50" cy="50" r="3" fill="#f0b90b"/><circle cx="50" cy="12" r="3.5" fill="#f0b90b"/><circle cx="83" cy="31" r="3.5" fill="#f0b90b"/><circle cx="83" cy="69" r="3.5" fill="#f0b90b"/><circle cx="50" cy="88" r="3.5" fill="#f0b90b"/><circle cx="17" cy="69" r="3.5" fill="#f0b90b"/><circle cx="17" cy="31" r="3.5" fill="#f0b90b"/></svg></a>
   <h1>P2P Monitor</h1>
   <span class="nav-pair" style="font-size:16px;color:var(--text-3);font-weight:500">VES/USDT</span>
+  <div class="top-controls">
   <select id="pay-method-select" class="tag-bank" onchange="setPayMethod(this.value)" style="font-family:inherit;cursor:pointer;outline:none"></select>
   <span class="tag-ver" id="ver-toggle" onclick="toggleVerified()" title="Filtrar solo comerciantes verificados"><span class="ver-sw"></span><span class="ver-lbl">Verificados</span></span>
   <span class="badge badge-off" id="live-badge"><span class="dot dot-off" id="live-dot"></span><span id="live-label">Detenido</span></span>
   <span id="topbar-bot-price" style="display:none;font-size:14px;font-weight:700;color:var(--gold);background:var(--gold-d);border:1px solid var(--gold-b);border-radius:6px;padding:2px 10px;font-variant-numeric:tabular-nums">—</span>
+  </div>
   <span style="font-size:15px;color:var(--text-3)" id="last-update"></span>
   <div class="spacer"></div>
+  <div class="top-actions">
   <button class="btn btn-sm" id="btn-activity" onclick="toggleActivityGuard()" title="Alertas de actividad / apagado por inactividad" style="font-size:17px;padding:5px 10px">🛡️</button>
   <button class="btn btn-gold" id="btn-start" onclick="toggleMonitor()">▶ Iniciar</button>
   <button class="btn btn-sm" onclick="fetchOnce()" title="Actualizar">&#8635;</button>
   <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative;font-size:17px;padding:5px 10px" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
+  </div>
 </div>
 
 <!-- Presence check modal -->
@@ -667,51 +790,53 @@ input:focus {
 <span id="st-best" style="display:none"></span>
 <span id="st-count" style="display:none"></span>
 
-<!-- 2-col grid: order book aligned with auto-repricing -->
-<div class="layout">
-  <!-- LEFT col -->
-  <div class="col">
-
-    <!-- Spread hero (now inside left col) -->
-    <div class="spread-hero-full" id="spread-hero" style="display:flex;flex-direction:row;align-items:stretch;gap:0">
-      <div class="hero-main">
-        <!-- Spread bruto -->
-        <div class="hero-cell">
-          <div class="sh-label">SPREAD BRUTO</div>
-          <div class="sh-pct" id="hero-pct" style="font-size:42px">—</div>
-        </div>
-        <!-- Neto (solo si hay comisión) -->
-        <div class="hero-cell" id="hero-net-wrap" style="display:none">
-          <div style="font-size:13px;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase" id="hero-net-lbl">NETO</div>
-          <div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1" id="hero-net">—</div>
-        </div>
+<!-- Barra de comando full-width -->
+<div class="hero-wrap">
+    <div class="spread-hero-full" id="spread-hero">
+      <div class="hero-lead">
+        <div class="sh-label">Spread neto</div>
+        <div class="sh-pct" id="hero-pct">—</div>
+        <div id="hero-pill" class="sh-pill opp-no">Sin datos</div>
+        <div class="hero-sublabel" id="hero-label"></div>
+      </div>
+      <div class="hero-metrics">
         <!-- Precios -->
-        <div class="hero-cell">
-          <div class="sh-label">PRECIOS</div>
-          <div class="sh-prices" style="margin-top:4px">
+        <div class="hero-metric span">
+          <div class="hm-label">Precios</div>
+          <div class="hm-prices">
             <span class="sh-sell" id="hero-may">—</span>
             <span class="sh-arrow">→</span>
             <span class="sh-buy" id="hero-small">—</span>
           </div>
         </div>
         <!-- Spread Bs -->
-        <div class="hero-cell">
-          <div class="sc-l">SPREAD (BS)</div>
-          <div class="sc-v y" id="st-diff" style="font-size:22px;font-weight:700;margin-top:2px">—</div>
+        <div class="hero-metric">
+          <div class="hm-label">Spread (Bs)</div>
+          <div class="sc-v y" id="st-diff" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
         <!-- Variación 10 min -->
-        <div class="hero-cell">
-          <div class="sc-l">VAR. 10 MIN</div>
-          <div class="sc-v" id="st-delta" style="font-size:22px;font-weight:700;margin-top:2px">—</div>
+        <div class="hero-metric">
+          <div class="hm-label">Var. 10 min</div>
+          <div class="sc-v" id="st-delta" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
-        <!-- Pill + diff -->
-        <div class="hero-cell" style="flex:1">
-          <div id="hero-pill" class="sh-pill opp-no">Sin datos</div>
-          <div style="font-size:13px;color:var(--text-3);margin-top:6px" id="hero-label"></div>
+        <!-- Sesión -->
+        <div class="hero-metric">
+          <div class="hm-label">Máx sesión</div>
+          <div class="sc-v g" id="sess-max" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div class="hero-metric">
+          <div class="hm-label">Mín sesión</div>
+          <div class="sc-v" id="sess-min" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
       </div>
       <span id="hero-small-lbl" style="display:none"></span>
     </div>
+</div>
+
+<!-- 2-col grid: mercado | bot -->
+<div class="layout">
+  <!-- LEFT col -->
+  <div class="col">
 
     <!-- Order book dividido -->
     <div class="panel" style="padding:11px;position:relative">
@@ -776,19 +901,28 @@ input:focus {
             <div id="ob-buy"></div>
           </div>
           <div class="buy-spread-card">
-            <div style="font-size:13px;font-weight:700;color:var(--text-2);margin-bottom:6px">Spread Venta</div>
-            <div class="bs-row"><span class="bs-lbl">NETO</span><span class="bs-val" id="bs-net">—</span></div>
-            <div class="bs-row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
-              <span class="bs-lbl">Precio efectivo</span>
-              <span id="bs-sell-eff" style="font-size:15px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span>
+            <div class="bsc-head">
+              <span class="bsc-title">Spread de Venta</span>
+              <span class="bsc-pill" id="bs-pill">—</span>
             </div>
-            <div class="bs-row" style="margin-top:4px">
-              <span class="bs-lbl">Ref. verde</span>
-              <span id="bs-sell-ref" style="font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums">—</span>
+            <div class="bsc-lead">
+              <span class="bs-val" id="bs-net">—</span>
+              <span class="bsc-abs" id="bs-net-abs"></span>
             </div>
-            <div class="bs-row">
-              <span class="bs-lbl">Ref. rojo</span>
-              <span id="bs-buy-ref" style="font-size:13px;color:var(--text-3);font-variant-numeric:tabular-nums">—</span>
+            <div class="bsc-flow">
+              <div class="bsc-cell">
+                <div class="bsc-cell-lbl">Compras ref.</div>
+                <div class="bsc-cell-val r2" id="bs-buy-ref">—</div>
+              </div>
+              <div class="bsc-arrow">→</div>
+              <div class="bsc-cell">
+                <div class="bsc-cell-lbl">Vendes efectivo</div>
+                <div class="bsc-cell-val g2" id="bs-sell-eff">—</div>
+              </div>
+            </div>
+            <div class="bsc-foot">
+              <span>Ref. verde (bruto)</span>
+              <span id="bs-sell-ref">—</span>
             </div>
           </div>
         </div>
@@ -869,64 +1003,46 @@ input:focus {
       </div>
 
       <!-- Config bot (campos visibles) -->
+      <div class="bot-group">
+      <div class="bot-group-h">Precio y techo</div>
       <div class="cfg-row"><span style="display:flex;align-items:center;gap:6px">Precio de venta (Bs)<button class="btn btn-sm" type="button" onclick="botSuggestSell()" title="Sugerir desde el mercado" style="padding:1px 7px;font-size:11px">sugerir</button></span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="ej. 640" min="1" step="1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
       <div class="cfg-row"><span>Spread mínimo (%)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" value="0.5" min="0.1" max="10" step="0.1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
-      <div class="cfg-row"><span style="color:#777;font-size:14px">Techo calculado</span><span id="cfg-bot-ceil-display" style="color:#E24B4A;font-weight:700;font-size:16px">—</span></div>
+      <div class="cfg-row"><span style="color:#777;font-size:14px">Techo calculado</span><span id="cfg-bot-ceil-display" style="color:#E24B4A;font-weight:700;font-size:16px;margin-right:32px">—</span></div>
+      </div>
+      <div class="bot-group">
+      <div class="bot-group-h">Límites</div>
       <div class="cfg-row"><span>Límite mínimo (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
       <div class="cfg-row"><span>Margen (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" value="10000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
-      <details style="margin-top:6px">
-        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Opciones avanzadas</summary>
+      </div>
+      <details class="bot-details">
+        <summary>Opciones avanzadas</summary>
         <div class="cfg-row"><span>Incremento (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',-1)">−</button><input type="number" id="cfg-bot-inc" value="0.001" min="0.001" step="0.001"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',1)">+</button></div></div>
         <div class="cfg-row"><span>Gap máx. para seguir (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',-1)">−</button><input type="number" id="cfg-bot-gap" value="1.0" min="0.5" step="0.5"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',1)">+</button></div></div>
       </details>
-      <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
+      <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
         <button class="btn btn-gold" style="flex:1" onclick="saveBotConfig()">Guardar</button>
         <span id="bot-cfg-st" style="font-size:14px;color:#555"></span>
       </div>
 
 
       <!-- Control manual -->
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Control manual</div>
-        <div style="display:flex;flex-direction:column;gap:4px">
-          <div style="font-size:13px;color:var(--text-3)">Cantidad (USDT)</div>
-          <div style="display:flex;gap:4px">
-            <input type="number" id="manual-qty" placeholder="ej. 500" min="1" step="1" style="flex:1;text-align:left" oninput="updateManualTotal()">
-            <button class="btn btn-sm" onclick="manualSetQty()" title="Aplicar cantidad" style="flex-shrink:0;font-size:13px;padding:4px 10px">✓</button>
-          </div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-          <span style="font-size:13px;color:var(--text-3)">Total ≈
-            <span id="manual-balance" style="margin-left:6px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span>
-          </span>
-          <span id="manual-total" style="font-size:15px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span>
-        </div>
-        <div id="manual-st" style="font-size:13px;color:var(--text-3);margin-top:4px;min-height:16px"></div>
+      <div class="bot-group">
+        <div class="bot-group-h">Control manual</div>
+        <div class="cfg-row"><span>Cantidad (USDT)</span><div style="display:flex;gap:6px;align-items:center"><input type="number" id="manual-qty" placeholder="ej. 500" min="1" step="1" style="width:108px" oninput="updateManualTotal()"><button class="btn btn-gold btn-sm" onclick="manualSetQty()" title="Aplicar cantidad" style="flex-shrink:0;padding:5px 13px">✓</button></div></div>
+        <div class="cfg-row" style="border-bottom:none"><span style="color:var(--text-3)">Total <span id="manual-balance" style="margin-left:4px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span></span><span id="manual-total" style="font-size:16px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span></div>
+        <div id="manual-st" style="font-size:13px;color:var(--text-3);min-height:16px;padding-bottom:6px"></div>
       </div>
 
       <!-- Log -->
-      <div style="margin-top:10px">
-        <div style="font-size:14px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Log de reprecio</div>
-        <div id="bot-log" style="font-size:15px;color:var(--text-2);max-height:120px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
+      <div class="bot-group" style="padding-bottom:10px">
+        <div class="bot-group-h">Log de reprecio</div>
+        <div id="bot-log" style="font-size:14px;color:var(--text-2);max-height:120px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
           <span style="color:var(--text-3)">Sin actividad</span>
         </div>
       </div>
     </div>
 
-    <!-- Sesión Max/Min -->
-    <div class="panel">
-      <div class="ptitle">Sesión</div>
-      <div class="session-grid">
-        <div class="sess-item">
-          <div class="sc-l">Máx mayorista</div>
-          <div class="sc-v g" id="sess-max">—</div>
-        </div>
-        <div class="sess-item">
-          <div class="sc-l">Mín mayorista</div>
-          <div class="sc-v" id="sess-min">—</div>
-        </div>
-      </div>
-    </div>
+    <!-- Sesión movida a la barra de comando superior -->
 
 
   </div>
@@ -1619,46 +1735,31 @@ function renderSpreadHero() {
   }
 
   var spread    = (bestMay - bestSmall) / bestMay * 100;
-  var spreadNet = spread - CFG.commission;
+  var spreadNet = spread - (CFG.commission || 0);
   var spreadBs  = bestMay - bestSmall;
 
-  var pct      = document.getElementById('hero-pct');
-  var netWrap  = document.getElementById('hero-net-wrap');
-  var netEl    = document.getElementById('hero-net');
-  var netLbl   = document.getElementById('hero-net-lbl');
+  var pct  = document.getElementById('hero-pct');
+  var pill = document.getElementById('hero-pill');
+  var threshold = CFG.spreadThr;
+  var commNote  = CFG.commission > 0 ? '  ·  −' + CFG.commission + '% comisión' : '';
 
-  pct.textContent = spread.toFixed(3) + '%';
+  pct.textContent = spreadNet.toFixed(3) + '%';
 
-  // Mostrar neto solo si hay comisión configurada
-  if (CFG.commission > 0) {
-    netWrap.style.display = '';
-    netEl.textContent = spreadNet.toFixed(3) + '%';
-    netLbl.textContent = 'NETO (−' + CFG.commission + '%)';
-    netEl.style.color  = spreadNet >= CFG.spreadThr ? '#F0B90B' : '#E24B4A';
-  } else {
-    netWrap.style.display = 'none';
-  }
-
-  // Alerta y color del hero basados en spread NETO
-  var pill       = document.getElementById('hero-pill');
-  var threshold  = CFG.spreadThr;
-  var evalSpread = CFG.commission > 0 ? spreadNet : spread;
-
-  if (spread <= 0) {
+  if (spreadNet <= 0) {
     pct.style.color = 'var(--red)';
-    document.getElementById('hero-label').textContent = 'Compra más cara — mercado invertido';
+    document.getElementById('hero-label').textContent = (spread <= 0 ? 'Mercado invertido' : 'Comisión supera el spread') + '  ·  Dif: ' + fmt(spreadBs) + ' Bs/USDT';
     pill.className = 'sh-pill opp-warn';
-    pill.textContent = '⚠ Spread negativo';
-  } else if (evalSpread >= threshold) {
-    pct.style.color = CFG.commission > 0 ? 'var(--text-2)' : 'var(--gold)';
-    document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + ' Bs/USDT';
+    pill.textContent = '⚠ Neto negativo';
+  } else if (spreadNet >= threshold) {
+    pct.style.color = 'var(--gold)';
+    document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + ' Bs/USDT' + commNote;
     pill.className = 'sh-pill opp-yes';
-    pill.textContent = '🟡 SPREAD ' + (CFG.commission > 0 ? 'NETO' : '') + ' > ' + threshold + '% — OPORTUNIDAD';
+    pill.textContent = '🟡 NETO > ' + threshold + '% — OPORTUNIDAD';
   } else {
     pct.style.color = 'var(--text-2)';
-    document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + ' Bs/USDT';
+    document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + ' Bs/USDT' + commNote;
     pill.className = 'sh-pill opp-no';
-    pill.textContent = 'Spread por debajo del umbral';
+    pill.textContent = 'Neto por debajo del umbral';
   }
 }
 
@@ -1795,6 +1896,10 @@ function renderBuySpread() {
     if (sellEff) sellEff.textContent = '—';
     if (sellRef) sellRef.textContent = '—';
     if (buyRef)  buyRef.textContent  = '—';
+    var p0 = document.getElementById('bs-pill');
+    if (p0) { p0.textContent = 'Sin datos'; p0.className = 'bsc-pill'; p0.style.cssText = 'background:var(--surf-2);color:var(--text-3);border:1px solid var(--border)'; }
+    var a0 = document.getElementById('bs-net-abs');
+    if (a0) a0.textContent = '';
     return;
   }
 
@@ -1814,6 +1919,16 @@ function renderBuySpread() {
   if (sellEff) sellEff.textContent = fmt(effectiveSell) + ' Bs';
   if (sellRef) sellRef.textContent = fmt(sellPrice) + ' Bs';
   if (buyRef)  buyRef.textContent  = fmt(buyPrice)  + ' Bs';
+
+  var absEl = document.getElementById('bs-net-abs');
+  if (absEl) absEl.textContent = '≈ ' + fmt(netAbs) + ' Bs/USDT';
+  var pill = document.getElementById('bs-pill');
+  if (pill) {
+    pill.className = 'bsc-pill';
+    if (netPct <= 0) { pill.textContent = '⚠ Negativo'; pill.style.cssText = 'background:var(--red-d);color:var(--red);border:1px solid var(--red-b)'; }
+    else if (isGood) { pill.textContent = '🟡 Oportunidad'; pill.style.cssText = 'background:var(--gold-d);color:var(--gold);border:1px solid var(--gold-b)'; }
+    else { pill.textContent = 'Bajo umbral'; pill.style.cssText = 'background:var(--surf-2);color:var(--text-3);border:1px solid var(--border)'; }
+  }
 
   var sellInp = document.getElementById('cfg-bot-sell');
   if (sellInp && sellPrice) sellInp.placeholder = 'sug. ' + Math.round(sellPrice);
