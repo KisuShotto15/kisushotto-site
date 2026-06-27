@@ -435,6 +435,7 @@ body {
 .rank { font-size:14px; color: var(--text-3); text-align: center; font-weight: 600; }
 .rank.n1 { color: var(--gold); font-weight: 800; }
 .merch { font-size:16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.merch.me { color: var(--purple); font-weight: 700; }
 .price-c { font-size:17px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
 .lim-c { font-size:14px; color: var(--text-3); text-align: center; white-space: nowrap; }
 .lim-amount { display: none; font-size:11px; color: var(--text-3); margin-top:2px; font-variant-numeric: tabular-nums; }
@@ -1827,8 +1828,9 @@ function renderOB(id, ads, bestCls) {
         : Math.round(ad.avail).toLocaleString('es-VE');
       var disp = ST.availDisp && ST.availDisp[id];
       var arrowHtml = availArrowHtml(disp && disp[ad.merchant]);
+      var meCls = ad.merchant === (BOT_CFG.myNick || BOT.myNick) ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
-        '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
+        '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
         '<span class="price-c ' + (i === 0 ? (id === 'ob-may' ? 'r' : 'p') : '') + '">' + fmtP(ad.price) + '</span>' +
         '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
@@ -1871,8 +1873,9 @@ function renderBuySection(ads) {
         : Math.round(ad.avail).toLocaleString('es-VE');
       var disp = ST.availDisp && ST.availDisp['ob-buy'];
       var arrowHtml = availArrowHtml(disp && disp[ad.merchant]);
+      var meCls = ad.merchant === (BOT_CFG.myNick || BOT.myNick) ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
-        '<span class="merch" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
+        '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
         '<span class="price-c g">' + fmtP(ad.price) + '</span>' +
         '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
