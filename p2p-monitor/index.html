@@ -651,7 +651,7 @@ input:focus {
 
   .top { height: auto; min-height: 48px; padding: 7px 10px; gap: 6px; flex-wrap: wrap; }
   .top h1 { font-size: 15px; }
-  .top-controls, .top-actions { flex-wrap: wrap; gap: 5px; }
+  .top-controls, .top-actions { flex-wrap: wrap; gap: 5px; min-width: 0; max-width: 100%; }
   .top-actions { margin-left: auto; }
   .spacer { display: none; }
   #last-update, .nav-pair { display: none; }
@@ -1004,7 +1004,7 @@ input:focus {
           <div id="bot-cur-price" style="font-size:20px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
         <div style="background:var(--surf-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
-          <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Techo (venta−spread)</div>
+          <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Techo venta</div>
           <div id="bot-ceiling" style="font-size:20px;color:var(--red);font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
       </div>
