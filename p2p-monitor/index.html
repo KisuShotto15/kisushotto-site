@@ -902,8 +902,10 @@ input:focus {
 
       <!-- Sección Compra (BUY) -->
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-        <div class="ptitle" style="margin-bottom:10px">Sección Compra</div>
-        <div class="buy-section-row">
+        <div class="ptitle" onclick="toggleBuySection()" style="margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:7px;user-select:none">
+          <span id="buy-chevron" style="display:inline-block;transition:transform .15s;font-size:11px">▼</span>Sección Compra
+        </div>
+        <div class="buy-section-row" id="buy-section-body">
           <div class="buy-ob-wrap">
             <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">🟢 SELL</span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
             <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
@@ -3285,7 +3287,27 @@ function toast(msg) {
   document.body.appendChild(t); setTimeout(function() { t.remove(); }, 2500);
 }
 
+// ── Sección Compra colapsable (oculta en mobile) ──────
+function setBuyCollapsed(collapsed) {
+  var body = document.getElementById('buy-section-body');
+  var chev = document.getElementById('buy-chevron');
+  if (body) body.style.display = collapsed ? 'none' : '';
+  if (chev) chev.style.transform = collapsed ? 'rotate(-90deg)' : '';
+  try { localStorage.setItem('p2p_buy_collapsed', collapsed ? '1' : '0'); } catch(e) {}
+}
+function toggleBuySection() {
+  var body = document.getElementById('buy-section-body');
+  setBuyCollapsed(body && body.style.display !== 'none');
+}
+function initBuySection() {
+  var saved = null;
+  try { saved = localStorage.getItem('p2p_buy_collapsed'); } catch(e) {}
+  // Sin preferencia previa: colapsada en mobile, abierta en escritorio.
+  setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
+}
+
 loadConfig(); syncFilterInputs(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI();
+initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });
 renderOB('ob-may',   [], 'best');
