@@ -1805,6 +1805,8 @@ function renderStats() {
   } else { el.textContent = '—'; }
 }
 
+var MY_NICK = 'キスショット';
+
 function renderOB(id, ads, bestCls) {
   var wrap = document.getElementById(id);
   var rows = '';
@@ -1828,7 +1830,7 @@ function renderOB(id, ads, bestCls) {
         : Math.round(ad.avail).toLocaleString('es-VE');
       var disp = ST.availDisp && ST.availDisp[id];
       var arrowHtml = availArrowHtml(disp && disp[ad.merchant]);
-      var meCls = ad.merchant === (BOT_CFG.myNick || BOT.myNick) ? ' me' : '';
+      var meCls = ad.merchant === MY_NICK ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
@@ -1873,7 +1875,7 @@ function renderBuySection(ads) {
         : Math.round(ad.avail).toLocaleString('es-VE');
       var disp = ST.availDisp && ST.availDisp['ob-buy'];
       var arrowHtml = availArrowHtml(disp && disp[ad.merchant]);
-      var meCls = ad.merchant === (BOT_CFG.myNick || BOT.myNick) ? ' me' : '';
+      var meCls = ad.merchant === MY_NICK ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
