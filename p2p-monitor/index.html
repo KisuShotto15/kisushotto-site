@@ -439,6 +439,8 @@ body {
 .merch.me { color: var(--purple); font-weight: 700; }
 .price-c { font-size:17px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
 .lim-c { font-size:14px; color: var(--text-3); text-align: center; white-space: nowrap; }
+.lim-c.pisado { color: var(--red);   font-weight: 700; }
+.lim-c.libre  { color: var(--green); font-weight: 700; }
 .lim-amount { display: none; font-size:11px; color: var(--text-3); margin-top:2px; font-variant-numeric: tabular-nums; }
 .avail-num { position: relative; }
 .avail-arrow { position: absolute; right: 100%; margin-right: 4px; font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap; top: 50%; transform: translateY(-50%); }
@@ -1810,6 +1812,18 @@ function renderStats() {
 
 var MY_NICK = 'キスショット';
 
+// Si la fila idx es mia, indica si me estan "pisando": alguien mejor posicionado
+// (arriba) con limite minimo <= al mio y disponibilidad real (>=150). rojo = pisado, verde = libre.
+function pisadoCls(ads, idx) {
+  var me = ads[idx];
+  if (!me || me.merchant !== MY_NICK) return '';
+  for (var j = 0; j < idx; j++) {
+    var c = ads[j];
+    if (c && c.avail >= 150 && c.minVES <= me.minVES) return ' pisado';
+  }
+  return ' libre';
+}
+
 function renderOB(id, ads, bestCls) {
   var wrap = document.getElementById(id);
   var rows = '';
@@ -1838,7 +1852,7 @@ function renderOB(id, ads, bestCls) {
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
         '<span class="price-c">' + fmtP(ad.price) + '</span>' +
-        '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
+        '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
       '</div>';
     } else {
       rows += '<div class="ob-row" style="opacity:0.18">' +
@@ -1883,7 +1897,7 @@ function renderBuySection(ads) {
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
         '<span class="price-c g">' + fmtP(ad.price) + '</span>' +
-        '<span class="lim-c">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
+        '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
       '</div>';
     } else {
       rows += '<div class="ob-row" style="opacity:0.18">' +
