@@ -1990,8 +1990,9 @@ function renderBuySpread() {
 // ── Alertas ───────────────────────────────────────────
 function checkAlerts() {
   var now = Date.now();
-  var bestMay   = ST.mayoristas[0] ? ST.mayoristas[0].price : null;
-  var bestSmall = ST.smallAds[0]   ? ST.smallAds[0].price   : null;
+  var cMay = credibleMay(), cSmall = credibleSmall();
+  var bestMay   = cMay   ? cMay.price   : null;  // solo mayoristas creibles (>=2000 USDT)
+  var bestSmall = cSmall ? cSmall.price : null;
 
   if (!bestMay) return;
 
@@ -2006,7 +2007,7 @@ function checkAlerts() {
         COOLDOWN.spread = now;
         addAlert('spread',
           '💰 Spread ' + spread.toFixed(3) + '%' + netLabel + ' — OPORTUNIDAD',
-          'Mayorista: ' + fmt(bestMay) + ' Bs (' + esc(ST.mayoristas[0].merchant) + ') → Compra: ' + fmt(bestSmall) + ' Bs · Dif: ' + fmt(bestMay - bestSmall) + ' Bs/USDT'
+          'Mayorista: ' + fmt(bestMay) + ' Bs (' + esc(cMay.merchant) + ') → Compra: ' + fmt(bestSmall) + ' Bs · Dif: ' + fmt(bestMay - bestSmall) + ' Bs/USDT'
         );
         push('Spread P2P ' + spread.toFixed(3) + '%', 'Vende a ' + fmt(bestMay) + ' Bs — compra ref. ' + fmt(bestSmall) + ' Bs');
       }
@@ -3096,14 +3097,13 @@ function loadTgConfig() {
 var MON24 = { enabled: false, lastHb: 0, lastHist: 0 };
 
 // ── Sparkline 24h (mejor mayorista) ───────────────────
-// Mejor precio mayorista CREIBLE: el mas alto entre anuncios con disponibilidad real
-// (>=150 USDT). ST.mayoristas viene ordenado desc por precio, asi que es el primero que
-// supera el umbral. Evita que un listing fantasma se registre como pico en el grafico.
-function bestCredibleMay() {
-  var arr = ST.mayoristas || [];
-  for (var i = 0; i < arr.length; i++) if (arr[i].avail >= 150) return arr[i].price;
-  return null;
-}
+// Anuncios CREIBLES: con disponibilidad real (>=2000 USDT, mayorista real). Las listas
+// vienen ordenadas desc por precio, asi que el primero que supera el umbral es el mejor.
+// Evita que un listing fantasma se registre como pico en el grafico o dispare alertas.
+var MIN_AVAIL = 2000;
+function credibleMay()   { var a = ST.mayoristas || []; for (var i = 0; i < a.length; i++) if (a[i].avail >= MIN_AVAIL) return a[i]; return null; }
+function credibleSmall() { var a = ST.smallAds   || []; for (var i = 0; i < a.length; i++) if (a[i].avail >= MIN_AVAIL) return a[i]; return null; }
+function bestCredibleMay() { var m = credibleMay(); return m ? m.price : null; }
 
 // HIST24 = serie servidor (24h, app cerrada/noche); se completa con los puntos vivos del cliente.
 var HIST24 = [];

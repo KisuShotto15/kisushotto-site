@@ -26,9 +26,9 @@ export function pushHistLong(hist, ts, price) {
   return arr;
 }
 
-// Disponibilidad minima (USDT) para considerar un anuncio creible. Evita que un
-// listing fantasma (ej. 5 USDT a precio absurdo) contamine bestMay/el grafico.
-const MIN_AVAIL = 150;
+// Disponibilidad minima (USDT) para considerar un anuncio creible (mayorista real).
+// Evita que un listing fantasma contamine bestMay (grafico) ni dispare falsas alertas.
+const MIN_AVAIL = 2000;
 function mapBest(raw, verifiedOnly) {
   return raw.map(item => ({
     price: parseFloat(item.adv.price),
