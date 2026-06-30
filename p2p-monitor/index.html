@@ -3157,8 +3157,10 @@ var HX_RANGES = [
 ];
 function openHistory() {
   HX.open = true;
+  HX.hoverTs = null;
   document.getElementById('hx-overlay').style.display = 'block';
   document.body.style.overflow = 'hidden';
+  hxBindPointer();
   hxRenderRanges();
   hxLoad();
 }
@@ -3213,7 +3215,7 @@ function hxRenderRanges() {
     b.textContent = r.label;
     b.style.cssText = 'border-radius:8px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:600;border:1px solid ' +
       (active ? 'var(--gold);background:var(--gold);color:#000' : 'var(--border);background:var(--surf-2);color:var(--text-3)');
-    b.onclick = function() { HX.range = r.id; hxRenderRanges(); hxDraw(); };
+    b.onclick = function() { HX.range = r.id; HX.hoverTs = null; hxRenderRanges(); hxDraw(); };
     wrap.appendChild(b);
   });
 }
@@ -3235,6 +3237,7 @@ function hxDraw() {
   var span = (max - min) || 1, lo = min - span * 0.08, hi = max + span * 0.08, dp = hi - lo;
   function X(ts) { return padL + (ts - t0) / dt * W; }
   function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
+  HX.px = { padL: padL, padT: padT, W: W, H: H, t0: t0, dt: dt }; // para invertir el hover
   ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
   for (var i = 0; i <= 5; i++) {
     var val = lo + (hi - lo) * i / 5, y = Y(val);
@@ -3260,6 +3263,58 @@ function hxDraw() {
   for (var b = 1; b < pts.length; b++) ctx.lineTo(X(pts[b].ts), Y(pts[b].price));
   ctx.strokeStyle = col; ctx.lineWidth = 1.7; ctx.lineJoin = 'round'; ctx.stroke();
   ctx.beginPath(); ctx.arc(X(t1), Y(close), 3.2, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
+
+  // Crosshair + tooltip al hacer hover
+  if (HX.hoverTs != null) {
+    var bp = pts[0], bd = Infinity;
+    for (var q = 0; q < pts.length; q++) {
+      var dd = Math.abs(pts[q].ts - HX.hoverTs);
+      if (dd < bd) { bd = dd; bp = pts[q]; }
+    }
+    var cx = X(bp.ts), cy = Y(bp.price);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, padT + H); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    // Caja tooltip
+    var l1 = fmt(bp.price) + ' Bs', l2 = hxFullLabel(bp.ts);
+    ctx.font = '600 12px -apple-system, sans-serif';
+    var tw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 16;
+    var th = 36, bx = cx + 10, by = padT + 6;
+    if (bx + tw > padL + W) bx = cx - 10 - tw;
+    ctx.fillStyle = 'rgba(20,24,34,0.95)'; ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, tw, th, 6); ctx.fill(); ctx.stroke(); }
+    else { ctx.fillRect(bx, by, tw, th); ctx.strokeRect(bx, by, tw, th); }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = col; ctx.fillText(l1, bx + 8, by + 12);
+    ctx.fillStyle = '#8b93a7'; ctx.font = '11px -apple-system, sans-serif'; ctx.fillText(l2, bx + 8, by + 26);
+    ctx.restore();
+  }
+}
+function hxFullLabel(ts) {
+  var d = new Date(ts), p2 = function(n) { return (n < 10 ? '0' : '') + n; };
+  return p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+}
+function hxPointer(e) {
+  if (!HX.px) return;
+  var cv = document.getElementById('hx-chart'), rect = cv.getBoundingClientRect();
+  var clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+  var px = clientX - rect.left;
+  var frac = (px - HX.px.padL) / HX.px.W;
+  frac = Math.max(0, Math.min(1, frac));
+  HX.hoverTs = HX.px.t0 + frac * HX.px.dt;
+  hxDraw();
+}
+function hxBindPointer() {
+  if (HX.bound) return;
+  HX.bound = true;
+  var cv = document.getElementById('hx-chart');
+  cv.addEventListener('mousemove', hxPointer);
+  cv.addEventListener('mouseleave', function() { HX.hoverTs = null; hxDraw(); });
+  cv.addEventListener('touchstart', function(e) { hxPointer(e); }, { passive: true });
+  cv.addEventListener('touchmove', function(e) { hxPointer(e); }, { passive: true });
 }
 async function hxLoad() {
   if (!SESSION.token) { hxMsg('Inicia sesión primero.'); return; }
