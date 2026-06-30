@@ -75,5 +75,7 @@ export async function ensureSchema() {
   // hist24: serie de 24h (mejor mayorista) para el sparkline. last_summary: ultimo resumen diario enviado.
   await sql`ALTER TABLE monitor_state ADD COLUMN IF NOT EXISTS hist24 JSONB`;
   await sql`ALTER TABLE monitor_state ADD COLUMN IF NOT EXISTS last_summary TIMESTAMPTZ`;
+  // hist_long: serie de 60 dias (1 punto/30min) para la pagina de historial grande.
+  await sql`ALTER TABLE monitor_state ADD COLUMN IF NOT EXISTS hist_long JSONB`;
   schemaReady = true;
 }

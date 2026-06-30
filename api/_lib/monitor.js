@@ -16,6 +16,17 @@ export function pushHist24(hist, ts, price) {
   return arr;
 }
 
+// Serie larga (1 punto cada ~30 min, retencion 60 dias) para la pagina de historial.
+const HISTLONG_MS = 60 * 24 * 3600 * 1000;
+export function pushHistLong(hist, ts, price) {
+  if (!price) return Array.isArray(hist) ? hist : [];
+  const arr = Array.isArray(hist) ? hist.slice() : [];
+  const last = arr[arr.length - 1];
+  if (!last || ts - last.ts >= 30 * 60000) arr.push({ ts, price });
+  while (arr.length && ts - arr[0].ts > HISTLONG_MS) arr.shift();
+  return arr;
+}
+
 function mapBest(raw, verifiedOnly) {
   return raw.map(item => ({
     price: parseFloat(item.adv.price),

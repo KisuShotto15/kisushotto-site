@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Historial — P2P Monitor</title>
+<link rel="icon" href="/images/p2p-favicon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #0b0e14; --surf: #121620; --surf-2: #171c28; --border: #232a38;
+    --text: #e6e9ef; --text-3: #8b93a7; --green: #2ebd85; --red: #f6465d; --gold: #F0B90B;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 14px; min-height: 100vh;
+  }
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .back { color: var(--text-3); text-decoration: none; font-size: 22px; line-height: 1; padding: 4px 8px; border-radius: 8px; }
+  .back:hover { background: var(--surf-2); color: var(--text); }
+  h1 { font-size: 16px; margin: 0; font-weight: 700; letter-spacing: .02em; }
+  .sub { font-size: 12px; color: var(--text-3); }
+  .card { background: var(--surf); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 10px; }
+  .stat { min-width: 80px; }
+  .stat .k { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+  .stat .v { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .ranges { display: flex; gap: 6px; margin: 4px 0 12px; flex-wrap: wrap; }
+  .rbtn {
+    background: var(--surf-2); border: 1px solid var(--border); color: var(--text-3);
+    border-radius: 8px; padding: 6px 13px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .rbtn.active { background: var(--gold); border-color: var(--gold); color: #000; }
+  #chart-wrap { position: relative; width: 100%; }
+  canvas { display: block; width: 100%; height: 380px; }
+  .msg { color: var(--text-3); font-size: 14px; padding: 40px 8px; text-align: center; }
+  @media (max-width: 600px) { canvas { height: 300px; } body { padding: 10px; } }
+</style>
+</head>
+<body>
+  <div class="top">
+    <a class="back" href="/" title="Volver">←</a>
+    <div>
+      <h1>Historial del mercado</h1>
+      <div class="sub">Mejor precio mayorista (USDT/VES)</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="stats">
+      <div class="stat"><div class="k">Actual</div><div class="v" id="s-cur">—</div></div>
+      <div class="stat"><div class="k">Cambio</div><div class="v" id="s-chg">—</div></div>
+      <div class="stat"><div class="k">Mínimo</div><div class="v" id="s-min" style="color:var(--red)">—</div></div>
+      <div class="stat"><div class="k">Máximo</div><div class="v" id="s-max" style="color:var(--green)">—</div></div>
+    </div>
+    <div class="ranges" id="ranges"></div>
+    <div id="chart-wrap"><canvas id="chart"></canvas></div>
+    <div class="msg" id="msg" style="display:none"></div>
+  </div>
+
+<script>
+var API = 'https://kisushotto-site.vercel.app/api/binance-bot';
+var RANGES = [
+  { id: '24h', label: '24h', ms: 24 * 3600e3 },
+  { id: '7d',  label: '7 días', ms: 7 * 24 * 3600e3 },
+  { id: '30d', label: '30 días', ms: 30 * 24 * 3600e3 },
+  { id: 'all', label: 'Todo', ms: Infinity }
+];
+var SERIES = [];      // serie combinada {ts, price}
+var curRange = '24h';
+
+function token() {
+  try { var s = JSON.parse(localStorage.getItem('p2p_session') || 'null'); return s && s.token; }
+  catch (e) { return null; }
+}
+
+function fmt(n) {
+  return Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function mergeSeries(histLong, hist24) {
+  var byTs = {};
+  [histLong, hist24].forEach(function (arr) {
+    if (Array.isArray(arr)) arr.forEach(function (p) { if (p && p.price) byTs[p.ts] = p.price; });
+  });
+  return Object.keys(byTs).map(function (ts) { return { ts: +ts, price: byTs[ts] }; })
+    .sort(function (a, b) { return a.ts - b.ts; });
+}
+
+function visible() {
+  var r = RANGES.filter(function (x) { return x.id === curRange; })[0];
+  if (!r || r.ms === Infinity) return SERIES;
+  var cut = Date.now() - r.ms;
+  return SERIES.filter(function (p) { return p.ts >= cut; });
+}
+
+function setMsg(t) {
+  var m = document.getElementById('msg'), c = document.getElementById('chart');
+  if (t) { m.textContent = t; m.style.display = ''; c.style.display = 'none'; }
+  else { m.style.display = 'none'; c.style.display = ''; }
+}
+
+function renderStats(pts) {
+  if (pts.length < 1) { ['s-cur','s-chg','s-min','s-max'].forEach(function(i){ document.getElementById(i).textContent='—'; }); return; }
+  var open = pts[0].price, close = pts[pts.length - 1].price;
+  var min = pts[0].price, max = pts[0].price;
+  pts.forEach(function (p) { if (p.price < min) min = p.price; if (p.price > max) max = p.price; });
+  var chg = open ? (close - open) / open * 100 : 0;
+  var up = close >= open;
+  document.getElementById('s-cur').textContent = fmt(close) + ' Bs';
+  var chgEl = document.getElementById('s-chg');
+  chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+  chgEl.style.color = up ? 'var(--green)' : 'var(--red)';
+  document.getElementById('s-min').textContent = fmt(min) + ' Bs';
+  document.getElementById('s-max').textContent = fmt(max) + ' Bs';
+}
+
+function timeLabel(ts, spanMs) {
+  var d = new Date(ts);
+  var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+  if (spanMs <= 36 * 3600e3) return p2(d.getHours()) + ':' + p2(d.getMinutes());
+  return p2(d.getDate()) + '/' + p2(d.getMonth() + 1);
+}
+
+function drawChart() {
+  var pts = visible();
+  renderStats(pts);
+  if (pts.length < 2) { setMsg('Aún no hay suficientes datos para este rango. El historial se acumula con el tiempo.'); return; }
+  setMsg('');
+
+  var canvas = document.getElementById('chart');
+  var dpr = window.devicePixelRatio || 1;
+  var cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+  canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+  var ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  var padL = 58, padR = 14, padT = 14, padB = 26;
+  var W = cssW - padL - padR, H = cssH - padT - padB;
+
+  var t0 = pts[0].ts, t1 = pts[pts.length - 1].ts, dt = (t1 - t0) || 1;
+  var min = pts[0].price, max = pts[0].price;
+  pts.forEach(function (p) { if (p.price < min) min = p.price; if (p.price > max) max = p.price; });
+  var span = (max - min) || 1, lo = min - span * 0.08, hi = max + span * 0.08, dp = hi - lo;
+
+  function X(ts) { return padL + (ts - t0) / dt * W; }
+  function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
+
+  // Grid + eje Y (precios)
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textBaseline = 'middle';
+  var rows = 5;
+  for (var i = 0; i <= rows; i++) {
+    var val = lo + (hi - lo) * i / rows;
+    var y = Y(val);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + W, y); ctx.stroke();
+    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'right';
+    ctx.fillText(fmt(val), padL - 8, y);
+  }
+
+  // Eje X (tiempo)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  var ticks = Math.min(6, pts.length);
+  for (var k = 0; k <= ticks; k++) {
+    var ts = t0 + dt * k / ticks;
+    var x = X(ts);
+    ctx.fillStyle = '#8b93a7';
+    ctx.fillText(timeLabel(ts, dt), Math.max(padL + 14, Math.min(padL + W - 14, x)), padT + H + 7);
+  }
+
+  var open = pts[0].price, close = pts[pts.length - 1].price;
+  var col = close >= open ? '#2ebd85' : '#f6465d';
+
+  // Area
+  var grad = ctx.createLinearGradient(0, padT, 0, padT + H);
+  grad.addColorStop(0, col + '44'); grad.addColorStop(1, col + '00');
+  ctx.beginPath();
+  ctx.moveTo(X(pts[0].ts), Y(pts[0].price));
+  for (var a = 1; a < pts.length; a++) ctx.lineTo(X(pts[a].ts), Y(pts[a].price));
+  ctx.lineTo(X(t1), padT + H); ctx.lineTo(X(t0), padT + H); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  // Linea
+  ctx.beginPath();
+  ctx.moveTo(X(pts[0].ts), Y(pts[0].price));
+  for (var b = 1; b < pts.length; b++) ctx.lineTo(X(pts[b].ts), Y(pts[b].price));
+  ctx.strokeStyle = col; ctx.lineWidth = 1.7; ctx.lineJoin = 'round'; ctx.stroke();
+
+  // Punto actual
+  ctx.beginPath(); ctx.arc(X(t1), Y(close), 3.2, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
+}
+
+function renderRanges() {
+  var wrap = document.getElementById('ranges');
+  wrap.innerHTML = '';
+  RANGES.forEach(function (r) {
+    var b = document.createElement('button');
+    b.className = 'rbtn' + (r.id === curRange ? ' active' : '');
+    b.textContent = r.label;
+    b.onclick = function () { curRange = r.id; renderRanges(); drawChart(); };
+    wrap.appendChild(b);
+  });
+}
+
+async function load() {
+  var t = token();
+  if (!t) { setMsg('Inicia sesión en el monitor primero.'); return; }
+  setMsg('Cargando historial...');
+  try {
+    var r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+      body: JSON.stringify({ path: '/monitor-history', params: {} })
+    });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok) { setMsg('Error ' + r.status + (d.error ? ': ' + d.error : '')); return; }
+    SERIES = mergeSeries(d.hist_long, d.hist24);
+    if (!SERIES.length) { setMsg('Aún no hay datos. El historial se acumula con el tiempo.'); return; }
+    drawChart();
+  } catch (e) { setMsg('Error de red: ' + e.message); }
+}
+
+window.addEventListener('resize', function () { try { drawChart(); } catch (e) {} });
+renderRanges();
+load();
+</script>
+</body>
+</html>

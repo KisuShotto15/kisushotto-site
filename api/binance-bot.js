@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
-import { pushHist24 } from './_lib/monitor.js';
+import { pushHist24, pushHistLong } from './_lib/monitor.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
   }
 
   // Control del monitor server-side (alertas Telegram 24/7). No requiere creds Binance.
-  if (path === '/monitor-enable' || path === '/monitor-disable' || path === '/monitor-state' || path === '/monitor-heartbeat') {
+  if (path === '/monitor-enable' || path === '/monitor-disable' || path === '/monitor-state' || path === '/monitor-heartbeat' || path === '/monitor-history') {
     try {
       await ensureSchema();
       if (path === '/monitor-enable') {
@@ -95,13 +95,18 @@ export default async function handler(req, res) {
         // De paso alimenta hist24 con el precio que ve el cliente, asi el sparkline no queda hueco de dia.
         const price = Number((params && params.price) || 0);
         if (price > 0) {
-          const cur = await sql`SELECT hist24 FROM monitor_state WHERE user_id = ${user.uid}`;
+          const cur = await sql`SELECT hist24, hist_long FROM monitor_state WHERE user_id = ${user.uid}`;
           const h = pushHist24(cur[0] ? cur[0].hist24 : [], Date.now(), price);
-          await sql`UPDATE monitor_state SET client_seen = now(), hist24 = ${JSON.stringify(h)}::jsonb WHERE user_id = ${user.uid}`;
+          const hl = pushHistLong(cur[0] ? cur[0].hist_long : [], Date.now(), price);
+          await sql`UPDATE monitor_state SET client_seen = now(), hist24 = ${JSON.stringify(h)}::jsonb, hist_long = ${JSON.stringify(hl)}::jsonb WHERE user_id = ${user.uid}`;
         } else {
           await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
         }
         return res.status(200).json({ ok: true });
+      }
+      if (path === '/monitor-history') {
+        const rows = await sql`SELECT hist_long, hist24 FROM monitor_state WHERE user_id = ${user.uid}`;
+        return res.status(200).json(rows[0] || { hist_long: [], hist24: [] });
       }
       const rows = await sql`SELECT enabled, status, last_tick, hist24, log FROM monitor_state WHERE user_id = ${user.uid}`;
       return res.status(200).json(rows[0] || { enabled: false });

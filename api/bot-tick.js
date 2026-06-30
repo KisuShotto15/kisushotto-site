@@ -4,7 +4,7 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
-import { computeAlerts, pushHist24 } from './_lib/monitor.js';
+import { computeAlerts, pushHist24, pushHistLong } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
 
 export const config = { maxDuration: 60 };
@@ -80,6 +80,7 @@ async function tickMonitor(row, now) {
 
   const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: row.price_hist, cooldowns: row.cooldowns, now, silent });
   const hist24 = pushHist24(row.hist24, now, out.bestMay);
+  const histLong = pushHistLong(row.hist_long, now, out.bestMay);
 
   let log = row.log;
   let token = '';
@@ -105,6 +106,7 @@ async function tickMonitor(row, now) {
     priceHist: out.priceHist,
     cooldowns: out.cooldowns,
     hist24,
+    histLong,
     lastSummary,
     log,
     status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
@@ -247,7 +249,7 @@ export default async function handler(req, res) {
 
     // Monitor server-side (alertas Telegram 24/7 con silencio nocturno)
     const mrows = await sql`
-      SELECT user_id, config, price_hist, cooldowns, hist24, last_summary, log, last_tick, client_seen
+      SELECT user_id, config, price_hist, cooldowns, hist24, hist_long, last_summary, log, last_tick, client_seen
       FROM monitor_state WHERE enabled = true LIMIT ${MAX_USERS}`;
     let monitored = 0;
     for (const row of mrows) {
@@ -255,7 +257,7 @@ export default async function handler(req, res) {
       try {
         out = await tickMonitor(row, Date.now());
       } catch (e) {
-        out = { priceHist: row.price_hist, cooldowns: row.cooldowns, hist24: row.hist24, lastSummary: row.last_summary,
+        out = { priceHist: row.price_hist, cooldowns: row.cooldowns, hist24: row.hist24, histLong: row.hist_long, lastSummary: row.last_summary,
                 log: pushLog(row.log, 'Error: ' + e.message, 'error'), status: 'Error: ' + e.message };
       }
       if (out === null) continue; // no toca refrescar aun
@@ -264,6 +266,7 @@ export default async function handler(req, res) {
           price_hist = ${JSON.stringify(out.priceHist || [])}::jsonb,
           cooldowns = ${JSON.stringify(out.cooldowns || {})}::jsonb,
           hist24 = ${JSON.stringify(out.hist24 || [])}::jsonb,
+          hist_long = ${JSON.stringify(out.histLong || [])}::jsonb,
           last_summary = ${out.lastSummary || null},
           log = ${JSON.stringify(out.log || [])}::jsonb,
           status = ${out.status || null},

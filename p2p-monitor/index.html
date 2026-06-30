@@ -832,9 +832,9 @@ input:focus {
           <div class="sc-v" id="sess-min" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
       </div>
-      <div id="spark-wrap" style="display:none;margin-top:8px">
+      <div id="spark-wrap" style="display:none;margin-top:8px;cursor:pointer" onclick="window.open('historial.html','_blank')" title="Ver historial completo">
         <div class="hm-label" style="display:flex;justify-content:space-between;align-items:baseline">
-          <span>Últimas 24h (mayorista)</span><span id="spark-range" style="font-weight:700"></span>
+          <span>Últimas 24h (mayorista) <span style="color:var(--text-3);font-weight:400">↗ ampliar</span></span><span id="spark-range" style="font-weight:700"></span>
         </div>
         <svg id="spark" width="100%" height="96" viewBox="0 0 600 96" style="display:block;margin-top:4px"></svg>
       </div>
