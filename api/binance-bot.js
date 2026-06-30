@@ -43,7 +43,9 @@ export default async function handler(req, res) {
     try {
       await ensureSchema();
       if (path === '/bot-enable') {
-        const cfg = JSON.stringify((params && params.config) || {});
+        const c = (params && params.config) || {};
+        if (c.tg && c.tg.token) c.tg = { token_enc: encrypt(c.tg.token), chatId: c.tg.chatId || '' };
+        const cfg = JSON.stringify(c);
         // Reset de estado de la corrida anterior: si no, el poller pinta el precio/log viejos
         // y sobrescribe el reprice inicial fresco del cliente.
         await sql`
@@ -59,7 +61,9 @@ export default async function handler(req, res) {
       }
       if (path === '/bot-config') {
         // Actualiza la config en caliente (sin resetear precio/log) para el bot ya corriendo.
-        const cfg = JSON.stringify((params && params.config) || {});
+        const c = (params && params.config) || {};
+        if (c.tg && c.tg.token) c.tg = { token_enc: encrypt(c.tg.token), chatId: c.tg.chatId || '' };
+        const cfg = JSON.stringify(c);
         await sql`UPDATE bot_state SET config = ${cfg}::jsonb, updated_at = now() WHERE user_id = ${user.uid} AND enabled = true`;
         return res.status(200).json({ ok: true });
       }

@@ -2,7 +2,7 @@
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
 import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
-import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus } from './_lib/binance.js';
+import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
 import { computeAlerts, pushHist24, pushHistLong } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
@@ -208,6 +208,41 @@ async function tickUser(row) {
   return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice };
 }
 
+// Notifica por Telegram las ordenes nuevas del usuario (24/7, app cerrada). Throttle ~60s.
+// Primera vez: siembra known_orders sin notificar. Devuelve { known, checkedAt, log } o null.
+async function maybeCheckOrders(row, now) {
+  if (row.orders_checked_at && now - new Date(row.orders_checked_at).getTime() < 60 * 1000) return null;
+  const cfg = row.config || {};
+  const key = decrypt({ ct: row.enc_key, iv: row.iv_key, tag: row.tag_key });
+  const secret = decrypt({ ct: row.enc_secret, iv: row.iv_secret, tag: row.tag_secret });
+  const { ok, orders } = await listOrders(key, secret, 2 * 3600 * 1000);
+  const checkedAt = new Date(now).toISOString();
+  if (!ok) return { known: row.known_orders, checkedAt };
+
+  const ids = orders.map(o => String(o.orderNumber));
+  const prev = Array.isArray(row.known_orders) ? row.known_orders : null;
+  if (prev === null) return { known: ids.slice(0, 50), checkedAt }; // siembra sin notificar
+
+  const knownSet = new Set(prev);
+  const fresh = orders.filter(o => !knownSet.has(String(o.orderNumber)));
+  const newKnown = Array.from(new Set([...ids, ...prev])).slice(0, 50);
+  let log = row.log;
+  if (fresh.length) {
+    let token = '';
+    try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
+    const chatId = cfg.tg && cfg.tg.chatId;
+    if (token && chatId) {
+      const f = fresh[0];
+      const total = f.totalPrice || (parseFloat(f.amount || 0) * parseFloat(f.price || 0)).toFixed(2);
+      let msg = '🟢 <b>Nueva orden P2P</b>\nCantidad: ' + (f.amount || '?') + ' USDT\nTotal: ' + total + ' Bs\nPrecio: ' + (f.price || '?') + ' Bs';
+      if (fresh.length > 1) msg += '\n(+' + (fresh.length - 1) + ' más)';
+      await sendTelegram(token, chatId, msg);
+      log = pushLog(log, '📩 ' + fresh.length + ' orden(es) nueva(s) → Telegram', 'info');
+    }
+  }
+  return { known: newKnown, checkedAt, log };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!process.env.BOT_TICK_SECRET || req.headers['x-bot-secret'] !== process.env.BOT_TICK_SECRET) {
@@ -218,6 +253,7 @@ export default async function handler(req, res) {
     await ensureSchema();
     const rows = await sql`
       SELECT b.user_id, b.enabled, b.config, b.ad_number, b.current_price, b.last_reprice, b.log,
+             b.known_orders, b.orders_checked_at,
              c.enc_key, c.iv_key, c.tag_key, c.enc_secret, c.iv_secret, c.tag_secret
       FROM bot_state b
       JOIN binance_creds c ON c.user_id = b.user_id
@@ -233,6 +269,14 @@ export default async function handler(req, res) {
         out = { enabled: row.enabled, status: 'Error: ' + e.message, log: pushLog(row.log, 'Error: ' + e.message, 'error'),
                 adNumber: row.ad_number, currentPrice: row.current_price, lastReprice: row.last_reprice };
       }
+      // Notificacion de ordenes nuevas (independiente del reprice; usa el log ya actualizado).
+      let knownOrders = row.known_orders, ordersCheckedAt = row.orders_checked_at;
+      if (out.enabled) {
+        try {
+          const oc = await maybeCheckOrders({ ...row, log: out.log }, Date.now());
+          if (oc) { knownOrders = oc.known; ordersCheckedAt = oc.checkedAt; if (oc.log) out.log = oc.log; }
+        } catch (e) {}
+      }
       await sql`
         UPDATE bot_state SET
           enabled = ${out.enabled},
@@ -241,6 +285,8 @@ export default async function handler(req, res) {
           ad_number = ${out.adNumber || null},
           current_price = ${out.currentPrice != null ? out.currentPrice : null},
           last_reprice = ${out.lastReprice || null},
+          known_orders = ${knownOrders != null ? JSON.stringify(knownOrders) : null}::jsonb,
+          orders_checked_at = ${ordersCheckedAt || null},
           last_tick = now(),
           updated_at = now()
         WHERE user_id = ${row.user_id}`;

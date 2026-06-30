@@ -77,5 +77,8 @@ export async function ensureSchema() {
   await sql`ALTER TABLE monitor_state ADD COLUMN IF NOT EXISTS last_summary TIMESTAMPTZ`;
   // hist_long: serie de 60 dias (1 punto/30min) para la pagina de historial grande.
   await sql`ALTER TABLE monitor_state ADD COLUMN IF NOT EXISTS hist_long JSONB`;
+  // Ordenes ya vistas (para notificar ordenes nuevas server-side) + ultima revision.
+  await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS known_orders JSONB`;
+  await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS orders_checked_at TIMESTAMPTZ`;
   schemaReady = true;
 }

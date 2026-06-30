@@ -80,6 +80,16 @@ export async function setAdStatus(key, secret, advNo, advStatus) {
   return { ok: r.ok, data };
 }
 
+// Historial de ordenes C2C del usuario (para notificar ordenes nuevas server-side).
+export async function listOrders(key, secret, sinceMs) {
+  const { ts, qs } = tsQs(secret);
+  const body = JSON.stringify({ page: 1, rows: 20, startTimestamp: ts - (sinceMs || 2 * 3600 * 1000), endTimestamp: ts });
+  const r = await fetch(`${BINANCE}/sapi/v1/c2c/orderMatch/listUserOrderHistory?${qs}`, { method: 'POST', headers: headers(key), body });
+  const data = await r.json().catch(() => ({}));
+  const orders = Array.isArray(data.data) ? data.data : [];
+  return { ok: r.ok, orders, raw: data };
+}
+
 // Body de busqueda publica (espejo de buildSearchBody del cliente).
 export function buildSearchBody({ transAmount, page, pays, tradeType }) {
   const body = {

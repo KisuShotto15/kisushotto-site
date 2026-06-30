@@ -2872,7 +2872,8 @@ function botServerConfig() {
     myNick: BOT_CFG.myNick || BOT.myNick || '',
     commission: CFG.commission || 0,
     verifiedOnly: CFG.verifiedOnly !== false,
-    payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [ACTIVE_PAY]
+    payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [ACTIVE_PAY],
+    tg: { token: TG.token, chatId: TG.chatId }
   };
 }
 
@@ -2994,7 +2995,7 @@ async function botToggle() {
     if (TG.token && TG.chatId) sendTelegram('🟢 <b>Bot encendido</b>');
     startBotPoller();
     startActivityWatcher();
-    startOrdersWatcher();
+    // Las notificaciones de ordenes nuevas las maneja el servidor (24/7, app cerrada).
   }
 }
 
@@ -3065,7 +3066,7 @@ async function hydrateBotState() {
       renderBotState(d);
       startBotPoller();
       startActivityWatcher();
-      startOrdersWatcher();
+      // Notificaciones de ordenes nuevas: server-side (24/7).
     }
   } catch(e) {}
 }
