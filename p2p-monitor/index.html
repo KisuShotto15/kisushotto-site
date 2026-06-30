@@ -3275,6 +3275,7 @@ function hxDraw() {
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, padT + H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL, cy); ctx.lineTo(padL + W, cy); ctx.stroke();
     ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
