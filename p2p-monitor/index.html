@@ -1630,8 +1630,8 @@ async function fetchOnce() {
 
     ST.allAds     = ST.mayoristas; // para compatibilidad con historial
 
-    // Historial de precio (mejor mayorista)
-    var bestMay = ST.mayoristas[0] ? ST.mayoristas[0].price : null;
+    // Historial de precio (mejor mayorista creible, sin listings fantasma)
+    var bestMay = bestCredibleMay();
     if (bestMay) {
       ST.priceHist.push({ ts: Date.now(), price: bestMay });
       if (ST.priceHist.length > 600) ST.priceHist.shift();
@@ -3096,6 +3096,15 @@ function loadTgConfig() {
 var MON24 = { enabled: false, lastHb: 0, lastHist: 0 };
 
 // ── Sparkline 24h (mejor mayorista) ───────────────────
+// Mejor precio mayorista CREIBLE: el mas alto entre anuncios con disponibilidad real
+// (>=150 USDT). ST.mayoristas viene ordenado desc por precio, asi que es el primero que
+// supera el umbral. Evita que un listing fantasma se registre como pico en el grafico.
+function bestCredibleMay() {
+  var arr = ST.mayoristas || [];
+  for (var i = 0; i < arr.length; i++) if (arr[i].avail >= 150) return arr[i].price;
+  return null;
+}
+
 // HIST24 = serie servidor (24h, app cerrada/noche); se completa con los puntos vivos del cliente.
 var HIST24 = [];
 function sparkSeries() {
@@ -3356,7 +3365,7 @@ function monitorHeartbeat() {
   if (now - MON24.lastHb < 28000) return;
   MON24.lastHb = now;
   // De paso, el precio que ve la app alimenta hist24 en el servidor (sparkline sin huecos de dia).
-  var p = (ST.mayoristas && ST.mayoristas[0]) ? ST.mayoristas[0].price : 0;
+  var p = bestCredibleMay() || 0;
   botCallWorker('/monitor-heartbeat', { price: p }).catch(function(){});
 }
 

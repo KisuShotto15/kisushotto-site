@@ -26,12 +26,16 @@ export function pushHistLong(hist, ts, price) {
   return arr;
 }
 
+// Disponibilidad minima (USDT) para considerar un anuncio creible. Evita que un
+// listing fantasma (ej. 5 USDT a precio absurdo) contamine bestMay/el grafico.
+const MIN_AVAIL = 150;
 function mapBest(raw, verifiedOnly) {
   return raw.map(item => ({
     price: parseFloat(item.adv.price),
+    avail: parseFloat(item.adv.tradableQuantity),
     merchant: item.advertiser.nickName,
     badges: item.advertiser.badges,
-  })).filter(a => !verifiedOnly || (a.badges && a.badges.length > 0))
+  })).filter(a => a.price > 0 && a.avail >= MIN_AVAIL && (!verifiedOnly || (a.badges && a.badges.length > 0)))
     .sort((a, b) => b.price - a.price);
 }
 
