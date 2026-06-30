@@ -1004,7 +1004,7 @@ input:focus {
       </div>
 
       <!-- Info en vivo -->
-      <div style="display:none;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px" id="bot-live">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px" id="bot-live">
         <div style="background:var(--surf-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
           <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Precio actual</div>
           <div id="bot-cur-price" style="font-size:20px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums">—</div>
@@ -1020,7 +1020,6 @@ input:focus {
       <div class="bot-group-h">Precio y techo</div>
       <div class="cfg-row"><span style="display:flex;align-items:center;gap:6px">Precio de venta (Bs)<button class="btn btn-sm" type="button" onclick="botSuggestSell()" title="Sugerir desde el mercado" style="padding:1px 7px;font-size:11px">sugerir</button></span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="ej. 640" min="1" step="1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
       <div class="cfg-row"><span>Spread mínimo (%)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" value="0.5" min="0.1" max="10" step="0.1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
-      <div class="cfg-row"><span style="color:#777;font-size:14px">Techo calculado</span><span id="cfg-bot-ceil-display" style="color:#E24B4A;font-weight:700;font-size:16px;margin-right:32px">—</span></div>
       </div>
       <div class="bot-group">
       <div class="bot-group-h">Límites</div>
@@ -2417,12 +2416,15 @@ function updateCommissionLabels() {
 function botUpdateCeiling() {
   var sell   = parseFloat(document.getElementById('cfg-bot-sell').value)   || 0;
   var spread = parseFloat(document.getElementById('cfg-bot-spread').value) || 0.5;
-  var disp   = document.getElementById('cfg-bot-ceil-display');
+  var el     = document.getElementById('bot-ceiling');
   if (sell > 0) {
     var ceiling = sell * (1 - (spread + (CFG.commission || 0)) / 100);
-    disp.textContent = ceiling.toFixed(3) + ' Bs';
+    BOT.ceiling = ceiling;
+    if (el) el.textContent = ceiling.toFixed(3) + ' Bs';
+    updateBotPriceColor();
   } else {
-    disp.textContent = '— (ingresa precio de venta)';
+    BOT.ceiling = null;
+    if (el) el.textContent = '—';
   }
 }
 
@@ -2862,10 +2864,9 @@ async function botToggle() {
 
     document.getElementById('bot-toggle').textContent = '▶ Iniciar Bot';
     document.getElementById('bot-toggle').style.background = '';
-    document.getElementById('bot-live').style.display = 'none';
     document.getElementById('bot-cur-price').textContent = '—';
     document.getElementById('bot-cur-price').style.color = 'var(--gold)';
-    document.getElementById('bot-ceiling').textContent = '—';
+    botUpdateCeiling();
     updateTopbarBotPrice(null);
     botSetStatus('Deteniendo...', '#888');
     botLog('— Bot detenido —', '#555');
