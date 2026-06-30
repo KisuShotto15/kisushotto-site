@@ -3157,7 +3157,7 @@ var HX_RANGES = [
 ];
 function openHistory() {
   HX.open = true;
-  HX.hoverTs = null;
+  HX.hoverX = null;
   document.getElementById('hx-overlay').style.display = 'block';
   document.body.style.overflow = 'hidden';
   hxBindPointer();
@@ -3215,7 +3215,7 @@ function hxRenderRanges() {
     b.textContent = r.label;
     b.style.cssText = 'border-radius:8px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:600;border:1px solid ' +
       (active ? 'var(--gold);background:var(--gold);color:#000' : 'var(--border);background:var(--surf-2);color:var(--text-3)');
-    b.onclick = function() { HX.range = r.id; HX.hoverTs = null; hxRenderRanges(); hxDraw(); };
+    b.onclick = function() { HX.range = r.id; HX.hoverX = null; hxRenderRanges(); hxDraw(); };
     wrap.appendChild(b);
   });
 }
@@ -3264,28 +3264,37 @@ function hxDraw() {
   ctx.strokeStyle = col; ctx.lineWidth = 1.7; ctx.lineJoin = 'round'; ctx.stroke();
   ctx.beginPath(); ctx.arc(X(t1), Y(close), 3.2, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
 
-  // Crosshair + tooltip al hacer hover
-  if (HX.hoverTs != null) {
+  // Crosshair estilo TradingView: las lineas siguen al CURSOR (libre), el punto
+  // marca el dato mas cercano en tiempo, y el eje Y muestra el precio a la altura del cursor.
+  if (HX.hoverX != null) {
+    var cx = HX.hoverX, cy = HX.hoverY;                 // lineas = posicion del cursor
+    var hts = t0 + ((cx - padL) / W) * dt;
     var bp = pts[0], bd = Infinity;
     for (var q = 0; q < pts.length; q++) {
-      var dd = Math.abs(pts[q].ts - HX.hoverTs);
+      var dd = Math.abs(pts[q].ts - hts);
       if (dd < bd) { bd = dd; bp = pts[q]; }
     }
-    var cx = X(bp.ts), cy = Y(bp.price);
+    var dotX = X(bp.ts), dotY = Y(bp.price);            // punto = dato mas cercano
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, padT + H); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(padL, cy); ctx.lineTo(padL + W, cy); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
+    ctx.beginPath(); ctx.arc(dotX, dotY, 4, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
-    // Caja tooltip
+    // Etiqueta de precio en el eje Y a la altura del cursor
+    var curPrice = lo + (1 - (cy - padT) / H) * dp;
+    ctx.font = '600 11px -apple-system, sans-serif';
+    ctx.fillStyle = col; ctx.fillRect(0, cy - 9, padL - 4, 18);
+    ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(fmt(curPrice), 4, cy);
+    // Caja tooltip (precio/fecha del dato mas cercano), cerca del cursor
     var l1 = fmt(bp.price) + ' Bs', l2 = hxFullLabel(bp.ts);
     ctx.font = '600 12px -apple-system, sans-serif';
     var tw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 16;
-    var th = 36, bx = cx + 10, by = cy - th - 10;
-    if (bx + tw > padL + W) bx = cx - 10 - tw;
-    if (by < padT) by = cy + 10;                       // si no cabe arriba, debajo del punto
+    var th = 36, bx = cx + 12, by = cy - th - 12;
+    if (bx + tw > padL + W) bx = cx - 12 - tw;
+    if (by < padT) by = cy + 12;                       // si no cabe arriba, debajo del cursor
     by = Math.max(padT, Math.min(padT + H - th, by));  // mantener dentro del area
     ctx.fillStyle = 'rgba(20,24,34,0.95)'; ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
     if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, tw, th, 6); ctx.fill(); ctx.stroke(); }
@@ -3303,11 +3312,10 @@ function hxFullLabel(ts) {
 function hxPointer(e) {
   if (!HX.px) return;
   var cv = document.getElementById('hx-chart'), rect = cv.getBoundingClientRect();
-  var clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-  var px = clientX - rect.left;
-  var frac = (px - HX.px.padL) / HX.px.W;
-  frac = Math.max(0, Math.min(1, frac));
-  HX.hoverTs = HX.px.t0 + frac * HX.px.dt;
+  var t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+  var px = t.clientX - rect.left, py = t.clientY - rect.top;
+  HX.hoverX = Math.max(HX.px.padL, Math.min(HX.px.padL + HX.px.W, px));
+  HX.hoverY = Math.max(HX.px.padT, Math.min(HX.px.padT + HX.px.H, py));
   hxDraw();
 }
 function hxBindPointer() {
@@ -3315,7 +3323,7 @@ function hxBindPointer() {
   HX.bound = true;
   var cv = document.getElementById('hx-chart');
   cv.addEventListener('mousemove', hxPointer);
-  cv.addEventListener('mouseleave', function() { HX.hoverTs = null; hxDraw(); });
+  cv.addEventListener('mouseleave', function() { HX.hoverX = null; hxDraw(); });
   cv.addEventListener('touchstart', function(e) { hxPointer(e); }, { passive: true });
   cv.addEventListener('touchmove', function(e) { hxPointer(e); }, { passive: true });
 }
