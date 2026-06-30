@@ -3283,8 +3283,10 @@ function hxDraw() {
     var l1 = fmt(bp.price) + ' Bs', l2 = hxFullLabel(bp.ts);
     ctx.font = '600 12px -apple-system, sans-serif';
     var tw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 16;
-    var th = 36, bx = cx + 10, by = padT + 6;
+    var th = 36, bx = cx + 10, by = cy - th - 10;
     if (bx + tw > padL + W) bx = cx - 10 - tw;
+    if (by < padT) by = cy + 10;                       // si no cabe arriba, debajo del punto
+    by = Math.max(padT, Math.min(padT + H - th, by));  // mantener dentro del area
     ctx.fillStyle = 'rgba(20,24,34,0.95)'; ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
     if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, tw, th, 6); ctx.fill(); ctx.stroke(); }
     else { ctx.fillRect(bx, by, tw, th); ctx.strokeRect(bx, by, tw, th); }
