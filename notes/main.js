@@ -191,7 +191,11 @@ const EditorHistory = {
 
 // ── init ─────────────────────────────────────────────────────────────────────
 async function init() {
-  if (!getUserEmail()) {
+  // La identidad del backend sale SOLO del JWT de sesion firmado (notes_session).
+  // Un email cacheado (cookie CF_Authorization o notes_user) ya no alcanza: sin
+  // sesion, cada request al worker responde 401 y nada sincroniza. Forzar login
+  // de passkey para que el dispositivo obtenga el JWT.
+  if (!getUserEmail() || !cfg.session()) {
     $('#loginScreen')?.classList.remove('hidden');
     initLoginScreen();
     return;

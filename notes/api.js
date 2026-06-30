@@ -49,6 +49,12 @@ async function api(path, opts = {}) {
   const res = await fetch(url, { ...opts, headers });
   if (!res.ok) {
     const txt = await res.text().catch(() => res.statusText);
+    // El worker rechaza la identidad (sesion ausente o JWT vencido a los 90 dias):
+    // descartar la sesion muerta y recargar para que init() exija passkey de nuevo.
+    if (res.status === 401 && cfg.session()) {
+      localStorage.removeItem('notes_session');
+      location.reload();
+    }
     throw new Error(`API ${res.status}: ${txt}`);
   }
   const ct = res.headers.get('Content-Type') || '';
