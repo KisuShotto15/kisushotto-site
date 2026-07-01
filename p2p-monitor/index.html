@@ -870,7 +870,7 @@ input:focus {
           <button onclick="closeHistory()" title="Cerrar" style="background:var(--surf-2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:20px;line-height:1;padding:5px 11px;cursor:pointer">←</button>
           <div>
             <div style="font-size:16px;font-weight:700">Historial del mercado</div>
-            <div style="font-size:12px;color:var(--text-3)">Mejor precio mayorista (USDT/VES)</div>
+            <div style="font-size:12px;color:var(--text-3)">Mejor precio mayorista (USDT/VES) <span id="hx-coverage" style="color:var(--gold)"></span></div>
           </div>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:18px;margin-bottom:10px">
@@ -3197,7 +3197,7 @@ function renderSparkline() {
 window.addEventListener('resize', function() { try { renderSparkline(); } catch(e) {} try { if (HX.open) hxDraw(); } catch(e) {} });
 
 // ── Historial completo (overlay pantalla completa) ──────────────
-var HX = { open: false, series: [], range: '24h' };
+var HX = { open: false, series: [], range: 'all' };
 var HX_RANGES = [
   { id: '24h', label: '24h',     ms: 24 * 3600e3 },
   { id: '7d',  label: '7 días',  ms: 7 * 24 * 3600e3 },
@@ -3382,6 +3382,10 @@ async function hxLoad() {
   try {
     var d = await botCallWorker('/monitor-history');
     HX.series = hxMerge(d && d.hist_long, d && d.hist24);
+    var cov = document.getElementById('hx-coverage');
+    if (cov) cov.textContent = HX.series.length
+      ? '· ' + HX.series.length + ' puntos desde ' + hxFullLabel(HX.series[0].ts)
+      : '';
     if (!HX.series.length) { hxMsg('Aún no hay datos. El historial se acumula con el tiempo.'); return; }
     hxDraw();
   } catch (e) { hxMsg('Error: ' + e.message); }
