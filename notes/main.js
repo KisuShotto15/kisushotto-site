@@ -173,7 +173,6 @@ const EditorHistory = {
     card.style.background = snap.color || '';
     card.style.setProperty('--ed-bg', snap.color || 'var(--card)');
     card.classList.toggle('colored', !!snap.color);
-    card.classList.toggle('on-light', isLightBg(snap.color));
     renderChecklist();
     updateEditorMeta();
     scheduleSave();
@@ -648,24 +647,12 @@ function renderDrawerCats() {
   });
 }
 
-// Los swatches de nota incluyen tonos claros (#585faa, #a9adf7): sobre ellos el
-// texto claro por defecto queda ilegible. Detectar fondo claro por luminancia
-// relativa para invertir el texto a oscuro via la clase .on-light.
-function isLightBg(hex) {
-  if (!hex) return false;
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return false;
-  const int = parseInt(m[1], 16);
-  const r = (int >> 16) & 255, g = (int >> 8) & 255, b = int & 255;
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 150;
-}
-
 function noteCardHtml(n) {
   const me = getUserEmail();
   const isShared = n.owner_email !== me;
   const colored = !!n.color;
   const isSelected = State.selected.has(n.id);
-  const cls = `note-card${colored ? ' colored' : ''}${colored && isLightBg(n.color) ? ' on-light' : ''}${isSelected ? ' selected' : ''}`;
+  const cls = `note-card${colored ? ' colored' : ''}${isSelected ? ' selected' : ''}`;
   const style = colored ? `style="background:${n.color}"` : '';
   let body = '';
   if (n.locked && !isSessionUnlocked()) {
@@ -1458,7 +1445,6 @@ function openEditor(n) {
   card.style.background = e.color || '';
   card.style.setProperty('--ed-bg', e.color || 'var(--card)');
   card.classList.toggle('colored', !!e.color);
-  card.classList.toggle('on-light', isLightBg(e.color));
   $('#ed-title').value = e.title || '';
   const isChecklist = e.type === 'checklist';
   // Unhide the textarea BEFORE measuring — autoGrow reads scrollHeight, which is
