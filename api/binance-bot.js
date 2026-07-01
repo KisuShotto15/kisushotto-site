@@ -52,7 +52,8 @@ export default async function handler(req, res) {
           INSERT INTO bot_state (user_id, enabled, config, status, updated_at)
           VALUES (${user.uid}, true, ${cfg}::jsonb, 'Iniciando...', now())
           ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfg}::jsonb, status = 'Iniciando...',
-            current_price = NULL, last_reprice = NULL, last_tick = NULL, ad_number = NULL, log = '[]'::jsonb, updated_at = now()`;
+            current_price = NULL, last_reprice = NULL, last_tick = NULL, ad_number = NULL, log = '[]'::jsonb,
+            known_orders = NULL, orders_checked_at = NULL, updated_at = now()`;
         return res.status(200).json({ ok: true });
       }
       if (path === '/bot-disable') {

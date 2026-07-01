@@ -215,18 +215,24 @@ async function maybeCheckOrders(row, now) {
   const cfg = row.config || {};
   const key = decrypt({ ct: row.enc_key, iv: row.iv_key, tag: row.tag_key });
   const secret = decrypt({ ct: row.enc_secret, iv: row.iv_secret, tag: row.tag_secret });
-  const { ok, orders } = await listOrders(key, secret, 2 * 3600 * 1000);
+  const { ok, orders, raw } = await listOrders(key, secret, 2 * 3600 * 1000);
   const checkedAt = new Date(now).toISOString();
-  if (!ok) return { known: row.known_orders, checkedAt };
+  let log = row.log;
+  if (!ok) {
+    log = pushLog(log, '⚠ Órdenes: API falló [' + ((raw && raw.code) || '?') + '] ' + ((raw && raw.message) || ''), 'warn');
+    return { known: row.known_orders, checkedAt, log };
+  }
 
   const ids = orders.map(o => String(o.orderNumber));
   const prev = Array.isArray(row.known_orders) ? row.known_orders : null;
-  if (prev === null) return { known: ids.slice(0, 50), checkedAt }; // siembra sin notificar
+  if (prev === null) {
+    log = pushLog(log, '🔎 Órdenes: ' + orders.length + ' en historial 2h (sembrado inicial, sin avisar)', 'info');
+    return { known: ids.slice(0, 50), checkedAt, log };
+  }
 
   const knownSet = new Set(prev);
   const fresh = orders.filter(o => !knownSet.has(String(o.orderNumber)));
   const newKnown = Array.from(new Set([...ids, ...prev])).slice(0, 50);
-  let log = row.log;
   if (fresh.length) {
     let token = '';
     try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
@@ -236,8 +242,11 @@ async function maybeCheckOrders(row, now) {
       const total = f.totalPrice || (parseFloat(f.amount || 0) * parseFloat(f.price || 0)).toFixed(2);
       let msg = '🟢 <b>Nueva orden P2P</b>\nCantidad: ' + (f.amount || '?') + ' USDT\nTotal: ' + total + ' Bs\nPrecio: ' + (f.price || '?') + ' Bs';
       if (fresh.length > 1) msg += '\n(+' + (fresh.length - 1) + ' más)';
-      await sendTelegram(token, chatId, msg);
-      log = pushLog(log, '📩 ' + fresh.length + ' orden(es) nueva(s) → Telegram', 'info');
+      const sent = await sendTelegram(token, chatId, msg);
+      log = pushLog(log, sent ? '📩 ' + fresh.length + ' orden(es) nueva(s) → Telegram'
+                               : '⚠ Orden nueva pero Telegram rechazó el envío', sent ? 'info' : 'warn');
+    } else {
+      log = pushLog(log, '⚠ ' + fresh.length + ' orden(es) nueva(s) pero el bot no tiene Telegram configurado', 'warn');
     }
   }
   return { known: newKnown, checkedAt, log };
