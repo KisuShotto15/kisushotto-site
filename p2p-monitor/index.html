@@ -1613,8 +1613,8 @@ function availArrowHtml(d) {
   var s = av >= 1000
     ? (av / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
     : Math.round(av).toLocaleString('es-VE');
-  if (v > 0) return '<span class="avail-arrow up" title="Recargó +' + Math.round(v) + ' USDT (últ. 60s)">▲+' + s + '</span>';
-  return '<span class="avail-arrow down" title="Vendió ' + Math.round(v) + ' USDT (últ. 60s)">▼-' + s + '</span>';
+  if (v > 0) return '<span class="avail-arrow up" title="Recargó +' + Math.round(v) + ' USDT (últ. 60s)">+' + s + '</span>';
+  return '<span class="avail-arrow down" title="Vendió ' + Math.round(v) + ' USDT (últ. 60s)">-' + s + '</span>';
 }
 
 function availPopupHtml(d) {
@@ -1623,8 +1623,8 @@ function availPopupHtml(d) {
   var s = av >= 1000
     ? (av / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
     : Math.round(av).toLocaleString('es-VE');
-  if (v > 0) return '<span class="avail-popup up">▲+' + s + '</span>';
-  return '<span class="avail-popup down">▼-' + s + '</span>';
+  if (v > 0) return '<span class="avail-popup up">+' + s + '</span>';
+  return '<span class="avail-popup down">-' + s + '</span>';
 }
 
 // ── Ciclo principal ───────────────────────────────────
