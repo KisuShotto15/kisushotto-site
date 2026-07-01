@@ -86,7 +86,7 @@ export async function listOrders(key, secret, sinceMs) {
   const ts = Date.now();
   const params = `startTimestamp=${ts - (sinceMs || 2 * 3600 * 1000)}&endTimestamp=${ts}&page=1&rows=20&recvWindow=10000&timestamp=${ts}`;
   const url = `${BINANCE}/sapi/v1/c2c/orderMatch/listUserOrderHistory?${params}&signature=${sign(secret, params)}`;
-  const r = await fetch(url, { method: 'POST', headers: { 'X-MBX-APIKEY': key } });
+  const r = await fetch(url, { method: 'GET', headers: { 'X-MBX-APIKEY': key } });
   const data = await r.json().catch(() => ({}));
   const orders = Array.isArray(data.data) ? data.data : [];
   const ok = r.ok && (data.code == null || data.code === '000000' || data.code === 0);
