@@ -432,6 +432,7 @@ body {
   border-bottom: 1px solid rgba(33,38,45,.7);
   align-items: center;
   transition: background .1s;
+  position: relative;
 }
 .ob-row:last-child { border-bottom: none; }
 .ob-row:hover { background: rgba(255,255,255,.03); }
@@ -699,21 +700,20 @@ input:focus {
   .avail-popup {
     display: flex;
     position: absolute;
-    top: 2px;
-    right: 2px;
-    padding: 1px 4px;
+    top: 0;
+    right: 0;
+    padding: 1px 5px;
     font-size: 11px;
     font-weight: 700;
-    border-radius: 3px;
+    border-radius: 0 0 0 4px;
     pointer-events: none;
     z-index: 5;
     white-space: nowrap;
-    line-height: 1.4;
+    line-height: 1.6;
     animation: availFade60 60s ease-out forwards;
   }
   .avail-popup.up   { background: rgba(34,197,94,.25); color: #22c55e; }
   .avail-popup.down { background: rgba(239,68,68,.25); color: #ef4444; }
-  .ob-row > span:last-child { position: relative; }
 }
 
 /* ── Buy Section ─────────────────────────────────────── */
@@ -1908,7 +1908,8 @@ function renderOB(id, ads, bestCls) {
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
         '<span class="price-c">' + fmtP(ad.price) + '</span>' +
-        '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span>' + popupHtml + '</span>' +
+        '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
+        popupHtml +
       '</div>';
     } else {
       rows += '<div class="ob-row" style="opacity:0.18">' +
@@ -1954,7 +1955,8 @@ function renderBuySection(ads) {
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
         '<span class="price-c g">' + fmtP(ad.price) + '</span>' +
-        '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span>' + popupHtml + '</span>' +
+        '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
+        popupHtml +
       '</div>';
     } else {
       rows += '<div class="ob-row" style="opacity:0.18">' +
