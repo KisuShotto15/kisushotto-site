@@ -81,13 +81,16 @@ export async function setAdStatus(key, secret, advNo, advStatus) {
 }
 
 // Historial de ordenes C2C del usuario (para notificar ordenes nuevas server-side).
+// Endpoint SAPI estandar: TODOS los params van en la query firmada (no en el body).
 export async function listOrders(key, secret, sinceMs) {
-  const { ts, qs } = tsQs(secret);
-  const body = JSON.stringify({ page: 1, rows: 20, startTimestamp: ts - (sinceMs || 2 * 3600 * 1000), endTimestamp: ts });
-  const r = await fetch(`${BINANCE}/sapi/v1/c2c/orderMatch/listUserOrderHistory?${qs}`, { method: 'POST', headers: headers(key), body });
+  const ts = Date.now();
+  const params = `startTimestamp=${ts - (sinceMs || 2 * 3600 * 1000)}&endTimestamp=${ts}&page=1&rows=20&recvWindow=10000&timestamp=${ts}`;
+  const url = `${BINANCE}/sapi/v1/c2c/orderMatch/listUserOrderHistory?${params}&signature=${sign(secret, params)}`;
+  const r = await fetch(url, { method: 'POST', headers: { 'X-MBX-APIKEY': key } });
   const data = await r.json().catch(() => ({}));
   const orders = Array.isArray(data.data) ? data.data : [];
-  return { ok: r.ok, orders, raw: data };
+  const ok = r.ok && (data.code == null || data.code === '000000' || data.code === 0);
+  return { ok, orders, raw: data };
 }
 
 // Body de busqueda publica (espejo de buildSearchBody del cliente).

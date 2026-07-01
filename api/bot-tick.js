@@ -219,7 +219,7 @@ async function maybeCheckOrders(row, now) {
   const checkedAt = new Date(now).toISOString();
   let log = row.log;
   if (!ok) {
-    log = pushLog(log, '⚠ Órdenes: API falló [' + ((raw && raw.code) || '?') + '] ' + ((raw && raw.message) || ''), 'warn');
+    log = pushLog(log, '⚠ Órdenes: API falló [' + ((raw && raw.code) || '?') + '] ' + ((raw && raw.message) || (raw ? JSON.stringify(raw).slice(0, 120) : '')), 'warn');
     return { known: row.known_orders, checkedAt, log };
   }
 
