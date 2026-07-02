@@ -1203,7 +1203,6 @@ var CFG = {
 };
 
 var PROXY = 'https://kisushotto-site.vercel.app/api/p2p-search';
-var VERCEL_SECRET = 'ptk-2025-kisu';
 var API_BASE = 'https://kisushotto-site.vercel.app';
 
 // ── Sesion (multi-usuario) ────────────────────────────
@@ -1631,7 +1630,6 @@ function availPopupHtml(d) {
 // Un solo batch combinado: paginas may + small + buy en 1 request Vercel
 var MAY_PAGES = 2, SMALL_PAGES = 3;
 async function fetchOnce() {
-  monitorHeartbeat();
   document.getElementById('last-update').textContent = 'Cargando...';
   try {
     var bodies = [];
@@ -1674,6 +1672,9 @@ async function fetchOnce() {
 
     ST.lastFetch = new Date();
     ST.consecFails = 0;
+    // Latir SOLO tras fetch exitoso: si la app esta abierta pero fallando,
+    // el servidor debe tomar el relevo (no decirle "yo cubro" sin datos).
+    monitorHeartbeat();
     renderAll();
     checkAlerts();
     renderSparkline();
@@ -1692,7 +1693,8 @@ async function fetchOnce() {
     } else {
       lu2.textContent = '⚠ ' + e.message;
     }
-    addAlert('info', 'Error de conexión', e.message);
+    // Solo alertar al transicionar a "sin conexion" (no en cada fallo → spam)
+    if (ST.consecFails === 2) addAlert('info', 'Error de conexión', e.message);
   }
 }
 
@@ -3561,7 +3563,7 @@ function fmtM(n) {
   if (n >= 1000) return (n / 1000).toFixed(0) + 'k';
   return n.toFixed(0);
 }
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function toast(msg) {
   var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
   document.body.appendChild(t); setTimeout(function() { t.remove(); }, 2500);

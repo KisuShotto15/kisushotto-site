@@ -29,6 +29,13 @@ export function pushHistLong(hist, ts, price) {
 // Disponibilidad minima (USDT) para considerar un anuncio creible (mayorista real).
 // Evita que un listing fantasma contamine bestMay (grafico) ni dispare falsas alertas.
 const MIN_AVAIL = 2000;
+
+// Escapa HTML para Telegram (parse_mode HTML): un nick con < o & haria que
+// Telegram rechace el mensaje completo y la alerta se pierda.
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function mapBest(raw, verifiedOnly) {
   return raw.map(item => ({
     price: parseFloat(item.adv.price),
@@ -69,7 +76,7 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
         alerts.push({
           type: 'spread',
           title: '💰 Spread ' + spread.toFixed(3) + '%' + netLabel + ' — OPORTUNIDAD',
-          desc: 'Mayorista: ' + bestMay.toFixed(2) + ' Bs (' + may[0].merchant + ') → Compra: ' +
+          desc: 'Mayorista: ' + bestMay.toFixed(2) + ' Bs (' + escHtml(may[0].merchant) + ') → Compra: ' +
                 bestSmall.toFixed(2) + ' Bs · Dif: ' + (bestMay - bestSmall).toFixed(2) + ' Bs/USDT',
         });
       }

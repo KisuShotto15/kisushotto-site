@@ -6,6 +6,20 @@ import { pushHist24, pushHistLong } from './_lib/monitor.js';
 
 const BINANCE = 'https://api.binance.com';
 
+// Cifra el token TG entrante; si no llega token (otro dispositivo, input vacio),
+// PRESERVA el token_enc ya guardado para no matar las notificaciones 24/7 en silencio.
+function mergeTg(c, prevConfig) {
+  if (c.tg && c.tg.token) {
+    c.tg = { token_enc: encrypt(c.tg.token), chatId: c.tg.chatId || '' };
+    return c;
+  }
+  const prev = prevConfig && prevConfig.tg;
+  if (prev && prev.token_enc) {
+    c.tg = { token_enc: prev.token_enc, chatId: (c.tg && c.tg.chatId) || prev.chatId || '' };
+  }
+  return c;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -44,7 +58,8 @@ export default async function handler(req, res) {
       await ensureSchema();
       if (path === '/bot-enable') {
         const c = (params && params.config) || {};
-        if (c.tg && c.tg.token) c.tg = { token_enc: encrypt(c.tg.token), chatId: c.tg.chatId || '' };
+        const prevB = await sql`SELECT config FROM bot_state WHERE user_id = ${user.uid}`;
+        mergeTg(c, prevB[0] && prevB[0].config);
         const cfg = JSON.stringify(c);
         // Reset de estado de la corrida anterior: si no, el poller pinta el precio/log viejos
         // y sobrescribe el reprice inicial fresco del cliente.
@@ -63,7 +78,8 @@ export default async function handler(req, res) {
       if (path === '/bot-config') {
         // Actualiza la config en caliente (sin resetear precio/log) para el bot ya corriendo.
         const c = (params && params.config) || {};
-        if (c.tg && c.tg.token) c.tg = { token_enc: encrypt(c.tg.token), chatId: c.tg.chatId || '' };
+        const prevC = await sql`SELECT config FROM bot_state WHERE user_id = ${user.uid}`;
+        mergeTg(c, prevC[0] && prevC[0].config);
         const cfg = JSON.stringify(c);
         await sql`UPDATE bot_state SET config = ${cfg}::jsonb, updated_at = now() WHERE user_id = ${user.uid} AND enabled = true`;
         return res.status(200).json({ ok: true });
@@ -81,9 +97,8 @@ export default async function handler(req, res) {
       await ensureSchema();
       if (path === '/monitor-enable') {
         const cfg = (params && params.config) || {};
-        if (cfg.tg && cfg.tg.token) {
-          cfg.tg = { token_enc: encrypt(cfg.tg.token), chatId: cfg.tg.chatId || '' };
-        }
+        const prevM = await sql`SELECT config FROM monitor_state WHERE user_id = ${user.uid}`;
+        mergeTg(cfg, prevM[0] && prevM[0].config);
         const cfgStr = JSON.stringify(cfg);
         await sql`
           INSERT INTO monitor_state (user_id, enabled, config, status, updated_at)

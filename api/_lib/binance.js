@@ -7,6 +7,12 @@ import crypto from 'node:crypto';
 const BINANCE = 'https://api.binance.com';
 const PUBLIC_SEARCH = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
 
+// fetch con timeout: un cuelgue de Binance no debe consumir los 60s del tick
+// y bloquear al resto de usuarios.
+function fx(url, opts, ms) {
+  return fetch(url, { ...opts, signal: AbortSignal.timeout(ms || 12000) });
+}
+
 export function sign(secret, qs) {
   return crypto.createHmac('sha256', secret).update(qs).digest('hex');
 }
@@ -24,7 +30,7 @@ function headers(key) {
 export async function getMyAds(key, secret) {
   const { qs } = tsQs(secret);
   const body = JSON.stringify({ page: 1, rows: 20, tradeType: 'BUY', asset: 'USDT', fiatUnit: 'VES' });
-  const r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/listWithPagination?${qs}`, { method: 'POST', headers: headers(key), body });
+  const r = await fx(`${BINANCE}/sapi/v1/c2c/ads/listWithPagination?${qs}`, { method: 'POST', headers: headers(key), body });
   const data = await r.json().catch(() => ({}));
   const ads = Array.isArray(data.data) ? data.data
             : (data.data && Array.isArray(data.data.data)) ? data.data.data : [];
@@ -35,7 +41,7 @@ export async function getDetailByNo(key, secret, advNo) {
   const ts = Date.now();
   const params = `adsNo=${encodeURIComponent(advNo)}&timestamp=${ts}`;
   const qs = `${params}&signature=${sign(secret, params)}`;
-  const r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${qs}`, {
+  const r = await fx(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${qs}`, {
     method: 'POST', headers: { 'X-MBX-APIKEY': key, 'clientType': 'web' },
   });
   const data = await r.json().catch(() => ({}));
@@ -45,7 +51,7 @@ export async function getDetailByNo(key, secret, advNo) {
 export async function updateAdPrice(key, secret, advNo, price) {
   const { qs } = tsQs(secret);
   const body = JSON.stringify({ advNo: String(advNo), price: Number(price) });
-  const r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers: headers(key), body });
+  const r = await fx(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers: headers(key), body });
   const data = await r.json().catch(() => ({}));
   return { ok: r.ok, data };
 }
@@ -66,7 +72,7 @@ export async function updateMinLimit(key, secret, advNo, minSingleTransAmount) {
     payTimeLimit: ad.payTimeLimit, tradeMethods: ad.tradeMethods || [],
     remarks: ad.remarks || '', autoReplyMsg: ad.autoReplyMsg || '', advStatus: ad.advStatus,
   });
-  const r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers: headers(key), body });
+  const r = await fx(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers: headers(key), body });
   const data = await r.json().catch(() => ({}));
   return { ok: r.ok, data };
 }
@@ -75,7 +81,7 @@ export async function updateMinLimit(key, secret, advNo, minSingleTransAmount) {
 export async function setAdStatus(key, secret, advNo, advStatus) {
   const { qs } = tsQs(secret);
   const body = JSON.stringify({ advNos: [String(advNo)], advStatus: Number(advStatus) });
-  const r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/updateStatus?${qs}`, { method: 'POST', headers: headers(key), body });
+  const r = await fx(`${BINANCE}/sapi/v1/c2c/ads/updateStatus?${qs}`, { method: 'POST', headers: headers(key), body });
   const data = await r.json().catch(() => ({}));
   return { ok: r.ok, data };
 }
@@ -86,7 +92,7 @@ export async function listOrders(key, secret, sinceMs) {
   const ts = Date.now();
   const params = `startTimestamp=${ts - (sinceMs || 2 * 3600 * 1000)}&endTimestamp=${ts}&page=1&rows=20&recvWindow=10000&timestamp=${ts}`;
   const url = `${BINANCE}/sapi/v1/c2c/orderMatch/listUserOrderHistory?${params}&signature=${sign(secret, params)}`;
-  const r = await fetch(url, { method: 'GET', headers: { 'X-MBX-APIKEY': key } });
+  const r = await fx(url, { method: 'GET', headers: { 'X-MBX-APIKEY': key } });
   const data = await r.json().catch(() => ({}));
   const orders = Array.isArray(data.data) ? data.data : [];
   const ok = r.ok && (data.code == null || data.code === '000000' || data.code === 0);
@@ -108,7 +114,7 @@ export async function publicSearch({ transAmount, pays, maxPages = 2, tradeType 
   const bodies = [];
   for (let i = 1; i <= maxPages; i++) bodies.push(buildSearchBody({ transAmount, page: i, pays, tradeType }));
   const settled = await Promise.allSettled(bodies.map(b =>
-    fetch(PUBLIC_SEARCH, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json())
+    fx(PUBLIC_SEARCH, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }, 9000).then(r => r.json())
   ));
   return settled.flatMap(s => (s.status === 'fulfilled' && Array.isArray(s.value.data)) ? s.value.data : []);
 }

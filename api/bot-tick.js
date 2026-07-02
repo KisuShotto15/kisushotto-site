@@ -74,6 +74,15 @@ async function tickMonitor(row, now) {
   // Respetar la cadencia (el tick base es ~18s; aqui decidimos si toca refrescar).
   if (row.last_tick && (now - new Date(row.last_tick).getTime()) < refreshSec * 1000) return null;
 
+  // Claim atomico: si otro tick concurrente ya refresco a este usuario, saltar
+  // (evita doble busqueda y doble alerta Telegram).
+  const claim = await sql`
+    UPDATE monitor_state SET last_tick = now()
+    WHERE user_id = ${row.user_id} AND enabled = true
+      AND (last_tick IS NULL OR last_tick < now() - interval '25 seconds')
+    RETURNING user_id`;
+  if (!claim.length) return null;
+
   const pays = (cfg.payTypes && cfg.payTypes.length) ? cfg.payTypes : [];
   const mayRaw = await publicSearch({ transAmount: cfg.mayAmount || 2000000, pays, maxPages: 2, tradeType: 'SELL' });
   const smallRaw = await publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 3, tradeType: 'SELL' });
@@ -271,6 +280,14 @@ export default async function handler(req, res) {
 
     let ticked = 0;
     for (const row of rows) {
+      // Claim atomico: evita que dos ticks solapados (DO ~18s + latencia Binance)
+      // repricien al mismo usuario en paralelo.
+      const claim = await sql`
+        UPDATE bot_state SET last_tick = now()
+        WHERE user_id = ${row.user_id} AND enabled = true
+          AND (last_tick IS NULL OR last_tick < now() - interval '15 seconds')
+        RETURNING user_id`;
+      if (!claim.length) continue;
       let out;
       try {
         out = await tickUser(row);
@@ -286,9 +303,11 @@ export default async function handler(req, res) {
           if (oc) { knownOrders = oc.known; ordersCheckedAt = oc.checkedAt; if (oc.log) out.log = oc.log; }
         } catch (e) {}
       }
+      // enabled = enabled AND out.enabled: el tick solo puede APAGAR, nunca re-encender.
+      // Si el usuario pulso Detener mientras este tick corria, no resucitar el bot.
       await sql`
         UPDATE bot_state SET
-          enabled = ${out.enabled},
+          enabled = enabled AND ${out.enabled},
           status = ${out.status || null},
           log = ${JSON.stringify(out.log || [])}::jsonb,
           ad_number = ${out.adNumber || null},
