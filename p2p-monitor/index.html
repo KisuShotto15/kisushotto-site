@@ -3259,8 +3259,7 @@ function saveConfig() {
   CFG.overboughtThr = parseFloat(document.getElementById('cfg-ob').value)  || 1.0;
   CFG.weaknessThr   = parseFloat(document.getElementById('cfg-wk').value)  || 0.5;
   CFG.sustainThr    = parseFloat(document.getElementById('cfg-sustain').value) || 1.5;
-  var mayVal = document.getElementById('cfg-may-amount').value;
-  CFG.mayAmount   = mayVal === '' ? 2000000 : (parseFloat(mayVal) || 0);
+  CFG.mayAmount   = parseFloat(document.getElementById('cfg-may-amount').value)   || 2000000;
   CFG.smallAmount = parseFloat(document.getElementById('cfg-small-amount').value) || 59999;
   CFG.commission  = parseFloat(document.getElementById('cfg-commission').value)   || 0;
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
@@ -3284,6 +3283,10 @@ function loadConfig() {
     var s = localStorage.getItem('p2p_cfg2');
     if (!s) return;
     Object.assign(CFG, JSON.parse(s));
+    // Sanear filtros en 0 guardados por versiones previas (0 = tabla con huecos)
+    if (!CFG.mayAmount   || CFG.mayAmount   <= 0) CFG.mayAmount   = 2000000;
+    if (!CFG.smallAmount || CFG.smallAmount <= 0) CFG.smallAmount = 59999;
+    if (!CFG.buyAmount   || CFG.buyAmount   <= 0) CFG.buyAmount   = 2000000;
     document.getElementById('cfg-int').value      = CFG.interval;
     document.getElementById('cfg-spr').value      = CFG.spreadThr;
     document.getElementById('cfg-ob').value       = CFG.overboughtThr;
@@ -3322,8 +3325,10 @@ function updateVerToggle() {
 function setFilter(which, raw) {
   var map = { may: ['mayAmount', 2000000], small: ['smallAmount', 59999], buy: ['buyAmount', 2000000] };
   var m = map[which]; if (!m) return;
-  var v = (raw === '' || raw == null) ? 0 : parseFloat(raw);
-  if (isNaN(v)) v = m[1];
+  // Vacio o 0 → restaurar el default. Con transAmount=0 Binance devuelve los 40 anuncios
+  // MAS BARATOS (pocos verificados) y la tabla queda con filas vacias.
+  var v = parseFloat(raw);
+  if (isNaN(v) || v <= 0) v = m[1];
   CFG[m[0]] = v;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();
