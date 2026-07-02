@@ -1632,15 +1632,19 @@ var MAY_PAGES = 2, SMALL_PAGES = 3;
 async function fetchOnce() {
   document.getElementById('last-update').textContent = 'Cargando...';
   try {
+    // Si la Sección Compra está colapsada, no pedir su página (1 llamada Binance menos por ciclo).
+    var buyBody = document.getElementById('buy-section-body');
+    var includeBuy = !buyBody || buyBody.style.display !== 'none';
+
     var bodies = [];
     for (var i = 1; i <= MAY_PAGES; i++)   bodies.push(buildSearchBody({ transAmount: CFG.mayAmount,   page: i, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
     for (var j = 1; j <= SMALL_PAGES; j++) bodies.push(buildSearchBody({ transAmount: CFG.smallAmount, page: j, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
-    bodies.push(buildSearchBody({ transAmount: CFG.buyAmount, page: 1, pays: [ACTIVE_PAY], tradeType: 'BUY' }));
+    if (includeBuy) bodies.push(buildSearchBody({ transAmount: CFG.buyAmount, page: 1, pays: [ACTIVE_PAY], tradeType: 'BUY' }));
 
     var batch = await searchBatch(bodies);
     var mayRaw   = batch.slice(0, MAY_PAGES).flatMap(function(a){ return a; });
     var smallRaw = batch.slice(MAY_PAGES, MAY_PAGES + SMALL_PAGES).flatMap(function(a){ return a; });
-    var buyRaw   = batch[MAY_PAGES + SMALL_PAGES] || [];
+    var buyRaw   = includeBuy ? (batch[MAY_PAGES + SMALL_PAGES] || []) : null;
 
     var prevMayAvail = {};
     (ST.mayoristas || []).forEach(function(a){ prevMayAvail[a.merchant] = a.avail; });
@@ -1653,13 +1657,12 @@ async function fetchOnce() {
 
     ST.mayoristas = mapAds(mayRaw);
     ST.smallAds   = mapAds(smallRaw);
-    ST.buyAds     = mapBuyAds(buyRaw);
+    if (buyRaw !== null) ST.buyAds = mapBuyAds(buyRaw); // colapsada: conservar última data
 
-    ST.availDisp = {
-      'ob-may':   accumAvail('ob-may',   ST.mayoristas, prevMayAvail),
-      'ob-small': accumAvail('ob-small', ST.smallAds,   prevSmallAvail),
-      'ob-buy':   accumAvail('ob-buy',   ST.buyAds,     prevBuyAvail)
-    };
+    ST.availDisp = ST.availDisp || {};
+    ST.availDisp['ob-may']   = accumAvail('ob-may',   ST.mayoristas, prevMayAvail);
+    ST.availDisp['ob-small'] = accumAvail('ob-small', ST.smallAds,   prevSmallAvail);
+    if (buyRaw !== null) ST.availDisp['ob-buy'] = accumAvail('ob-buy', ST.buyAds, prevBuyAvail);
 
     ST.allAds     = ST.mayoristas; // para compatibilidad con historial
 
@@ -1762,8 +1765,9 @@ function renderAll() {
 }
 
 function updateSessionStats() {
-  // Sólo el primer mayorista (mejor precio) define el max/min de sesión
-  var bestMay = ST.mayoristas[0] ? ST.mayoristas[0].price : null;
+  // Solo el mejor mayorista CREIBLE (>=2000 USDT) define el max/min de sesión,
+  // igual que gráfico y alertas (un listing fantasma no infla la sesión).
+  var bestMay = bestCredibleMay();
   if (bestMay === null) return;
   if (BOT.sessMax === null || bestMay > BOT.sessMax) BOT.sessMax = bestMay;
   if (BOT.sessMin === null || bestMay < BOT.sessMin) BOT.sessMin = bestMay;
@@ -1782,8 +1786,10 @@ function updateTopbarBotPrice(price) {
 }
 
 function renderSpreadHero() {
-  var bestMay   = ST.mayoristas[0]  ? ST.mayoristas[0].price  : null;
-  var bestSmall = ST.smallAds[0]    ? ST.smallAds[0].price    : null;
+  // Mismo filtro de credibilidad (>=2000 USDT) que gráfico/alertas.
+  var cMayH = credibleMay(), cSmallH = credibleSmall();
+  var bestMay   = cMayH   ? cMayH.price   : null;
+  var bestSmall = cSmallH ? cSmallH.price : null;
 
   if (!bestMay) {
     document.getElementById('hero-pct').textContent   = '—';
@@ -1838,8 +1844,9 @@ function renderSpreadHero() {
 }
 
 function renderStats() {
-  var bestMay   = ST.mayoristas[0] ? ST.mayoristas[0].price : null;
-  var bestSmall = ST.smallAds[0]   ? ST.smallAds[0].price   : null;
+  var cMayS = credibleMay(), cSmallS = credibleSmall();
+  var bestMay   = cMayS   ? cMayS.price   : null;
+  var bestSmall = cSmallS ? cSmallS.price : null;
 
   document.getElementById('st-best').textContent  = bestMay   ? fmt(bestMay)   + ' Bs' : '—';
   document.getElementById('st-count').textContent = ST.mayoristas.length;
@@ -2165,14 +2172,6 @@ function toggleAlertDropdown(e) {
   d.style.display = 'flex';
 }
 
-function toggleConfig() {
-  var body  = document.getElementById('cfg-body');
-  var arrow = document.getElementById('cfg-arrow');
-  var open  = body.style.display !== 'none';
-  body.style.display = open ? 'none' : '';
-  arrow.textContent  = open ? '▸' : '▾';
-}
-
 function toggleBotGear(e) {
   e.stopPropagation();
   var p = document.getElementById('bot-gear-popup');
@@ -2241,80 +2240,6 @@ function startActivityWatcher() {
 function stopActivityWatcher() {
   if (ACTIVITY.checkTimer) { clearInterval(ACTIVITY.checkTimer); ACTIVITY.checkTimer = null; }
   hidePresenceModal();
-}
-
-// ── Orders watcher (Telegram notifications) ───────────
-var ORDERS = {
-  knownIds: null,    // null = first poll not done
-  lastNotifTs: 0,
-  timer: null,
-  COOLDOWN_MS: 3 * 60 * 1000,
-  POLL_MS: 120 * 1000
-};
-
-function startOrdersWatcher() {
-  ORDERS.knownIds = null;
-  ORDERS.lastNotifTs = 0;
-  if (ORDERS.timer) clearInterval(ORDERS.timer);
-  pollOrders();
-  ORDERS.timer = setInterval(pollOrders, ORDERS.POLL_MS);
-}
-
-function stopOrdersWatcher() {
-  if (ORDERS.timer) { clearInterval(ORDERS.timer); ORDERS.timer = null; }
-}
-
-async function pollOrders() {
-  if (!BOT.running) return;
-  try {
-    var res = await botCallWorker('/orders', { sinceMs: 2 * 60 * 60 * 1000 });
-    if (!res || !res.data) return;
-    var orders = res.data;
-    var now = Date.now();
-
-    // Primera poll: sembrar known sin notificar
-    if (ORDERS.knownIds === null) {
-      ORDERS.knownIds = {};
-      orders.forEach(function(o){ ORDERS.knownIds[o.orderNumber] = true; });
-      ORDERS.lastNotifTs = now; // arrancar cooldown
-      return;
-    }
-
-    var newOrders = orders.filter(function(o){ return !ORDERS.knownIds[o.orderNumber]; });
-    newOrders.forEach(function(o){ ORDERS.knownIds[o.orderNumber] = true; });
-
-    var canNotify = (now - ORDERS.lastNotifTs) >= ORDERS.COOLDOWN_MS;
-
-    if (newOrders.length > 0) {
-      if (canNotify) {
-        var first = newOrders[0];
-        var totalBs = first.totalPrice || (parseFloat(first.amount || 0) * parseFloat(first.price || 0)).toFixed(2);
-        var msg = '🟢 <b>Nueva orden P2P</b>\n' +
-                  'Cantidad: ' + (first.amount || '?') + ' USDT\n' +
-                  'Total: ' + totalBs + ' Bs\n' +
-                  'Precio: ' + (first.price || '?') + ' Bs';
-        if (newOrders.length > 1) msg += '\n(+' + (newOrders.length - 1) + ' más)';
-        sendTelegram(msg);
-        ORDERS.lastNotifTs = now;
-        botLog('📩 Orden nueva notificada', '#1D9E75');
-      } else {
-        botLog('📨 ' + newOrders.length + ' orden(es) nueva(s) — silenciada(s) por cooldown', '#8b949e');
-      }
-    } else if (canNotify) {
-      // No nuevas, pero pueden haber pendientes (status 0 = pending pay, 1 = paid awaiting release)
-      var pending = orders.filter(function(o){
-        var s = Number(o.orderStatus);
-        return s === 0 || s === 1;
-      });
-      if (pending.length > 0) {
-        sendTelegram('⏳ <b>Órdenes pendientes</b>\n' + pending.length + ' orden(es) sin completar');
-        ORDERS.lastNotifTs = now;
-        botLog('📩 Pendientes notificadas: ' + pending.length, '#F0B90B');
-      }
-    }
-  } catch(e) {
-    // silencioso
-  }
 }
 
 function activityCheck() {
@@ -2659,161 +2584,6 @@ function botSetStatus(msg, color) {
   el.textContent = msg; el.style.color = color || '#888';
 }
 
-async function botCycle() {
-  if (!BOT.running) return;
-  BOT.cycles++;
-
-  try {
-    // Actualizar límite mínimo antes de reprice si cambió
-    if (BOT_CFG.minLimit > 0 && BOT_CFG.minLimit !== BOT.appliedMinLimit && BOT.adNumber) {
-      botSetStatus('Actualizando límite mínimo...', '#F0B90B');
-      try {
-        await botUpdateMinLimit(BOT.adNumber, BOT_CFG.minLimit);
-        BOT.appliedMinLimit = BOT_CFG.minLimit;
-        BOT.myMinLimit = BOT_CFG.minLimit;
-        BOT.cachedAd = null;
-        botLog('📏 Límite mínimo → ' + fmtM(BOT_CFG.minLimit) + ' VES', '#8b949e');
-      } catch(e) {
-        botLog('⚠ Límite mínimo: ' + e.message, '#F6465D');
-      }
-    }
-
-    // 1. Mi anuncio actual — usar cache si tiene menos de 2 min
-    var ad;
-    var now = Date.now();
-    if (BOT.cachedAd && (now - BOT.cachedAdAt) < 120000) {
-      ad = BOT.cachedAd;
-    } else {
-      botSetStatus('Consultando anuncio...', '#F0B90B');
-      ad = await botGetMyAd(true);
-      if (ad) { BOT.cachedAd = ad; BOT.cachedAdAt = now; updateManualBalance(); }
-    }
-    if (!ad) {
-      BOT.cachedAd = null;
-      botSetStatus('Anuncio no encontrado', '#E24B4A');
-      return;
-    }
-    if (ad.__noFunds) {
-      botLog('🛑 Fondos insuficientes (<100 USDT) — bot detenido automáticamente', '#E24B4A');
-      sendTelegram('🛑 P2P Bot detenido: fondos insuficientes (<100 USDT)');
-      await botToggle();
-      return;
-    }
-    BOT.adNumber   = ad.adNumber || ad.advNo;
-    // Sincronizar BOT.currentPrice con el ad fresco para detectar cambios manuales en Binance.
-    // Excepción: si el bot acaba de reprice (<60s), conservar el local para evitar race con propagación.
-    var adIsFresh = (BOT.cachedAdAt === now);
-    var recentReprice = BOT.lastReprice && (now - BOT.lastReprice) < 60000;
-    if (!BOT.currentPrice || (adIsFresh && !recentReprice)) {
-      BOT.currentPrice = parseFloat(ad.price);
-    }
-    BOT.myMinLimit = parseFloat(ad.minSingleTransAmount);
-    var freshPays = (ad.tradeMethods || []).map(function(m){ return m.identifier; })
-                    .filter(function(id){ return id && GENERIC_PAY_IDS.indexOf(id) === -1; });
-    if (freshPays.length) { BOT.adPayTypes = freshPays; updateBotPayBadge(); }
-
-    // Calcular techo desde precio de venta configurado
-    if (!BOT_CFG.sellPrice) {
-      throw new Error('Configura el Precio de venta antes de iniciar');
-    }
-    BOT.ceiling = BOT_CFG.sellPrice * (1 - (BOT_CFG.minSpread + (CFG.commission || 0)) / 100);
-    document.getElementById('bot-ceiling').textContent = BOT.ceiling.toFixed(3) + ' Bs';
-    document.getElementById('bot-cur-price').textContent = BOT.currentPrice.toFixed(3) + ' Bs';
-    updateBotPriceColor();
-
-    // 2. Mercado público — 3 páginas, usando los métodos del anuncio del bot
-    botSetStatus('Analizando mercado...', '#F0B90B');
-    var market = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 2, BOT.adPayTypes));
-
-    // 3. Competidores: badge + match con métodos del anuncio, límite mínimo ≤ mío + umbral
-    var myPays = BOT.adPayTypes && BOT.adPayTypes.length ? BOT.adPayTypes : [ACTIVE_PAY];
-    var competitors = market.filter(function(a) {
-      var aTypes = a.payTypes || [];
-      var match = myPays.some(function(p) { return aTypes.indexOf(p) !== -1; });
-      return String(a.advNo) !== String(BOT.adNumber) &&
-             a.merchant !== (BOT_CFG.myNick || BOT.myNick) &&
-             match &&
-             a.minVES < (BOT.myMinLimit + BOT_CFG.limitThreshold) &&
-             a.avail >= 150;
-    });
-
-    var above = competitors.filter(function(a) { return a.price > BOT.currentPrice && a.price <= BOT.ceiling; });
-    var below = competitors.filter(function(a) { return a.price < BOT.currentPrice; });
-
-    var targetPrice = null;
-    var reason = '';
-
-    // Bug fix #2: si el precio actual ya supera el techo, corregir de inmediato
-    if (BOT.currentPrice > BOT.ceiling) {
-      targetPrice = BOT.ceiling;
-      reason = '↓ precio sobre techo → ' + BOT.ceiling.toFixed(3);
-    } else if (above.length > 0) {
-      // Competidores dentro del gap máximo
-      var inGap = above.filter(function(a) {
-        return (a.price - BOT.currentPrice) <= BOT_CFG.maxGap;
-      });
-      if (inGap.length > 0) {
-        inGap.sort(function(a, b) { return b.price - a.price; });
-        targetPrice = inGap[0].price + BOT_CFG.increment;
-        reason = '↑ ' + inGap[0].merchant + ' @ ' + inGap[0].price.toFixed(3);
-      } else {
-        above.sort(function(a, b) { return a.price - b.price; });
-        var nearest = above[0];
-        botLog('En espera — más cercano: ' + nearest.merchant + ' @ ' + nearest.price.toFixed(3) + ' (+' + (nearest.price - BOT.currentPrice).toFixed(3) + ' Bs)', '#555');
-        botSetStatus('En espera (gap > ' + BOT_CFG.maxGap + ' Bs)', '#555');
-        return;
-      }
-    } else if (below.length > 0) {
-      // Soy #1 — bajar al mínimo necesario para mantener posición
-      below.sort(function(a, b) { return b.price - a.price; });
-      var best = below[0];
-      var proposed = best.price + BOT_CFG.increment;
-      if (proposed < BOT.currentPrice) {
-        targetPrice = proposed;
-        reason = '↓ ahorro vs ' + best.merchant + ' @ ' + best.price.toFixed(3);
-      }
-    }
-
-    if (targetPrice === null) {
-      botLog('Óptimo — yo: ' + BOT.currentPrice.toFixed(3) + ' | arriba: ' + above.length + ' | abajo: ' + below.length + ' | total competidores: ' + competitors.length, '#484f58');
-      botSetStatus('✓ Posición óptima', '#1D9E75');
-      return;
-    }
-
-    // Aplicar techo
-    if (targetPrice > BOT.ceiling) {
-      targetPrice = BOT.ceiling;
-      reason += ' [techo]';
-    }
-
-    var now = Date.now();
-
-    // Solo actuar si hay cambio real
-    if (Math.abs(targetPrice - BOT.currentPrice) < 0.001) {
-      botSetStatus('✓ Posición óptima', '#1D9E75');
-      return;
-    }
-
-    // 4. Actualizar precio
-    botSetStatus('Actualizando precio...', '#F0B90B');
-    await botUpdatePrice(BOT.adNumber, targetPrice);
-    BOT.lastReprice = now;
-
-    var isUp = targetPrice > BOT.currentPrice;
-    var msg = (isUp ? '↑' : '↓') + ' ' + BOT.currentPrice.toFixed(3) + ' → ' + targetPrice.toFixed(3) + ' Bs  |  ' + reason;
-    BOT.currentPrice = targetPrice;
-    document.getElementById('bot-cur-price').textContent = targetPrice.toFixed(3) + ' Bs';
-    updateBotPriceColor();
-    botLog(msg, isUp ? '#1D9E75' : '#5dade2');
-    botSetStatus('✓ Repriciado', '#1D9E75');
-    updateTopbarBotPrice(targetPrice);
-
-  } catch(e) {
-    botSetStatus('Error: ' + e.message, '#E24B4A');
-    botLog('✗ ' + e.message, '#E24B4A');
-  }
-}
-
 async function botInitialCycle(allowPaused) {
   botLog('⚡ Posicionando...', '#F0B90B');
   try {
@@ -2921,7 +2691,6 @@ async function botToggle() {
     BOT.startSeq = (BOT.startSeq || 0) + 1; // cancela cualquier arranque aun en curso
     stopBotPoller();
     stopActivityWatcher();
-    stopOrdersWatcher();
     BOT.adPayTypes = [];
     updateBotPayBadge();
     updateManualBalance();
@@ -3270,15 +3039,12 @@ function hxRenderRanges() {
     wrap.appendChild(b);
   });
 }
-function hxDraw() {
-  var pts = hxVisible();
-  hxStats(pts);
-  if (pts.length < 2) { hxMsg('Aún no hay suficientes datos para este rango. El historial se acumula con el tiempo.'); return; }
-  hxMsg('');
-  var canvas = document.getElementById('hx-chart');
-  var dpr = window.devicePixelRatio || 1, cssW = canvas.clientWidth, cssH = canvas.clientHeight;
-  canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
-  var ctx = canvas.getContext('2d');
+// Dibuja el frame base (grilla, ejes, area, linea) en un canvas offscreen. Se
+// regenera solo cuando cambia la data/rango/tamano; el mousemove solo lo blitea.
+function hxDrawBase(pts, cssW, cssH, dpr) {
+  var base = HX.base || (HX.base = document.createElement('canvas'));
+  base.width = Math.round(cssW * dpr); base.height = Math.round(cssH * dpr);
+  var ctx = base.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
   var padL = 58, padR = 14, padT = 14, padB = 26, W = cssW - padL - padR, H = cssH - padT - padB;
@@ -3288,7 +3054,8 @@ function hxDraw() {
   var span = (max - min) || 1, lo = min - span * 0.08, hi = max + span * 0.08, dp = hi - lo;
   function X(ts) { return padL + (ts - t0) / dt * W; }
   function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
-  HX.px = { padL: padL, padT: padT, W: W, H: H, t0: t0, dt: dt }; // para invertir el hover
+  var open = pts[0].price, close = pts[pts.length - 1].price, col = close >= open ? '#2ebd85' : '#f6465d';
+  HX.px = { padL: padL, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, col: col }; // para el crosshair
   ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
   for (var i = 0; i <= 5; i++) {
     var val = lo + (hi - lo) * i / 5, y = Y(val);
@@ -3303,7 +3070,6 @@ function hxDraw() {
     ctx.fillStyle = '#8b93a7';
     ctx.fillText(hxTimeLabel(ts, dt), Math.max(padL + 14, Math.min(padL + W - 14, x)), padT + H + 7);
   }
-  var open = pts[0].price, close = pts[pts.length - 1].price, col = close >= open ? '#2ebd85' : '#f6465d';
   var grad = ctx.createLinearGradient(0, padT, 0, padT + H);
   grad.addColorStop(0, col + '44'); grad.addColorStop(1, col + '00');
   ctx.beginPath(); ctx.moveTo(X(pts[0].ts), Y(pts[0].price));
@@ -3314,6 +3080,27 @@ function hxDraw() {
   for (var b = 1; b < pts.length; b++) ctx.lineTo(X(pts[b].ts), Y(pts[b].price));
   ctx.strokeStyle = col; ctx.lineWidth = 1.7; ctx.lineJoin = 'round'; ctx.stroke();
   ctx.beginPath(); ctx.arc(X(t1), Y(close), 3.2, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
+}
+function hxDraw() {
+  var pts = hxVisible();
+  hxStats(pts);
+  if (pts.length < 2) { hxMsg('Aún no hay suficientes datos para este rango. El historial se acumula con el tiempo.'); return; }
+  hxMsg('');
+  var canvas = document.getElementById('hx-chart');
+  var dpr = window.devicePixelRatio || 1, cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+  // Regenerar el base solo si cambio data/rango/tamano (no en cada mousemove)
+  var key = HX.range + '|' + pts.length + '|' + pts[pts.length - 1].ts + '|' + cssW + 'x' + cssH + '|' + dpr;
+  if (HX.baseKey !== key) { hxDrawBase(pts, cssW, cssH, dpr); HX.baseKey = key; }
+  var bw = Math.round(cssW * dpr), bh = Math.round(cssH * dpr);
+  if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
+  var ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.drawImage(HX.base, 0, 0, cssW, cssH);
+  var padL = HX.px.padL, padT = HX.px.padT, W = HX.px.W, H = HX.px.H;
+  var t0 = HX.px.t0, dt = HX.px.dt, lo = HX.px.lo, dp = HX.px.dp, col = HX.px.col;
+  function X(ts) { return padL + (ts - t0) / dt * W; }
+  function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
 
   // Crosshair estilo TradingView: las lineas siguen al CURSOR (libre), el punto
   // marca el dato mas cercano en tiempo, y el eje Y muestra el precio a la altura del cursor.
@@ -3579,7 +3366,10 @@ function setBuyCollapsed(collapsed) {
 }
 function toggleBuySection() {
   var body = document.getElementById('buy-section-body');
-  setBuyCollapsed(body && body.style.display !== 'none');
+  var willCollapse = body && body.style.display !== 'none';
+  setBuyCollapsed(willCollapse);
+  // Al expandir, refrescar para traer la data BUY (no se pide mientras está colapsada).
+  if (!willCollapse) fetchOnce();
 }
 function initBuySection() {
   var saved = null;

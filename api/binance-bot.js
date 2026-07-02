@@ -153,8 +153,6 @@ export default async function handler(req, res) {
   }
 
   const timestamp = Date.now();
-  const bodyObj = { ...(params || {}), timestamp };  // timestamp in body for SAPI
-  const bodyStr = JSON.stringify({ ...params });
   const qs = `timestamp=${timestamp}&signature=${sign(`timestamp=${timestamp}`)}`;
 
   const headers = { 'X-MBX-APIKEY': key, 'Content-Type': 'application/json', 'clientType': 'web' };
@@ -238,14 +236,6 @@ export default async function handler(req, res) {
     if (!advNo || advStatus == null) return res.status(400).json({ error: 'advNo y advStatus requeridos' });
     const body = JSON.stringify({ advNos: [String(advNo)], advStatus: Number(advStatus) });
     r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/updateStatus?${qs}`, { method: 'POST', headers, body });
-  } else if (path === '/orders') {
-    const sinceMs = Number((params || {}).sinceMs) || (2 * 60 * 60 * 1000);
-    const body = JSON.stringify({
-      page: 1, rows: 20,
-      startTimestamp: timestamp - sinceMs,
-      endTimestamp: timestamp
-    });
-    r = await fetch(`${BINANCE}/sapi/v1/c2c/orderMatch/listUserOrderHistory?${qs}`, { method: 'POST', headers, body });
   } else {
     return res.status(404).json({ error: 'Unknown path' });
   }
