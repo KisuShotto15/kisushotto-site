@@ -467,10 +467,12 @@ async function renderMicros() {
     }
     sources.sort((a, b) => b.amt - a.amt);
     const srcText = sources.length ? sources.slice(0, 3).map(s => esc(s.name)).join(' · ') : '—';
+    const fmtA = v => v >= 100 ? Math.round(v) : v >= 10 ? Math.round(v * 10) / 10 : Math.round(v * 100) / 100;
     return `<div class="micro-row" data-status="${status}" data-pct="${pct}">
       <div class="micro-name">${def.label}</div>
       <div class="micro-source">${srcText}</div>
       <div class="micro-bar"><div class="micro-bar-fill" style="--pct:${barPct}%"></div><div class="micro-bar-mark"></div></div>
+      <div class="micro-amt">${fmtA(total)}${def.unit}<span>/${fmtA(rdaVal)}${def.unit}</span></div>
       <div class="micro-pct">${pct}<span>%</span></div>
       <div class="micro-status">${label}</div>
     </div>`;
