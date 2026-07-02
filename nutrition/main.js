@@ -72,6 +72,7 @@ let searchTargetMealId = null;
 let pendingFood = null;
 let pendingDetailFetch = null;
 const _microFetchedSession = new Set(); // prevent re-fetching same fdcId twice per session
+const _microFailedAt = new Map();       // fdcId -> timestamp del ultimo fallo, para reintentar
 
 // ── State helpers ─────────────────────────────────────────────────────────────
 function profile() { return S.profiles[S.activeProfile]; }
@@ -82,6 +83,7 @@ function day() {
 function uid()  { return Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4); }
 function fmt(n) { return Math.round(n); }
 function fmtD(n){ return n.toFixed(1); }
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 
 // Migrate old state (profile.meals → profile.days)
 function migrateState(s) {
@@ -109,8 +111,17 @@ function save() {
   S.lastModified = Date.now();
   saveLocal(S);
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => push(S), 1500);
+  syncTimer = setTimeout(() => { syncTimer = null; push(S); }, 1500);
 }
+
+// Push pendiente no puede quedar en el timer si el usuario cierra o cambia de pestana
+function flushPush() {
+  if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; push(S); }
+}
+window.addEventListener('pagehide', flushPush);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushPush();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
@@ -120,8 +131,10 @@ async function init() {
   render();
   hydrateForm();
 
+  const localBefore = S.lastModified || 0;
   const cloud = await pull();
-  if (cloud && (cloud.lastModified || 0) > (S.lastModified || 0)) {
+  // No pisar ediciones hechas mientras resolvia el pull
+  if (cloud && (cloud.lastModified || 0) > (S.lastModified || 0) && (S.lastModified || 0) === localBefore) {
     S = migrateState(cloud);
     saveLocal(S);
     render();
@@ -148,7 +161,7 @@ function renderProfiles() {
       : '';
     return `<div class="profile-pill${active}">
       <span class="pill-name" onclick="window._switchProfile('${id}')"
-            ondblclick="event.stopPropagation(); window._renameProfile('${id}',this)">${S.profiles[id].name}</span>
+            ondblclick="event.stopPropagation(); window._renameProfile('${id}',this)">${esc(S.profiles[id].name)}</span>
       <span class="pill-rename" onclick="event.stopPropagation(); window._renameProfile('${id}',this.previousElementSibling)" title="Renombrar">✎</span>
       ${delBtn}
     </div>`;
@@ -219,7 +232,7 @@ function renderDayTabs() {
       ? `<span class="day-tab-del" onclick="event.stopPropagation(); window._deleteDay('${d.id}')" title="Eliminar día">×</span>`
       : '';
     return `<div class="day-tab${active}" onclick="window._switchDay('${d.id}')">
-      <span class="day-tab-label" ondblclick="event.stopPropagation(); window._editDayLabel('${d.id}',this)">${d.label}</span>
+      <span class="day-tab-label" ondblclick="event.stopPropagation(); window._editDayLabel('${d.id}',this)">${esc(d.label)}</span>
       ${delBtn}
     </div>`;
   }).join('');
@@ -357,6 +370,10 @@ function renderTDEEResults() {
 }
 
 window._applyTDEE = function(target) {
+  if (!totalMacros(day().meals).calories) {
+    alert('No hay ingredientes activos que escalar. Agrega comidas primero.');
+    return;
+  }
   day().meals = scalePortions(day().meals, target);
   save();
   renderSummary();
@@ -375,24 +392,33 @@ async function ensureMicros(ingredients) {
   };
   const needsFetch = i => {
     if (!i.fdcId) return false;
-    if (_microFetchedSession.has(i.fdcId)) return false; // already tried this session
+    if (_microFetchedSession.has(i.fdcId)) return false; // fetched OK this session
+    const failedAt = _microFailedAt.get(i.fdcId);
+    if (failedAt && Date.now() - failedAt < 30000) return false; // backoff tras fallo de red
     if (!(i.fdcId in S.microCache)) return true;
     return isStale(S.microCache[i.fdcId]);
   };
   const unique = [...new Set(ingredients.filter(needsFetch).map(i => i.fdcId))];
   if (!unique.length) return;
+  let anyOk = false;
   for (let i = 0; i < unique.length; i += 4) {
     await Promise.allSettled(
       unique.slice(i, i + 4).map(async fdcId => {
-        _microFetchedSession.add(fdcId);
-        try { S.microCache[fdcId] = await getFoodDetail(fdcId, apiKey); }
-        catch { S.microCache[fdcId] = {}; }
+        try {
+          S.microCache[fdcId] = await getFoodDetail(fdcId, apiKey);
+          _microFetchedSession.add(fdcId);
+          _microFailedAt.delete(fdcId);
+          anyOk = true;
+        } catch {
+          _microFailedAt.set(fdcId, Date.now());
+        }
       })
     );
   }
-  save();
+  if (anyOk) save();
 }
 
+let _microsRun = 0;
 async function renderMicros() {
   const el = document.getElementById('micros-list');
   if (!el) return;
@@ -401,14 +427,17 @@ async function renderMicros() {
     el.innerHTML = `<div class="micros-loading">Micronutrientes requieren una
       <button class="link-btn" onclick="window._openApiKeyModal()">API key USDA</button>
       para calcular cobertura real.</div>`;
+    renderFatTypes(day().meals);
     return;
   }
   if (!el.querySelector('.micro-row')) {
     el.innerHTML = '<div class="micros-loading">Calculando cobertura...</div>';
   }
+  const run = ++_microsRun;
   const meals = day().meals;
   const allIngs = meals.flatMap(m => m.ingredients);
   await ensureMicros(allIngs);
+  if (run !== _microsRun) return; // otra ejecucion mas nueva ya va a pintar
   const t      = profile().tdee;
   const age    = parseInt(t.age) || 30;
   const gender = t.gender || 'male';
@@ -437,7 +466,7 @@ async function renderMicros() {
       }
     }
     sources.sort((a, b) => b.amt - a.amt);
-    const srcText = sources.length ? sources.slice(0, 3).map(s => s.name).join(' · ') : '—';
+    const srcText = sources.length ? sources.slice(0, 3).map(s => esc(s.name)).join(' · ') : '—';
     return `<div class="micro-row" data-status="${status}" data-pct="${pct}">
       <div class="micro-name">${def.label}</div>
       <div class="micro-source">${srcText}</div>
@@ -546,8 +575,8 @@ function renderMealCard(meal, idx, total) {
       <div class="meal-left">
         <div class="meal-number">${String(idx+1).padStart(2,'0')}</div>
         <div class="meal-info">
-          <h3 class="editable" onclick="event.stopPropagation(); window._editField('${meal.id}','name',this)">${meal.name}</h3>
-          <div class="meal-time editable" onclick="event.stopPropagation(); window._editField('${meal.id}','time',this)">${meal.time}</div>
+          <h3 class="editable" onclick="event.stopPropagation(); window._editField('${meal.id}','name',this)">${esc(meal.name)}</h3>
+          <div class="meal-time editable" onclick="event.stopPropagation(); window._editField('${meal.id}','time',this)">${esc(meal.time)}</div>
         </div>
       </div>
       <div class="meal-macros">
@@ -580,9 +609,9 @@ function renderIngredient(ing, mealId) {
     : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>`;
   return `
   <li class="ingredient-item${disabled ? ' ing--disabled' : ''}" id="ii-${ing.id}">
-    <span class="ing-name">${ing.name}</span>
+    <span class="ing-name">${esc(ing.name)}</span>
     <div class="ing-amount-wrap">
-      <input class="ing-amount" type="number" value="${ing.amountG}" min="1"
+      <input class="ing-amount" type="number" value="${ing.amountG}" min="1" step="any"
         onchange="window._updateAmount('${mealId}','${ing.id}',this.value)"
         onclick="event.stopPropagation()">
       <span class="ing-unit">g</span>
@@ -693,7 +722,7 @@ window._updateAmount = function(mealId, ingId, val) {
   if (!meal) return;
   const ing = meal.ingredients.find(i => i.id === ingId);
   if (!ing) return;
-  ing.amountG = Math.max(1, parseInt(val) || 1);
+  ing.amountG = Math.max(1, parseFloat(val) || 1);
   save(); renderSummary();
   const m = mealMacros([ing]);
   const li = document.getElementById(`ii-${ingId}`);
@@ -752,7 +781,8 @@ async function doSearch(q) {
   try {
     const foods = await searchFoods(q, apiKey);
     if (!foods.length) { renderFallbackResults(q); return; }
-    results.innerHTML = foods.map(f => renderFoodResult(f)).join('');
+    searchResultsList = foods;
+    results.innerHTML = foods.map((f, i) => renderFoodResult(f, i)).join('');
   } catch {
     renderFallbackResults(q);
   }
@@ -764,21 +794,24 @@ function renderFallbackResults(q) {
     ? FALLBACK_FOODS.filter(f => f.name.toLowerCase().includes(q.toLowerCase()))
     : FALLBACK_FOODS;
   if (!filtered.length) { results.innerHTML = '<div class="search-loading">Sin resultados.</div>'; return; }
-  results.innerHTML = filtered.map(f => renderFoodResult(f)).join('');
+  searchResultsList = filtered;
+  results.innerHTML = filtered.map((f, i) => renderFoodResult(f, i)).join('');
 }
 
-function renderFoodResult(food) {
+let searchResultsList = [];
+
+function renderFoodResult(food, i) {
   const p100 = food.per100g;
-  const data = encodeURIComponent(JSON.stringify(food));
-  return `<div class="search-result" onclick="window._selectFood('${data}')">
-    <div class="sr-name">${food.name}</div>
+  return `<div class="search-result" onclick="window._selectFood(${i})">
+    <div class="sr-name">${esc(food.name)}</div>
     <div class="sr-macros">${fmtD(p100.protein)}P · ${fmtD(p100.fat)}F · ${fmtD(p100.carbs)}C · ${fmt(p100.calories)}kcal <span class="sr-per">/ 100g</span></div>
   </div>`;
 }
 
-window._selectFood = function(encoded) {
-  try { pendingFood = JSON.parse(decodeURIComponent(encoded)); }
-  catch { return; }
+window._selectFood = function(idx) {
+  const food = searchResultsList[idx];
+  if (!food) return;
+  pendingFood = JSON.parse(JSON.stringify(food)); // clonar: no mutar FALLBACK_FOODS ni resultados
   document.getElementById('amountWrap').classList.remove('hidden');
   document.getElementById('selectedFoodName').textContent = pendingFood.name;
   document.getElementById('ingredientAmount').value = '100';
@@ -801,7 +834,7 @@ window._confirmIngredient = async function() {
   if (!pendingFood || !searchTargetMealId) return;
   if (pendingDetailFetch) await pendingDetailFetch;
   const amtEl = document.getElementById('ingredientAmount');
-  const amountG = Math.max(1, parseInt(amtEl.value) || 100);
+  const amountG = Math.max(1, parseFloat(amtEl.value) || 100);
   const meal = day().meals.find(m => m.id === searchTargetMealId);
   if (!meal) return;
   if (pendingFood.fdcId && pendingFood.per100g) {

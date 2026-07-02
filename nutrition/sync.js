@@ -30,7 +30,8 @@ export async function push(state) {
     await fetch(DATA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
-      body: JSON.stringify(state)
+      body: JSON.stringify(state),
+      keepalive: true // sobrevive al cierre de la pestana (flush en pagehide)
     });
   } catch {}
 }

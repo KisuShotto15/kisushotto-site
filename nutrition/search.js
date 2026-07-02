@@ -19,7 +19,7 @@ export function setApiKey(profileId, key) {
 export async function searchFoods(query, apiKey) {
   const url = `${BASE}/foods/search?query=${encodeURIComponent(query)}`
     + `&dataType=Foundation,SR%20Legacy&pageSize=10&api_key=${apiKey}`;
-  const r = await fetch(url);
+  const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw new Error(`USDA ${r.status}`);
   const data = await r.json();
   return (data.foods || []).map(food => ({
@@ -74,7 +74,7 @@ function extractPer100g(nutrients) {
 }
 
 export async function getFoodDetail(fdcId, apiKey) {
-  const r = await fetch(`${BASE}/food/${fdcId}?api_key=${apiKey}`);
+  const r = await fetch(`${BASE}/food/${fdcId}?api_key=${apiKey}`, { signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw new Error(`USDA detail ${r.status}`);
   const data = await r.json();
   const nutrients = (data.foodNutrients || []).map(fn => ({

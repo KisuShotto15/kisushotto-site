@@ -13,10 +13,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./style.css">
-
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 </head>
 <body>
 <div class="app">
@@ -208,7 +204,7 @@
     <span class="footer-dot">·</span>
     <span>Datos USDA + lista local</span>
     <span class="footer-dot">·</span>
-    <span class="app-version">v7</span>
+    <span class="app-version">v8</span>
   </footer>
 
 </div><!-- /app -->
@@ -235,7 +231,7 @@
       <div id="amountWrap" class="amount-wrap hidden">
         <div id="selectedFoodName" class="selected-food-name"></div>
         <div class="amount-row">
-          <input type="number" id="ingredientAmount" placeholder="100" min="1" value="100">
+          <input type="number" id="ingredientAmount" placeholder="100" min="1" step="any" value="100">
           <span class="amount-unit">g</span>
           <button class="btn-accent" onclick="window._confirmIngredient()">Agregar</button>
         </div>
@@ -291,9 +287,33 @@
 <script type="module" src="./main.js"></script>
 <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
 
-<!-- ── TWEAKS PANEL ─────────────────────────────────────────────── -->
-<script type="text/babel" src="tweaks-panel.jsx"></script>
-<script type="text/babel" src="tweaks.jsx"></script>
+<!-- ── TWEAKS PANEL (solo en modo editor, embebido en iframe) ────── -->
+<script>
+(function () {
+  if (window.self === window.top) return; // visita normal: sin React/Babel (~500KB)
+  const babelSrc = (src) => {
+    const s = document.createElement('script');
+    s.type = 'text/babel'; s.src = src;
+    document.body.appendChild(s);
+  };
+  babelSrc('tweaks-panel.jsx');
+  babelSrc('tweaks.jsx');
+  const chain = [
+    ['https://unpkg.com/react@18.3.1/umd/react.development.js', 'sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L'],
+    ['https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js', 'sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm'],
+    ['https://unpkg.com/@babel/standalone@7.29.0/babel.min.js', 'sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y'],
+  ];
+  (function load(i) {
+    if (i >= chain.length) return;
+    const s = document.createElement('script');
+    s.src = chain[i][0];
+    s.integrity = chain[i][1];
+    s.crossOrigin = 'anonymous';
+    s.onload = () => load(i + 1); // Babel al final: transforma los text/babel ya insertados
+    document.body.appendChild(s);
+  })(0);
+})();
+</script>
 
 </body>
 </html>
