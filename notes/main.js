@@ -6,7 +6,7 @@ import {
   apiGetMe,
   apiShareNote, apiRevokeShare,
   apiUploadAttachment, apiDeleteAttachment, apiAttachmentBlobUrl,
-  apiTrashNote, apiRestoreNote, apiPurgeNote,
+  apiPurgeNote,
   apiRegWebauthn,
   apiListPasskeys, apiRenamePasskey, apiDeletePasskey,
   getUserEmail,
@@ -272,8 +272,19 @@ async function init() {
           if (fresh) {
             State.editing = fresh;
             State.editingSnapshotTime = fresh.last_modified || 0;
-            State.notes[State.notes.findIndex(n => n.id === fresh.id)] = fresh;
+            const nIdx = State.notes.findIndex(n => n.id === fresh.id);
+            if (nIdx >= 0) State.notes[nIdx] = fresh; else State.notes.unshift(fresh);
+            // Refrescar TODO el DOM del editor: si solo se actualiza State,
+            // el proximo scheduleSave leeria el textarea viejo y revertiria
+            // la edicion remota (perdida de datos).
+            $('#ed-title').value = fresh.title || '';
+            if (fresh.type !== 'checklist') {
+              $('#ed-body').value = htmlToText(fresh.body || '');
+              autoGrow($('#ed-body'));
+            }
+            State.editorOpenSnapshot = noteContentHash(fresh);
             renderChecklist();
+            renderAttachments();
             updateEditorMeta();
             $('#ed-status').textContent = 'Actualizado';
           }
@@ -307,6 +318,15 @@ async function init() {
 async function loadFromIDB() {
   State.notes      = await idb.getAll('notes')      || [];
   State.categories = await idb.getAll('categories') || [];
+  // Espejo del purge del server (30 dias): el pull incremental no comunica
+  // borrados fisicos, asi que sin esto las notas purgadas en el server
+  // quedarian como zombies en la papelera local para siempre.
+  const purgeCutoff = Date.now() - 30 * 24 * 3600 * 1000;
+  const zombies = State.notes.filter(n => n.trashed_at && n.trashed_at < purgeCutoff);
+  if (zombies.length) {
+    zombies.forEach(n => idb.del('notes', n.id).catch(() => {}));
+    State.notes = State.notes.filter(n => !(n.trashed_at && n.trashed_at < purgeCutoff));
+  }
   // Migrate: assign sort_order from created_at (immutable). Using last_modified
   // would mean a note that lost sort_order during sync round-trip would later
   // get bumped to "now" because the server rewrites last_modified to its clock.
@@ -679,6 +699,9 @@ function noteCardHtml(n) {
   const sharedBadge = isShared ? `<span class="nc-shared">📥 Compartida</span>` : '';
   const lockBadge = n.locked ? `<span class="nc-locked" style="display:inline-flex;align-items:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>` : '';
   const reminderBadge = n.reminder_at ? `<span>⏰ ${fmtDate(n.reminder_at)}</span>` : '';
+  const trashActions = State.view === 'trash'
+    ? `<div class="nc-trash-actions"><button class="nc-trash-btn" data-restore="${n.id}">Restaurar</button><button class="nc-trash-btn danger" data-purge="${n.id}">Eliminar</button></div>`
+    : '';
   const archiveBadge = n.archived ? `<span class="nc-archive-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></span>` : '';
 
   return `
@@ -690,6 +713,7 @@ function noteCardHtml(n) {
       ${n.locked && !isSessionUnlocked() ? '' : imgs}
       ${body}
       <div class="nc-meta">${catTags}${sharedBadge}${lockBadge}${reminderBadge}</div>
+      ${trashActions}
     </article>
   `;
 }
@@ -1126,8 +1150,31 @@ function wireCard(card) {
 
   // ── Click ────────────────────────────────────────────────────────────────
 
-  card.addEventListener('click', (ev) => {
+  card.addEventListener('click', async (ev) => {
     if (_dragHappened) { _dragHappened = false; return; }
+    const restoreBtn = ev.target.closest('[data-restore]');
+    if (restoreBtn) {
+      ev.stopPropagation();
+      const n = State.notes.find(x => x.id === restoreBtn.dataset.restore);
+      if (!n) return;
+      n.trashed_at = null;
+      n.last_modified = Date.now();
+      saveNoteLocal(n);
+      render();
+      return;
+    }
+    const purgeBtn = ev.target.closest('[data-purge]');
+    if (purgeBtn) {
+      ev.stopPropagation();
+      const id = purgeBtn.dataset.purge;
+      if (!(await window.customConfirm('¿Eliminar definitivamente? No se puede deshacer.'))) return;
+      try { await apiPurgeNote(id); }
+      catch { showErrorToast('No se pudo eliminar. Verifica tu conexion.'); return; }
+      State.notes = State.notes.filter(x => x.id !== id);
+      idb.del('notes', id).catch(() => {});
+      render();
+      return;
+    }
     if (ev.target.closest('.nc-select-wrap')) {
       ev.stopPropagation();
       if (!State.selectMode) enterSelectMode();
@@ -1778,7 +1825,10 @@ function renderAttachments() {
       ev.stopPropagation();
       const id = btn.dataset.del;
       if (!(await window.customConfirm('¿Eliminar adjunto?'))) return;
-      try { await apiDeleteAttachment(id); }
+      try {
+        const r = await apiDeleteAttachment(id);
+        if (r?.note_last_modified) e.base_lm = r.note_last_modified;
+      }
       catch { showErrorToast('No se pudo eliminar el adjunto. Intenta de nuevo.'); return; }
       e.attachments = e.attachments.filter(a => a.id !== id);
       e.last_modified = Date.now();
@@ -2170,9 +2220,9 @@ function bindEditorActions() {
       saveNoteLocal(target);
       render();
     });
-    // Persist and sync in background (non-blocking)
+    // Persist and sync in background via el outbox (unica via de escritura;
+    // el POST directo duplicado generaba una segunda escritura server-side).
     saveNoteLocal(e);
-    apiTrashNote(noteId).catch(() => {});
   });
 
   // Color picker
@@ -2290,6 +2340,7 @@ function bindEditorActions() {
       const blob = await resizeImage(file, 1600, 0.85);
       try {
         const att = await apiUploadAttachment(State.editing.id, blob, 'image');
+        if (att.note_last_modified) State.editing.base_lm = att.note_last_modified;
         State.editing.attachments = (State.editing.attachments || []).concat([{ ...att, note_id: State.editing.id }]);
         renderAttachments();
         scheduleSave();
@@ -2322,6 +2373,7 @@ function bindEditorActions() {
     const blob = await resizeImage(file, 1600, 0.85);
     try {
       const att = await apiUploadAttachment(State.editing.id, blob, 'image');
+      if (att.note_last_modified) State.editing.base_lm = att.note_last_modified;
       State.editing.attachments = (State.editing.attachments || []).concat([{ ...att, note_id: State.editing.id }]);
       renderAttachments();
       scheduleSave();
@@ -2330,11 +2382,14 @@ function bindEditorActions() {
 
   // Audio
   $('#ed-audio').addEventListener('click', async (ev) => {
+    // ev.currentTarget es null despues de un await (fin del dispatch) — capturarlo.
+    const btn = ev.currentTarget;
     if (isRecording()) {
       const blob = await stopRecording();
-      ev.currentTarget.textContent = '🎙️';
+      btn.textContent = '🎙️';
       try {
         const att = await apiUploadAttachment(State.editing.id, blob, 'audio');
+        if (att.note_last_modified) State.editing.base_lm = att.note_last_modified;
         State.editing.attachments = (State.editing.attachments || []).concat([{ ...att, note_id: State.editing.id }]);
         renderAttachments();
         scheduleSave();
@@ -2342,7 +2397,7 @@ function bindEditorActions() {
     } else {
       try {
         await startRecording();
-        ev.currentTarget.textContent = '⏹️';
+        btn.textContent = '⏹️';
       } catch (err) { alert(err.message); }
     }
   });
@@ -2939,10 +2994,10 @@ function bindUI() {
       n.trashed_at = ts; n.last_modified = ts;
     }
     exitSelectMode(); render();
-    // Persist and sync in background
+    // Persist and sync in background (outbox)
     for (const id of ids) {
       const n = State.notes.find(x => x.id === id);
-      if (n) { saveNoteLocal(n); apiTrashNote(id).catch(() => {}); }
+      if (n) saveNoteLocal(n);
     }
     const label = ids.length === 1 ? 'Nota eliminada' : `${ids.length} notas eliminadas`;
     showUndoToast(label, async () => {
@@ -3203,10 +3258,17 @@ async function doRegisterPasskey() {
   }
 }
 
-window.logout = function() {
+window.logout = async function() {
+  // Intentar vaciar el outbox antes de limpiar (best-effort).
+  try { await flushQueue(); } catch {}
   localStorage.removeItem('notes_user');
   localStorage.removeItem('notes_session');
   localStorage.removeItem('notes_unlocked_until');
+  // Limpiar la cache local: el proximo login (posiblemente otra cuenta) no
+  // debe ver ni empujar notas del usuario anterior.
+  for (const s of ['notes', 'categories', 'attachments', 'queue', 'meta']) {
+    try { await idb.clear(s); } catch {}
+  }
   location.reload();
 };
 

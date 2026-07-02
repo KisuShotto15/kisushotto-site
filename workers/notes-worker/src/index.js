@@ -267,10 +267,23 @@ async function fetchNotesForUser(env, email, since = 0, before = null) {
      ORDER BY n.last_modified DESC LIMIT ${SYNC_PAGE}`
   ).bind(...(hasBefore ? [email, since, since, before] : [email, since, since])).all();
 
-  const has_more = (ownRes.results?.length === SYNC_PAGE) || (sharedRes.results?.length === SYNC_PAGE);
+  const ownFull    = ownRes.results?.length === SYNC_PAGE;
+  const sharedFull = sharedRes.results?.length === SYNC_PAGE;
+  const has_more = ownFull || sharedFull;
+  // Cursor de paginacion calculado SOLO sobre las fuentes que llenaron su
+  // pagina: si own llego al LIMIT pero la pagina combinada incluye una nota
+  // compartida mucho mas vieja, un min() global saltaria por debajo del piso
+  // de own y las filas intermedias quedarian sin entregar para siempre.
+  let next_before = null;
+  if (has_more) {
+    const mins = [];
+    if (ownFull)    mins.push(Math.min(...ownRes.results.map(r => r.last_modified || 0)));
+    if (sharedFull) mins.push(Math.min(...sharedRes.results.map(r => r.last_modified || 0)));
+    next_before = Math.min(...mins);
+  }
 
   const all = [...(ownRes.results || []), ...(sharedRes.results || [])];
-  if (!all.length) return { notes: [], has_more: false };
+  if (!all.length) return { notes: [], has_more: false, next_before };
 
   const ids = all.map(n => n.id);
 
@@ -313,7 +326,7 @@ async function fetchNotesForUser(env, email, since = 0, before = null) {
     shares: shareMap[n.id] || [],
     attachments: attMap[n.id] || [],
   }));
-  return { notes, has_more };
+  return { notes, has_more, next_before };
 }
 
 async function syncPull(request, env, email) {
@@ -322,7 +335,13 @@ async function syncPull(request, env, email) {
   const beforeRaw = url.searchParams.get('before');
   const before = beforeRaw ? parseInt(beforeRaw, 10) : null;
   await ensureUser(env, email);
-  const { notes, has_more } = await fetchNotesForUser(env, email, since, before);
+  // server_time se toma ANTES de consultar: una escritura de otro dispositivo
+  // que aterrice durante la query queda con last_modified >= server_time y se
+  // re-entrega en el proximo pull (el filtro since es inclusivo). Tomarlo
+  // despues abria una ventana en la que esa nota no salia en esta respuesta
+  // pero el cursor del cliente ya la excluia para siempre.
+  const serverTime = now();
+  const { notes, has_more, next_before } = await fetchNotesForUser(env, email, since, before);
   // Always return ALL categories — deletes are only visible via absence
   const catRes = await env.DB.prepare(
     `SELECT * FROM categories WHERE owner_email = ? ORDER BY sort_order ASC, created_at ASC`
@@ -330,8 +349,9 @@ async function syncPull(request, env, email) {
   return json({
     notes,
     categories: catRes.results || [],
-    server_time: now(),
+    server_time: serverTime,
     has_more,
+    next_before,
   });
 }
 
@@ -347,14 +367,53 @@ async function canEdit(env, noteId, email) {
   return !!(share && share.can_edit);
 }
 
+// El contenido "de fondo" difiere (ignora categorias/pinned/reminder, que el
+// server tambien toca por su cuenta y generarian copias espurias).
+function noteContentDiffers(row, n) {
+  const cl = (n.checklist_items && n.checklist_items.length) ? JSON.stringify(n.checklist_items) : null;
+  return (row.title || null)      !== (n.title || null)
+      || (row.body || null)       !== (n.body || null)
+      || (row.checklist_items || null) !== cl
+      || (row.color || null)      !== (n.color || null)
+      || (row.trashed_at || null) !== (n.trashed_at || null);
+}
+
 async function upsertNote(env, email, n) {
-  const existing = await env.DB.prepare(`SELECT last_modified, owner_email FROM notes WHERE id = ?`).bind(n.id).first();
+  const existing = await env.DB.prepare(`SELECT * FROM notes WHERE id = ?`).bind(n.id).first();
 
   const serverNow = now();
   const stmts = [];
   if (existing) {
     if (!(await canEdit(env, n.id, email))) {
       return { skipped: true, reason: 'forbidden' };
+    }
+    // Edicion concurrente: el cliente manda base_lm (el last_modified canonico
+    // sobre el que baso su edicion). Si el servidor avanzo desde esa base y el
+    // contenido difiere, se preserva la version del servidor como copia antes
+    // de aplicar la del cliente — asi una carrera entre dos dispositivos nunca
+    // pierde datos en silencio.
+    const baseLm = Number(n.base_lm);
+    if (Number.isFinite(baseLm) && baseLm > 0 && existing.last_modified > baseLm && noteContentDiffers(existing, n)) {
+      stmts.push(env.DB.prepare(
+        `INSERT INTO notes (id, owner_email, title, body, type, checklist_items, color, pinned, archived, trashed_at, locked, reminder_at, reminder_sent, last_modified, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        uuid(),
+        existing.owner_email,
+        ((existing.title || 'Sin titulo') + ' (copia de conflicto)'),
+        existing.body,
+        existing.type,
+        existing.checklist_items,
+        existing.color,
+        0,
+        existing.archived,
+        existing.trashed_at,
+        existing.locked,
+        null,
+        1,
+        serverNow,
+        serverNow
+      ));
     }
     stmts.push(env.DB.prepare(
       `UPDATE notes SET title=?, body=?, type=?, checklist_items=?, color=?, pinned=?, archived=?, trashed_at=?, locked=?, reminder_at=?, reminder_sent=?, last_modified=? WHERE id=?`
@@ -404,7 +463,8 @@ async function upsertNote(env, email, n) {
     }
   }
   await env.DB.batch(stmts);
-  return { skipped: false };
+  // last_modified asignado: el cliente lo usa como nueva base de conflictos.
+  return { skipped: false, last_modified: serverNow };
 }
 
 async function upsertCategory(env, email, c) {
@@ -442,13 +502,16 @@ async function syncPush(request, env, email) {
 
   // Pull all changed records since client's "since" so it gets canonical state
   const since = parseInt(body.since || 0, 10);
-  const { notes: fresh, has_more } = await fetchNotesForUser(env, email, since);
+  // Igual que en syncPull: server_time antes de la query canonica para no
+  // dejar fuera del proximo pull una escritura concurrente de otro dispositivo.
+  const serverTime = now();
+  const { notes: fresh, has_more, next_before } = await fetchNotesForUser(env, email, since);
   // Always return ALL categories — deletes are only visible via absence
   const catRes = await env.DB.prepare(
     `SELECT * FROM categories WHERE owner_email = ? ORDER BY sort_order ASC, created_at ASC`
   ).bind(email).all();
 
-  return json({ results, notes: fresh, categories: catRes.results || [], server_time: now(), has_more });
+  return json({ results, notes: fresh, categories: catRes.results || [], server_time: serverTime, has_more, next_before });
 }
 
 async function trashNote(noteId, env, email) {
@@ -572,9 +635,11 @@ async function uploadAttachment(request, env, email) {
   await env.DB.prepare(
     `INSERT INTO attachments (id, note_id, owner_email, type, r2_key, mime, size, created_at) VALUES (?,?,?,?,?,?,?,?)`
   ).bind(id, noteId, email, type, key, mime, buf.byteLength, now()).run();
-  // bump note last_modified
-  await env.DB.prepare(`UPDATE notes SET last_modified = ? WHERE id = ?`).bind(now(), noteId).run();
-  return json({ id, type, mime, size: buf.byteLength }, 201);
+  // bump note last_modified — se devuelve para que el cliente actualice su
+  // base_lm y este bump no dispare una copia de conflicto espuria en el push.
+  const bump = now();
+  await env.DB.prepare(`UPDATE notes SET last_modified = ? WHERE id = ?`).bind(bump, noteId).run();
+  return json({ id, type, mime, size: buf.byteLength, note_last_modified: bump }, 201);
 }
 
 async function getAttachment(id, env, email) {
@@ -602,8 +667,9 @@ async function deleteAttachment(id, env, email) {
   if (!(await canEdit(env, a.note_id, email))) return err('forbidden', 403);
   try { await env.BUCKET.delete(a.r2_key); } catch (_) {}
   await env.DB.prepare(`DELETE FROM attachments WHERE id = ?`).bind(id).run();
-  await env.DB.prepare(`UPDATE notes SET last_modified = ? WHERE id = ?`).bind(now(), a.note_id).run();
-  return json({ ok: true });
+  const bump = now();
+  await env.DB.prepare(`UPDATE notes SET last_modified = ? WHERE id = ?`).bind(bump, a.note_id).run();
+  return json({ ok: true, note_last_modified: bump });
 }
 
 // ── Web Push (VAPID) ────────────────────────────────────────────────────────

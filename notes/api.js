@@ -10,10 +10,10 @@ export const cfg = {
 };
 
 function authHeaders() {
-  const headers = {
-    'Authorization': `Bearer ${cfg.token()}`,
-    'X-User-Email':  getUserEmail(),
-  };
+  const headers = { 'Authorization': `Bearer ${cfg.token()}` };
+  // Solo informativo — el worker deriva la identidad del JWT de sesion.
+  const email = getUserEmail();
+  if (email) headers['X-User-Email'] = email;
   const session = cfg.session();
   if (session) headers['X-Session-Token'] = session;
   return headers;
@@ -36,8 +36,8 @@ export function getUserEmail() {
 }
 
 async function api(path, opts = {}) {
-  const email = getUserEmail();
-  if (!email) throw new Error('Sin identidad de usuario. Abre la app desde el dominio protegido.');
+  // La sesion JWT es la identidad real; el email cacheado es solo cosmetico.
+  if (!getUserEmail() && !cfg.session()) throw new Error('Sin identidad de usuario. Inicia sesion de nuevo.');
   const url = cfg.base() + path;
   const headers = {
     ...authHeaders(),

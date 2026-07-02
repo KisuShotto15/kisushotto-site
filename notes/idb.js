@@ -78,6 +78,43 @@ export async function setMeta(key, value) {
   return put('meta', { key, value });
 }
 
+// Escribe la entidad y su entrada de cola en UNA transaccion: un pull
+// concurrente nunca puede ver la entidad nueva sin su marca de pendiente
+// (la ventana put→enqueue permitia que datos del server pisaran el guardado).
+export async function putAndEnqueue(store, value, type) {
+  const t = await tx([store, 'queue'], 'readwrite');
+  t.objectStore(store).put(value);
+  t.objectStore('queue').put({ type, id: value.id, queued_at: Date.now() });
+  return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+}
+
+// Aplica datos del server solo si la entidad no tiene un cambio local en cola.
+// Verificacion y escritura comparten transaccion: elimina la carrera
+// peek→put en la que una edicion hecha durante el pull podia perderse.
+export async function putIfNotQueued(store, value) {
+  const t = await tx([store, 'queue'], 'readwrite');
+  const q = t.objectStore('queue').get(value.id);
+  q.onsuccess = () => { if (!q.result) t.objectStore(store).put(value); };
+  return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+}
+
+export async function delIfNotQueued(store, key) {
+  const t = await tx([store, 'queue'], 'readwrite');
+  const q = t.objectStore('queue').get(key);
+  q.onsuccess = () => { if (!q.result) t.objectStore(store).delete(key); };
+  return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+}
+
+// Parchea campos puntuales sin reescribir el objeto completo (get+put en una
+// transaccion, no pisa una edicion concurrente de otros campos).
+export async function patchOne(store, key, patch) {
+  const t = await tx(store, 'readwrite');
+  const s = t.objectStore(store);
+  const g = s.get(key);
+  g.onsuccess = () => { if (g.result) s.put({ ...g.result, ...patch }); };
+  return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+}
+
 // Queue
 export async function enqueue(item) {
   return put('queue', { ...item, queued_at: Date.now() });
