@@ -1536,8 +1536,10 @@ async function fetchTier(transAmount, maxPages, payTypesOverride) {
   return results.flatMap(function(arr) { return arr; });
 }
 
-function mapAds(raw) {
-  return raw.map(function(item) {
+// keepOrder=true (filtro de monto en 0): conserva el orden nativo de Binance.
+// Con filtro de monto: ordena desc por precio (mejor mayorista primero).
+function mapAds(raw, keepOrder) {
+  var mapped = raw.map(function(item) {
     return {
       advNo:    item.adv.advNo,
       price:    parseFloat(item.adv.price),
@@ -1555,7 +1557,9 @@ function mapAds(raw) {
     // Solo comerciantes con insignia (Bronze/Silver/Gold/Block/Ordinary/PRO)
     // badges: null = sin insignia → excluir (si el filtro esta activo)
     return !CFG.verifiedOnly || (a.badges && a.badges.length > 0);
-  }).sort(function(a, b) { return b.price - a.price; });
+  });
+  if (!keepOrder) mapped.sort(function(a, b) { return b.price - a.price; });
+  return mapped;
 }
 
 // ── Sección Compra (BUY) ─────────────────────────────
@@ -1655,8 +1659,8 @@ async function fetchOnce() {
     var prevBuyAvail = {};
     (ST.buyAds || []).forEach(function(a){ prevBuyAvail[a.merchant] = a.avail; });
 
-    ST.mayoristas = mapAds(mayRaw);
-    ST.smallAds   = mapAds(smallRaw);
+    ST.mayoristas = mapAds(mayRaw,   !(CFG.mayAmount   > 0));
+    ST.smallAds   = mapAds(smallRaw, !(CFG.smallAmount > 0));
     if (buyRaw !== null) ST.buyAds = mapBuyAds(buyRaw); // colapsada: conservar última data
 
     ST.availDisp = ST.availDisp || {};
@@ -2912,8 +2916,17 @@ var MON24 = { enabled: false, lastHb: 0, lastHist: 0 };
 // vienen ordenadas desc por precio, asi que el primero que supera el umbral es el mejor.
 // Evita que un listing fantasma se registre como pico en el grafico o dispare alertas.
 var MIN_AVAIL = 2000;
-function credibleMay()   { var a = ST.mayoristas || []; for (var i = 0; i < a.length; i++) if (a[i].avail >= MIN_AVAIL) return a[i]; return null; }
-function credibleSmall() { var a = ST.smallAds   || []; for (var i = 0; i < a.length; i++) if (a[i].avail >= MIN_AVAIL) return a[i]; return null; }
+// Escanea el MAX precio entre los creibles (independiente del orden de la lista,
+// que puede venir en orden nativo de Binance si el filtro de monto esta en 0).
+function credibleBest(a) {
+  var best = null;
+  for (var i = 0; i < (a || []).length; i++) {
+    if (a[i].avail >= MIN_AVAIL && (!best || a[i].price > best.price)) best = a[i];
+  }
+  return best;
+}
+function credibleMay()   { return credibleBest(ST.mayoristas); }
+function credibleSmall() { return credibleBest(ST.smallAds); }
 function bestCredibleMay() { var m = credibleMay(); return m ? m.price : null; }
 
 // HIST24 = serie servidor (24h, app cerrada/noche); se completa con los puntos vivos del cliente.
@@ -3259,7 +3272,8 @@ function saveConfig() {
   CFG.overboughtThr = parseFloat(document.getElementById('cfg-ob').value)  || 1.0;
   CFG.weaknessThr   = parseFloat(document.getElementById('cfg-wk').value)  || 0.5;
   CFG.sustainThr    = parseFloat(document.getElementById('cfg-sustain').value) || 1.5;
-  CFG.mayAmount   = parseFloat(document.getElementById('cfg-may-amount').value)   || 2000000;
+  var mayVal = document.getElementById('cfg-may-amount').value;
+  CFG.mayAmount   = mayVal === '' ? 0 : (parseFloat(mayVal) || 0);
   CFG.smallAmount = parseFloat(document.getElementById('cfg-small-amount').value) || 59999;
   CFG.commission  = parseFloat(document.getElementById('cfg-commission').value)   || 0;
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
@@ -3283,10 +3297,6 @@ function loadConfig() {
     var s = localStorage.getItem('p2p_cfg2');
     if (!s) return;
     Object.assign(CFG, JSON.parse(s));
-    // Sanear filtros en 0 guardados por versiones previas (0 = tabla con huecos)
-    if (!CFG.mayAmount   || CFG.mayAmount   <= 0) CFG.mayAmount   = 2000000;
-    if (!CFG.smallAmount || CFG.smallAmount <= 0) CFG.smallAmount = 59999;
-    if (!CFG.buyAmount   || CFG.buyAmount   <= 0) CFG.buyAmount   = 2000000;
     document.getElementById('cfg-int').value      = CFG.interval;
     document.getElementById('cfg-spr').value      = CFG.spreadThr;
     document.getElementById('cfg-ob').value       = CFG.overboughtThr;
@@ -3325,10 +3335,10 @@ function updateVerToggle() {
 function setFilter(which, raw) {
   var map = { may: ['mayAmount', 2000000], small: ['smallAmount', 59999], buy: ['buyAmount', 2000000] };
   var m = map[which]; if (!m) return;
-  // Vacio o 0 → restaurar el default. Con transAmount=0 Binance devuelve los 40 anuncios
-  // MAS BARATOS (pocos verificados) y la tabla queda con filas vacias.
-  var v = parseFloat(raw);
-  if (isNaN(v) || v <= 0) v = m[1];
+  // 0 o vacio = SIN filtro de monto (eleccion del usuario): la tabla muestra el
+  // orden nativo de Binance, solo con filtros de verificados y metodo de pago.
+  var v = (raw === '' || raw == null) ? 0 : parseFloat(raw);
+  if (isNaN(v)) v = m[1];
   CFG[m[0]] = v;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();
