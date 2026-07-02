@@ -83,6 +83,10 @@
   </section>
   <section id="others-section" class="grid-section">
     <h2 id="others-title">Notas</h2>
+    <div class="trash-actions" id="trash-actions" hidden>
+      <button class="trash-action-btn" id="trash-restore-all"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/></svg> Restaurar todo</button>
+      <button class="trash-action-btn danger" id="trash-empty"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg> Vaciar papelera</button>
+    </div>
     <div class="masonry" id="grid-others"></div>
     <div class="empty" id="empty-state" hidden>
       <p>No hay notas aquí.</p>
@@ -343,7 +347,7 @@
 </div>
 
 <div id="__version_wm">v65</div>
-<script type="module" src="./main.js?v=65"></script>
+<script type="module" src="./main.js?v=66"></script>
 <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>

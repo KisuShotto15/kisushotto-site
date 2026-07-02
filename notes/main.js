@@ -553,6 +553,7 @@ async function reorderCategoryDrag(srcId, targetId) {
 
 const TRASH_SVG  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 const PENCIL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 014 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`;
+const RESTORE_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/></svg>`;
 const GRIP_SVG  = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>`;
 const CAT_ICONS = ['🏷️','📁','🏠','💼','📚','🎯','🍽️','💪','💰','🎨','✈️','🎮','🎵','💡','🛒','🌿','🔧','❤️','📝','🏃','🎬','📊','⭐','🔔','🎁','🇯🇵'];
 
@@ -700,7 +701,7 @@ function noteCardHtml(n) {
   const lockBadge = n.locked ? `<span class="nc-locked" style="display:inline-flex;align-items:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>` : '';
   const reminderBadge = n.reminder_at ? `<span>⏰ ${fmtDate(n.reminder_at)}</span>` : '';
   const trashActions = State.view === 'trash'
-    ? `<div class="nc-trash-actions"><button class="nc-trash-btn" data-restore="${n.id}">Restaurar</button><button class="nc-trash-btn danger" data-purge="${n.id}">Eliminar</button></div>`
+    ? `<div class="nc-trash-actions"><button class="nc-trash-btn" data-restore="${n.id}" title="Restaurar" aria-label="Restaurar">${RESTORE_SVG}</button><button class="nc-trash-btn danger" data-purge="${n.id}" title="Eliminar definitivamente" aria-label="Eliminar definitivamente">${TRASH_SVG}</button></div>`
     : '';
   const archiveBadge = n.archived ? `<span class="nc-archive-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></span>` : '';
 
@@ -1295,6 +1296,8 @@ function renderGrid() {
   }
   $('#others-title').textContent = title;
   $('#empty-state').hidden = !!notes.length;
+  const ta = $('#trash-actions');
+  if (ta) ta.hidden = State.view !== 'trash' || !notes.length;
 }
 
 function render() {
@@ -2875,6 +2878,40 @@ function bindUI() {
     searchDebounceTimer = setTimeout(renderGrid, 180);
   });
   $('#btn-new')?.addEventListener('click', openNew);
+
+  // Acciones en bloque de la papelera
+  $('#trash-restore-all')?.addEventListener('click', async () => {
+    const ids = State.notes.filter(n => n.trashed_at).map(n => n.id);
+    if (!ids.length) return;
+    for (const id of ids) {
+      const n = State.notes.find(x => x.id === id);
+      if (n) { n.trashed_at = null; n.last_modified = Date.now(); await saveNoteLocal(n); }
+    }
+    render();
+    showUndoToast(ids.length === 1 ? 'Nota restaurada' : `${ids.length} notas restauradas`, async () => {
+      const ts = Date.now();
+      for (const id of ids) {
+        const n = State.notes.find(x => x.id === id);
+        if (n) { n.trashed_at = ts; n.last_modified = ts; await saveNoteLocal(n); }
+      }
+      render();
+    });
+  });
+  $('#trash-empty')?.addEventListener('click', async () => {
+    const ids = State.notes.filter(n => n.trashed_at).map(n => n.id);
+    if (!ids.length) return;
+    if (!(await window.customConfirm(`¿Vaciar la papelera (${ids.length} nota${ids.length !== 1 ? 's' : ''})? No se puede deshacer.`, 'Vaciar'))) return;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await apiPurgeNote(id);
+        State.notes = State.notes.filter(x => x.id !== id);
+        idb.del('notes', id).catch(() => {});
+      } catch { failed++; }
+    }
+    render();
+    if (failed) showErrorToast(`No se pudieron eliminar ${failed} nota${failed !== 1 ? 's' : ''}. Verifica tu conexion.`);
+  });
 
   // Restore the desktop sidebar state (persists until the user toggles it),
   // without animating on load.
