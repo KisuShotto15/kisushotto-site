@@ -2186,8 +2186,6 @@ function bindEditorActions() {
   // More options menu (⋮)
   $('#ed-more').addEventListener('click', (ev) => {
     showPopupAt('#popup-more', ev.currentTarget);
-    const popup = document.getElementById('popup-more');
-    if (popup) popup.style.background = State.editing?.color || '';
   });
 
   // Add menu (+)
@@ -2643,22 +2641,35 @@ function closeCatsModal() {
 function showPopupAt(sel, anchor) {
   hidePopups();
   const p = $(sel);
+  // Los popups de la barra del editor adoptan el color de la nota para no
+  // verse como un parche oscuro sobre una nota coloreada (antes solo lo hacia
+  // el menu de mas opciones).
+  if (sel === '#popup-color' || sel === '#popup-add' || sel === '#popup-more') {
+    p.style.background = State.editing?.color || '';
+  }
   if (isMobile()) {
     // On mobile, CSS handles bottom-sheet positioning; just clear inline styles
     p.style.top = '';
     p.style.left = '';
-  } else {
-    const r = anchor.getBoundingClientRect();
-    const popupH = 300; // estimated max height
-    let top = r.bottom + 6;
-    // If popup would overflow bottom, show above the anchor
-    if (top + popupH > window.innerHeight) {
-      top = Math.max(8, r.top - popupH - 6);
-    }
-    p.style.top  = `${top}px`;
-    p.style.left = `${Math.max(8, Math.min(window.innerWidth - 280, r.left))}px`;
+    p.hidden = false;
+    return;
   }
+  // Medir el tamano real (offset* ignora la animacion de escala popupIn) y
+  // pegar el popup al boton. El estimado fijo de 300px sobrepasaba y tiraba el
+  // popup al medio de la nota al voltearlo por encima de un boton inferior.
+  p.style.top = '-9999px';
+  p.style.left = '-9999px';
   p.hidden = false;
+  const ph = p.offsetHeight;
+  const pw = p.offsetWidth;
+  const r = anchor.getBoundingClientRect();
+  const gap = 6;
+  let top = r.bottom + gap;
+  if (top + ph > window.innerHeight - 8) top = r.top - ph - gap; // voltear arriba, pegado
+  top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+  p.style.top  = `${top}px`;
+  p.style.left = `${left}px`;
 }
 function openBulkCatsModal() {
   const list = $('#bulk-cats-list');
@@ -2700,6 +2711,7 @@ function hidePopups() {
     p.hidden = true;
     p.style.top = '';
     p.style.left = '';
+    p.style.background = ''; // no arrastrar el color de una nota a la siguiente
   });
 }
 
