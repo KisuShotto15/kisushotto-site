@@ -1480,6 +1480,9 @@ function buildSearchBody(opts) {
     tradeType: opts.tradeType || 'SELL',
     payTypes: opts.pays
   };
+  // Pre-filtrar verificados en Binance (como el toggle "Solo comerciantes" de su web):
+  // paginas llenas de verificados → sin huecos y sin pedir paginas extra.
+  if (CFG.verifiedOnly) body.publisherType = 'merchant';
   if (opts.transAmount && parseFloat(opts.transAmount) > 0) body.transAmount = opts.transAmount;
   return body;
 }
