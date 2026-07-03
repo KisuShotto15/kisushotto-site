@@ -1668,6 +1668,35 @@ async function fetchOnce() {
 
     ST.mayoristas = mapAds(mayRaw,   !(CFG.mayAmount   > 0));
     ST.smallAds   = mapAds(smallRaw, !(CFG.smallAmount > 0));
+
+    // Top-up: si el filtro de verificados deja <8 filas y Binance tiene mas paginas
+    // (las pedidas vinieron llenas), pedir hasta 3 paginas extra solo para esa tabla.
+    // Con filtros VES bajos las primeras paginas vienen dominadas por no-verificados.
+    var EXTRA_PAGES = 3;
+    var extraBodies = [], extraMeta = [];
+    if (ST.mayoristas.length < 8 && mayRaw.length >= MAY_PAGES * 20) {
+      for (var ep = MAY_PAGES + 1; ep <= MAY_PAGES + EXTRA_PAGES; ep++) {
+        extraBodies.push(buildSearchBody({ transAmount: CFG.mayAmount, page: ep, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
+        extraMeta.push('may');
+      }
+    }
+    if (ST.smallAds.length < 8 && smallRaw.length >= SMALL_PAGES * 20) {
+      for (var es = SMALL_PAGES + 1; es <= SMALL_PAGES + EXTRA_PAGES; es++) {
+        extraBodies.push(buildSearchBody({ transAmount: CFG.smallAmount, page: es, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
+        extraMeta.push('small');
+      }
+    }
+    if (extraBodies.length) {
+      var extra = await searchBatch(extraBodies);
+      var mayExtra = [], smallExtra = [];
+      extra.forEach(function(arr, xi) {
+        if (extraMeta[xi] === 'may') mayExtra = mayExtra.concat(arr || []);
+        else smallExtra = smallExtra.concat(arr || []);
+      });
+      if (mayExtra.length)   ST.mayoristas = mapAds(mayRaw.concat(mayExtra),     !(CFG.mayAmount   > 0));
+      if (smallExtra.length) ST.smallAds   = mapAds(smallRaw.concat(smallExtra), !(CFG.smallAmount > 0));
+    }
+
     if (buyRaw !== null) ST.buyAds = mapBuyAds(buyRaw); // colapsada: conservar última data
 
     ST.availDisp = ST.availDisp || {};
