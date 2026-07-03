@@ -26,6 +26,25 @@ export function pushHistLong(hist, ts, price) {
   return arr;
 }
 
+// ── Series por metodo de pago ─────────────────────────
+// hist24/hist_long guardan { pay: [{ts,price}] } para que cambiar de metodo no
+// contamine el grafico. Formato legado (array plano) = serie de BDV.
+const LEGACY_PAY = 'BancoDeVenezuela';
+export function histMap(h) {
+  if (Array.isArray(h)) return { [LEGACY_PAY]: h };
+  return (h && typeof h === 'object') ? h : {};
+}
+export function pushHist24Pay(hist, pay, ts, price) {
+  const m = histMap(hist);
+  m[pay] = pushHist24(m[pay], ts, price);
+  return m;
+}
+export function pushHistLongPay(hist, pay, ts, price) {
+  const m = histMap(hist);
+  m[pay] = pushHistLong(m[pay], ts, price);
+  return m;
+}
+
 // Disponibilidad minima (USDT) para considerar un anuncio creible (mayorista real).
 // Evita que un listing fantasma contamine bestMay (grafico) ni dispare falsas alertas.
 const MIN_AVAIL = 2000;

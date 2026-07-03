@@ -4,7 +4,7 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
-import { computeAlerts, pushHist24, pushHistLong } from './_lib/monitor.js';
+import { computeAlerts, pushHist24Pay, pushHistLongPay, histMap } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
 
 export const config = { maxDuration: 60 };
@@ -88,8 +88,9 @@ async function tickMonitor(row, now) {
   const smallRaw = await publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 3, tradeType: 'SELL' });
 
   const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: row.price_hist, cooldowns: row.cooldowns, now, silent });
-  const hist24 = pushHist24(row.hist24, now, out.bestMay);
-  const histLong = pushHistLong(row.hist_long, now, out.bestMay);
+  const pay = pays[0] || 'BancoDeVenezuela';
+  const hist24 = pushHist24Pay(row.hist24, pay, now, out.bestMay);
+  const histLong = pushHistLongPay(row.hist_long, pay, now, out.bestMay);
 
   let log = row.log;
   let token = '';
@@ -106,7 +107,7 @@ async function tickMonitor(row, now) {
   // Resumen diario (no depende del silencio nocturno; se manda a la hora configurada)
   let lastSummary = row.last_summary;
   if (shouldSendSummary(cfg.summaryHour, lastSummary, now)) {
-    if (token && chatId) await sendTelegram(token, chatId, buildSummary(hist24, now));
+    if (token && chatId) await sendTelegram(token, chatId, buildSummary(histMap(hist24)[pay], now));
     lastSummary = new Date(now).toISOString();
     log = pushLog(log, '📊 Resumen diario → Telegram', 'info');
   }

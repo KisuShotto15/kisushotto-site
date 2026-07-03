@@ -870,7 +870,7 @@ input:focus {
           <button onclick="closeHistory()" title="Cerrar" style="background:var(--surf-2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:20px;line-height:1;padding:5px 11px;cursor:pointer">←</button>
           <div>
             <div style="font-size:16px;font-weight:700">Historial del mercado</div>
-            <div style="font-size:12px;color:var(--text-3)">Mejor precio mayorista (USDT/VES) <span id="hx-coverage" style="color:var(--gold)"></span></div>
+            <div style="font-size:12px;color:var(--text-3)">Mejor precio mayorista (USDT/VES)<span id="hx-pay" style="color:var(--gold)"></span> <span id="hx-coverage" style="color:var(--gold)"></span></div>
           </div>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:18px;margin-bottom:10px">
@@ -1158,6 +1158,13 @@ function setPayMethod(id) {
     botToggle();
   }
   ACTIVE_PAY = id;
+  // Cada metodo tiene su propia serie: resetear momentum de alertas, max/min de
+  // sesion y puntos locales del metodo anterior para no mezclar precios.
+  try {
+    ST.priceHist = [];
+    COOLDOWN = {};
+    BOT.sessMax = null; BOT.sessMin = null;
+  } catch(e) {}
   try { localStorage.setItem('p2p_pay_method', id); } catch(e) {}
   if (typeof fetchOnce === 'function') fetchOnce();
   saveUserSettings();
@@ -2611,6 +2618,8 @@ async function botInitialCycle(allowPaused) {
       }
       if (primary && primary !== ACTIVE_PAY) {
         ACTIVE_PAY = primary;
+        // Mismo reset que setPayMethod: no mezclar precios de metodos distintos
+        ST.priceHist = []; COOLDOWN = {}; BOT.sessMax = null; BOT.sessMin = null;
         try { localStorage.setItem('p2p_pay_method', primary); } catch(e) {}
         var sel = document.getElementById('pay-method-select');
         if (sel) sel.value = primary;
@@ -2929,10 +2938,16 @@ function credibleMay()   { return credibleBest(ST.mayoristas); }
 function credibleSmall() { return credibleBest(ST.smallAds); }
 function bestCredibleMay() { var m = credibleMay(); return m ? m.price : null; }
 
-// HIST24 = serie servidor (24h, app cerrada/noche); se completa con los puntos vivos del cliente.
-var HIST24 = [];
+// HIST24 = series del servidor por metodo de pago { pay: [{ts,price}] }; se completa
+// con los puntos vivos del cliente. Formato legado (array plano) = serie de BDV.
+var HIST24 = {};
+var LEGACY_PAY = 'BancoDeVenezuela';
+function histByPay(h, pay) {
+  if (Array.isArray(h)) return pay === LEGACY_PAY ? h : [];
+  return (h && h[pay]) || [];
+}
 function sparkSeries() {
-  var s = Array.isArray(HIST24) ? HIST24.slice() : [];
+  var s = histByPay(HIST24, ACTIVE_PAY).slice();
   var lastTs = s.length ? s[s.length - 1].ts : 0;
   for (var i = 0; i < ST.priceHist.length; i++) {
     if (ST.priceHist[i].ts > lastTs) s.push(ST.priceHist[i]);
@@ -2991,6 +3006,8 @@ var HX_RANGES = [
 function openHistory() {
   HX.open = true;
   HX.hoverX = null;
+  var hp = document.getElementById('hx-pay');
+  if (hp) hp.textContent = ' · ' + payLabel(ACTIVE_PAY);
   document.getElementById('hx-overlay').style.display = 'block';
   document.body.style.overflow = 'hidden';
   hxBindPointer();
@@ -3102,7 +3119,7 @@ function hxDraw() {
   var canvas = document.getElementById('hx-chart');
   var dpr = window.devicePixelRatio || 1, cssW = canvas.clientWidth, cssH = canvas.clientHeight;
   // Regenerar el base solo si cambio data/rango/tamano (no en cada mousemove)
-  var key = HX.range + '|' + pts.length + '|' + pts[pts.length - 1].ts + '|' + cssW + 'x' + cssH + '|' + dpr;
+  var key = ACTIVE_PAY + '|' + HX.range + '|' + pts.length + '|' + pts[pts.length - 1].ts + '|' + cssW + 'x' + cssH + '|' + dpr;
   if (HX.baseKey !== key) { hxDrawBase(pts, cssW, cssH, dpr); HX.baseKey = key; }
   var bw = Math.round(cssW * dpr), bh = Math.round(cssH * dpr);
   if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
@@ -3183,7 +3200,7 @@ async function hxLoad() {
   hxMsg('Cargando historial...');
   try {
     var d = await botCallWorker('/monitor-history');
-    HX.series = hxMerge(d && d.hist_long, d && d.hist24);
+    HX.series = hxMerge(histByPay(d && d.hist_long, ACTIVE_PAY), histByPay(d && d.hist24, ACTIVE_PAY));
     var cov = document.getElementById('hx-coverage');
     if (cov) cov.textContent = HX.series.length
       ? '· ' + HX.series.length + ' puntos desde ' + hxFullLabel(HX.series[0].ts)
@@ -3199,7 +3216,7 @@ function refreshHist24() {
   if (now - MON24.lastHist < 5 * 60000) return;
   MON24.lastHist = now;
   botCallWorker('/monitor-state').then(function(d) {
-    if (d && Array.isArray(d.hist24)) { HIST24 = d.hist24; renderSparkline(); }
+    if (d && d.hist24) { HIST24 = d.hist24; renderSparkline(); }
   }).catch(function(){});
 }
 
@@ -3212,7 +3229,7 @@ function monitorHeartbeat() {
   MON24.lastHb = now;
   // De paso, el precio que ve la app alimenta hist24 en el servidor (sparkline sin huecos de dia).
   var p = bestCredibleMay() || 0;
-  botCallWorker('/monitor-heartbeat', { price: p }).catch(function(){});
+  botCallWorker('/monitor-heartbeat', { price: p, pay: ACTIVE_PAY }).catch(function(){});
 }
 
 function monitorServerConfig() {
@@ -3258,7 +3275,7 @@ async function hydrateMon24() {
   try {
     var d = await botCallWorker('/monitor-state');
     MON24.enabled = !!(d && d.enabled);
-    if (d && Array.isArray(d.hist24)) { HIST24 = d.hist24; MON24.lastHist = Date.now(); renderSparkline(); }
+    if (d && d.hist24) { HIST24 = d.hist24; MON24.lastHist = Date.now(); renderSparkline(); }
     renderMon24(d && d.status);
     // Si el monitor 24/7 quedo activo, arranca la vista (tablas a CFG.interval) sin pulsar Iniciar.
     if (MON24.enabled && !ST.running) startMonitorView();

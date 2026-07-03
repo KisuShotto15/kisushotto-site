@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
-import { pushHist24, pushHistLong } from './_lib/monitor.js';
+import { pushHist24Pay, pushHistLongPay } from './_lib/monitor.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -99,11 +99,17 @@ export default async function handler(req, res) {
         const cfg = (params && params.config) || {};
         const prevM = await sql`SELECT config FROM monitor_state WHERE user_id = ${user.uid}`;
         mergeTg(cfg, prevM[0] && prevM[0].config);
+        // Si cambio el metodo de pago, resetear el momentum (price_hist mezcla precios de metodos distintos)
+        const prevPay = prevM[0] && prevM[0].config && prevM[0].config.payTypes && prevM[0].config.payTypes[0];
+        const newPay = cfg.payTypes && cfg.payTypes[0];
         const cfgStr = JSON.stringify(cfg);
         await sql`
           INSERT INTO monitor_state (user_id, enabled, config, status, updated_at)
           VALUES (${user.uid}, true, ${cfgStr}::jsonb, 'Iniciando...', now())
           ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfgStr}::jsonb, status = 'Iniciando...', updated_at = now()`;
+        if (prevPay && newPay && prevPay !== newPay) {
+          await sql`UPDATE monitor_state SET price_hist = '[]'::jsonb WHERE user_id = ${user.uid}`;
+        }
         return res.status(200).json({ ok: true });
       }
       if (path === '/monitor-disable') {
@@ -114,10 +120,11 @@ export default async function handler(req, res) {
         // La app abierta avisa que esta refrescando; el servidor se queda quieto mientras tanto.
         // De paso alimenta hist24 con el precio que ve el cliente, asi el sparkline no queda hueco de dia.
         const price = Number((params && params.price) || 0);
+        const pay = (params && params.pay) || 'BancoDeVenezuela';
         if (price > 0) {
           const cur = await sql`SELECT hist24, hist_long FROM monitor_state WHERE user_id = ${user.uid}`;
-          const h = pushHist24(cur[0] ? cur[0].hist24 : [], Date.now(), price);
-          const hl = pushHistLong(cur[0] ? cur[0].hist_long : [], Date.now(), price);
+          const h = pushHist24Pay(cur[0] ? cur[0].hist24 : null, pay, Date.now(), price);
+          const hl = pushHistLongPay(cur[0] ? cur[0].hist_long : null, pay, Date.now(), price);
           await sql`UPDATE monitor_state SET client_seen = now(), hist24 = ${JSON.stringify(h)}::jsonb, hist_long = ${JSON.stringify(hl)}::jsonb WHERE user_id = ${user.uid}`;
         } else {
           await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
