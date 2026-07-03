@@ -287,7 +287,7 @@ export default async function handler(req, res) {
       const claim = await sql`
         UPDATE bot_state SET last_tick = now()
         WHERE user_id = ${row.user_id} AND enabled = true
-          AND (last_tick IS NULL OR last_tick < now() - interval '15 seconds')
+          AND (last_tick IS NULL OR last_tick < now() - interval '12 seconds')
         RETURNING user_id`;
       if (!claim.length) continue;
       let out;
@@ -317,9 +317,10 @@ export default async function handler(req, res) {
           last_reprice = ${out.lastReprice || null},
           known_orders = ${knownOrders != null ? JSON.stringify(knownOrders) : null}::jsonb,
           orders_checked_at = ${ordersCheckedAt || null},
-          last_tick = now(),
           updated_at = now()
         WHERE user_id = ${row.user_id}`;
+      // OJO: last_tick NO se re-sella aqui: lo marca el claim al INICIO del tick.
+      // Sellarlo al final sumaba el tiempo de proceso y hacia saltar 1 de cada 2 ticks (~36s).
       ticked++;
     }
 
@@ -346,7 +347,6 @@ export default async function handler(req, res) {
           last_summary = ${out.lastSummary || null},
           log = ${JSON.stringify(out.log || [])}::jsonb,
           status = ${out.status || null},
-          last_tick = now(),
           updated_at = now()
         WHERE user_id = ${row.user_id}`;
       monitored++;
