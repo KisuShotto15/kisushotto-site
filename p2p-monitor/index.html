@@ -1153,10 +1153,8 @@ function loadPayMethod() {
 
 function setPayMethod(id) {
   if (id === ACTIVE_PAY) return;
-  if (typeof BOT !== 'undefined' && BOT.running) {
-    botLog('🛑 Bot detenido: cambio de método de pago', '#E24B4A');
-    botToggle();
-  }
+  // El bot corre server-side con los metodos de SU anuncio: cambiar el selector
+  // del monitor no le afecta, se puede revisar otros metodos con el bot prendido.
   ACTIVE_PAY = id;
   // Cada metodo tiene su propia serie: resetear momentum de alertas, max/min de
   // sesion y puntos locales del metodo anterior para no mezclar precios.
