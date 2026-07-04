@@ -2196,7 +2196,18 @@ function updNotifSt() {
   if (!('Notification' in window)) { el.textContent = ''; return; }
   el.textContent = Notification.permission === 'granted' ? '✓' : Notification.permission === 'denied' ? '✗' : '?';
 }
+// Silencio nocturno del lado del CLIENTE: con la app abierta el servidor cede el
+// monitor (heartbeat) y quien alerta es el cliente — debe respetar el mismo horario.
+function inQuietNow() {
+  var s = CFG.monQuietStart, e = CFG.monQuietEnd;
+  if (!s || !e || s === e) return false;
+  function toMin(hm) { var p = String(hm).split(':'); return (+p[0] || 0) * 60 + (+p[1] || 0); }
+  var d = new Date(), cur = d.getHours() * 60 + d.getMinutes();
+  var sm = toMin(s), em = toMin(e);
+  return sm < em ? (cur >= sm && cur < em) : (cur >= sm || cur < em); // soporta franja nocturna
+}
 function push(title, body) {
+  if (inQuietNow()) return; // 🌙 silencio nocturno: ni Telegram ni notificacion
   if (Notification.permission === 'granted') new Notification('🟡 P2P — ' + title, { body: body });
   sendTelegram('<b>🟡 P2P — ' + title + '</b>\n' + body);
 }
