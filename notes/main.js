@@ -377,7 +377,12 @@ function autoGrow(el) {
 
 function isMobile() { return window.innerWidth <= 640; }
 
+// Contador de locks: con modales anidados (editor → modal de categorias) el
+// segundo lock pisaba el scrollY guardado y el primer unlock liberaba el body
+// con el editor todavia abierto.
+let _scrollLocks = 0;
 function lockBodyScroll() {
+  if (_scrollLocks++ > 0) return; // ya bloqueado por un modal exterior
   const scrollY = window.scrollY;
   // Compensate for scrollbar disappearing so the grid doesn't shift
   const sb = window.innerWidth - document.documentElement.clientWidth;
@@ -388,6 +393,7 @@ function lockBodyScroll() {
 }
 
 function unlockBodyScroll() {
+  if (_scrollLocks > 0 && --_scrollLocks > 0) return; // aun hay un modal abierto
   const scrollY = parseInt(document.body.dataset.scrollY || '0', 10);
   document.body.classList.remove('modal-open');
   document.body.style.removeProperty('--scroll-y');
@@ -704,7 +710,7 @@ function noteCardHtml(n) {
   }
 
   const cats = (n.categories || []).map(cid => State.categories.find(c => c.id === cid)).filter(Boolean);
-  const catTags = cats.map(c => `<span class="nc-cat-tag">${c.icon || '🏷️'} ${escapeHtml(c.name)}</span>`).join('');
+  const catTags = cats.map(c => `<span class="nc-cat-tag"><span class="cat-emoji">${c.icon || '🏷️'}</span> ${escapeHtml(c.name)}</span>`).join('');
   const sharedBadge = isShared ? `<span class="nc-shared">📥 Compartida</span>` : '';
   const lockBadge = n.locked ? `<span class="nc-locked" style="display:inline-flex;align-items:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>` : '';
   const reminderBadge = n.reminder_at ? `<span>⏰ ${fmtDate(n.reminder_at)}</span>` : '';
@@ -1179,6 +1185,7 @@ function wireCard(card) {
       if (!(await window.customConfirm('¿Eliminar definitivamente? No se puede deshacer.'))) return;
       try { await apiPurgeNote(id); }
       catch { showErrorToast('No se pudo eliminar. Verifica tu conexion.'); return; }
+      revokeAttachmentUrls(State.notes.find(x => x.id === id));
       State.notes = State.notes.filter(x => x.id !== id);
       idb.del('notes', id).catch(() => {});
       render();
@@ -1214,6 +1221,15 @@ function wireCard(card) {
     const n = State.notes.find(x => x.id === card.dataset.id);
     if (n) openCard(n);
   });
+}
+
+// Libera los object URLs de los adjuntos de una nota que deja de existir —
+// sin esto los blobs quedan retenidos en memoria toda la sesion.
+function revokeAttachmentUrls(n) {
+  for (const a of (n?.attachments || [])) {
+    const u = State.attachUrls[a.id];
+    if (u) { URL.revokeObjectURL(u); delete State.attachUrls[a.id]; }
+  }
 }
 
 // Runs fn(item) over items with at most `limit` concurrent calls.
@@ -1841,6 +1857,8 @@ function renderAttachments() {
         if (r?.note_last_modified) e.base_lm = r.note_last_modified;
       }
       catch { showErrorToast('No se pudo eliminar el adjunto. Intenta de nuevo.'); return; }
+      const u = State.attachUrls[id];
+      if (u) { URL.revokeObjectURL(u); delete State.attachUrls[id]; }
       e.attachments = e.attachments.filter(a => a.id !== id);
       e.last_modified = Date.now();
       await saveNoteLocal(e);
@@ -1924,6 +1942,13 @@ function closeEditor(fromPopState = false) {
   clearTimeout(saveTimer);
   saveTimer = null;
 
+  // Si se cierra el editor a mitad de una grabacion, apagar el microfono.
+  if (isRecording()) {
+    cancelRecording();
+    const audioBtn = $('#ed-audio');
+    if (audioBtn) audioBtn.textContent = '🎙️';
+  }
+
   let noteWasEmpty = false;
   const editedId = State.editing?.id || null;
   if (State.editing) {
@@ -1979,11 +2004,8 @@ function closeEditor(fromPopState = false) {
     _closed = true;
     // Now unlock the body: this is the moment the grid would shift, but
     // since the modal is gone the user does not see the reflow.
-    const savedScrollY = parseInt(document.body.dataset.scrollY || '0', 10);
-    document.body.classList.remove('modal-open');
-    document.body.style.removeProperty('--scroll-y');
-    document.body.style.paddingRight = '';
-    window.scrollTo(0, savedScrollY);
+    // (Via unlockBodyScroll para mantener balanceado el contador de locks.)
+    unlockBodyScroll();
     modal.classList.remove('closing');
     modal.hidden = true;
     modal._closing = false;
@@ -2925,6 +2947,7 @@ function bindUI() {
     for (const id of ids) {
       try {
         await apiPurgeNote(id);
+        revokeAttachmentUrls(State.notes.find(x => x.id === id));
         State.notes = State.notes.filter(x => x.id !== id);
         idb.del('notes', id).catch(() => {});
       } catch { failed++; }

@@ -1005,6 +1005,12 @@ body.select-mode .nc-select-wrap { display: block; }
   box-shadow: none;
 }
 .color-swatch:hover { opacity: 0.8; }
+
+/* Iconos de categoria monocromaticos (emoji en escala de grises, aclarados
+   para que sigan visibles sobre el fondo oscuro) */
+.sidebar-cat-icon, .cat-icon-btn, .cat-icon-display, .cat-icon-opt, .cat-emoji {
+  filter: grayscale(1) brightness(1.4);
+}
 .color-swatch.active { outline: 2px solid var(--text); outline-offset: 2px; }
 
 /* PIN modal */
