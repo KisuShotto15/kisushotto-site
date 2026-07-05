@@ -368,6 +368,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 
 /* Acciones en bloque de la vista Papelera */
 .trash-actions { display: flex; gap: 8px; margin: 2px 0 16px; }
+.trash-actions[hidden] { display: none; }
 .trash-action-btn {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 7px 14px;
