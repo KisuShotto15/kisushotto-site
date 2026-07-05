@@ -367,53 +367,14 @@ async function canEdit(env, noteId, email) {
   return !!(share && share.can_edit);
 }
 
-// El contenido "de fondo" difiere (ignora categorias/pinned/reminder, que el
-// server tambien toca por su cuenta y generarian copias espurias).
-function noteContentDiffers(row, n) {
-  const cl = (n.checklist_items && n.checklist_items.length) ? JSON.stringify(n.checklist_items) : null;
-  return (row.title || null)      !== (n.title || null)
-      || (row.body || null)       !== (n.body || null)
-      || (row.checklist_items || null) !== cl
-      || (row.color || null)      !== (n.color || null)
-      || (row.trashed_at || null) !== (n.trashed_at || null);
-}
-
 async function upsertNote(env, email, n) {
-  const existing = await env.DB.prepare(`SELECT * FROM notes WHERE id = ?`).bind(n.id).first();
+  const existing = await env.DB.prepare(`SELECT last_modified, owner_email FROM notes WHERE id = ?`).bind(n.id).first();
 
   const serverNow = now();
   const stmts = [];
   if (existing) {
     if (!(await canEdit(env, n.id, email))) {
       return { skipped: true, reason: 'forbidden' };
-    }
-    // Edicion concurrente: el cliente manda base_lm (el last_modified canonico
-    // sobre el que baso su edicion). Si el servidor avanzo desde esa base y el
-    // contenido difiere, se preserva la version del servidor como copia antes
-    // de aplicar la del cliente — asi una carrera entre dos dispositivos nunca
-    // pierde datos en silencio.
-    const baseLm = Number(n.base_lm);
-    if (Number.isFinite(baseLm) && baseLm > 0 && existing.last_modified > baseLm && noteContentDiffers(existing, n)) {
-      stmts.push(env.DB.prepare(
-        `INSERT INTO notes (id, owner_email, title, body, type, checklist_items, color, pinned, archived, trashed_at, locked, reminder_at, reminder_sent, last_modified, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-      ).bind(
-        uuid(),
-        existing.owner_email,
-        ((existing.title || 'Sin titulo') + ' (copia de conflicto)'),
-        existing.body,
-        existing.type,
-        existing.checklist_items,
-        existing.color,
-        0,
-        existing.archived,
-        existing.trashed_at,
-        existing.locked,
-        null,
-        1,
-        serverNow,
-        serverNow
-      ));
     }
     stmts.push(env.DB.prepare(
       `UPDATE notes SET title=?, body=?, type=?, checklist_items=?, color=?, pinned=?, archived=?, trashed_at=?, locked=?, reminder_at=?, reminder_sent=?, last_modified=? WHERE id=?`

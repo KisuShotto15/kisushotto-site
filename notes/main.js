@@ -327,6 +327,14 @@ async function loadFromIDB() {
     zombies.forEach(n => idb.del('notes', n.id).catch(() => {}));
     State.notes = State.notes.filter(n => !(n.trashed_at && n.trashed_at < purgeCutoff));
   }
+  // Limpieza de las "copias de conflicto" que genero un bug ya corregido; se
+  // borraron server-side pero el pull incremental no comunica borrados, asi
+  // que se eliminan localmente en cada dispositivo (la app ya no las crea).
+  const junk = State.notes.filter(n => (n.title || '').endsWith('(copia de conflicto)'));
+  if (junk.length) {
+    junk.forEach(n => idb.del('notes', n.id).catch(() => {}));
+    State.notes = State.notes.filter(n => !(n.title || '').endsWith('(copia de conflicto)'));
+  }
   // Migrate: assign sort_order from created_at (immutable). Using last_modified
   // would mean a note that lost sort_order during sync round-trip would later
   // get bumped to "now" because the server rewrites last_modified to its clock.
