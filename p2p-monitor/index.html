@@ -807,10 +807,23 @@ input:focus {
 </div>
 
 <!-- Bell alert dropdown -->
-<div id="alert-dropdown" style="display:none;position:fixed;top:52px;right:12px;z-index:200;width:340px;background:var(--surf-2);border:1px solid var(--border-2);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.7);overflow:hidden;flex-direction:column;max-height:420px">
+<div id="alert-dropdown" style="display:none;position:fixed;top:52px;right:12px;z-index:200;width:340px;background:var(--surf-2);border:1px solid var(--border-2);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.7);overflow:hidden;flex-direction:column;max-height:80vh">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
     <span style="font-size:13px;font-weight:700;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase">Alertas</span>
-    <button class="btn btn-sm" onclick="clearAlerts()">Limpiar</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm" onclick="toggleAlertConfig(event)" title="Configurar alertas">⚙</button>
+      <button class="btn btn-sm" onclick="clearAlerts()">Limpiar</button>
+    </div>
+  </div>
+  <!-- Configuración de alertas (umbrales + notificaciones) -->
+  <div id="alert-config" style="display:none;flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surf-1)">
+    <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+    <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+    <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+    <div class="cfg-row"><span>Tendencia sostenida ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-sustain" value="1.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
+    <div class="cfg-row"><span>Push del sistema</span><button class="btn btn-sm" type="button" id="btn-push" onclick="togglePush()">Activar</button></div>
+    <div class="cfg-row" style="border-bottom:none"><span style="font-size:12px;color:var(--text-3)">Notificaciones al teléfono/PC aunque cierres la app</span></div>
+    <div style="margin-top:8px"><button class="btn btn-gold btn-sm" style="width:100%" onclick="saveConfig()">Guardar</button></div>
   </div>
   <div class="alert-list" id="alert-list" style="overflow-y:auto;padding:8px;flex:1"></div>
 </div>
@@ -909,13 +922,7 @@ input:focus {
         <div class="ptitle" style="margin-bottom:8px">Configuración</div>
         <div class="cfg-row"><span>Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="10" max="300"></div>
         <div class="cfg-row"><span>Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
-        <details style="margin-top:6px">
-          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Alertas</summary>
-          <div class="cfg-row"><span>Alerta spread ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-spr" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-          <div class="cfg-row"><span>Sobrecomprado ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-ob" value="1.0" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-          <div class="cfg-row"><span>Debilidad ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-wk" value="0.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-          <div class="cfg-row"><span>Tendencia sostenida ≥</span><div style="display:flex;align-items:center;gap:4px"><input type="number" id="cfg-sustain" value="1.5" min="0.1" step="0.1"><span style="color:#555">%</span></div></div>
-        </details>
+        <div class="cfg-row" style="border-bottom:none"><span style="font-size:11px;color:var(--text-3)">Los umbrales de alerta y el push están en la 🔔 campana</span></div>
         <details style="margin-top:6px">
           <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Monitor 24/7</summary>
           <div id="mon24-status" style="font-size:11px;color:var(--text-3);margin:0 0 6px"></div>
@@ -925,7 +932,6 @@ input:focus {
           <div class="cfg-row"><span>Resumen diario</span><input type="time" id="cfg-mon-summary" value="08:00" style="width:96px"></div>
           <div style="font-size:11px;color:var(--text-3);margin-top:4px">Al pulsar Iniciar también corre 24/7 en el servidor y avisa por el Telegram del bot (requiere token+chat). De noche silencia las alertas y refresca más lento.</div>
         </details>
-        <div class="cfg-row"><span>Push del sistema</span><button class="btn btn-sm" type="button" id="btn-push" onclick="togglePush()">Activar</button></div>
         <div class="gear-filter">
           <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="0" step="100000"></div>
           <div class="cfg-row"><span>Compra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
@@ -2377,6 +2383,12 @@ function toggleAlertDropdown(e) {
   var d = document.getElementById('alert-dropdown');
   if (d.style.display === 'flex') { d.style.display = 'none'; return; }
   d.style.display = 'flex';
+}
+
+function toggleAlertConfig(e) {
+  e.stopPropagation();
+  var c = document.getElementById('alert-config');
+  if (c) c.style.display = c.style.display === 'none' ? 'block' : 'none';
 }
 
 function toggleBotGear(e) {
