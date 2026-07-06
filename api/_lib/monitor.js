@@ -45,6 +45,23 @@ export function pushHistLongPay(hist, pay, ts, price) {
   return m;
 }
 
+// Velas OHLC por HORA, por metodo de pago. Cada observacion de precio (tick del
+// servidor ~30s o latido del cliente ~28s) actualiza la vela de su bucket horario.
+export function pushOhlcPay(hist, pay, ts, price) {
+  const m = histMap(hist);
+  if (!price) return m;
+  const arr = Array.isArray(m[pay]) ? m[pay].slice() : [];
+  const t = Math.floor(ts / 3600000) * 3600000;
+  const last = arr[arr.length - 1];
+  if (last && last.t === t) {
+    arr[arr.length - 1] = { t, o: last.o, h: Math.max(last.h, price), l: Math.min(last.l, price), c: price };
+  } else {
+    arr.push({ t, o: price, h: price, l: price, c: price });
+  }
+  m[pay] = arr;
+  return m;
+}
+
 // Disponibilidad minima (USDT) para considerar un anuncio creible (mayorista real).
 // Evita que un listing fantasma contamine bestMay (grafico) ni dispare falsas alertas.
 const MIN_AVAIL = 2000;

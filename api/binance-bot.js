@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
-import { pushHist24Pay, pushHistLongPay } from './_lib/monitor.js';
+import { pushHist24Pay, pushHistLongPay, pushOhlcPay } from './_lib/monitor.js';
+import { sendPush, vapidPublicKey } from './_lib/push.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -122,21 +123,48 @@ export default async function handler(req, res) {
         const price = Number((params && params.price) || 0);
         const pay = (params && params.pay) || 'BancoDeVenezuela';
         if (price > 0) {
-          const cur = await sql`SELECT hist24, hist_long FROM monitor_state WHERE user_id = ${user.uid}`;
+          const cur = await sql`SELECT hist24, hist_long, hist_ohlc FROM monitor_state WHERE user_id = ${user.uid}`;
           const h = pushHist24Pay(cur[0] ? cur[0].hist24 : null, pay, Date.now(), price);
           const hl = pushHistLongPay(cur[0] ? cur[0].hist_long : null, pay, Date.now(), price);
-          await sql`UPDATE monitor_state SET client_seen = now(), hist24 = ${JSON.stringify(h)}::jsonb, hist_long = ${JSON.stringify(hl)}::jsonb WHERE user_id = ${user.uid}`;
+          const ho = pushOhlcPay(cur[0] ? cur[0].hist_ohlc : null, pay, Date.now(), price);
+          await sql`UPDATE monitor_state SET client_seen = now(), hist24 = ${JSON.stringify(h)}::jsonb, hist_long = ${JSON.stringify(hl)}::jsonb, hist_ohlc = ${JSON.stringify(ho)}::jsonb WHERE user_id = ${user.uid}`;
         } else {
           await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
         }
         return res.status(200).json({ ok: true });
       }
       if (path === '/monitor-history') {
-        const rows = await sql`SELECT hist_long, hist24 FROM monitor_state WHERE user_id = ${user.uid}`;
-        return res.status(200).json(rows[0] || { hist_long: [], hist24: [] });
+        const rows = await sql`SELECT hist_long, hist24, hist_ohlc FROM monitor_state WHERE user_id = ${user.uid}`;
+        return res.status(200).json(rows[0] || { hist_long: [], hist24: [], hist_ohlc: {} });
       }
       const rows = await sql`SELECT enabled, status, last_tick, hist24, log FROM monitor_state WHERE user_id = ${user.uid}`;
       return res.status(200).json(rows[0] || { enabled: false });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // Web Push: suscripcion por dispositivo (no requiere creds Binance).
+  if (path === '/push-key' || path === '/push-subscribe' || path === '/push-unsubscribe' || path === '/push-test') {
+    try {
+      await ensureSchema();
+      if (path === '/push-key') return res.status(200).json({ key: vapidPublicKey() });
+      if (path === '/push-subscribe') {
+        const sub = params && params.sub;
+        if (!sub || !sub.endpoint) return res.status(400).json({ error: 'sub invalida' });
+        const subStr = JSON.stringify(sub);
+        await sql`
+          INSERT INTO push_subs (endpoint, user_id, sub) VALUES (${sub.endpoint}, ${user.uid}, ${subStr}::jsonb)
+          ON CONFLICT (endpoint) DO UPDATE SET user_id = ${user.uid}, sub = ${subStr}::jsonb`;
+        return res.status(200).json({ ok: true });
+      }
+      if (path === '/push-unsubscribe') {
+        const endpoint = params && params.endpoint;
+        if (endpoint) await sql`DELETE FROM push_subs WHERE endpoint = ${endpoint} AND user_id = ${user.uid}`;
+        return res.status(200).json({ ok: true });
+      }
+      const ok = await sendPush(user.uid, '🔔 P2P Monitor', 'Notificaciones push funcionando');
+      return res.status(200).json({ ok });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }

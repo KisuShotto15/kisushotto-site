@@ -925,6 +925,7 @@ input:focus {
           <div class="cfg-row"><span>Resumen diario</span><input type="time" id="cfg-mon-summary" value="08:00" style="width:96px"></div>
           <div style="font-size:11px;color:var(--text-3);margin-top:4px">Al pulsar Iniciar también corre 24/7 en el servidor y avisa por el Telegram del bot (requiere token+chat). De noche silencia las alertas y refresca más lento.</div>
         </details>
+        <div class="cfg-row"><span>Push del sistema</span><button class="btn btn-sm" type="button" id="btn-push" onclick="togglePush()">Activar</button></div>
         <div class="gear-filter">
           <div class="cfg-row"><span>Mayoristas — filtro (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="0" step="100000"></div>
           <div class="cfg-row"><span>Compra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
@@ -1061,6 +1062,9 @@ input:focus {
           <div id="bot-ceiling" style="font-size:20px;color:var(--red);font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
       </div>
+
+      <!-- Salud del bot (ultimo tick / reprice del servidor) -->
+      <div id="bot-health" style="display:none;justify-content:space-between;font-size:12px;color:var(--text-3);margin:-4px 2px 10px;font-variant-numeric:tabular-nums"><span id="bh-tick">Tick: —</span><span id="bh-reprice">Reprice: —</span></div>
 
       <!-- Config bot (campos visibles) -->
       <div class="bot-group">
@@ -2286,6 +2290,57 @@ function renderAlerts() {
 
 function clearAlerts() { ST.alerts = []; COOLDOWN = {}; renderAlerts(); }
 
+// ── Web Push (notificaciones del sistema, app cerrada) ─
+var PUSH = { sub: null };
+function b64ToU8(base64) {
+  var pad = '='.repeat((4 - base64.length % 4) % 4);
+  var b = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  var raw = atob(b), arr = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+function updPushBtn() {
+  var b = document.getElementById('btn-push');
+  if (!b) return;
+  var supported = ('serviceWorker' in navigator) && ('PushManager' in window);
+  if (!supported) { b.textContent = 'No soportado'; b.disabled = true; return; }
+  b.textContent = PUSH.sub ? '✓ Activado' : 'Activar';
+}
+async function refreshPushState() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { updPushBtn(); return; }
+    var reg = await navigator.serviceWorker.ready;
+    PUSH.sub = await reg.pushManager.getSubscription();
+  } catch(e) { PUSH.sub = null; }
+  updPushBtn();
+}
+async function togglePush() {
+  var b = document.getElementById('btn-push');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) { toast('Tu navegador no soporta push'); return; }
+  if (!SESSION.token) { toast('Inicia sesión primero'); return; }
+  try {
+    var reg = await navigator.serviceWorker.ready;
+    if (PUSH.sub) {
+      var endpoint = PUSH.sub.endpoint;
+      await PUSH.sub.unsubscribe().catch(function(){});
+      await botCallWorker('/push-unsubscribe', { endpoint: endpoint }).catch(function(){});
+      PUSH.sub = null; updPushBtn(); toast('Push desactivado');
+      return;
+    }
+    if (Notification.permission !== 'granted') {
+      var perm = await Notification.requestPermission();
+      if (perm !== 'granted') { toast('Permiso denegado'); return; }
+    }
+    if (b) b.textContent = 'Activando...';
+    var kd = await botCallWorker('/push-key');
+    if (!kd || !kd.key) { toast('Push no configurado en el servidor'); updPushBtn(); return; }
+    PUSH.sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(kd.key) });
+    await botCallWorker('/push-subscribe', { sub: PUSH.sub.toJSON() });
+    updPushBtn(); toast('✓ Push activado');
+    botCallWorker('/push-test').catch(function(){});
+  } catch(e) { toast('⚠ ' + e.message); updPushBtn(); }
+}
+
 // ── Notificaciones ────────────────────────────────────
 function reqNotif() {
   if (!('Notification' in window)) { document.getElementById('notif-st').textContent = 'No soportado'; return; }
@@ -3010,6 +3065,38 @@ function renderBotState(d) {
     document.getElementById('bot-toggle').textContent = '▶ Iniciar Bot';
     document.getElementById('bot-toggle').style.background = '';
   }
+  // Salud del bot: ultimo tick / reprice + watchdog de bot congelado. Si el
+  // scheduler (DO/Vercel) muere, el anuncio queda publicado a precio viejo: avisar.
+  var health = document.getElementById('bot-health');
+  if (health) health.style.display = BOT.running ? 'flex' : 'none';
+  if (BOT.running) {
+    var nowH = Date.now();
+    var tickMs = d.last_tick ? nowH - new Date(d.last_tick).getTime() : null;
+    var repMs  = d.last_reprice ? nowH - new Date(d.last_reprice).getTime() : null;
+    var bt = document.getElementById('bh-tick'), br = document.getElementById('bh-reprice');
+    if (bt) { bt.textContent = 'Tick: ' + (tickMs != null ? 'hace ' + agoStr(tickMs) : '—'); bt.style.color = (tickMs != null && tickMs > 120000) ? 'var(--red)' : ''; }
+    if (br) br.textContent = 'Reprice: ' + (repMs != null ? 'hace ' + agoStr(repMs) : '—');
+    if (d.enabled !== false && tickMs != null && tickMs > 120000) {
+      botSetStatus('⚠ Sin tick del servidor hace ' + agoStr(tickMs), '#E24B4A');
+      if (nowH - (BOT.staleNotifTs || 0) > 10 * 60000) {
+        BOT.staleNotifTs = nowH;
+        botLog('⚠ Bot congelado: el servidor no repricia hace ' + agoStr(tickMs) + ' — revisa el scheduler', '#E24B4A');
+        sendTelegram('⚠ <b>Bot congelado</b>: sin tick hace ' + agoStr(tickMs) + '. Tu anuncio puede estar a precio viejo.');
+      }
+    } else if (BOT.staleNotifTs && tickMs != null && tickMs < 60000) {
+      BOT.staleNotifTs = 0;
+      botLog('✓ Tick del servidor recuperado', '#1D9E75');
+      sendTelegram('✓ Bot recuperado: el servidor volvió a repriciar.');
+    }
+  }
+}
+
+function agoStr(ms) {
+  var s = Math.round(ms / 1000);
+  if (s < 90) return s + 's';
+  var m = Math.round(s / 60);
+  if (m < 90) return m + ' min';
+  return Math.round(m / 60) + ' h';
 }
 
 // Al cargar: si el bot quedó encendido en el servidor, reflejar estado + reanudar poller.
@@ -3137,7 +3224,8 @@ function renderSparkline() {
 window.addEventListener('resize', function() { try { renderSparkline(); } catch(e) {} try { if (HX.open) hxDraw(); } catch(e) {} });
 
 // ── Historial completo (overlay pantalla completa) ──────────────
-var HX = { open: false, series: [], range: 'all' };
+var HX = { open: false, series: [], ohlc: [], range: 'all', mode: 'candles' };
+try { HX.mode = localStorage.getItem('p2p_hx_mode') || 'candles'; } catch(e) {}
 var HX_RANGES = [
   { id: '24h', label: '24h',     ms: 24 * 3600e3 },
   { id: '7d',  label: '7 días',  ms: 7 * 24 * 3600e3 },
@@ -3197,18 +3285,92 @@ function hxStats(pts) {
   document.getElementById('hx-min').textContent = fmt(min) + fiatSuf();
   document.getElementById('hx-max').textContent = fmt(max) + fiatSuf();
 }
+function hxBtnCss(active) {
+  return 'border-radius:8px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:600;border:1px solid ' +
+    (active ? 'var(--gold);background:var(--gold);color:#000' : 'var(--border);background:var(--surf-2);color:var(--text-3)');
+}
 function hxRenderRanges() {
   var wrap = document.getElementById('hx-ranges');
   wrap.innerHTML = '';
   HX_RANGES.forEach(function(r) {
     var b = document.createElement('button');
-    var active = r.id === HX.range;
     b.textContent = r.label;
-    b.style.cssText = 'border-radius:8px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:600;border:1px solid ' +
-      (active ? 'var(--gold);background:var(--gold);color:#000' : 'var(--border);background:var(--surf-2);color:var(--text-3)');
+    b.style.cssText = hxBtnCss(r.id === HX.range);
     b.onclick = function() { HX.range = r.id; HX.hoverX = null; hxRenderRanges(); hxDraw(); };
     wrap.appendChild(b);
   });
+  var sep = document.createElement('span');
+  sep.style.cssText = 'flex:1';
+  wrap.appendChild(sep);
+  [['line', '📈 Línea'], ['candles', '🕯 Velas']].forEach(function(m) {
+    var b = document.createElement('button');
+    b.textContent = m[1];
+    b.style.cssText = hxBtnCss(HX.mode === m[0]);
+    b.onclick = function() {
+      HX.mode = m[0];
+      try { localStorage.setItem('p2p_hx_mode', m[0]); } catch(e) {}
+      HX.hoverX = null; hxRenderRanges(); hxDraw();
+    };
+    wrap.appendChild(b);
+  });
+}
+// Velas visibles del rango; agrupa buckets si hay demasiadas (max ~150 en pantalla)
+function hxVisibleOhlc() {
+  var r = HX_RANGES.filter(function(x) { return x.id === HX.range; })[0];
+  var all = HX.ohlc || [];
+  var cs = (!r || r.ms === Infinity) ? all.slice() : all.filter(function(k) { return k.t >= Date.now() - r.ms; });
+  var factor = Math.max(1, Math.ceil(cs.length / 150));
+  HX.bucketMs = 3600000 * factor;
+  if (factor <= 1) return cs;
+  var out = [];
+  for (var i = 0; i < cs.length; i += factor) {
+    var g = cs.slice(i, i + factor);
+    var agg = { t: g[0].t, o: g[0].o, h: g[0].h, l: g[0].l, c: g[g.length - 1].c };
+    for (var j = 1; j < g.length; j++) { if (g[j].h > agg.h) agg.h = g[j].h; if (g[j].l < agg.l) agg.l = g[j].l; }
+    out.push(agg);
+  }
+  return out;
+}
+// Frame base en modo VELAS (grilla/ejes compartidos con el modo linea)
+function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
+  var base = HX.base || (HX.base = document.createElement('canvas'));
+  base.width = Math.round(cssW * dpr); base.height = Math.round(cssH * dpr);
+  var ctx = base.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  var padL = 58, padR = 14, padT = 14, padB = 26, W = cssW - padL - padR, H = cssH - padT - padB;
+  var bMs = HX.bucketMs || 3600000;
+  var t0 = cs[0].t, t1 = cs[cs.length - 1].t + bMs, dt = (t1 - t0) || 1;
+  var min = cs[0].l, max = cs[0].h;
+  cs.forEach(function(k) { if (k.l < min) min = k.l; if (k.h > max) max = k.h; });
+  var span = (max - min) || 1, lo = min - span * 0.08, hi = max + span * 0.08, dp = hi - lo;
+  function X(ts) { return padL + (ts - t0) / dt * W; }
+  function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
+  var up = cs[cs.length - 1].c >= cs[0].o;
+  HX.px = { padL: padL, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, col: up ? '#2ebd85' : '#f6465d' };
+  ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
+  for (var i = 0; i <= 5; i++) {
+    var val = lo + (hi - lo) * i / 5, y = Y(val);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + W, y); ctx.stroke();
+    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'right'; ctx.fillText(fmt(val), padL - 8, y);
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  var ticks = Math.min(6, cs.length);
+  for (var k2 = 0; k2 <= ticks; k2++) {
+    var ts = t0 + dt * k2 / ticks;
+    ctx.fillStyle = '#8b93a7';
+    ctx.fillText(hxTimeLabel(ts, dt), Math.max(padL + 14, Math.min(padL + W - 14, X(ts))), padT + H + 7);
+  }
+  var cw = Math.max(2, Math.min(14, (W / cs.length) * 0.65));
+  for (var q = 0; q < cs.length; q++) {
+    var c = cs[q], cx = X(c.t + bMs / 2), colq = c.c >= c.o ? '#2ebd85' : '#f6465d';
+    ctx.strokeStyle = colq; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, Y(c.h)); ctx.lineTo(cx, Y(c.l)); ctx.stroke();
+    var yTop = Y(Math.max(c.o, c.c)), yBot = Y(Math.min(c.o, c.c));
+    ctx.fillStyle = colq;
+    ctx.fillRect(cx - cw / 2, yTop, cw, Math.max(1, yBot - yTop));
+  }
 }
 // Dibuja el frame base (grilla, ejes, area, linea) en un canvas offscreen. Se
 // regenera solo cuando cambia la data/rango/tamano; el mousemove solo lo blitea.
@@ -3255,13 +3417,21 @@ function hxDrawBase(pts, cssW, cssH, dpr) {
 function hxDraw() {
   var pts = hxVisible();
   hxStats(pts);
-  if (pts.length < 2) { hxMsg('Aún no hay suficientes datos para este rango. El historial se acumula con el tiempo.'); return; }
+  var candles = HX.mode === 'candles';
+  var cs = candles ? hxVisibleOhlc() : [];
+  // En velas, si el rango no tiene al menos 2 velas caemos a linea automaticamente.
+  if (candles && cs.length < 2) candles = false;
+  if ((candles ? cs.length : pts.length) < 2) { hxMsg('Aún no hay suficientes datos para este rango. El historial se acumula con el tiempo.'); return; }
   hxMsg('');
   var canvas = document.getElementById('hx-chart');
   var dpr = window.devicePixelRatio || 1, cssW = canvas.clientWidth, cssH = canvas.clientHeight;
-  // Regenerar el base solo si cambio data/rango/tamano (no en cada mousemove)
-  var key = ACTIVE_PAY + '|' + HX.range + '|' + pts.length + '|' + pts[pts.length - 1].ts + '|' + cssW + 'x' + cssH + '|' + dpr;
-  if (HX.baseKey !== key) { hxDrawBase(pts, cssW, cssH, dpr); HX.baseKey = key; }
+  // Regenerar el base solo si cambio modo/data/rango/tamano (no en cada mousemove)
+  var lastT = candles ? cs[cs.length - 1].t : pts[pts.length - 1].ts;
+  var key = (candles ? 'c' : 'l') + '|' + ACTIVE_PAY + '|' + HX.range + '|' + (candles ? cs.length : pts.length) + '|' + lastT + '|' + cssW + 'x' + cssH + '|' + dpr;
+  if (HX.baseKey !== key) {
+    if (candles) hxDrawBaseCandles(cs, cssW, cssH, dpr); else hxDrawBase(pts, cssW, cssH, dpr);
+    HX.baseKey = key;
+  }
   var bw = Math.round(cssW * dpr), bh = Math.round(cssH * dpr);
   if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
   var ctx = canvas.getContext('2d');
@@ -3273,44 +3443,57 @@ function hxDraw() {
   function X(ts) { return padL + (ts - t0) / dt * W; }
   function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
 
-  // Crosshair estilo TradingView: las lineas siguen al CURSOR (libre), el punto
-  // marca el dato mas cercano en tiempo, y el eje Y muestra el precio a la altura del cursor.
+  // Crosshair estilo TradingView: las lineas siguen al CURSOR (libre); el marcador
+  // y el tooltip enganchan al dato mas cercano (punto en linea, vela en velas).
   if (HX.hoverX != null) {
-    var cx = HX.hoverX, cy = HX.hoverY;                 // lineas = posicion del cursor
+    var cx = HX.hoverX, cy = HX.hoverY;
     var hts = t0 + ((cx - padL) / W) * dt;
-    var bp = pts[0], bd = Infinity;
-    for (var q = 0; q < pts.length; q++) {
-      var dd = Math.abs(pts[q].ts - hts);
-      if (dd < bd) { bd = dd; bp = pts[q]; }
-    }
-    var dotX = X(bp.ts), dotY = Y(bp.price);            // punto = dato mas cercano
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, padT + H); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(padL, cy); ctx.lineTo(padL + W, cy); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(dotX, dotY, 4, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    var l1, l2, l3 = null;
+    if (candles) {
+      var bMs = HX.bucketMs || 3600000, bc = cs[0], bd = Infinity;
+      for (var q = 0; q < cs.length; q++) { var dd = Math.abs((cs[q].t + bMs / 2) - hts); if (dd < bd) { bd = dd; bc = cs[q]; } }
+      var kcol = bc.c >= bc.o ? '#2ebd85' : '#f6465d';
+      var mx = X(bc.t + bMs / 2);
+      ctx.beginPath(); ctx.arc(mx, Y(bc.c), 4, 0, 2 * Math.PI); ctx.fillStyle = kcol; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+      l1 = 'A ' + fmt(bc.o) + '  C ' + fmt(bc.c);
+      l2 = 'Máx ' + fmt(bc.h) + '  Mín ' + fmt(bc.l);
+      l3 = hxFullLabel(bc.t);
+      col = kcol;
+    } else {
+      var bp = pts[0], bd2 = Infinity;
+      for (var q2 = 0; q2 < pts.length; q2++) { var dd2 = Math.abs(pts[q2].ts - hts); if (dd2 < bd2) { bd2 = dd2; bp = pts[q2]; } }
+      ctx.beginPath(); ctx.arc(X(bp.ts), Y(bp.price), 4, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+      l1 = fmt(bp.price) + fiatSuf();
+      l2 = hxFullLabel(bp.ts);
+    }
     // Etiqueta de precio en el eje Y a la altura del cursor
     var curPrice = lo + (1 - (cy - padT) / H) * dp;
     ctx.font = '600 11px -apple-system, sans-serif';
     ctx.fillStyle = col; ctx.fillRect(0, cy - 9, padL - 4, 18);
     ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(fmt(curPrice), 4, cy);
-    // Caja tooltip (precio/fecha del dato mas cercano), cerca del cursor
-    var l1 = fmt(bp.price) + fiatSuf(), l2 = hxFullLabel(bp.ts);
+    // Caja tooltip cerca del cursor
     ctx.font = '600 12px -apple-system, sans-serif';
-    var tw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 16;
-    var th = 36, bx = cx + 12, by = cy - th - 12;
+    var lines = l3 != null ? [l1, l2, l3] : [l1, l2];
+    var tw = 0; lines.forEach(function(s) { tw = Math.max(tw, ctx.measureText(s).width); }); tw += 16;
+    var th = 14 * lines.length + 8, bx = cx + 12, by = cy - th - 12;
     if (bx + tw > padL + W) bx = cx - 12 - tw;
-    if (by < padT) by = cy + 12;                       // si no cabe arriba, debajo del cursor
-    by = Math.max(padT, Math.min(padT + H - th, by));  // mantener dentro del area
+    if (by < padT) by = cy + 12;
+    by = Math.max(padT, Math.min(padT + H - th, by));
     ctx.fillStyle = 'rgba(20,24,34,0.95)'; ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
     if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, tw, th, 6); ctx.fill(); ctx.stroke(); }
     else { ctx.fillRect(bx, by, tw, th); ctx.strokeRect(bx, by, tw, th); }
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = col; ctx.fillText(l1, bx + 8, by + 12);
-    ctx.fillStyle = '#8b93a7'; ctx.font = '11px -apple-system, sans-serif'; ctx.fillText(l2, bx + 8, by + 26);
+    ctx.fillStyle = col; ctx.fillText(lines[0], bx + 8, by + 12);
+    ctx.fillStyle = '#8b93a7'; ctx.font = '11px -apple-system, sans-serif';
+    for (var li = 1; li < lines.length; li++) ctx.fillText(lines[li], bx + 8, by + 12 + 14 * li);
     ctx.restore();
   }
 }
@@ -3342,6 +3525,8 @@ async function hxLoad() {
   try {
     var d = await botCallWorker('/monitor-history');
     HX.series = hxMerge(histByPay(d && d.hist_long, ACTIVE_PAY), histByPay(d && d.hist24, ACTIVE_PAY));
+    var ohlc = histByPay(d && d.hist_ohlc, ACTIVE_PAY);
+    HX.ohlc = Array.isArray(ohlc) ? ohlc.slice().sort(function(a, b) { return a.t - b.t; }) : [];
     var cov = document.getElementById('hx-coverage');
     if (cov) cov.textContent = HX.series.length
       ? '· ' + HX.series.length + ' puntos desde ' + hxFullLabel(HX.series[0].ts)
@@ -3556,7 +3741,7 @@ function initBuySection() {
   setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
 }
 
-loadConfig(); syncFilterInputs(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI();
+loadConfig(); syncFilterInputs(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState();
 initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });

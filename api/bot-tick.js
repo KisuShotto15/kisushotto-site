@@ -4,8 +4,9 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
-import { computeAlerts, pushHist24Pay, pushHistLongPay, histMap } from './_lib/monitor.js';
+import { computeAlerts, pushHist24Pay, pushHistLongPay, pushOhlcPay, histMap } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
+import { sendPush, stripHtml } from './_lib/push.js';
 
 export const config = { maxDuration: 60 };
 
@@ -92,23 +93,27 @@ async function tickMonitor(row, now) {
   const pay = pays[0] || 'BancoDeVenezuela';
   const hist24 = pushHist24Pay(row.hist24, pay, now, out.bestMay);
   const histLong = pushHistLongPay(row.hist_long, pay, now, out.bestMay);
+  const histOhlc = pushOhlcPay(row.hist_ohlc, pay, now, out.bestMay);
 
   let log = row.log;
   let token = '';
   try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
   const chatId = cfg.tg && cfg.tg.chatId;
 
-  if (!silent && out.alerts.length && token && chatId) {
+  if (!silent && out.alerts.length) {
     for (const a of out.alerts) {
-      await sendTelegram(token, chatId, '<b>🟡 P2P — ' + a.title + '</b>\n' + a.desc);
+      if (token && chatId) await sendTelegram(token, chatId, '<b>🟡 P2P — ' + a.title + '</b>\n' + a.desc);
+      await sendPush(row.user_id, '🟡 P2P — ' + stripHtml(a.title), stripHtml(a.desc)).catch(() => {});
     }
-    log = pushLog(log, '📩 ' + out.alerts.length + ' alerta(s) → Telegram', 'info');
+    log = pushLog(log, '📩 ' + out.alerts.length + ' alerta(s) notificada(s)', 'info');
   }
 
   // Resumen diario (no depende del silencio nocturno; se manda a la hora configurada)
   let lastSummary = row.last_summary;
   if (shouldSendSummary(cfg.summaryHour, lastSummary, now)) {
-    if (token && chatId) await sendTelegram(token, chatId, buildSummary(histMap(hist24)[pay], now));
+    const summary = buildSummary(histMap(hist24)[pay], now);
+    if (token && chatId) await sendTelegram(token, chatId, summary);
+    await sendPush(row.user_id, '📊 Resumen P2P · últimas 24h', stripHtml(summary).split('\n').slice(1).join('\n')).catch(() => {});
     lastSummary = new Date(now).toISOString();
     log = pushLog(log, '📊 Resumen diario → Telegram', 'info');
   }
@@ -118,6 +123,7 @@ async function tickMonitor(row, now) {
     cooldowns: out.cooldowns,
     hist24,
     histLong,
+    histOhlc,
     lastSummary,
     log,
     status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
@@ -248,10 +254,15 @@ async function maybeCheckOrders(row, now) {
     let token = '';
     try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
     const chatId = cfg.tg && cfg.tg.chatId;
+    const f = fresh[0];
+    // El historial de ordenes trae unitPrice (no price); si falta, derivar de total/cantidad.
+    const amt = parseFloat(f.amount || 0);
+    const total = parseFloat(f.totalPrice || 0) || (amt * parseFloat(f.unitPrice || f.price || 0));
+    const price = parseFloat(f.unitPrice || f.price || 0) || (amt > 0 && total > 0 ? total / amt : 0);
     if (token && chatId) {
-      const f = fresh[0];
-      const total = f.totalPrice || (parseFloat(f.amount || 0) * parseFloat(f.price || 0)).toFixed(2);
-      let msg = '🟢 <b>Nueva orden P2P</b>\nCantidad: ' + (f.amount || '?') + ' USDT\nTotal: ' + total + ' Bs\nPrecio: ' + (f.price || '?') + ' Bs';
+      let msg = '🟢 <b>Nueva orden P2P</b>\nCantidad: ' + (amt ? amt.toFixed(2) : '?') + ' USDT' +
+        '\nTotal: ' + (total ? total.toFixed(2) : '?') + ' Bs' +
+        '\nPrecio: ' + (price ? price.toFixed(3) : '?') + ' Bs';
       if (fresh.length > 1) msg += '\n(+' + (fresh.length - 1) + ' más)';
       const sent = await sendTelegram(token, chatId, msg);
       log = pushLog(log, sent ? '📩 ' + fresh.length + ' orden(es) nueva(s) → Telegram'
@@ -259,6 +270,9 @@ async function maybeCheckOrders(row, now) {
     } else {
       log = pushLog(log, '⚠ ' + fresh.length + ' orden(es) nueva(s) pero el bot no tiene Telegram configurado', 'warn');
     }
+    await sendPush(row.user_id, '🟢 Nueva orden P2P',
+      'Cantidad: ' + (amt ? amt.toFixed(2) : '?') + ' USDT · Total: ' + (total ? total.toFixed(2) : '?') + ' Bs · Precio: ' + (price ? price.toFixed(3) : '?') + ' Bs' +
+      (fresh.length > 1 ? ' (+' + (fresh.length - 1) + ' más)' : '')).catch(() => {});
   }
   return { known: newKnown, checkedAt, log };
 }
@@ -326,7 +340,7 @@ export default async function handler(req, res) {
 
     // Monitor server-side (alertas Telegram 24/7 con silencio nocturno)
     const mrows = await sql`
-      SELECT user_id, config, price_hist, cooldowns, hist24, hist_long, last_summary, log, last_tick, client_seen
+      SELECT user_id, config, price_hist, cooldowns, hist24, hist_long, hist_ohlc, last_summary, log, last_tick, client_seen
       FROM monitor_state WHERE enabled = true LIMIT ${MAX_USERS}`;
     let monitored = 0;
     for (const row of mrows) {
@@ -334,7 +348,7 @@ export default async function handler(req, res) {
       try {
         out = await tickMonitor(row, Date.now());
       } catch (e) {
-        out = { priceHist: row.price_hist, cooldowns: row.cooldowns, hist24: row.hist24, histLong: row.hist_long, lastSummary: row.last_summary,
+        out = { priceHist: row.price_hist, cooldowns: row.cooldowns, hist24: row.hist24, histLong: row.hist_long, histOhlc: row.hist_ohlc, lastSummary: row.last_summary,
                 log: pushLog(row.log, 'Error: ' + e.message, 'error'), status: 'Error: ' + e.message };
       }
       if (out === null) continue; // no toca refrescar aun
@@ -344,6 +358,7 @@ export default async function handler(req, res) {
           cooldowns = ${JSON.stringify(out.cooldowns || {})}::jsonb,
           hist24 = ${JSON.stringify(out.hist24 || [])}::jsonb,
           hist_long = ${JSON.stringify(out.histLong || [])}::jsonb,
+          hist_ohlc = ${JSON.stringify(out.histOhlc || {})}::jsonb,
           last_summary = ${out.lastSummary || null},
           log = ${JSON.stringify(out.log || [])}::jsonb,
           status = ${out.status || null},

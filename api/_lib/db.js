@@ -80,5 +80,14 @@ export async function ensureSchema() {
   // Ordenes ya vistas (para notificar ordenes nuevas server-side) + ultima revision.
   await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS known_orders JSONB`;
   await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS orders_checked_at TIMESTAMPTZ`;
+  // Velas OHLC por hora, por metodo de pago: { pay: [{t,o,h,l,c}] }.
+  await sql`ALTER TABLE monitor_state ADD COLUMN IF NOT EXISTS hist_ohlc JSONB`;
+  // Suscripciones Web Push (varias por usuario: una por dispositivo/navegador).
+  await sql`CREATE TABLE IF NOT EXISTS push_subs (
+    endpoint TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sub JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+  )`;
   schemaReady = true;
 }
