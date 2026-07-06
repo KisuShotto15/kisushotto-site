@@ -409,7 +409,7 @@ a { color: inherit; text-decoration: none; }
 /* ── MAIN GRID ──────────────────────────────────────────────────── */
 .main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 3fr) minmax(340px, 2fr);
   gap: 28px;
   margin-bottom: var(--gap-section);
 }
@@ -748,8 +748,8 @@ a { color: inherit; text-decoration: none; }
 .tdee-body { padding: 4px 20px 20px; }
 .tdee-form { display: flex; flex-direction: column; gap: 10px; }
 .tdee-row { display: flex; gap: 10px; flex-wrap: wrap; }
-.tdee-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 100px; }
-.tdee-field--wide { flex: 2; min-width: 100%; }
+.tdee-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 110px; }
+.tdee-field--wide { flex: 1.7; min-width: 170px; }
 .tdee-field label {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -793,7 +793,7 @@ a { color: inherit; text-decoration: none; }
 /* TDEE result chips */
 .tdee-chips {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin: 16px 0 12px;
 }
@@ -807,7 +807,6 @@ a { color: inherit; text-decoration: none; }
   gap: 4px;
 }
 .tdee-chip--accent {
-  grid-column: 1 / -1;
   border-color: rgba(200,241,53,0.45);
   background: linear-gradient(180deg, rgba(200,241,53,0.10), rgba(200,241,53,0.03));
 }
@@ -818,7 +817,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--text);
   letter-spacing: 0.5px;
 }
-.tdee-chip--accent .tdee-chip-val { color: var(--accent); font-size: 44px; }
+.tdee-chip--accent .tdee-chip-val { color: var(--accent); font-size: 36px; }
 .tdee-chip-label {
   font-family: var(--font-mono);
   font-size: 10px;
