@@ -778,8 +778,9 @@ input:focus {
 <div class="top">
   <a href="https://kisushotto.com" class="hub-back" title="Volver al Hub"><svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;border-radius:7px"><rect width="100" height="100" rx="22" fill="#0d0f14"/><line x1="50" y1="12" x2="50" y2="30" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="83" y1="31" x2="67" y2="40" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="83" y1="69" x2="67" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="50" y1="88" x2="50" y2="70" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="17" y1="69" x2="33" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="17" y1="31" x2="33" y2="40" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="50" y1="30" x2="50" y2="70" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="67" y1="40" x2="33" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="33" y1="40" x2="67" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><polygon points="50,30 67,40 67,60 50,70 33,60 33,40" fill="rgba(240,185,11,0.07)" stroke="#f0b90b" stroke-width="2" stroke-linejoin="round"/><polygon points="50,12 83,31 83,69 50,88 17,69 17,31" fill="none" stroke="#f0b90b" stroke-width="2.5" stroke-linejoin="round"/><circle cx="50" cy="50" r="7" fill="none" stroke="#f0b90b" stroke-width="2.2"/><circle cx="50" cy="50" r="3" fill="#f0b90b"/><circle cx="50" cy="12" r="3.5" fill="#f0b90b"/><circle cx="83" cy="31" r="3.5" fill="#f0b90b"/><circle cx="83" cy="69" r="3.5" fill="#f0b90b"/><circle cx="50" cy="88" r="3.5" fill="#f0b90b"/><circle cx="17" cy="69" r="3.5" fill="#f0b90b"/><circle cx="17" cy="31" r="3.5" fill="#f0b90b"/></svg></a>
   <h1>P2P Monitor</h1>
-  <span class="nav-pair" style="font-size:16px;color:var(--text-3);font-weight:500">VES/USDT</span>
+  <span class="nav-pair" id="nav-pair" style="font-size:16px;color:var(--text-3);font-weight:500">VES/USDT</span>
   <div class="top-controls">
+  <select id="fiat-select" class="tag-bank" onchange="setFiat(this.value)" title="Moneda fiat" style="font-family:inherit;cursor:pointer;outline:none"></select>
   <select id="pay-method-select" class="tag-bank" onchange="setPayMethod(this.value)" style="font-family:inherit;cursor:pointer;outline:none"></select>
   <span class="tag-ver" id="ver-toggle" onclick="toggleVerified()" title="Filtrar solo comerciantes verificados"><span class="ver-sw"></span><span class="ver-lbl">Verificados</span></span>
   <span class="badge badge-off" id="live-badge"><span class="dot dot-off" id="live-dot"></span><span id="live-label">Detenido</span></span>
@@ -1107,17 +1108,30 @@ input:focus {
 </div>
 
 <script>
-// ── Métodos de pago ───────────────────────────────────
-var PAY_METHODS = [
-  { id: 'BancoDeVenezuela', label: 'BDV' },
-  { id: 'Provincial',       label: 'Provincial' },
-  { id: 'Mercantil',        label: 'Mercantil' },
-  { id: 'Banesco',          label: 'Banesco' },
-  { id: 'Bancamiga',        label: 'Bancamiga' },
-  { id: 'BNCBancoNacional', label: 'BNC' },
-  { id: 'PagoMovil',        label: 'Pago Móvil' }
-];
+// ── Moneda fiat + métodos de pago por moneda ──────────
+var FIATS = ['VES', 'USD'];
+var ACTIVE_FIAT = 'VES';
+var PAY_METHODS_BY_FIAT = {
+  VES: [
+    { id: 'BancoDeVenezuela', label: 'BDV' },
+    { id: 'Provincial',       label: 'Provincial' },
+    { id: 'Mercantil',        label: 'Mercantil' },
+    { id: 'Banesco',          label: 'Banesco' },
+    { id: 'Bancamiga',        label: 'Bancamiga' },
+    { id: 'BNCBancoNacional', label: 'BNC' },
+    { id: 'PagoMovil',        label: 'Pago Móvil' }
+  ],
+  USD: [
+    { id: 'Zinli',     label: 'Zinli' },
+    { id: 'WallyTech', label: 'Wally Tech' },
+    { id: 'Zelle',     label: 'Zelle' }
+  ]
+};
+var PAY_METHODS = PAY_METHODS_BY_FIAT.VES; // lista activa (segun ACTIVE_FIAT)
+var PAY_SEL = { VES: 'BancoDeVenezuela', USD: 'Zinli' }; // ultimo metodo elegido por moneda
 var ACTIVE_PAY = 'BancoDeVenezuela';
+// Sufijo de moneda para los displays del monitor (el bot es siempre VES/Bs)
+function fiatSuf() { return ACTIVE_FIAT === 'VES' ? ' Bs' : ' $'; }
 // Identifiers genéricos (catch-all) que NO deben usarse para filtrar competidores
 // BANK = Bank Transfer (legítimo, lo usa el usuario junto a BDV) → no se filtra
 var GENERIC_PAY_IDS = ['OtherPayments', 'SpecificBank'];
@@ -1131,18 +1145,17 @@ var PAY_ALIASES = {
 
 function payLabel(id) {
   var canonical = PAY_ALIASES[id] || id;
-  for (var i = 0; i < PAY_METHODS.length; i++) {
-    if (PAY_METHODS[i].id === canonical) return PAY_METHODS[i].label;
+  for (var f in PAY_METHODS_BY_FIAT) {
+    var list = PAY_METHODS_BY_FIAT[f];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === canonical) return list[i].label;
+    }
   }
   if (canonical === 'BANK') return 'Bank Transfer';
   return id;
 }
 
-function loadPayMethod() {
-  try {
-    var saved = localStorage.getItem('p2p_pay_method');
-    if (saved && PAY_METHODS.some(function(m){ return m.id === saved; })) ACTIVE_PAY = saved;
-  } catch(e) {}
+function renderPaySelect() {
   var sel = document.getElementById('pay-method-select');
   if (sel) {
     sel.innerHTML = PAY_METHODS.map(function(m){
@@ -1151,19 +1164,93 @@ function loadPayMethod() {
   }
 }
 
-function setPayMethod(id) {
-  if (id === ACTIVE_PAY) return;
-  // El bot corre server-side con los metodos de SU anuncio: cambiar el selector
-  // del monitor no le afecta, se puede revisar otros metodos con el bot prendido.
-  ACTIVE_PAY = id;
-  // Cada metodo tiene su propia serie: resetear momentum de alertas, max/min de
-  // sesion y puntos locales del metodo anterior para no mezclar precios.
+function renderFiatSelect() {
+  var fs = document.getElementById('fiat-select');
+  if (fs) {
+    fs.innerHTML = FIATS.map(function(f){
+      return '<option value="' + f + '"' + (f === ACTIVE_FIAT ? ' selected' : '') + '>' + f + '</option>';
+    }).join('');
+  }
+  var np = document.getElementById('nav-pair');
+  if (np) np.textContent = ACTIVE_FIAT + '/USDT';
+}
+
+function loadPayMethod() {
+  try {
+    var ps = JSON.parse(localStorage.getItem('p2p_pay_by_fiat') || 'null');
+    if (ps) {
+      Object.assign(PAY_SEL, ps);
+    } else {
+      // Migracion desde la clave legada (solo VES)
+      var saved = localStorage.getItem('p2p_pay_method');
+      if (saved && PAY_METHODS_BY_FIAT.VES.some(function(m){ return m.id === saved; })) PAY_SEL.VES = saved;
+    }
+    var f = localStorage.getItem('p2p_fiat');
+    if (f && PAY_METHODS_BY_FIAT[f]) ACTIVE_FIAT = f;
+  } catch(e) {}
+  PAY_METHODS = PAY_METHODS_BY_FIAT[ACTIVE_FIAT];
+  var cur = PAY_SEL[ACTIVE_FIAT];
+  ACTIVE_PAY = PAY_METHODS.some(function(m){ return m.id === cur; }) ? cur : PAY_METHODS[0].id;
+  PAY_SEL[ACTIVE_FIAT] = ACTIVE_PAY;
+  renderPaySelect();
+  renderFiatSelect();
+}
+
+// Reset comun al cambiar de metodo o de moneda: los precios no son comparables
+// entre series distintas (momentum de alertas, cooldowns y max/min de sesion).
+function resetLocalSeries() {
   try {
     ST.priceHist = [];
     COOLDOWN = {};
     BOT.sessMax = null; BOT.sessMin = null;
   } catch(e) {}
-  try { localStorage.setItem('p2p_pay_method', id); } catch(e) {}
+}
+
+function persistPaySel() {
+  try {
+    localStorage.setItem('p2p_pay_by_fiat', JSON.stringify(PAY_SEL));
+    localStorage.setItem('p2p_fiat', ACTIVE_FIAT);
+    if (ACTIVE_FIAT === 'VES') localStorage.setItem('p2p_pay_method', PAY_SEL.VES); // legado
+  } catch(e) {}
+}
+
+function setPayMethod(id) {
+  if (id === ACTIVE_PAY) return;
+  // El bot corre server-side con los metodos de SU anuncio: cambiar el selector
+  // del monitor no le afecta, se puede revisar otros metodos con el bot prendido.
+  ACTIVE_PAY = id;
+  PAY_SEL[ACTIVE_FIAT] = id;
+  resetLocalSeries();
+  persistPaySel();
+  if (typeof fetchOnce === 'function') fetchOnce();
+  saveUserSettings();
+}
+
+// Defaults de los 3 filtros de monto por moneda (USD: sin filtro, orden nativo de Binance)
+var FIAT_FILTER_DEFAULTS = {
+  VES: { may: 2000000, small: 59999, buy: 2000000 },
+  USD: { may: 0, small: 0, buy: 0 }
+};
+
+function setFiat(id) {
+  if (id === ACTIVE_FIAT || !PAY_METHODS_BY_FIAT[id]) return;
+  // Guardar los filtros de la moneda saliente y cargar los de la entrante
+  CFG.fiatFilters = CFG.fiatFilters || {};
+  CFG.fiatFilters[ACTIVE_FIAT] = { may: CFG.mayAmount, small: CFG.smallAmount, buy: CFG.buyAmount };
+  ACTIVE_FIAT = id;
+  var f = CFG.fiatFilters[id] || FIAT_FILTER_DEFAULTS[id];
+  CFG.mayAmount = f.may; CFG.smallAmount = f.small; CFG.buyAmount = f.buy;
+  try { localStorage.setItem('p2p_cfg2', JSON.stringify(CFG)); } catch(e) {}
+  PAY_METHODS = PAY_METHODS_BY_FIAT[id];
+  var cur = PAY_SEL[id];
+  ACTIVE_PAY = PAY_METHODS.some(function(m){ return m.id === cur; }) ? cur : PAY_METHODS[0].id;
+  PAY_SEL[id] = ACTIVE_PAY;
+  renderPaySelect();
+  renderFiatSelect();
+  resetLocalSeries();
+  persistPaySel();
+  syncFilterInputs();
+  if (typeof renderSparkline === 'function') try { renderSparkline(); } catch(e) {}
   if (typeof fetchOnce === 'function') fetchOnce();
   saveUserSettings();
 }
@@ -1225,7 +1312,7 @@ function saveUserSettings() {
   if (!SESSION.token) return;
   clearTimeout(_saveSettingsT);
   _saveSettingsT = setTimeout(function() {
-    var data = { cfg: CFG, bot: BOT_CFG, pay: ACTIVE_PAY };
+    var data = { cfg: CFG, bot: BOT_CFG, pay: PAY_SEL.VES, paySel: PAY_SEL, fiat: ACTIVE_FIAT };
     botCallWorker('/settings-save', { data: data }).catch(function(){});
   }, 800);
 }
@@ -1239,6 +1326,8 @@ async function loadUserSettings() {
     if (s.cfg) localStorage.setItem('p2p_cfg2', JSON.stringify(s.cfg));
     if (s.bot) localStorage.setItem('p2p_bot_cfg', JSON.stringify(s.bot));
     if (s.pay) localStorage.setItem('p2p_pay_method', s.pay);
+    if (s.paySel) localStorage.setItem('p2p_pay_by_fiat', JSON.stringify(s.paySel));
+    if (s.fiat) localStorage.setItem('p2p_fiat', s.fiat);
     // Reusar los loaders existentes para repintar inputs desde localStorage
     loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod();
     updateCommissionLabels(); updateVerToggle(); botUpdateCeiling();
@@ -1423,6 +1512,7 @@ function bncShowForm() {
 }
 
 function botSuggestSell() {
+  if (ACTIVE_FIAT !== 'VES') { toast('Cambia la vista a VES para sugerir (el bot opera en VES)'); return; }
   var ref = ST.buyAds && ST.buyAds[0] ? ST.buyAds[0].price : null;
   if (!ref) { toast('Sin datos de mercado aún'); return; }
   var inp = document.getElementById('cfg-bot-sell');
@@ -1471,7 +1561,7 @@ var COOLDOWN_MS = 5 * 60000;
 function buildSearchBody(opts) {
   var body = {
     asset: 'USDT',
-    fiat: 'VES',
+    fiat: ACTIVE_FIAT,
     merchantCheck: false,
     page: opts.page,
     rows: 20,
@@ -1481,6 +1571,7 @@ function buildSearchBody(opts) {
   // Pre-filtrar verificados en Binance (como el toggle "Solo comerciantes" de su web):
   // paginas llenas de verificados → sin huecos y sin pedir paginas extra.
   if (CFG.verifiedOnly) body.publisherType = 'merchant';
+  if (opts.fiat) body.fiat = opts.fiat; // override (el bot siempre busca en VES)
   if (opts.transAmount && parseFloat(opts.transAmount) > 0) body.transAmount = opts.transAmount;
   return body;
 }
@@ -1533,12 +1624,13 @@ async function searchBatch(bodies) {
   return (d.results || []).map(function(res) { return (res && res.data) || []; });
 }
 
+// Solo lo usa el bot (reprice inicial): SIEMPRE mercado VES, sin importar la vista.
 async function fetchTier(transAmount, maxPages, payTypesOverride) {
   maxPages = maxPages || 2;
-  var pays = (payTypesOverride && payTypesOverride.length) ? payTypesOverride : [ACTIVE_PAY];
+  var pays = (payTypesOverride && payTypesOverride.length) ? payTypesOverride : [PAY_SEL.VES];
   var bodies = [];
   for (var i = 1; i <= maxPages; i++) {
-    bodies.push(buildSearchBody({ transAmount: transAmount, page: i, pays: pays, tradeType: 'SELL' }));
+    bodies.push(buildSearchBody({ transAmount: transAmount, page: i, pays: pays, tradeType: 'SELL', fiat: 'VES' }));
   }
   var results = await searchBatch(bodies);
   return results.flatMap(function(arr) { return arr; });
@@ -1812,8 +1904,8 @@ function updateSessionStats() {
   if (bestMay === null) return;
   if (BOT.sessMax === null || bestMay > BOT.sessMax) BOT.sessMax = bestMay;
   if (BOT.sessMin === null || bestMay < BOT.sessMin) BOT.sessMin = bestMay;
-  document.getElementById('sess-max').textContent = fmt(BOT.sessMax) + ' Bs';
-  document.getElementById('sess-min').textContent = fmt(BOT.sessMin) + ' Bs';
+  document.getElementById('sess-max').textContent = fmt(BOT.sessMax) + fiatSuf();
+  document.getElementById('sess-min').textContent = fmt(BOT.sessMin) + fiatSuf();
 }
 
 function updateTopbarBotPrice(price) {
@@ -1843,8 +1935,8 @@ function renderSpreadHero() {
     return;
   }
 
-  document.getElementById('hero-may').textContent   = fmt(bestMay)   + ' Bs';
-  document.getElementById('hero-small').textContent = bestSmall ? fmt(bestSmall) + ' Bs' : '—';
+  document.getElementById('hero-may').textContent   = fmt(bestMay)   + fiatSuf();
+  document.getElementById('hero-small').textContent = bestSmall ? fmt(bestSmall) + fiatSuf() : '—';
 
   if (!bestSmall) {
     document.getElementById('hero-pct').textContent   = '—';
@@ -1868,17 +1960,17 @@ function renderSpreadHero() {
 
   if (spreadNet <= 0) {
     pct.style.color = 'var(--red)';
-    document.getElementById('hero-label').textContent = (spread <= 0 ? 'Mercado invertido' : 'Comisión supera el spread') + '  ·  Dif: ' + fmt(spreadBs) + ' Bs/USDT';
+    document.getElementById('hero-label').textContent = (spread <= 0 ? 'Mercado invertido' : 'Comisión supera el spread') + '  ·  Dif: ' + fmt(spreadBs) + fiatSuf() + '/USDT';
     pill.className = 'sh-pill opp-warn';
     pill.textContent = '⚠ Neto negativo';
   } else if (spreadNet >= threshold) {
     pct.style.color = 'var(--gold)';
-    document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + ' Bs/USDT' + commNote;
+    document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + fiatSuf() + '/USDT' + commNote;
     pill.className = 'sh-pill opp-yes';
     pill.textContent = '🟡 NETO > ' + threshold + '% — OPORTUNIDAD';
   } else {
     pct.style.color = 'var(--text-2)';
-    document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + ' Bs/USDT' + commNote;
+    document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + fiatSuf() + '/USDT' + commNote;
     pill.className = 'sh-pill opp-no';
     pill.textContent = 'Neto por debajo del umbral';
   }
@@ -1889,12 +1981,12 @@ function renderStats() {
   var bestMay   = cMayS   ? cMayS.price   : null;
   var bestSmall = cSmallS ? cSmallS.price : null;
 
-  document.getElementById('st-best').textContent  = bestMay   ? fmt(bestMay)   + ' Bs' : '—';
+  document.getElementById('st-best').textContent  = bestMay   ? fmt(bestMay)   + fiatSuf() : '—';
   document.getElementById('st-count').textContent = ST.mayoristas.length;
 
   if (bestMay && bestSmall) {
     var diff = bestMay - bestSmall;
-    document.getElementById('st-diff').textContent = fmt(diff) + ' Bs';
+    document.getElementById('st-diff').textContent = fmt(diff) + fiatSuf();
   } else {
     document.getElementById('st-diff').textContent = '—';
   }
@@ -2058,12 +2150,12 @@ function renderBuySpread() {
   netEl.className   = 'bs-val' + (isGood ? '' : ' bs-red');
   netEl.style.color = '';
 
-  if (sellEff) sellEff.textContent = fmt(effectiveSell) + ' Bs';
-  if (sellRef) sellRef.textContent = fmt(sellPrice) + ' Bs';
-  if (buyRef)  buyRef.textContent  = fmt(buyPrice)  + ' Bs';
+  if (sellEff) sellEff.textContent = fmt(effectiveSell) + fiatSuf();
+  if (sellRef) sellRef.textContent = fmt(sellPrice) + fiatSuf();
+  if (buyRef)  buyRef.textContent  = fmt(buyPrice)  + fiatSuf();
 
   var absEl = document.getElementById('bs-net-abs');
-  if (absEl) absEl.textContent = '≈ ' + fmt(netAbs) + ' Bs/USDT';
+  if (absEl) absEl.textContent = '≈ ' + fmt(netAbs) + fiatSuf() + '/USDT';
   var pill = document.getElementById('bs-pill');
   if (pill) {
     pill.className = 'bsc-pill';
@@ -2096,9 +2188,9 @@ function checkAlerts() {
         COOLDOWN.spread = now;
         addAlert('spread',
           '💰 Spread ' + spread.toFixed(3) + '%' + netLabel + ' — OPORTUNIDAD',
-          'Mayorista: ' + fmt(bestMay) + ' Bs (' + esc(cMay.merchant) + ') → Compra: ' + fmt(bestSmall) + ' Bs · Dif: ' + fmt(bestMay - bestSmall) + ' Bs/USDT'
+          'Mayorista: ' + fmt(bestMay) + fiatSuf() + ' (' + esc(cMay.merchant) + ') → Compra: ' + fmt(bestSmall) + fiatSuf() + ' · Dif: ' + fmt(bestMay - bestSmall) + fiatSuf() + '/USDT'
         );
-        push('Spread P2P ' + spread.toFixed(3) + '%', 'Vende a ' + fmt(bestMay) + ' Bs — compra ref. ' + fmt(bestSmall) + ' Bs');
+        push('Spread P2P ' + spread.toFixed(3) + '%', 'Vende a ' + fmt(bestMay) + fiatSuf() + ' — compra ref. ' + fmt(bestSmall) + fiatSuf());
       }
     }
   }
@@ -2116,7 +2208,7 @@ function checkAlerts() {
       if (chg > CFG.overboughtThr) {
         if (!COOLDOWN.ob || now - COOLDOWN.ob > COOLDOWN_MS) {
           COOLDOWN.ob = now;
-          addAlert('overbought', '🔴 Mercado sobrecomprado', '+' + chg.toFixed(3) + '% en 10 min · Precio actual: ' + fmt(bestMay) + ' Bs');
+          addAlert('overbought', '🔴 Mercado sobrecomprado', '+' + chg.toFixed(3) + '% en 10 min · Precio actual: ' + fmt(bestMay) + fiatSuf());
           push('Sobrecomprado P2P', '+' + chg.toFixed(3) + '% en 10 min');
         }
       } else { COOLDOWN.ob = 0; }
@@ -2124,7 +2216,7 @@ function checkAlerts() {
       if (chg < -CFG.weaknessThr) {
         if (!COOLDOWN.wk || now - COOLDOWN.wk > COOLDOWN_MS) {
           COOLDOWN.wk = now;
-          addAlert('weakness', '🔵 Debilidad en el mercado', chg.toFixed(3) + '% en 10 min · Precio actual: ' + fmt(bestMay) + ' Bs');
+          addAlert('weakness', '🔵 Debilidad en el mercado', chg.toFixed(3) + '% en 10 min · Precio actual: ' + fmt(bestMay) + fiatSuf());
           push('Debilidad P2P', chg.toFixed(3) + '% en 10 min');
         }
       } else { COOLDOWN.wk = 0; }
@@ -2150,7 +2242,7 @@ function checkAlerts() {
           var upT = chg60 > 0;
           addAlert(upT ? 'overbought' : 'weakness',
             upT ? '📈 Tendencia alcista sostenida' : '📉 Tendencia bajista sostenida',
-            (upT ? '+' : '') + chg60.toFixed(2) + '% en 1h · Precio actual: ' + fmt(bestMay) + ' Bs');
+            (upT ? '+' : '') + chg60.toFixed(2) + '% en 1h · Precio actual: ' + fmt(bestMay) + fiatSuf());
           push('Tendencia P2P', (upT ? '+' : '') + chg60.toFixed(2) + '% en 1h');
         }
       } else { COOLDOWN.tr = 0; }
@@ -2657,11 +2749,13 @@ async function botInitialCycle(allowPaused) {
           break;
         }
       }
-      if (primary && primary !== ACTIVE_PAY) {
+      // Auto-sync del selector solo en vista VES (el anuncio del bot es VES;
+      // si estas revisando USD no hay que tocarte la vista).
+      if (ACTIVE_FIAT === 'VES' && primary && primary !== ACTIVE_PAY) {
         ACTIVE_PAY = primary;
-        // Mismo reset que setPayMethod: no mezclar precios de metodos distintos
-        ST.priceHist = []; COOLDOWN = {}; BOT.sessMax = null; BOT.sessMin = null;
-        try { localStorage.setItem('p2p_pay_method', primary); } catch(e) {}
+        PAY_SEL.VES = primary;
+        resetLocalSeries();
+        persistPaySel();
         var sel = document.getElementById('pay-method-select');
         if (sel) sel.value = primary;
         botLog('🔄 Selector ajustado → ' + payLabel(primary), '#8b949e');
@@ -2733,7 +2827,7 @@ function botServerConfig() {
     myNick: BOT_CFG.myNick || BOT.myNick || '',
     commission: CFG.commission || 0,
     verifiedOnly: CFG.verifiedOnly !== false,
-    payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [ACTIVE_PAY],
+    payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [PAY_SEL.VES],
     tg: { token: TG.token, chatId: TG.chatId }
   };
 }
@@ -3031,7 +3125,7 @@ function renderSparkline() {
     '<circle cx="' + X(min.ts).toFixed(1) + '" cy="' + Y(min.price).toFixed(1) + '" r="2.4" fill="#f6465d"/>' +
     '<circle cx="' + xL.toFixed(1) + '" cy="' + Y(close).toFixed(1) + '" r="3" fill="' + col + '"/>';
   document.getElementById('spark-range').innerHTML =
-    '<span style="color:' + col + '">' + fmt(close) + ' Bs (' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%)</span>' +
+    '<span style="color:' + col + '">' + fmt(close) + fiatSuf() + ' (' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%)</span>' +
     ' <span style="color:var(--text-3);font-weight:400">· ' + fmt(min.price) + '–' + fmt(max.price) + '</span>';
 }
 window.addEventListener('resize', function() { try { renderSparkline(); } catch(e) {} try { if (HX.open) hxDraw(); } catch(e) {} });
@@ -3090,12 +3184,12 @@ function hxStats(pts) {
   var open = pts[0].price, close = pts[pts.length - 1].price, min = pts[0].price, max = pts[0].price;
   pts.forEach(function(p) { if (p.price < min) min = p.price; if (p.price > max) max = p.price; });
   var chg = open ? (close - open) / open * 100 : 0;
-  document.getElementById('hx-cur').textContent = fmt(close) + ' Bs';
+  document.getElementById('hx-cur').textContent = fmt(close) + fiatSuf();
   var chgEl = document.getElementById('hx-chg');
   chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
   chgEl.style.color = close >= open ? 'var(--green)' : 'var(--red)';
-  document.getElementById('hx-min').textContent = fmt(min) + ' Bs';
-  document.getElementById('hx-max').textContent = fmt(max) + ' Bs';
+  document.getElementById('hx-min').textContent = fmt(min) + fiatSuf();
+  document.getElementById('hx-max').textContent = fmt(max) + fiatSuf();
 }
 function hxRenderRanges() {
   var wrap = document.getElementById('hx-ranges');
@@ -3198,7 +3292,7 @@ function hxDraw() {
     ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(fmt(curPrice), 4, cy);
     // Caja tooltip (precio/fecha del dato mas cercano), cerca del cursor
-    var l1 = fmt(bp.price) + ' Bs', l2 = hxFullLabel(bp.ts);
+    var l1 = fmt(bp.price) + fiatSuf(), l2 = hxFullLabel(bp.ts);
     ctx.font = '600 12px -apple-system, sans-serif';
     var tw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 16;
     var th = 36, bx = cx + 12, by = cy - th - 12;
@@ -3264,6 +3358,9 @@ function refreshHist24() {
 // Latido: avisa al servidor que la app esta abierta y refrescando, para que NO duplique
 // la busqueda ni las alertas mientras tanto. Throttle ~30s.
 function monitorHeartbeat() {
+  // USD es solo vista local: sin latido, el servidor sigue vigilando VES 24/7
+  // y los precios USD no contaminan las series del servidor.
+  if (ACTIVE_FIAT !== 'VES') return;
   if (!MON24.enabled || !SESSION.token) return;
   var now = Date.now();
   if (now - MON24.lastHb < 28000) return;
@@ -3295,6 +3392,8 @@ function monitorServerConfig() {
 
 // Encender/apagar el monitor server-side (lo dispara el boton Iniciar, no un boton aparte).
 async function monitorServerEnable() {
+  // El 24/7 del servidor es solo VES; en USD no tocar su config (vista local).
+  if (ACTIVE_FIAT !== 'VES') { renderMon24('USD: solo vista local (24/7 sigue en VES)'); return; }
   if (!SESSION.token) { renderMon24(); return; }
   if (!TG.token || !TG.chatId) { MON24.enabled = false; renderMon24('Sin Telegram — solo vista local'); return; }
   try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; MON24.lastHb = Date.now(); botCallWorker('/monitor-heartbeat').catch(function(){}); renderMon24('Corriendo en el servidor'); }
@@ -3346,7 +3445,7 @@ function saveConfig() {
   botUpdateCeiling();
   fetchOnce();
   saveUserSettings();
-  if (MON24.enabled) { botCallWorker('/monitor-enable', { config: monitorServerConfig() }).catch(function(){}); }
+  if (MON24.enabled && ACTIVE_FIAT === 'VES') { botCallWorker('/monitor-enable', { config: monitorServerConfig() }).catch(function(){}); }
   toast('Guardado');
 }
 
