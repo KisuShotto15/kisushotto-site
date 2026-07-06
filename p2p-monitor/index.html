@@ -850,11 +850,11 @@ input:focus {
         </div>
         <!-- Sesión -->
         <div class="hero-metric">
-          <div class="hm-label">Máx sesión</div>
+          <div class="hm-label">Máx 24h</div>
           <div class="sc-v g" id="sess-max" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
         <div class="hero-metric">
-          <div class="hm-label">Mín sesión</div>
+          <div class="hm-label">Mín 24h</div>
           <div class="sc-v" id="sess-min" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
       </div>
@@ -1202,7 +1202,6 @@ function resetLocalSeries() {
   try {
     ST.priceHist = [];
     COOLDOWN = {};
-    BOT.sessMax = null; BOT.sessMin = null;
   } catch(e) {}
 }
 
@@ -1898,14 +1897,23 @@ function renderAll() {
 }
 
 function updateSessionStats() {
-  // Solo el mejor mayorista CREIBLE (>=2000 USDT) define el max/min de sesión,
-  // igual que gráfico y alertas (un listing fantasma no infla la sesión).
-  var bestMay = bestCredibleMay();
-  if (bestMay === null) return;
-  if (BOT.sessMax === null || bestMay > BOT.sessMax) BOT.sessMax = bestMay;
-  if (BOT.sessMin === null || bestMay < BOT.sessMin) BOT.sessMin = bestMay;
-  document.getElementById('sess-max').textContent = fmt(BOT.sessMax) + fiatSuf();
-  document.getElementById('sess-min').textContent = fmt(BOT.sessMin) + fiatSuf();
+  // Max/min de las ULTIMAS 24H: misma fuente y ventana que el resumen diario de
+  // Telegram (serie del servidor + puntos vivos), sobrevive recargas de pagina.
+  var pts = sparkSeries();
+  var now = Date.now(), min = null, max = null;
+  for (var i = 0; i < pts.length; i++) {
+    if (now - pts[i].ts > 24 * 3600e3) continue;
+    if (min === null || pts[i].price < min) min = pts[i].price;
+    if (max === null || pts[i].price > max) max = pts[i].price;
+  }
+  // Incluir el precio creible actual aunque aun no haya entrado a la serie
+  var cur = bestCredibleMay();
+  if (cur) {
+    if (min === null || cur < min) min = cur;
+    if (max === null || cur > max) max = cur;
+  }
+  document.getElementById('sess-max').textContent = max !== null ? fmt(max) + fiatSuf() : '—';
+  document.getElementById('sess-min').textContent = min !== null ? fmt(min) + fiatSuf() : '—';
 }
 
 function updateTopbarBotPrice(price) {
@@ -2454,8 +2462,6 @@ var BOT = {
   lastReprice: 0,
   cycles: 0,
   appliedMinLimit: 0,
-  sessMax: null,
-  sessMin: null,
   cachedAd: null,
   cachedAdAt: 0,
   adPayTypes: []
