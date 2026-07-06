@@ -351,6 +351,14 @@ function renderTDEEResults() {
   const tdee   = calcTDEE(bmr, t.activity);
   const target = calcTarget(tdee, t.goal, t.goalPct);
   const label  = t.goal === 'deficit' ? 'Déficit' : t.goal === 'surplus' ? 'Volumen' : 'Mantenimiento';
+  const h2  = (t.height / 100) ** 2;
+  const bmi = t.weight / h2;
+  let bmiCat, bmiStatus, bmiAdjust;
+  if (bmi < 18.5)      { bmiCat = 'Bajo peso';  bmiStatus = 'low';  bmiAdjust = `Te faltan ${(18.5 * h2 - t.weight).toFixed(1)} kg para el rango normal`; }
+  else if (bmi < 25)   { bmiCat = 'Normal';     bmiStatus = 'ok';   bmiAdjust = `Margen: ${(t.weight - 18.5 * h2).toFixed(1)} kg sobre el minimo · ${(24.9 * h2 - t.weight).toFixed(1)} kg bajo el maximo`; }
+  else if (bmi < 30)   { bmiCat = 'Sobrepeso';  bmiStatus = 'high'; bmiAdjust = `Te sobran ${(t.weight - 24.9 * h2).toFixed(1)} kg para el rango normal`; }
+  else                 { bmiCat = 'Obesidad';   bmiStatus = 'high'; bmiAdjust = `Te sobran ${(t.weight - 24.9 * h2).toFixed(1)} kg para el rango normal`; }
+  const bmiPos = Math.min(100, Math.max(0, (bmi - 14) / (36 - 14) * 100));
   el.innerHTML = `
     <div class="tdee-chips">
       <div class="tdee-chip">
@@ -365,6 +373,21 @@ function renderTDEEResults() {
         <div class="tdee-chip-val">${target}</div>
         <div class="tdee-chip-label">Target · ${label}</div>
       </div>
+    </div>
+    <div class="bmi-block" data-bmi="${bmiStatus}">
+      <div class="bmi-head">
+        <span class="bmi-label">BMI</span>
+        <span class="bmi-val">${bmi.toFixed(1)}</span>
+        <span class="bmi-cat">${bmiCat}</span>
+      </div>
+      <div class="bmi-scale">
+        <div class="bmi-seg bmi-seg--low"></div>
+        <div class="bmi-seg bmi-seg--ok"></div>
+        <div class="bmi-seg bmi-seg--over"></div>
+        <div class="bmi-seg bmi-seg--obese"></div>
+        <div class="bmi-marker" style="left:${bmiPos}%"></div>
+      </div>
+      <div class="bmi-adjust">${bmiAdjust}</div>
     </div>
     <button class="btn-accent" onclick="window._applyTDEE(${target})">Aplicar al plan ↗</button>`;
 }

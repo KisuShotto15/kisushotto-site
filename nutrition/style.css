@@ -829,6 +829,77 @@ a { color: inherit; text-decoration: none; }
 }
 .tdee-chip--accent .tdee-chip-label { color: var(--accent); }
 
+/* ── BMI ────────────────────────────────────────────────────────── */
+.bmi-block {
+  margin: 14px 0 4px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+.bmi-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.bmi-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.16em;
+  font-weight: 500;
+}
+.bmi-val {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+.bmi-cat {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-left: auto;
+}
+.bmi-block[data-bmi="ok"]   .bmi-cat { color: var(--accent); }
+.bmi-block[data-bmi="low"]  .bmi-cat { color: var(--fat); }
+.bmi-block[data-bmi="high"] .bmi-cat { color: var(--protein); }
+.bmi-scale {
+  position: relative;
+  display: flex;
+  height: 6px;
+  border-radius: 999px;
+  overflow: visible;
+  margin-bottom: 10px;
+}
+.bmi-seg { height: 100%; opacity: 0.45; }
+.bmi-seg:first-child { border-radius: 999px 0 0 999px; }
+.bmi-seg:last-child  { border-radius: 0 999px 999px 0; }
+.bmi-seg--low   { width: 20.5%; background: var(--fat); }
+.bmi-seg--ok    { width: 29.5%; background: var(--accent); }
+.bmi-seg--over  { width: 22.7%; background: var(--fat); }
+.bmi-seg--obese { width: 27.3%; background: var(--protein); }
+.bmi-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.25);
+}
+.bmi-adjust {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
 /* ── API HINT ───────────────────────────────────────────────────── */
 .api-hint {
   display: flex;
