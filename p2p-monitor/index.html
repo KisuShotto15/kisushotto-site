@@ -3314,22 +3314,27 @@ function hxRenderRanges() {
     wrap.appendChild(b);
   });
 }
-// Velas visibles del rango; agrupa buckets si hay demasiadas (max ~150 en pantalla)
+// Velas del rango, derivadas AL VUELO de la serie de puntos existente (hist24 +
+// hist_long): asi funcionan desde el primer momento con todo el historial ya
+// guardado, sin esperar a que hist_ohlc del servidor se llene hora a hora.
+// Bucket adaptativo por rango para no dibujar cientos de velas apretadas.
 function hxVisibleOhlc() {
-  var r = HX_RANGES.filter(function(x) { return x.id === HX.range; })[0];
-  var all = HX.ohlc || [];
-  var cs = (!r || r.ms === Infinity) ? all.slice() : all.filter(function(k) { return k.t >= Date.now() - r.ms; });
-  var factor = Math.max(1, Math.ceil(cs.length / 150));
-  HX.bucketMs = 3600000 * factor;
-  if (factor <= 1) return cs;
-  var out = [];
-  for (var i = 0; i < cs.length; i += factor) {
-    var g = cs.slice(i, i + factor);
-    var agg = { t: g[0].t, o: g[0].o, h: g[0].h, l: g[0].l, c: g[g.length - 1].c };
-    for (var j = 1; j < g.length; j++) { if (g[j].h > agg.h) agg.h = g[j].h; if (g[j].l < agg.l) agg.l = g[j].l; }
-    out.push(agg);
+  var pts = hxVisible();
+  if (pts.length < 2) { HX.bucketMs = 3600000; return []; }
+  var span = pts[pts.length - 1].ts - pts[0].ts;
+  // Objetivo ~60-150 velas: elegir el bucket estandar mas cercano.
+  var STEPS = [3600000, 2 * 3600000, 4 * 3600000, 6 * 3600000, 12 * 3600000, 24 * 3600000, 3 * 24 * 3600000, 7 * 24 * 3600000];
+  var bMs = STEPS[0];
+  for (var s = 0; s < STEPS.length; s++) { bMs = STEPS[s]; if (span / bMs <= 150) break; }
+  HX.bucketMs = bMs;
+  var buckets = {};
+  for (var i = 0; i < pts.length; i++) {
+    var t = Math.floor(pts[i].ts / bMs) * bMs, p = pts[i].price;
+    var b = buckets[t];
+    if (!b) buckets[t] = { t: t, o: p, h: p, l: p, c: p };
+    else { b.c = p; if (p > b.h) b.h = p; if (p < b.l) b.l = p; }
   }
-  return out;
+  return Object.keys(buckets).map(function(k) { return buckets[k]; }).sort(function(a, b) { return a.t - b.t; });
 }
 // Frame base en modo VELAS (grilla/ejes compartidos con el modo linea)
 function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
@@ -3525,8 +3530,6 @@ async function hxLoad() {
   try {
     var d = await botCallWorker('/monitor-history');
     HX.series = hxMerge(histByPay(d && d.hist_long, ACTIVE_PAY), histByPay(d && d.hist24, ACTIVE_PAY));
-    var ohlc = histByPay(d && d.hist_ohlc, ACTIVE_PAY);
-    HX.ohlc = Array.isArray(ohlc) ? ohlc.slice().sort(function(a, b) { return a.t - b.t; }) : [];
     var cov = document.getElementById('hx-coverage');
     if (cov) cov.textContent = HX.series.length
       ? '· ' + HX.series.length + ' puntos desde ' + hxFullLabel(HX.series[0].ts)
