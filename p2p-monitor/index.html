@@ -1675,6 +1675,7 @@ function mapAds(raw, keepOrder) {
 function mapBuyAds(raw) {
   return raw.map(function(item) {
     return {
+      advNo:   item.adv.advNo,
       price:   parseFloat(item.adv.price),
       minVES:  parseFloat(item.adv.minSingleTransAmount),
       maxVES:  parseFloat(item.adv.maxSingleTransAmount),
@@ -1702,17 +1703,17 @@ function accumAvail(section, ads, prevMap) {
   var present = {};
   var display = {};
   ads.forEach(function(ad) {
-    present[ad.merchant] = true;
-    var ev = acc[ad.merchant] || [];
-    var prev = prevMap[ad.merchant];
+    present[ad.advNo] = true;
+    var ev = acc[ad.advNo] || [];
+    var prev = prevMap[ad.advNo];
     if (prev !== undefined) {
       var delta = ad.avail - prev;
       if (delta !== 0) ev.push({ ts: now, delta: delta });
     }
     ev = ev.filter(function(e){ return now - e.ts < ACCUM_WINDOW_MS; });
-    acc[ad.merchant] = ev;
+    acc[ad.advNo] = ev;
     var sum = ev.reduce(function(s, e){ return s + e.delta; }, 0);
-    if (sum !== 0) display[ad.merchant] = { value: sum };
+    if (sum !== 0) display[ad.advNo] = { value: sum };
   });
   // limpiar merchants que ya no estan en el top
   Object.keys(acc).forEach(function(m){ if (!present[m]) delete acc[m]; });
@@ -1760,13 +1761,13 @@ async function fetchOnce() {
     var buyRaw   = includeBuy ? (batch[MAY_PAGES + SMALL_PAGES] || []) : null;
 
     var prevMayAvail = {};
-    (ST.mayoristas || []).forEach(function(a){ prevMayAvail[a.merchant] = a.avail; });
+    (ST.mayoristas || []).forEach(function(a){ prevMayAvail[a.advNo] = a.avail; });
 
     var prevSmallAvail = {};
-    (ST.smallAds || []).forEach(function(a){ prevSmallAvail[a.merchant] = a.avail; });
+    (ST.smallAds || []).forEach(function(a){ prevSmallAvail[a.advNo] = a.avail; });
 
     var prevBuyAvail = {};
-    (ST.buyAds || []).forEach(function(a){ prevBuyAvail[a.merchant] = a.avail; });
+    (ST.buyAds || []).forEach(function(a){ prevBuyAvail[a.advNo] = a.avail; });
 
     ST.mayoristas = mapAds(mayRaw,   !(CFG.mayAmount   > 0));
     ST.smallAds   = mapAds(smallRaw, !(CFG.smallAmount > 0));
@@ -2061,8 +2062,8 @@ function renderOB(id, ads, bestCls) {
         ? (ad.avail / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
         : Math.round(ad.avail).toLocaleString('es-VE');
       var disp = ST.availDisp && ST.availDisp[id];
-      var arrowHtml = availArrowHtml(disp && disp[ad.merchant]);
-      var popupHtml = availPopupHtml(disp && disp[ad.merchant]);
+      var arrowHtml = availArrowHtml(disp && disp[ad.advNo]);
+      var popupHtml = availPopupHtml(disp && disp[ad.advNo]);
       var meCls = ad.merchant === MY_NICK ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
@@ -2108,8 +2109,8 @@ function renderBuySection(ads) {
         ? (ad.avail / 1000).toLocaleString('es-VE', {maximumFractionDigits: 1}) + 'k'
         : Math.round(ad.avail).toLocaleString('es-VE');
       var disp = ST.availDisp && ST.availDisp['ob-buy'];
-      var arrowHtml = availArrowHtml(disp && disp[ad.merchant]);
-      var popupHtml = availPopupHtml(disp && disp[ad.merchant]);
+      var arrowHtml = availArrowHtml(disp && disp[ad.advNo]);
+      var popupHtml = availPopupHtml(disp && disp[ad.advNo]);
       var meCls = ad.merchant === MY_NICK ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
