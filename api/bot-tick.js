@@ -91,9 +91,9 @@ async function tickMonitor(row, now) {
 
   const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: row.price_hist, cooldowns: row.cooldowns, now, silent });
   const pay = pays[0] || 'BancoDeVenezuela';
-  // Tasa USDT/VES publica (mediana top-20 mayoristas): la consume el portfolio.
+  // Tasa USDT/VES publica (mediana top-10 mayoristas): la consume el portfolio.
   // Best-effort: un fallo aqui no debe tumbar el tick del monitor.
-  const med = topMedianRate(mayRaw, 20, verifiedOnly);
+  const med = topMedianRate(mayRaw, 10, verifiedOnly);
   if (med) {
     await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${med.rate}, ${med.n}, now())
       ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});

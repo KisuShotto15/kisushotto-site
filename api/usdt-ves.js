@@ -1,4 +1,4 @@
-// Tasa USDT/VES publica: mediana del top-20 de merchants (SELL mayorista).
+// Tasa USDT/VES publica: mediana del top-10 de merchants (SELL mayorista).
 // Fuentes, en orden: (1) p2p_rate fresca (<10 min), escrita por el tick del monitor
 // o el heartbeat del cliente; (2) busqueda publica en vivo (self-serve) que ademas
 // refresca p2p_rate; (3) fila vieja como ultimo recurso. Dato de mercado publico:
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
       // Self-serve: mismo fetch y criba que el monitor (mayorista 2M VES, verificados).
       try {
         const raw = await publicSearch({ transAmount: 2000000, pays: [pay], maxPages: 2, tradeType: 'SELL', verifiedOnly: true });
-        const med = topMedianRate(raw, 20, true);
+        const med = topMedianRate(raw, 10, true);
         if (med) {
           await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${med.rate}, ${med.n}, now())
             ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});

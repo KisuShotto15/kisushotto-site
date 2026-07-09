@@ -3178,14 +3178,14 @@ function credibleBest(a) {
 function credibleMay()   { return credibleBest(ST.mayoristas); }
 function credibleSmall() { return credibleBest(ST.smallAds); }
 function bestCredibleMay() { var m = credibleMay(); return m ? m.price : null; }
-// Mediana del top-20 creible (misma criba que el server: avail >= MIN_AVAIL).
+// Mediana del top-10 creible (misma criba que el server: avail >= MIN_AVAIL).
 // Va en el heartbeat para que p2p_rate siga fresca con la app abierta.
 function medianCredibleMay() {
   var prices = [];
   var a = ST.mayoristas || [];
   for (var i = 0; i < a.length; i++) if (a[i].avail >= MIN_AVAIL) prices.push(a[i].price);
   prices.sort(function(x, y) { return y - x; });
-  prices = prices.slice(0, 20).sort(function(x, y) { return x - y; });
+  prices = prices.slice(0, 10).sort(function(x, y) { return x - y; });
   if (!prices.length) return 0;
   var m = prices.length >> 1;
   return prices.length % 2 ? prices[m] : (prices[m - 1] + prices[m]) / 2;

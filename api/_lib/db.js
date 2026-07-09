@@ -89,7 +89,7 @@ export async function ensureSchema() {
     sub JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
   )`;
-  // Tasa USDT/VES publica (mediana top-20 merchants por metodo de pago), la
+  // Tasa USDT/VES publica (mediana top-10 merchants por metodo de pago), la
   // actualiza cada refresh del monitor y la lee el portfolio via /api/usdt-ves.
   await sql`CREATE TABLE IF NOT EXISTS p2p_rate (
     pay TEXT PRIMARY KEY,
