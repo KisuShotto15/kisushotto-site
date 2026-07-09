@@ -3186,9 +3186,9 @@ function medianCredibleMay() {
   for (var i = 0; i < a.length; i++) if (a[i].avail >= MIN_AVAIL) prices.push(a[i].price);
   prices.sort(function(x, y) { return y - x; });
   prices = prices.slice(0, 10).sort(function(x, y) { return x - y; });
-  if (!prices.length) return 0;
+  if (!prices.length) return { rate: 0, n: 0 };
   var m = prices.length >> 1;
-  return prices.length % 2 ? prices[m] : (prices[m - 1] + prices[m]) / 2;
+  return { rate: prices.length % 2 ? prices[m] : (prices[m - 1] + prices[m]) / 2, n: prices.length };
 }
 
 // HIST24 = series del servidor por metodo de pago { pay: [{ts,price}] }; se completa
@@ -3586,7 +3586,8 @@ function monitorHeartbeat() {
   MON24.lastHb = now;
   // De paso, el precio que ve la app alimenta hist24 en el servidor (sparkline sin huecos de dia).
   var p = bestCredibleMay() || 0;
-  botCallWorker('/monitor-heartbeat', { price: p, pay: ACTIVE_PAY, median: medianCredibleMay() }).catch(function(){});
+  var med = medianCredibleMay();
+  botCallWorker('/monitor-heartbeat', { price: p, pay: ACTIVE_PAY, median: med.rate, medianN: med.n }).catch(function(){});
 }
 
 function monitorServerConfig() {

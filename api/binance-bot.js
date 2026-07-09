@@ -125,9 +125,10 @@ export default async function handler(req, res) {
         // Mediana top-20 que ve el cliente → p2p_rate no se queda vieja mientras la
         // app esta abierta (con app abierta el server no busca). Best-effort.
         const median = Number((params && params.median) || 0);
+        const medianN = Number((params && params.medianN) || 0) || null;
         if (median > 0) {
-          await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${median}, null, now())
-            ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, updated_at = now()`.catch(() => {});
+          await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${median}, ${medianN}, now())
+            ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});
         }
         if (price > 0) {
           const cur = await sql`SELECT hist24, hist_long, hist_ohlc FROM monitor_state WHERE user_id = ${user.uid}`;
