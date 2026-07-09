@@ -82,6 +82,21 @@ function mapBest(raw, verifiedOnly) {
     .sort((a, b) => b.price - a.price);
 }
 
+// Mediana del precio de los primeros N anuncios creibles (misma criba que el
+// grafico: avail >= MIN_AVAIL, verificados segun cfg). Tasa USDT/VES publica que
+// consume el portfolio-tracker via /api/usdt-ves. Mediana > promedio: inmune a
+// un outlier que pase la criba.
+export function topMedianRate(raw, n, verifiedOnly) {
+  const prices = mapBest(raw, verifiedOnly).slice(0, n).map(a => a.price);
+  if (!prices.length) return null;
+  prices.sort((a, b) => a - b);
+  const m = prices.length >> 1;
+  return {
+    rate: prices.length % 2 ? prices[m] : (prices[m - 1] + prices[m]) / 2,
+    n: prices.length,
+  };
+}
+
 export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now, silent }) {
   now = now || Date.now();
   const verifiedOnly = cfg.verifiedOnly !== false;

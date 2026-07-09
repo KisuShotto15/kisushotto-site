@@ -4,7 +4,7 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
-import { computeAlerts, pushHist24Pay, pushHistLongPay, pushOhlcPay, histMap } from './_lib/monitor.js';
+import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, pushOhlcPay, histMap } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
 
@@ -91,6 +91,13 @@ async function tickMonitor(row, now) {
 
   const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: row.price_hist, cooldowns: row.cooldowns, now, silent });
   const pay = pays[0] || 'BancoDeVenezuela';
+  // Tasa USDT/VES publica (mediana top-20 mayoristas): la consume el portfolio.
+  // Best-effort: un fallo aqui no debe tumbar el tick del monitor.
+  const med = topMedianRate(mayRaw, 20, verifiedOnly);
+  if (med) {
+    await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${med.rate}, ${med.n}, now())
+      ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});
+  }
   const hist24 = pushHist24Pay(row.hist24, pay, now, out.bestMay);
   const histLong = pushHistLongPay(row.hist_long, pay, now, out.bestMay);
   const histOhlc = pushOhlcPay(row.hist_ohlc, pay, now, out.bestMay);
