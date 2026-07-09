@@ -1,10 +1,10 @@
 // Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~18s.
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
-import { sql, ensureSchema } from './_lib/db.js';
+import { sql } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
-import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, pushOhlcPay, histMap } from './_lib/monitor.js';
+import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, pushOhlcPay, histMap, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
 
@@ -84,12 +84,19 @@ async function tickMonitor(row, now) {
     RETURNING user_id`;
   if (!claim.length) return null;
 
+  // Columnas pesadas (hist_long/hist_ohlc crecen sin limite) SOLO cuando toca refrescar:
+  // parsearlas en cada tick de 18s era CPU desperdiciada.
+  const hrows = await sql`
+    SELECT price_hist, cooldowns, hist24, hist_long, hist_ohlc, last_summary, log
+    FROM monitor_state WHERE user_id = ${row.user_id}`;
+  const h = hrows[0] || {};
+
   const pays = (cfg.payTypes && cfg.payTypes.length) ? cfg.payTypes : [];
   const verifiedOnly = cfg.verifiedOnly !== false;
   const mayRaw = await publicSearch({ transAmount: cfg.mayAmount || 2000000, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly });
   const smallRaw = await publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 3, tradeType: 'SELL', verifiedOnly });
 
-  const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: row.price_hist, cooldowns: row.cooldowns, now, silent });
+  const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: h.price_hist, cooldowns: h.cooldowns, now, silent });
   const pay = pays[0] || 'BancoDeVenezuela';
   // Tasa USDT/VES publica (mediana top-10 mayoristas): la consume el portfolio.
   // Best-effort: un fallo aqui no debe tumbar el tick del monitor.
@@ -98,11 +105,13 @@ async function tickMonitor(row, now) {
     await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${med.rate}, ${med.n}, now())
       ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});
   }
-  const hist24 = pushHist24Pay(row.hist24, pay, now, out.bestMay);
-  const histLong = pushHistLongPay(row.hist_long, pay, now, out.bestMay);
-  const histOhlc = pushOhlcPay(row.hist_ohlc, pay, now, out.bestMay);
+  const snap24 = histPaySnapshot(h.hist24, pay);
+  const snapLong = histPaySnapshot(h.hist_long, pay);
+  const hist24 = pushHist24Pay(h.hist24, pay, now, out.bestMay);
+  const histLong = pushHistLongPay(h.hist_long, pay, now, out.bestMay);
+  const histOhlc = pushOhlcPay(h.hist_ohlc, pay, now, out.bestMay);
 
-  let log = row.log;
+  let log = h.log;
   let token = '';
   try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
   const chatId = cfg.tg && cfg.tg.chatId;
@@ -116,7 +125,7 @@ async function tickMonitor(row, now) {
   }
 
   // Resumen diario (no depende del silencio nocturno; se manda a la hora configurada)
-  let lastSummary = row.last_summary;
+  let lastSummary = h.last_summary;
   if (shouldSendSummary(cfg.summaryHour, lastSummary, now)) {
     const summary = buildSummary(histMap(hist24)[pay], now);
     if (token && chatId) await sendTelegram(token, chatId, summary);
@@ -133,6 +142,11 @@ async function tickMonitor(row, now) {
     histOhlc,
     lastSummary,
     log,
+    // Solo re-serializar/escribir las series que realmente cambiaron (hist_long solo
+    // suma 1 punto cada 30 min; stringify de anios de datos cada 30s era CPU pura).
+    hist24Changed: histPayChanged(snap24, hist24, pay),
+    histLongChanged: histPayChanged(snapLong, histLong, pay),
+    ohlcChanged: !!out.bestMay,
     status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
   };
 }
@@ -291,7 +305,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    await ensureSchema();
+    // Sin ensureSchema(): el schema ya existe (lo crean los endpoints de auth/app).
+    // Correr ~25 DDLs por cold start cada 18s era costo inutil.
     const rows = await sql`
       SELECT b.user_id, b.enabled, b.config, b.ad_number, b.current_price, b.last_reprice, b.log,
              b.known_orders, b.orders_checked_at,
@@ -345,9 +360,10 @@ export default async function handler(req, res) {
       ticked++;
     }
 
-    // Monitor server-side (alertas Telegram 24/7 con silencio nocturno)
+    // Monitor server-side (alertas Telegram 24/7 con silencio nocturno).
+    // SELECT liviano: las columnas pesadas se leen dentro de tickMonitor solo si toca refrescar.
     const mrows = await sql`
-      SELECT user_id, config, price_hist, cooldowns, hist24, hist_long, hist_ohlc, last_summary, log, last_tick, client_seen
+      SELECT user_id, config, last_tick, client_seen
       FROM monitor_state WHERE enabled = true LIMIT ${MAX_USERS}`;
     let monitored = 0;
     for (const row of mrows) {
@@ -355,17 +371,19 @@ export default async function handler(req, res) {
       try {
         out = await tickMonitor(row, Date.now());
       } catch (e) {
-        out = { priceHist: row.price_hist, cooldowns: row.cooldowns, hist24: row.hist24, histLong: row.hist_long, histOhlc: row.hist_ohlc, lastSummary: row.last_summary,
-                log: pushLog(row.log, 'Error: ' + e.message, 'error'), status: 'Error: ' + e.message };
+        // Solo status: aqui no tenemos los historiales cargados y no hay que pisarlos.
+        await sql`UPDATE monitor_state SET status = ${'Error: ' + e.message}, updated_at = now()
+          WHERE user_id = ${row.user_id}`.catch(() => {});
+        continue;
       }
       if (out === null) continue; // no toca refrescar aun
       await sql`
         UPDATE monitor_state SET
           price_hist = ${JSON.stringify(out.priceHist || [])}::jsonb,
           cooldowns = ${JSON.stringify(out.cooldowns || {})}::jsonb,
-          hist24 = ${JSON.stringify(out.hist24 || [])}::jsonb,
-          hist_long = ${JSON.stringify(out.histLong || [])}::jsonb,
-          hist_ohlc = ${JSON.stringify(out.histOhlc || {})}::jsonb,
+          hist24 = COALESCE(${out.hist24Changed ? JSON.stringify(out.hist24 || []) : null}::jsonb, hist24),
+          hist_long = COALESCE(${out.histLongChanged ? JSON.stringify(out.histLong || []) : null}::jsonb, hist_long),
+          hist_ohlc = COALESCE(${out.ohlcChanged ? JSON.stringify(out.histOhlc || {}) : null}::jsonb, hist_ohlc),
           last_summary = ${out.lastSummary || null},
           log = ${JSON.stringify(out.log || [])}::jsonb,
           status = ${out.status || null},
@@ -374,7 +392,9 @@ export default async function handler(req, res) {
       monitored++;
     }
 
-    return res.status(200).json({ ok: true, ticked, monitored });
+    // bots/monitors: se los lee el scheduler de CF para adaptar la cadencia
+    // (18s con bots, 30s solo-monitor, backoff si no hay nada habilitado).
+    return res.status(200).json({ ok: true, ticked, monitored, bots: rows.length, monitors: mrows.length });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

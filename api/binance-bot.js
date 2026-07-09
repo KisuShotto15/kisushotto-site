@@ -2,10 +2,18 @@ import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
-import { pushHist24Pay, pushHistLongPay, pushOhlcPay } from './_lib/monitor.js';
+import { pushHist24Pay, pushHistLongPay, pushOhlcPay, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
 
 const BINANCE = 'https://api.binance.com';
+
+// Despierta al scheduler de CF (backoff idle de 2 min): asi el primer tick llega
+// enseguida tras habilitar bot/monitor. Best-effort: sin env configurada, no hace nada.
+async function pokeScheduler() {
+  const url = process.env.SCHEDULER_POKE_URL;
+  if (!url) return;
+  await fetch(url, { signal: AbortSignal.timeout(2500) }).catch(() => {});
+}
 
 // Cifra el token TG entrante; si no llega token (otro dispositivo, input vacio),
 // PRESERVA el token_enc ya guardado para no matar las notificaciones 24/7 en silencio.
@@ -70,6 +78,7 @@ export default async function handler(req, res) {
           ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfg}::jsonb, status = 'Iniciando...',
             current_price = NULL, last_reprice = NULL, last_tick = NULL, ad_number = NULL, log = '[]'::jsonb,
             known_orders = NULL, orders_checked_at = NULL, updated_at = now()`;
+        await pokeScheduler();
         return res.status(200).json({ ok: true });
       }
       if (path === '/bot-disable') {
@@ -111,6 +120,7 @@ export default async function handler(req, res) {
         if (prevPay && newPay && prevPay !== newPay) {
           await sql`UPDATE monitor_state SET price_hist = '[]'::jsonb WHERE user_id = ${user.uid}`;
         }
+        await pokeScheduler();
         return res.status(200).json({ ok: true });
       }
       if (path === '/monitor-disable') {
@@ -132,10 +142,18 @@ export default async function handler(req, res) {
         }
         if (price > 0) {
           const cur = await sql`SELECT hist24, hist_long, hist_ohlc FROM monitor_state WHERE user_id = ${user.uid}`;
+          const snap24 = histPaySnapshot(cur[0] && cur[0].hist24, pay);
+          const snapLong = histPaySnapshot(cur[0] && cur[0].hist_long, pay);
           const h = pushHist24Pay(cur[0] ? cur[0].hist24 : null, pay, Date.now(), price);
           const hl = pushHistLongPay(cur[0] ? cur[0].hist_long : null, pay, Date.now(), price);
           const ho = pushOhlcPay(cur[0] ? cur[0].hist_ohlc : null, pay, Date.now(), price);
-          await sql`UPDATE monitor_state SET client_seen = now(), hist24 = ${JSON.stringify(h)}::jsonb, hist_long = ${JSON.stringify(hl)}::jsonb, hist_ohlc = ${JSON.stringify(ho)}::jsonb WHERE user_id = ${user.uid}`;
+          // Re-serializar hist24/hist_long solo si cambiaron (suman 1 punto cada 5/30 min;
+          // stringify de la serie completa en cada latido de ~28s era CPU desperdiciada).
+          await sql`UPDATE monitor_state SET client_seen = now(),
+            hist24 = COALESCE(${histPayChanged(snap24, h, pay) ? JSON.stringify(h) : null}::jsonb, hist24),
+            hist_long = COALESCE(${histPayChanged(snapLong, hl, pay) ? JSON.stringify(hl) : null}::jsonb, hist_long),
+            hist_ohlc = ${JSON.stringify(ho)}::jsonb
+            WHERE user_id = ${user.uid}`;
         } else {
           await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
         }

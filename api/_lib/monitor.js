@@ -45,6 +45,18 @@ export function pushHistLongPay(hist, pay, ts, price) {
   return m;
 }
 
+// Snapshot ANTES del push (pushHist*Pay muta el mapa en sitio) + comparacion despues.
+// Permite saltarse el JSON.stringify + UPDATE de series grandes (hist_long crece sin
+// limite) cuando no cambiaron.
+export function histPaySnapshot(hist, pay) {
+  const a = histMap(hist)[pay] || [];
+  return { len: a.length, lastTs: a.length ? a[a.length - 1].ts : 0 };
+}
+export function histPayChanged(snap, after, pay) {
+  const b = histMap(after)[pay] || [];
+  return snap.len !== b.length || (b.length ? b[b.length - 1].ts : 0) !== snap.lastTs;
+}
+
 // Velas OHLC por HORA, por metodo de pago. Cada observacion de precio (tick del
 // servidor ~30s o latido del cliente ~28s) actualiza la vela de su bucket horario.
 export function pushOhlcPay(hist, pay, ts, price) {
