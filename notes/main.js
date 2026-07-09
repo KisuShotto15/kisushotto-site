@@ -367,8 +367,13 @@ function closeLightbox(fromPopState = false) {
 }
 
 function autoGrow(el) {
+  // Colapsar a 'auto' encoge el textarea un instante; sin esto el navegador
+  // movil re-scrollea .ed-scroll para seguir al caret y la vista salta.
+  const scroller = el.closest('.ed-scroll');
+  const prevScroll = scroller ? scroller.scrollTop : 0;
   el.style.height = 'auto';
   el.style.height = el.scrollHeight + 'px';
+  if (scroller) scroller.scrollTop = prevScroll;
   // On mobile, ensure textarea stays scrollable when it exceeds viewport
   if (window.innerWidth <= 640) {
     el.style.overflow = 'auto';
