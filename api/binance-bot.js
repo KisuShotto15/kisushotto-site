@@ -122,6 +122,13 @@ export default async function handler(req, res) {
         // De paso alimenta hist24 con el precio que ve el cliente, asi el sparkline no queda hueco de dia.
         const price = Number((params && params.price) || 0);
         const pay = (params && params.pay) || 'BancoDeVenezuela';
+        // Mediana top-20 que ve el cliente → p2p_rate no se queda vieja mientras la
+        // app esta abierta (con app abierta el server no busca). Best-effort.
+        const median = Number((params && params.median) || 0);
+        if (median > 0) {
+          await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${median}, null, now())
+            ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, updated_at = now()`.catch(() => {});
+        }
         if (price > 0) {
           const cur = await sql`SELECT hist24, hist_long, hist_ohlc FROM monitor_state WHERE user_id = ${user.uid}`;
           const h = pushHist24Pay(cur[0] ? cur[0].hist24 : null, pay, Date.now(), price);
