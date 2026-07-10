@@ -1,0 +1,33 @@
+name: Deploy P2P Scheduler Worker
+
+# Despliega workers/p2p-bot-scheduler en Cloudflare con wrangler.
+# Token: input manual (cf_token) o secret CLOUDFLARE_API_TOKEN del repo.
+on:
+  workflow_dispatch:
+    inputs:
+      cf_token:
+        description: 'Cloudflare API token (opcional si existe el secret CLOUDFLARE_API_TOKEN)'
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: workers/p2p-bot-scheduler
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ inputs.cf_token || secrets.CLOUDFLARE_API_TOKEN }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Falta cf_token (input) o CLOUDFLARE_API_TOKEN (secret)" >&2
+            exit 1
+          fi
+          npx --yes wrangler@4 deploy
