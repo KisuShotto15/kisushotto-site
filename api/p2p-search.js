@@ -37,6 +37,32 @@ export default async function handler(req, res) {
 
   const BINANCE_URL = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
 
+  // Recorta cada anuncio a los campos que usa la app (misma forma anidada, ~95% menos
+  // bytes). Fast Origin Transfer cuenta cada byte que la funcion devuelve al CDN.
+  function slimItem(it) {
+    if (!it || !it.adv || !it.advertiser) return it;
+    return {
+      adv: {
+        advNo: it.adv.advNo,
+        price: it.adv.price,
+        minSingleTransAmount: it.adv.minSingleTransAmount,
+        maxSingleTransAmount: it.adv.maxSingleTransAmount,
+        tradableQuantity: it.adv.tradableQuantity,
+        tradeMethods: (it.adv.tradeMethods || []).map(m => ({ identifier: m && m.identifier })),
+      },
+      advertiser: {
+        nickName: it.advertiser.nickName,
+        monthOrderCount: it.advertiser.monthOrderCount,
+        monthFinishRate: it.advertiser.monthFinishRate,
+        badges: it.advertiser.badges,
+        vipLevel: it.advertiser.vipLevel,
+      },
+    };
+  }
+  function slimResp(d) {
+    return (d && Array.isArray(d.data)) ? { ...d, data: d.data.map(slimItem) } : d;
+  }
+
   // Lote: { queries: [body1, body2, ...] } → fan-out a Binance, 1 sola invocacion Vercel
   const queries = req.body && req.body.queries;
   if (Array.isArray(queries)) {
@@ -48,7 +74,7 @@ export default async function handler(req, res) {
       }).then(r => r.json())
     ));
     return res.status(200).json({
-      results: settled.map(s => s.status === 'fulfilled' ? s.value : { error: String(s.reason) })
+      results: settled.map(s => s.status === 'fulfilled' ? slimResp(s.value) : { error: String(s.reason) })
     });
   }
 
@@ -59,5 +85,5 @@ export default async function handler(req, res) {
     body: JSON.stringify(req.body),
   });
   const data = await r.json();
-  res.status(r.ok ? 200 : 502).json(data);
+  res.status(r.ok ? 200 : 502).json(slimResp(data));
 }
