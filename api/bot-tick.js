@@ -99,8 +99,8 @@ async function tickMonitor(row, now) {
   const pays = (cfg.payTypes && cfg.payTypes.length) ? cfg.payTypes : [];
   const verifiedOnly = cfg.verifiedOnly !== false;
   const [mayRaw, smallRaw] = await Promise.all([
-    publicSearch({ transAmount: cfg.mayAmount || 2000000, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly }),
-    publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly }),
+    publicSearch({ transAmount: cfg.mayAmount || 2000000, pays, maxPages: 1, tradeType: 'SELL', verifiedOnly }),
+    publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 1, tradeType: 'SELL', verifiedOnly }),
   ]);
 
   const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: h.price_hist, cooldowns: h.cooldowns, now, silent });
