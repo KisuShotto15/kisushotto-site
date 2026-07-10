@@ -60,7 +60,13 @@ export class BotScheduler {
         body: '{}',
       });
       const j = await r.json().catch(() => null);
-      if (j && j.ok) next = j.bots > 0 ? tickMs : (j.monitors > 0 ? monMs : idleMs);
+      if (j && j.ok) {
+        if (j.bots > 0) next = tickMs;
+        // Solo monitor: dormir hasta el proximo refresh (nextSec), acotado
+        // entre MONITOR_TICK_MS y 10 min (de noche el refresh es 180s).
+        else if (j.monitors > 0) next = Math.min(Math.max((j.nextSec || 0) * 1000, monMs), 600000);
+        else next = idleMs;
+      }
     } catch (_) {
       // error de red: reintenta a cadencia base
     }

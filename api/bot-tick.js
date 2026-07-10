@@ -394,7 +394,21 @@ export default async function handler(req, res) {
 
     // bots/monitors: se los lee el scheduler de CF para adaptar la cadencia
     // (18s con bots, 30s solo-monitor, backoff si no hay nada habilitado).
-    return res.status(200).json({ ok: true, ticked, monitored, bots: rows.length, monitors: mrows.length });
+    // nextSec: sin bots, cuando toca el proximo refresh de monitor (de noche
+    // quietRefreshSec=180 → el scheduler duerme 180s en vez de 30s).
+    let nextSec = null;
+    if (!rows.length && mrows.length) {
+      const tnow = Date.now();
+      nextSec = Math.min(...mrows.map(r => {
+        const cfg = r.config || {};
+        const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, tnow);
+        const rs = silent ? (cfg.quietRefreshSec || 180) : (cfg.refreshSec || 30);
+        const elapsed = r.last_tick ? (tnow - new Date(r.last_tick).getTime()) / 1000 : rs;
+        const rem = rs - elapsed;
+        return rem <= 0 ? rs : Math.max(rem, 5); // ya refresco en este tick → espera completa
+      }));
+    }
+    return res.status(200).json({ ok: true, ticked, monitored, bots: rows.length, monitors: mrows.length, nextSec });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
