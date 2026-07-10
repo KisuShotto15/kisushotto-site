@@ -936,7 +936,7 @@ input:focus {
           <div id="mon24-status" style="font-size:11px;color:var(--text-3);margin:0 0 6px"></div>
           <div class="cfg-row"><span>Silencio desde</span><input type="time" id="cfg-mon-qstart" value="00:00" style="width:96px"></div>
           <div class="cfg-row"><span>Silencio hasta</span><input type="time" id="cfg-mon-qend" value="07:00" style="width:96px"></div>
-          <div class="cfg-row"><span>Refresco nocturno (seg)</span><input type="number" id="cfg-mon-qref" value="180" min="60" max="600" step="30"></div>
+          <div class="cfg-row"><span>Refresco nocturno (seg)</span><input type="number" id="cfg-mon-qref" value="300" min="60" max="600" step="30"></div>
           <div class="cfg-row"><span>Resumen diario</span><input type="time" id="cfg-mon-summary" value="08:00" style="width:96px"></div>
           <div style="font-size:11px;color:var(--text-3);margin-top:4px">Al pulsar Iniciar también corre 24/7 en el servidor y avisa por el Telegram del bot (requiere token+chat). De noche silencia las alertas y refresca más lento.</div>
         </details>
@@ -3616,7 +3616,7 @@ function monitorServerConfig() {
     refreshSec: 60, // servidor (app cerrada/oculta): 60s. La vista abierta sigue a CFG.interval (10s).
     quietStart: document.getElementById('cfg-mon-qstart').value || '',
     quietEnd:   document.getElementById('cfg-mon-qend').value   || '',
-    quietRefreshSec: parseInt(document.getElementById('cfg-mon-qref').value) || 180,
+    quietRefreshSec: parseInt(document.getElementById('cfg-mon-qref').value) || 300,
     summaryHour: document.getElementById('cfg-mon-summary').value || '',
     spreadThr: CFG.spreadThr,
     overboughtThr: CFG.overboughtThr,
@@ -3677,7 +3677,7 @@ function saveConfig() {
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
   CFG.monQuietStart = document.getElementById('cfg-mon-qstart').value || '00:00';
   CFG.monQuietEnd   = document.getElementById('cfg-mon-qend').value   || '07:00';
-  CFG.monQuietRef   = parseInt(document.getElementById('cfg-mon-qref').value) || 180;
+  CFG.monQuietRef   = parseInt(document.getElementById('cfg-mon-qref').value) || 300;
   CFG.monSummary    = document.getElementById('cfg-mon-summary').value || '08:00';
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();
