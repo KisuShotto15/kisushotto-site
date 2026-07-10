@@ -10,7 +10,8 @@ const BINANCE = 'https://api.binance.com';
 // Despierta al scheduler de CF (backoff idle de 2 min): asi el primer tick llega
 // enseguida tras habilitar bot/monitor. Best-effort: sin env configurada, no hace nada.
 async function pokeScheduler() {
-  const url = process.env.SCHEDULER_POKE_URL;
+  const url = process.env.SCHEDULER_POKE_URL ||
+    (process.env.SCHEDULER_URL ? process.env.SCHEDULER_URL.replace(/\/$/, '') + '/poke' : '');
   if (!url) return;
   await fetch(url, { signal: AbortSignal.timeout(2500) }).catch(() => {});
 }

@@ -61,19 +61,24 @@ function buildSummary(hist, now) {
     'Rango: ' + (max.price - min.price).toFixed(2) + ' Bs';
 }
 
+// Devuelve un objeto con el resultado del refresh, o un numero = ms hasta que
+// vuelva a tocar trabajo (para que el scheduler espacie la alarma si puede).
 async function tickMonitor(row, now) {
   const cfg = row.config || {};
 
   // Si la app esta abierta y refrescando (latido fresco), el cliente cubre el monitor:
   // el servidor no busca ni alerta (evita duplicar requests a Binance y mensajes Telegram).
   const seenMs = row.client_seen ? now - new Date(row.client_seen).getTime() : Infinity;
-  if (seenMs < 70 * 1000) return null;
+  if (seenMs < 70 * 1000) return 70 * 1000 - seenMs;
 
   const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now);
-  const refreshSec = silent ? (cfg.quietRefreshSec || 180) : (cfg.refreshSec || 30);
+  // Silencio nocturno: sin alertas, pero se busca cada 5 min para no dejar
+  // huecos en el grafico (hist24/OHLC) ni p2p_rate vieja.
+  const refreshSec = silent ? (cfg.quietRefreshSec || 300) : (cfg.refreshSec || 30);
 
   // Respetar la cadencia (el tick base es ~18s; aqui decidimos si toca refrescar).
-  if (row.last_tick && (now - new Date(row.last_tick).getTime()) < refreshSec * 1000) return null;
+  const sinceTick = row.last_tick ? now - new Date(row.last_tick).getTime() : Infinity;
+  if (sinceTick < refreshSec * 1000) return refreshSec * 1000 - sinceTick;
 
   // Claim atomico: si otro tick concurrente ya refresco a este usuario, saltar
   // (evita doble busqueda y doble alerta Telegram).
@@ -82,7 +87,7 @@ async function tickMonitor(row, now) {
     WHERE user_id = ${row.user_id} AND enabled = true
       AND (last_tick IS NULL OR last_tick < now() - interval '25 seconds')
     RETURNING user_id`;
-  if (!claim.length) return null;
+  if (!claim.length) return 25 * 1000;
 
   // Columnas pesadas (hist_long/hist_ohlc crecen sin limite) SOLO cuando toca refrescar:
   // parsearlas en cada tick de 18s era CPU desperdiciada.
@@ -93,8 +98,10 @@ async function tickMonitor(row, now) {
 
   const pays = (cfg.payTypes && cfg.payTypes.length) ? cfg.payTypes : [];
   const verifiedOnly = cfg.verifiedOnly !== false;
-  const mayRaw = await publicSearch({ transAmount: cfg.mayAmount || 2000000, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly });
-  const smallRaw = await publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 3, tradeType: 'SELL', verifiedOnly });
+  const [mayRaw, smallRaw] = await Promise.all([
+    publicSearch({ transAmount: cfg.mayAmount || 2000000, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly }),
+    publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 3, tradeType: 'SELL', verifiedOnly }),
+  ]);
 
   const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: h.price_hist, cooldowns: h.cooldowns, now, silent });
   const pay = pays[0] || 'BancoDeVenezuela';
@@ -148,6 +155,7 @@ async function tickMonitor(row, now) {
     histLongChanged: histPayChanged(snapLong, histLong, pay),
     ohlcChanged: !!out.bestMay,
     status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
+    nextMs: refreshSec * 1000,
   };
 }
 
@@ -366,6 +374,9 @@ export default async function handler(req, res) {
       SELECT user_id, config, last_tick, client_seen
       FROM monitor_state WHERE enabled = true LIMIT ${MAX_USERS}`;
     let monitored = 0;
+    // ms hasta el proximo trabajo real: el scheduler espacia su alarma con esto.
+    // Con bots activos siempre hay trabajo en el proximo tick.
+    let nextMs = rows.length ? 0 : Infinity;
     for (const row of mrows) {
       let out;
       try {
@@ -376,7 +387,8 @@ export default async function handler(req, res) {
           WHERE user_id = ${row.user_id}`.catch(() => {});
         continue;
       }
-      if (out === null) continue; // no toca refrescar aun
+      if (typeof out === 'number') { nextMs = Math.min(nextMs, out); continue; } // no toca refrescar aun
+      nextMs = Math.min(nextMs, out.nextMs || 0);
       await sql`
         UPDATE monitor_state SET
           price_hist = ${JSON.stringify(out.priceHist || [])}::jsonb,
@@ -394,20 +406,10 @@ export default async function handler(req, res) {
 
     // bots/monitors: se los lee el scheduler de CF para adaptar la cadencia
     // (18s con bots, 30s solo-monitor, backoff si no hay nada habilitado).
-    // nextSec: sin bots, cuando toca el proximo refresh de monitor (de noche
-    // quietRefreshSec=180 → el scheduler duerme 180s en vez de 30s).
-    let nextSec = null;
-    if (!rows.length && mrows.length) {
-      const tnow = Date.now();
-      nextSec = Math.min(...mrows.map(r => {
-        const cfg = r.config || {};
-        const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, tnow);
-        const rs = silent ? (cfg.quietRefreshSec || 180) : (cfg.refreshSec || 30);
-        const elapsed = r.last_tick ? (tnow - new Date(r.last_tick).getTime()) / 1000 : rs;
-        const rem = rs - elapsed;
-        return rem <= 0 ? rs : Math.max(rem, 5); // ya refresco en este tick → espera completa
-      }));
-    }
+    // nextSec: sin bots, cuando toca el proximo refresh de monitor. tickMonitor
+    // ya devuelve cuanto falta (incluye silencio nocturno y latido del cliente).
+    const nextSec = (!rows.length && mrows.length && nextMs !== Infinity)
+      ? Math.max(Math.round(nextMs / 1000), 5) : null;
     return res.status(200).json({ ok: true, ticked, monitored, bots: rows.length, monitors: mrows.length, nextSec });
   } catch (e) {
     return res.status(500).json({ error: e.message });

@@ -392,6 +392,14 @@ body {
   text-transform: none;
   color: var(--text-3);
 }
+/* anuncios fetcheados que no caben en los 8 visibles */
+.lbl-extra {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-3);
+  margin-right: auto;
+}
 .lbl-filter input[type=number] {
   width: 86px;
   background: var(--surf-2);
@@ -945,12 +953,12 @@ input:focus {
 
       <div class="ob-grid">
         <div class="ob-side">
-          <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">🏦 Mayoristas</span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="100000" onchange="setFilter('may',this.value)"> VES</span></div>
+          <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">🏦 Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="100000" onchange="setFilter('may',this.value)"> VES</span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
           <div id="ob-may"></div>
         </div>
         <div class="ob-side">
-          <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">📉 BUY</span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="1000" onchange="setFilter('small',this.value)"> VES</span></div>
+          <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">📉 BUY</span><span class="lbl-extra" id="extra-small"></span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="1000" onchange="setFilter('small',this.value)"> VES</span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
           <div id="ob-small"></div>
         </div>
@@ -963,7 +971,7 @@ input:focus {
         </div>
         <div class="buy-section-row" id="buy-section-body">
           <div class="buy-ob-wrap">
-            <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">🟢 SELL</span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
+            <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">🟢 SELL</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
             <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
             <div id="ob-buy"></div>
           </div>
@@ -1688,8 +1696,7 @@ function mapBuyAds(raw) {
     };
   }).filter(function(a) {
     return (!CFG.verifiedOnly || (a.badges && a.badges.length > 0)) && a.maxVES >= CFG.buyAmount;
-  }).sort(function(a, b) { return a.price - b.price; })  // ascendente: más barato primero
-    .slice(0, 8);
+  }).sort(function(a, b) { return a.price - b.price; });  // ascendente: más barato primero
 }
 
 // ── Acumulador de variacion de avail ──────────────────
@@ -1718,6 +1725,15 @@ function accumAvail(section, ads, prevMap) {
   // limpiar merchants que ya no estan en el top
   Object.keys(acc).forEach(function(m){ if (!present[m]) delete acc[m]; });
   return display;
+}
+
+// Indicador +X en el titulo: anuncios fetcheados que no caben en los 8 visibles.
+function setExtraCount(id, fetched) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var extra = fetched - 8;
+  el.textContent = extra > 0 ? '+' + extra : '';
+  el.title = extra > 0 ? fetched + ' anuncios traidos de Binance, 8 visibles' : '';
 }
 
 function availArrowHtml(d) {
@@ -1801,6 +1817,11 @@ async function fetchOnce() {
     }
 
     if (buyRaw !== null) ST.buyAds = mapBuyAds(buyRaw); // colapsada: conservar última data
+
+    // +X en los titulos: candidatos reales (ya filtrados) que no caben en los 8 visibles
+    setExtraCount('extra-may', ST.mayoristas.length);
+    setExtraCount('extra-small', ST.smallAds.length);
+    if (buyRaw !== null) setExtraCount('extra-buy', ST.buyAds.length);
 
     ST.availDisp = ST.availDisp || {};
     ST.availDisp['ob-may']   = accumAvail('ob-may',   ST.mayoristas, prevMayAvail);
@@ -3592,7 +3613,7 @@ function monitorHeartbeat() {
 
 function monitorServerConfig() {
   return {
-    refreshSec: 30, // servidor (app cerrada/oculta): 30s. La vista abierta sigue a CFG.interval (10s).
+    refreshSec: 60, // servidor (app cerrada/oculta): 60s. La vista abierta sigue a CFG.interval (10s).
     quietStart: document.getElementById('cfg-mon-qstart').value || '',
     quietEnd:   document.getElementById('cfg-mon-qend').value   || '',
     quietRefreshSec: parseInt(document.getElementById('cfg-mon-qref').value) || 180,
