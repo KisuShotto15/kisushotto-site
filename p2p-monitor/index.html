@@ -3062,7 +3062,9 @@ var BOT_LOG_COLORS = { up: '#1D9E75', down: '#5dade2', warn: '#F0B90B', error: '
 function startBotPoller() {
   stopBotPoller();
   pollBotState();
-  BOT_POLL.timer = setInterval(pollBotState, 6000);
+  // 15s: el reprice server-side es ~18s, pollear mas rapido solo gastaba invocaciones
+  // Vercel sin ver nada nuevo (era el mayor consumidor con la app abierta).
+  BOT_POLL.timer = setInterval(pollBotState, 15000);
 }
 function stopBotPoller() {
   if (BOT_POLL.timer) { clearInterval(BOT_POLL.timer); BOT_POLL.timer = null; }
