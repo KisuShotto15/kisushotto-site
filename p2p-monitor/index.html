@@ -3187,7 +3187,26 @@ function loadTgConfig() {
 }
 
 // ── Monitor 24/7 (server-side) ────────────────────────
-var MON24 = { enabled: false, lastHb: 0, lastHist: 0 };
+var MON24 = { enabled: false, lastHb: 0, lastHist: 0, lastLogTs: 0 };
+
+// Superficie de errores del monitor server-side: el peor fallo silencioso es
+// "Telegram rechazo el envio" / "API fallo" — el server lo registra pero no puede
+// avisarte por Telegram si Telegram es lo que falla. Lo mostramos en mon24-status.
+// Reusa el poll de /monitor-state (sin requests extra). Primer poll: sembrar sin avisar.
+function surfaceMonitorErrors(d) {
+  if (!d || !Array.isArray(d.log)) return;
+  var newest = 0, lastErr = null;
+  d.log.forEach(function(e) {
+    if (!e || !e.ts) return;
+    if (e.ts > newest) newest = e.ts;
+    if (e.ts > MON24.lastLogTs && (e.level === 'error' || e.level === 'warn')) lastErr = e;
+  });
+  if (MON24.lastLogTs === 0) { MON24.lastLogTs = newest; return; }
+  var st = document.getElementById('mon24-status');
+  if (lastErr && st) { st.textContent = '⚠ Monitor: ' + lastErr.msg; st.style.color = 'var(--red)'; }
+  else if (st && st.style.color) { st.style.color = ''; renderMon24(d.status); } // se resolvio: volver a normal
+  MON24.lastLogTs = Math.max(MON24.lastLogTs, newest);
+}
 
 // ── Sparkline 24h (mejor mayorista) ───────────────────
 // Anuncios CREIBLES: con disponibilidad real (>=2000 USDT, mayorista real). Las listas
@@ -3599,6 +3618,7 @@ function refreshHist24() {
   MON24.lastHist = now;
   botCallWorker('/monitor-state').then(function(d) {
     if (d && d.hist24) { HIST24 = d.hist24; renderSparkline(); }
+    surfaceMonitorErrors(d);
   }).catch(function(){});
 }
 
@@ -3665,6 +3685,7 @@ async function hydrateMon24() {
     MON24.enabled = !!(d && d.enabled);
     if (d && d.hist24) { HIST24 = d.hist24; MON24.lastHist = Date.now(); renderSparkline(); }
     renderMon24(d && d.status);
+    surfaceMonitorErrors(d); // siembra lastLogTs sin avisar errores viejos
     // Si el monitor 24/7 quedo activo, arranca la vista (tablas a CFG.interval) sin pulsar Iniciar.
     if (MON24.enabled && !ST.running) startMonitorView();
   } catch(e) {}
