@@ -8,11 +8,16 @@ BUILD_ID="$(date +%s)"
 
 mkdir -p "$OUT/icons" "$OUT/images"
 
-# App files
-cp p2p-monitor/index.html         "$OUT/index.html"
+# App files (CSS/JS viven en public/p2p-monitor/, extraidos del HTML)
+cp p2p-monitor/index.html            "$OUT/index.html"
+cp public/p2p-monitor/style.css      "$OUT/style.css"
+cp public/p2p-monitor/main.js        "$OUT/main.js"
 
 # Rewrite manifest path: subdomain serves manifest.json at root
 sed -i 's|href="/manifests/p2p-monitor.json"|href="/manifest.json"|g' "$OUT/index.html"
+
+# CSS/JS at root with per-build cache buster
+sed -i "s|/p2p-monitor/style.css?v=[0-9]*|/style.css?v=${BUILD_ID}|; s|/p2p-monitor/main.js?v=[0-9]*|/main.js?v=${BUILD_ID}|" "$OUT/index.html"
 
 # Manifest at root (scope/start_url remapped from /p2p-monitor/ to /)
 node -e "
