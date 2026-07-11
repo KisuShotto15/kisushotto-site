@@ -1896,13 +1896,20 @@ function toggleMonitor() {
 // Pestana oculta: pausa el fetch visual (sin apagar el monitor). Deja de latir → a los ~70s
 // el servidor toma el relevo (notificaciones siguen). Al volver, reanuda y el servidor cede.
 document.addEventListener('visibilitychange', function() {
-  if (!ST.running) return;
   if (document.hidden) {
-    clearInterval(ST.timer); ST.timer = null;
-  } else if (!ST.timer) {
+    // Pestaña oculta: sin UI que actualizar. Pausar los pollers que pegan a la red
+    // (fetch de precios y poller del bot) para no gastar invocaciones Vercel en vano.
+    // El servidor cubre monitor y bot 24/7. ACTIVITY es local + seguridad: no se toca.
+    if (ST.running && ST.timer) { clearInterval(ST.timer); ST.timer = null; }
+    if (BOT.running) stopBotPoller();
+    return;
+  }
+  // Volver a visible: pollear de inmediato y re-armar.
+  if (ST.running && !ST.timer) {
     fetchOnce();
     ST.timer = setInterval(fetchOnce, CFG.interval * 1000);
   }
+  if (BOT.running && !BOT_POLL.timer) startBotPoller();
 });
 
 function setBadge(live) {
