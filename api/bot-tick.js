@@ -261,7 +261,7 @@ async function maybeCheckOrders(row, now) {
   const cfg = row.config || {};
   const key = decrypt({ ct: row.enc_key, iv: row.iv_key, tag: row.tag_key });
   const secret = decrypt({ ct: row.enc_secret, iv: row.iv_secret, tag: row.tag_secret });
-  const { ok, orders, raw } = await listOrders(key, secret, 2 * 3600 * 1000);
+  const { ok, orders, raw } = await listOrders(key, secret, 15 * 60 * 1000);
   const checkedAt = new Date(now).toISOString();
   let log = row.log;
   if (!ok) {
@@ -272,7 +272,7 @@ async function maybeCheckOrders(row, now) {
   const ids = orders.map(o => String(o.orderNumber));
   const prev = Array.isArray(row.known_orders) ? row.known_orders : null;
   if (prev === null) {
-    log = pushLog(log, '🔎 Órdenes: ' + orders.length + ' en historial 2h (sembrado inicial, sin avisar)', 'info');
+    log = pushLog(log, '🔎 Órdenes: ' + orders.length + ' en historial 15min (sembrado inicial, sin avisar)', 'info');
     return { known: ids.slice(0, 50), checkedAt, log };
   }
 
