@@ -145,6 +145,8 @@ body {
 }
 .bot-group .cfg-row { border-bottom: 1px solid var(--border); }
 .bot-group .cfg-row:last-child { border-bottom: none; }
+.pay-chk { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none; }
+.pay-chk input { accent-color: var(--gold); cursor: pointer; }
 
 .bot-details {
   background: var(--surf-2);

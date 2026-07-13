@@ -1445,8 +1445,19 @@ var BOT_CFG = {
   sellPrice: 0,
   minSpread: 0.5,
   minLimit: 0,
-  myNick: ''
+  myNick: '',
+  payMethods: [] // ids elegidos para el anuncio (vacio = no tocar sus metodos)
 };
+
+// BDV en la UI = Banco de Venezuela + Bank Transfer (el usuario los usa juntos)
+var BOT_PAY_EXPAND = { BancoDeVenezuela: ['BancoDeVenezuela', 'BANK'] };
+function botExpandPays(ids) {
+  var out = [];
+  (ids || []).forEach(function (id) {
+    (BOT_PAY_EXPAND[id] || [id]).forEach(function (x) { if (out.indexOf(x) === -1) out.push(x); });
+  });
+  return out;
+}
 
 function stepInput(id, dir) {
   const el = document.getElementById(id);
@@ -1468,6 +1479,7 @@ function saveBotConfig() {
   BOT_CFG.sellPrice      = parseFloat(document.getElementById('cfg-bot-sell').value)    || 0;
   BOT_CFG.minSpread      = parseFloat(document.getElementById('cfg-bot-spread').value)  || 0.5;
   BOT_CFG.minLimit       = parseFloat(document.getElementById('cfg-bot-minlimit').value) || 0;
+  BOT_CFG.payMethods     = readBotPayChecks();
   localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
   // Save Telegram from popup inputs
   TG.token  = document.getElementById('cfg-tg-token').value.trim();
@@ -1483,10 +1495,50 @@ function saveBotConfig() {
   saveUserSettings();
 }
 
+// Checkboxes de metodos de pago del anuncio (lista VES; el bot siempre es VES)
+function renderBotPayChecks() {
+  var box = document.getElementById('bot-paymethods');
+  if (!box) return;
+  var sel = BOT_CFG.payMethods || [];
+  box.innerHTML = PAY_METHODS_BY_FIAT.VES.map(function (m) {
+    var on = sel.indexOf(m.id) !== -1 ? ' checked' : '';
+    return '<label class="pay-chk"><input type="checkbox" value="' + m.id + '"' + on + '>' + m.label + '</label>';
+  }).join('');
+}
+function readBotPayChecks() {
+  var box = document.getElementById('bot-paymethods');
+  if (!box) return BOT_CFG.payMethods || [];
+  return Array.prototype.filter.call(box.querySelectorAll('input:checked'), function () { return true; })
+    .map(function (c) { return c.value; });
+}
+async function botApplyMethods(silent) {
+  var ids = readBotPayChecks();
+  var st = document.getElementById('bot-cfg-st');
+  if (!ids.length) { if (!silent && st) { st.textContent = 'Marca al menos un método'; st.style.color = 'var(--red)'; } return false; }
+  var adNo = BOT.adNumber || BOT_CFG.adNo;
+  if (!adNo) { if (!silent && st) { st.textContent = 'Configura el anuncio primero'; st.style.color = 'var(--red)'; } return false; }
+  var pays = botExpandPays(ids);
+  botLog('💳 Aplicando métodos: ' + ids.map(payLabel).join(', '), '#58A6FF');
+  try {
+    var data = await botCallWorker('/update-methods', { advNo: adNo, payTypes: pays });
+    if (data.code && data.code !== '000000') throw new Error(data.msgDetail || data.message || data.msg || 'código ' + data.code);
+    BOT.adPayTypes = pays.filter(function (id) { return GENERIC_PAY_IDS.indexOf(id) === -1; });
+    updateBotPayBadge();
+    BOT.cachedAd = null; BOT.cachedAdAt = 0;
+    botLog('✓ Métodos actualizados en el anuncio', '#1D9E75');
+    if (!silent && st) { st.textContent = '✓ Métodos aplicados'; st.style.color = 'var(--green)'; }
+    return true;
+  } catch (e) {
+    botLog('⚠ No se pudieron aplicar métodos: ' + e.message, '#F6465D');
+    if (!silent && st) { st.textContent = '✗ ' + e.message; st.style.color = 'var(--red)'; }
+    return false;
+  }
+}
+
 function loadBotConfig() {
   try {
     var s = localStorage.getItem('p2p_bot_cfg');
-    if (!s) return;
+    if (!s) { renderBotPayChecks(); return; }
     Object.assign(BOT_CFG, JSON.parse(s));
     BOT_CFG.url = 'https://kisushotto-site.vercel.app/api/binance-bot'; // fija (interna)
     var _sel = document.getElementById('cfg-bot-adsel');
@@ -1501,6 +1553,7 @@ function loadBotConfig() {
     document.getElementById('cfg-bot-sell').value     = BOT_CFG.sellPrice || '';
     document.getElementById('cfg-bot-spread').value   = BOT_CFG.minSpread;
     document.getElementById('cfg-bot-minlimit').value = BOT_CFG.minLimit || '';
+    renderBotPayChecks();
     botUpdateCeiling();
   } catch(e) {}
 }
@@ -1876,6 +1929,12 @@ async function botToggle() {
       } catch(e) {
         botLog('⚠ No se pudo leer el anuncio: ' + e.message, '#F6465D');
       }
+    }
+
+    // 1b. Aplicar métodos de pago elegidos (anuncio aún PAUSADO)
+    if ((BOT_CFG.payMethods || []).length && BOT.adNumber) {
+      botSetStatus('Aplicando métodos...', '#F0B90B');
+      try { await botApplyMethods(true); } catch(e) {}
     }
 
     // 2. Reprice inicial + límite mínimo mientras el anuncio está PAUSADO

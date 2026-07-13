@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=1">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=2">
 </head>
 <body>
 
@@ -349,6 +349,14 @@
       <div class="cfg-row"><span>Límite mínimo (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
       <div class="cfg-row"><span>Margen (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" value="10000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
       </div>
+      <div class="bot-group">
+        <div class="bot-group-h">Métodos de pago del anuncio</div>
+        <div id="bot-paymethods" style="display:flex;flex-wrap:wrap;gap:6px 12px;padding:2px 0 6px"></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-sm" type="button" onclick="botApplyMethods(false)">Aplicar al anuncio ahora</button>
+          <span style="font-size:11px;color:var(--text-3)">se aplican solos al iniciar el bot</span>
+        </div>
+      </div>
       <details class="bot-details">
         <summary>Opciones avanzadas</summary>
         <div class="cfg-row"><span>Incremento (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',-1)">−</button><input type="number" id="cfg-bot-inc" value="0.001" min="0.001" step="0.001"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',1)">+</button></div></div>
@@ -383,7 +391,7 @@
   </div>
 </div>
 
-<script src="/p2p-monitor/main.js?v=1"></script>
+<script src="/p2p-monitor/main.js?v=2"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

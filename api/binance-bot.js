@@ -293,6 +293,41 @@ export default async function handler(req, res) {
       advStatus: ad.advStatus,
     });
     r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
+  } else if (path === '/update-methods') {
+    const { advNo, payTypes } = params || {};
+    if (!advNo || !Array.isArray(payTypes) || !payTypes.length) return res.status(400).json({ error: 'advNo y payTypes requeridos' });
+    const detailParams = `adsNo=${encodeURIComponent(advNo)}&timestamp=${timestamp}`;
+    const detailQs = `${detailParams}&signature=${sign(detailParams)}`;
+    const detailHeaders = { 'X-MBX-APIKEY': key, 'clientType': 'web' };
+    const detailRes = await fetch(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
+    const detail = await detailRes.json();
+    if (!detailRes.ok || !detail.data) return res.status(502).json({ error: 'getDetailByNo failed', detail });
+    const ad = detail.data;
+    const existing = ad.tradeMethods || [];
+    // Reusa el objeto completo (con payId/bind) si el metodo ya esta en el anuncio;
+    // si es nuevo, construye el minimo (anuncio BUY: el comprador paga, no requiere bind).
+    const tradeMethods = payTypes.map(function (id) {
+      const found = existing.find(function (m) { return m && (m.identifier === id || m.payType === id); });
+      return found || { payType: id, identifier: id };
+    });
+    const body = JSON.stringify({
+      advNo: String(advNo),
+      asset: ad.asset,
+      tradeType: ad.tradeType,
+      fiatUnit: ad.fiatUnit,
+      priceType: ad.priceType,
+      price: ad.price,
+      priceFloatingRatio: ad.priceFloatingRatio,
+      initAmount: ad.initAmount,
+      minSingleTransAmount: ad.minSingleTransAmount,
+      maxSingleTransAmount: ad.maxSingleTransAmount,
+      payTimeLimit: ad.payTimeLimit,
+      tradeMethods: tradeMethods,
+      remarks: ad.remarks || '',
+      autoReplyMsg: ad.autoReplyMsg || '',
+      advStatus: ad.advStatus,
+    });
+    r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
   } else if (path === '/toggle-ad') {
     const { advNo, advStatus } = params || {};
     if (!advNo || advStatus == null) return res.status(400).json({ error: 'advNo y advStatus requeridos' });
