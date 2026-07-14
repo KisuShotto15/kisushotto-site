@@ -1,6 +1,15 @@
 // Port puro (sin DOM) del algoritmo de reprice del cliente (botCycle).
 // Entrada: { ad, marketRaw, cfg } → salida: { targetPrice|null, reason, ceiling, currentPrice, myMinLimit, competitors }.
 const GENERIC_PAY_IDS = ['OtherPayments', 'SpecificBank'];
+const EPS = 1e-9; // tolerancia float: el techo (sellPrice * factor) rara vez es exacto en binario
+
+// Techo redondeado a 3 decimales SIN excederlo: toFixed puede redondear hacia
+// arriba (838.9996 → "839.000") y dejar el precio publicado sobre el techo real.
+function capCeil(ceiling) {
+  let c = Number(ceiling.toFixed(3));
+  if (c > ceiling + EPS) c = Number((c - 0.001).toFixed(3));
+  return c;
+}
 
 function mapAds(raw, verifiedOnly) {
   return raw.map(item => ({
@@ -42,15 +51,25 @@ export function computeReprice({ ad, marketRaw, cfg }) {
            a.avail >= 150;
   });
 
-  const above = competitors.filter(a => a.price > currentPrice && a.price <= ceiling);
+  const above = competitors.filter(a => a.price > currentPrice && a.price <= ceiling + EPS);
   const below = competitors.filter(a => a.price < currentPrice);
 
   let targetPrice = null;
   let reason = '';
 
-  if (currentPrice > ceiling) {
-    targetPrice = ceiling;
-    reason = '↓ precio sobre techo → ' + ceiling.toFixed(3);
+  if (currentPrice > ceiling + EPS) {
+    // Sobre el techo: reposicionar contra el mejor competidor valido bajo el techo,
+    // no solo recortar al techo (si no, con un competidor sobre el techo el bot
+    // quedaba pegado al techo ignorando a los de abajo).
+    const belowCeil = competitors.filter(a => a.price <= ceiling + EPS);
+    if (belowCeil.length > 0) {
+      belowCeil.sort((a, b) => b.price - a.price);
+      targetPrice = Math.min(belowCeil[0].price + increment, capCeil(ceiling));
+      reason = '↓ sobre techo, vs ' + belowCeil[0].merchant + ' @ ' + belowCeil[0].price.toFixed(3);
+    } else {
+      targetPrice = capCeil(ceiling);
+      reason = '↓ precio sobre techo → ' + ceiling.toFixed(3);
+    }
   } else if (above.length > 0) {
     const inGap = above.filter(a => (a.price - currentPrice) <= maxGap);
     if (inGap.length > 0) {
@@ -75,8 +94,8 @@ export function computeReprice({ ad, marketRaw, cfg }) {
   if (targetPrice === null) {
     return { targetPrice: null, reason: 'Posición óptima', ceiling, currentPrice, myMinLimit, competitors: competitors.length };
   }
-  if (targetPrice > ceiling) { targetPrice = ceiling; reason += ' [techo]'; }
-  if (Math.abs(targetPrice - currentPrice) < 0.001) {
+  if (targetPrice > ceiling + EPS) { targetPrice = capCeil(ceiling); reason += ' [techo]'; }
+  if (Math.abs(targetPrice - currentPrice) < 0.001 - EPS) {
     return { targetPrice: null, reason: 'Posición óptima', ceiling, currentPrice, myMinLimit, competitors: competitors.length };
   }
   return { targetPrice, reason, ceiling, currentPrice, myMinLimit, competitors: competitors.length };

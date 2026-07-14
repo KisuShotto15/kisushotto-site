@@ -121,6 +121,22 @@ test('comision reduce el techo', () => {
   assert.equal(r.targetPrice, 111.55);
 });
 
+test('sobre techo con competidor arriba del techo → baja al mejor bajo techo', () => {
+  // techo real 838.9996; el precio publicado quedo en 839.000 por redondeo toFixed(3).
+  // Competidor en 840 (sobre techo, se ignora) y en 835 → debe bajar a 835.001,
+  // no quedarse pegado al techo como "posicion optima".
+  const cfg = { ...baseCfg, sellPrice: 856.122, minSpread: 2 }; // techo = 838.99956
+  const market = [rawAd({ price: 840 }), rawAd({ advNo: 'X2', price: 835 })];
+  const r = computeReprice({ ad: myAd({ price: '839.000' }), marketRaw: market, cfg });
+  assert.equal(r.targetPrice, 835.001);
+});
+
+test('sobre techo sin competidores bajo techo → baja al techo sin excederlo', () => {
+  const cfg = { ...baseCfg, sellPrice: 856.122, minSpread: 2 }; // techo = 838.99956
+  const r = computeReprice({ ad: myAd({ price: '839.000' }), marketRaw: [rawAd({ price: 840 })], cfg });
+  assert.equal(r.targetPrice, 838.999); // toFixed daria 839.000 (> techo); se recorta
+});
+
 test('adPayTypes ignora ids genericos', () => {
   const ad = { tradeMethods: [{ identifier: 'BancoDeVenezuela' }, { identifier: 'OtherPayments' }, { identifier: 'SpecificBank' }] };
   assert.deepEqual(adPayTypes(ad), ['BancoDeVenezuela']);
