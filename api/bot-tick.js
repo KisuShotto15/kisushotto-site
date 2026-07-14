@@ -76,8 +76,10 @@ async function tickMonitor(row, now) {
 
   // Si la app esta abierta y refrescando (latido fresco), el cliente cubre el monitor:
   // el servidor no busca ni alerta (evita duplicar requests a Binance y mensajes Telegram).
+  // Ventana 35 min (latido del cliente cada 15 min; 2 perdidos + margen). Ancha a
+  // proposito: mantiene Neon dormida mientras la app esta abierta.
   const seenMs = row.client_seen ? now - new Date(row.client_seen).getTime() : Infinity;
-  if (seenMs < 70 * 1000) return 70 * 1000 - seenMs;
+  if (seenMs < 35 * 60 * 1000) return 35 * 60 * 1000 - seenMs;
 
   const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now);
   // Silencio nocturno: sin alertas; se busca cada 1h (solo para no perder del todo

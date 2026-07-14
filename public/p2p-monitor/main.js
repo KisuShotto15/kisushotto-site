@@ -2543,11 +2543,12 @@ async function hxLoad() {
     hxDraw();
   } catch (e) { hxMsg('Error: ' + e.message); }
 }
-// Refresca la serie de 24h desde el servidor (max 1 vez cada 5 min).
+// Refresca la serie de 24h desde el servidor (max 1 vez cada 15 min, alineado con
+// el latido para despertar Neon una sola vez por ciclo).
 function refreshHist24() {
   if (!SESSION.token) return;
   var now = Date.now();
-  if (now - MON24.lastHist < 5 * 60000) return;
+  if (now - MON24.lastHist < 15 * 60000) return;
   MON24.lastHist = now;
   botCallWorker('/monitor-state').then(function(d) {
     if (d && d.hist24) { HIST24 = d.hist24; renderSparkline(); }
@@ -2563,7 +2564,9 @@ function monitorHeartbeat() {
   if (ACTIVE_FIAT !== 'VES') return;
   if (!MON24.enabled || !SESSION.token) return;
   var now = Date.now();
-  if (now - MON24.lastHb < 28000) return;
+  // 15 min: cada latido despierta Neon ~5 min; a esta cadencia duerme ~2/3 del
+  // tiempo con la app abierta. El servidor toma el relevo a los 35 min sin latido.
+  if (now - MON24.lastHb < 15 * 60 * 1000) return;
   MON24.lastHb = now;
   // De paso, el precio que ve la app alimenta hist24 en el servidor (sparkline sin huecos de dia).
   var p = bestCredibleMay() || 0;
