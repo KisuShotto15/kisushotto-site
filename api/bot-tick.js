@@ -33,6 +33,14 @@ function inQuietHours(start, end, now) {
   if (s === e) return false;
   return s < e ? (cur >= s && cur < e) : (cur >= s || cur < e); // soporta franja nocturna
 }
+// ms hasta que termine la franja de silencio (para no dormir de mas y reanudar
+// alertas puntual en la manana). Asume que now cae dentro del silencio.
+function msUntilQuietEnd(end, now) {
+  const e = hmToMin(end), cur = caracasMinutes(now);
+  let left = (e - cur + 1440) % 1440;
+  if (left === 0) left = 1440;
+  return left * 60000;
+}
 function caracasDateStr(now) {
   return new Date(now - 4 * 3600 * 1000).toISOString().slice(0, 10);
 }
@@ -72,13 +80,17 @@ async function tickMonitor(row, now) {
   if (seenMs < 70 * 1000) return 70 * 1000 - seenMs;
 
   const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now);
-  // Silencio nocturno: sin alertas, pero se busca cada 5 min para no dejar
-  // huecos en el grafico (hist24/OHLC) ni p2p_rate vieja.
-  const refreshSec = silent ? (cfg.quietRefreshSec || 300) : (cfg.refreshSec || 30);
+  // Silencio nocturno: sin alertas; se busca cada 1h (solo para no perder del todo
+  // el grafico) → Neon se suspende casi toda la noche. Piso 3600s aunque el config
+  // guardado tenga un valor menor.
+  const refreshSec = silent ? Math.max(cfg.quietRefreshSec || 3600, 3600) : (cfg.refreshSec || 30);
+  // De noche, no dormir mas alla del fin del silencio (reanuda alertas puntual).
+  const nightCap = silent ? msUntilQuietEnd(cfg.quietEnd, now) : Infinity;
+  const nextMs = Math.min(refreshSec * 1000, nightCap);
 
   // Respetar la cadencia (el tick base es ~18s; aqui decidimos si toca refrescar).
   const sinceTick = row.last_tick ? now - new Date(row.last_tick).getTime() : Infinity;
-  if (sinceTick < refreshSec * 1000) return refreshSec * 1000 - sinceTick;
+  if (sinceTick < refreshSec * 1000) return Math.min(refreshSec * 1000 - sinceTick, nightCap);
 
   // Claim atomico: si otro tick concurrente ya refresco a este usuario, saltar
   // (evita doble busqueda y doble alerta Telegram).
@@ -155,7 +167,7 @@ async function tickMonitor(row, now) {
     histLongChanged: histPayChanged(snapLong, histLong, pay),
     ohlcChanged: !!out.bestMay,
     status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
-    nextMs: refreshSec * 1000,
+    nextMs: nextMs,
   };
 }
 

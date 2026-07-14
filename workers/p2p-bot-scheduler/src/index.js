@@ -63,8 +63,8 @@ export class BotScheduler {
       if (j && j.ok) {
         if (j.bots > 0) next = tickMs;
         // Solo monitor: dormir hasta el proximo refresh (nextSec), acotado
-        // entre MONITOR_TICK_MS y 10 min (de noche el refresh es 180s).
-        else if (j.monitors > 0) next = Math.min(Math.max((j.nextSec || 0) * 1000, monMs), 600000);
+        // entre MONITOR_TICK_MS y 1h (de noche el refresh es 1h → Neon se suspende).
+        else if (j.monitors > 0) next = Math.min(Math.max((j.nextSec || 0) * 1000, monMs), 3600000);
         else next = idleMs;
       }
     } catch (_) {

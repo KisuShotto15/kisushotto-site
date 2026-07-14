@@ -20,7 +20,7 @@ crons = ["* * * * *"]
 VERCEL_URL = "https://kisushotto-site.vercel.app"
 TICK_MS = "18000"          # con bots habilitados
 MONITOR_TICK_MS = "30000"  # solo monitor (su refresh minimo es 30s)
-IDLE_TICK_MS = "120000"    # nada habilitado (GET /poke lo despierta al instante)
+IDLE_TICK_MS = "900000"    # nada habilitado (GET /poke lo despierta al instante); alto para que Neon se suspenda
 
 # Secreto compartido con Vercel (header x-bot-secret). Setear con:
 #   wrangler secret put BOT_TICK_SECRET

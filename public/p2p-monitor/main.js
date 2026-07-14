@@ -179,7 +179,7 @@ var CFG = {
   verifiedOnly: true,    // Solo comerciantes con insignia (aplica a monitor y bot)
   monQuietStart: '00:00',// Monitor 24/7: inicio del silencio nocturno (America/Caracas)
   monQuietEnd:   '07:00',// Monitor 24/7: fin del silencio nocturno
-  monQuietRef:   180,    // Monitor 24/7: refresco nocturno (seg)
+  monQuietRef:   3600,   // Monitor 24/7: refresco nocturno (seg); alto para que Neon se suspenda de noche
   monSummary:    '08:00' // Monitor 24/7: hora del resumen diario por Telegram (Caracas)
 };
 
@@ -2576,7 +2576,7 @@ function monitorServerConfig() {
     refreshSec: 60, // servidor (app cerrada/oculta): 60s. La vista abierta sigue a CFG.interval (10s).
     quietStart: document.getElementById('cfg-mon-qstart').value || '',
     quietEnd:   document.getElementById('cfg-mon-qend').value   || '',
-    quietRefreshSec: parseInt(document.getElementById('cfg-mon-qref').value) || 300,
+    quietRefreshSec: parseInt(document.getElementById('cfg-mon-qref').value) || 3600,
     summaryHour: document.getElementById('cfg-mon-summary').value || '',
     spreadThr: CFG.spreadThr,
     overboughtThr: CFG.overboughtThr,
@@ -2638,7 +2638,7 @@ function saveConfig() {
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
   CFG.monQuietStart = document.getElementById('cfg-mon-qstart').value || '00:00';
   CFG.monQuietEnd   = document.getElementById('cfg-mon-qend').value   || '07:00';
-  CFG.monQuietRef   = parseInt(document.getElementById('cfg-mon-qref').value) || 300;
+  CFG.monQuietRef   = parseInt(document.getElementById('cfg-mon-qref').value) || 3600;
   CFG.monSummary    = document.getElementById('cfg-mon-summary').value || '08:00';
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();

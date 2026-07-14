@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=2">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=3">
 </head>
 <body>
 
@@ -194,7 +194,7 @@
           <div id="mon24-status" style="font-size:11px;color:var(--text-3);margin:0 0 6px"></div>
           <div class="cfg-row"><span>Silencio desde</span><input type="time" id="cfg-mon-qstart" value="00:00" style="width:96px"></div>
           <div class="cfg-row"><span>Silencio hasta</span><input type="time" id="cfg-mon-qend" value="07:00" style="width:96px"></div>
-          <div class="cfg-row"><span>Refresco nocturno (seg)</span><input type="number" id="cfg-mon-qref" value="300" min="60" max="600" step="30"></div>
+          <div class="cfg-row"><span>Refresco nocturno (seg)</span><input type="number" id="cfg-mon-qref" value="3600" min="60" max="3600" step="60"></div>
           <div class="cfg-row"><span>Resumen diario</span><input type="time" id="cfg-mon-summary" value="08:00" style="width:96px"></div>
           <div style="font-size:11px;color:var(--text-3);margin-top:4px">Al pulsar Iniciar también corre 24/7 en el servidor y avisa por el Telegram del bot (requiere token+chat). De noche silencia las alertas y refresca más lento.</div>
         </details>
@@ -391,7 +391,7 @@
   </div>
 </div>
 
-<script src="/p2p-monitor/main.js?v=2"></script>
+<script src="/p2p-monitor/main.js?v=3"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
