@@ -21,6 +21,17 @@ export const sql = postgres(dbUrl(), {
   connect_timeout: 15,
   // Las tablas de la app viven en el schema p2p (el proyecto Supabase es compartido).
   connection: { search_path: 'p2p' },
+  // El codigo envia jsonb como texto ya serializado (JSON.stringify(x) + ::jsonb).
+  // El serializer json por defecto re-stringifica ese string y doble-codifica
+  // (queda jsonb "string" en vez de array/objeto). OIDs: 114 = json, 3802 = jsonb.
+  types: {
+    json: {
+      to: 114,
+      from: [114, 3802],
+      serialize: v => typeof v === 'string' ? v : JSON.stringify(v),
+      parse: v => JSON.parse(v),
+    },
+  },
 });
 
 let schemaReady = false;
