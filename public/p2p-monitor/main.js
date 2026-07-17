@@ -400,9 +400,17 @@ function bncShowForm() {
   if (f) f.style.display = '';
 }
 
-function botSuggestSell() {
+async function botSuggestSell() {
   if (ACTIVE_FIAT !== 'VES') { toast('Cambia la vista a VES para sugerir (el bot opera en VES)'); return; }
   var ref = ST.buyAds && ST.buyAds[0] ? ST.buyAds[0].price : null;
+  if (!ref) {
+    // Seccion Compra colapsada o monitor parado: pedir la pagina BUY al momento.
+    try {
+      var raw = await searchBatch([buildSearchBody({ transAmount: CFG.buyAmount, page: 1, pays: [PAY_SEL.VES], tradeType: 'BUY' })]);
+      var ads = mapBuyAds(raw[0] || []);
+      if (ads[0]) ref = ads[0].price;
+    } catch(e) {}
+  }
   if (!ref) { toast('Sin datos de mercado aún'); return; }
   var inp = document.getElementById('cfg-bot-sell');
   inp.value = Math.round(ref);
