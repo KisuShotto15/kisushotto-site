@@ -57,7 +57,26 @@ function live() {
   return client;
 }
 
-export function sql(...args) { return live()(...args); }
+// Watchdog por query: si la conexion muere BAJO trafico continuo (pollers cada
+// 10-15s), lastUsed se refresca siempre y live() nunca la recicla — todas las
+// queries quedarian en cola detras de la muerta para siempre. A los 10s se
+// descarta el cliente (la proxima llamada reconecta) y la query falla con un
+// error claro en vez de colgar hasta que el HTTP del cliente aborte.
+function guarded(c, q) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      if (client === c) client = null;
+      c.end({ timeout: 0 }).catch(() => {});
+      reject(new Error('DB sin respuesta en 10s (conexión reciclada, reintenta)'));
+    }, 10000);
+    q.then(r => { clearTimeout(t); resolve(r); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+
+export function sql(...args) {
+  const c = live();
+  return guarded(c, c(...args));
+}
 
 let schemaReady = false;
 export async function ensureSchema() {
