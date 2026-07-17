@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.91.1",
     "@neondatabase/serverless": "^0.10.4",
     "lightweight-charts": "^4.2.0",
+    "postgres": "^3.4.9",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

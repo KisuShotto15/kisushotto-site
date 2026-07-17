@@ -1,17 +1,27 @@
-import { neon } from '@neondatabase/serverless';
+import postgres from 'postgres';
 
-// Acepta cualquier nombre que use la integracion de Neon/Vercel (con o sin prefijo).
+// Acepta cualquier nombre que use la integracion de la DB en Vercel (con o sin prefijo).
 function dbUrl() {
   const e = process.env;
-  const url = e.DATABASE_URL || e.POSTGRES_URL || e.STORAGE_URL || e.STORAGE_DATABASE_URL ||
+  const url = e.SUPABASE_DB_URL || e.DATABASE_URL || e.POSTGRES_URL || e.STORAGE_URL || e.STORAGE_DATABASE_URL ||
     e.STORAGE_POSTGRES_URL || e.POSTGRES_PRISMA_URL ||
-    (Object.keys(e).filter(k => /_URL$/.test(k) && /postgres|neon|database/i.test(e[k]))
+    (Object.keys(e).filter(k => /_URL$/.test(k) && /postgres|neon|supabase|database/i.test(e[k]))
       .map(k => e[k])[0]);
   if (!url) throw new Error('No se encontro la connection string de Postgres en env');
   return url;
 }
 
-export const sql = neon(dbUrl());
+// Supabase via Supavisor (pooler, puerto 6543, modo transaccion): prepare:false es
+// obligatorio; max:1 e idle_timeout cortos porque cada invocacion serverless es efimera.
+export const sql = postgres(dbUrl(), {
+  ssl: 'require',
+  prepare: false,
+  max: 1,
+  idle_timeout: 20,
+  connect_timeout: 15,
+  // Las tablas de la app viven en el schema p2p (el proyecto Supabase es compartido).
+  connection: { search_path: 'p2p' },
+});
 
 let schemaReady = false;
 export async function ensureSchema() {
