@@ -25,6 +25,9 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'X-MBX-APIKEY': apiKey, 'Content-Type': 'application/json', 'clientType': 'web' },
       body: JSON.stringify({ page: 1, rows: 1, tradeType: 'BUY', asset: 'USDT', fiatUnit: 'VES' }),
+      // Sin timeout, un cuelgue de Binance dejaba la invocacion colgada y el cliente
+      // abortaba a los 8s con "Timeout" generico.
+      signal: AbortSignal.timeout(12000),
     });
     data = await r.json().catch(() => ({}));
     if (!r.ok || (data.code && data.code !== '000000')) {

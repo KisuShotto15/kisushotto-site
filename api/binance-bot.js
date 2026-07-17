@@ -7,6 +7,11 @@ import { sendPush, vapidPublicKey } from './_lib/push.js';
 
 const BINANCE = 'https://api.binance.com';
 
+// fetch con timeout: si Binance se cuelga, responder un error claro en vez de
+// dejar la invocacion colgada hasta que el cliente aborte con "Timeout".
+const fx = (url, opts) => fetch(url, { ...opts, signal: AbortSignal.timeout(12000) })
+  .catch(e => ({ ok: false, status: 504, json: async () => ({ code: 'TIMEOUT', message: 'Binance no respondió: ' + e.message }) }));
+
 // Despierta al scheduler de CF (backoff idle de 2 min): asi el primer tick llega
 // enseguida tras habilitar bot/monitor. Best-effort: sin env configurada, no hace nada.
 async function pokeScheduler() {
@@ -161,8 +166,10 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
       if (path === '/monitor-history') {
-        const rows = await sql`SELECT hist_long, hist24, hist_ohlc FROM monitor_state WHERE user_id = ${user.uid}`;
-        return res.status(200).json(rows[0] || { hist_long: [], hist24: [], hist_ohlc: {} });
+        // Sin hist_ohlc: el cliente deriva las velas de hist24+hist_long y esa columna
+        // crece sin limite (hacia la respuesta enorme y lenta en mobile).
+        const rows = await sql`SELECT hist_long, hist24 FROM monitor_state WHERE user_id = ${user.uid}`;
+        return res.status(200).json(rows[0] || { hist_long: [], hist24: [] });
       }
       const rows = await sql`SELECT enabled, status, last_tick, hist24, log FROM monitor_state WHERE user_id = ${user.uid}`;
       return res.status(200).json(rows[0] || { enabled: false });
@@ -222,25 +229,25 @@ export default async function handler(req, res) {
   let r;
   if (path === '/ping') {
     // Test connectivity to Binance
-    const t = await fetch(`${BINANCE}/api/v3/time`).then(r => r.json()).catch(e => ({ error: e.message }));
+    const t = await fx(`${BINANCE}/api/v3/time`).then(r => r.json()).catch(e => ({ error: e.message }));
     return res.json({ ok: true, keyLen: key.length, binanceTime: t.serverTime || t.error });
   }
 
   if (path === '/my-ads') {
     const body = JSON.stringify({ page: 1, rows: 20, tradeType: 'BUY', asset: 'USDT', fiatUnit: 'VES' });
-    r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/listWithPagination?${qs}`, { method: 'POST', headers, body });
+    r = await fx(`${BINANCE}/sapi/v1/c2c/ads/listWithPagination?${qs}`, { method: 'POST', headers, body });
   } else if (path === '/update-ad') {
     const { advNo, price } = params || {};
     if (!advNo || price == null) return res.status(400).json({ error: 'advNo y price requeridos' });
     const body = JSON.stringify({ advNo: String(advNo), price: Number(price) });
-    r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
+    r = await fx(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
   } else if (path === '/update-quantity') {
     const { advNo, totalAmount } = params || {};
     if (!advNo || totalAmount == null) return res.status(400).json({ error: 'advNo y totalAmount requeridos' });
     const detailParams = `adsNo=${encodeURIComponent(advNo)}&timestamp=${timestamp}`;
     const detailQs = `${detailParams}&signature=${sign(detailParams)}`;
     const detailHeaders = { 'X-MBX-APIKEY': key, 'clientType': 'web' };
-    const detailRes = await fetch(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
+    const detailRes = await fx(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
     const detail = await detailRes.json();
     if (!detailRes.ok || !detail.data) return res.status(200).json({ code: 'DETAIL_FAILED', message: JSON.stringify(detail).substring(0, 200) });
     const ad = detail.data;
@@ -261,7 +268,7 @@ export default async function handler(req, res) {
       autoReplyMsg: ad.autoReplyMsg || '',
       advStatus: ad.advStatus,
     });
-    r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
+    r = await fx(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
   } else if (path === '/update-limit') {
     const { advNo, minSingleTransAmount } = params || {};
     if (!advNo || minSingleTransAmount == null) return res.status(400).json({ error: 'advNo y minSingleTransAmount requeridos' });
@@ -269,7 +276,7 @@ export default async function handler(req, res) {
     const detailParams = `adsNo=${encodeURIComponent(advNo)}&timestamp=${timestamp}`;
     const detailQs = `${detailParams}&signature=${sign(detailParams)}`;
     const detailHeaders = { 'X-MBX-APIKEY': key, 'clientType': 'web' };
-    const detailRes = await fetch(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
+    const detailRes = await fx(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
     const detail = await detailRes.json();
     if (!detailRes.ok || !detail.data) {
       return res.status(502).json({ error: 'getDetailByNo failed', detail });
@@ -292,14 +299,14 @@ export default async function handler(req, res) {
       autoReplyMsg: ad.autoReplyMsg || '',
       advStatus: ad.advStatus,
     });
-    r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
+    r = await fx(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
   } else if (path === '/update-methods') {
     const { advNo, payTypes } = params || {};
     if (!advNo || !Array.isArray(payTypes) || !payTypes.length) return res.status(400).json({ error: 'advNo y payTypes requeridos' });
     const detailParams = `adsNo=${encodeURIComponent(advNo)}&timestamp=${timestamp}`;
     const detailQs = `${detailParams}&signature=${sign(detailParams)}`;
     const detailHeaders = { 'X-MBX-APIKEY': key, 'clientType': 'web' };
-    const detailRes = await fetch(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
+    const detailRes = await fx(`${BINANCE}/sapi/v1/c2c/ads/getDetailByNo?${detailQs}`, { method: 'POST', headers: detailHeaders });
     const detail = await detailRes.json();
     if (!detailRes.ok || !detail.data) return res.status(502).json({ error: 'getDetailByNo failed', detail });
     const ad = detail.data;
@@ -327,12 +334,12 @@ export default async function handler(req, res) {
       autoReplyMsg: ad.autoReplyMsg || '',
       advStatus: ad.advStatus,
     });
-    r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
+    r = await fx(`${BINANCE}/sapi/v1/c2c/ads/update?${qs}`, { method: 'POST', headers, body });
   } else if (path === '/toggle-ad') {
     const { advNo, advStatus } = params || {};
     if (!advNo || advStatus == null) return res.status(400).json({ error: 'advNo y advStatus requeridos' });
     const body = JSON.stringify({ advNos: [String(advNo)], advStatus: Number(advStatus) });
-    r = await fetch(`${BINANCE}/sapi/v1/c2c/ads/updateStatus?${qs}`, { method: 'POST', headers, body });
+    r = await fx(`${BINANCE}/sapi/v1/c2c/ads/updateStatus?${qs}`, { method: 'POST', headers, body });
   } else {
     return res.status(404).json({ error: 'Unknown path' });
   }

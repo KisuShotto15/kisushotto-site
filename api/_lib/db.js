@@ -13,30 +13,61 @@ function dbUrl() {
 
 // Supabase via Supavisor (pooler, puerto 6543, modo transaccion): prepare:false es
 // obligatorio; max:1 e idle_timeout cortos porque cada invocacion serverless es efimera.
-export const sql = postgres(dbUrl(), {
-  ssl: 'require',
-  prepare: false,
-  max: 1,
-  idle_timeout: 20,
-  connect_timeout: 15,
-  // Las tablas de la app viven en el schema p2p (el proyecto Supabase es compartido).
-  connection: { search_path: 'p2p' },
-  // El codigo envia jsonb como texto ya serializado (JSON.stringify(x) + ::jsonb).
-  // El serializer json por defecto re-stringifica ese string y doble-codifica
-  // (queda jsonb "string" en vez de array/objeto). OIDs: 114 = json, 3802 = jsonb.
-  types: {
-    json: {
-      to: 114,
-      from: [114, 3802],
-      serialize: v => typeof v === 'string' ? v : JSON.stringify(v),
-      parse: v => JSON.parse(v),
+function mkClient() {
+  return postgres(dbUrl(), {
+    ssl: 'require',
+    prepare: false,
+    max: 1,
+    idle_timeout: 20,
+    connect_timeout: 15,
+    // Los types van con OIDs explicitos: no hace falta el round trip de fetch_types al conectar.
+    fetch_types: false,
+    // Las tablas de la app viven en el schema p2p (el proyecto Supabase es compartido).
+    connection: { search_path: 'p2p' },
+    // El codigo envia jsonb como texto ya serializado (JSON.stringify(x) + ::jsonb).
+    // El serializer json por defecto re-stringifica ese string y doble-codifica
+    // (queda jsonb "string" en vez de array/objeto). OIDs: 114 = json, 3802 = jsonb.
+    types: {
+      json: {
+        to: 114,
+        from: [114, 3802],
+        serialize: v => typeof v === 'string' ? v : JSON.stringify(v),
+        parse: v => JSON.parse(v),
+      },
     },
-  },
-});
+  });
+}
+
+// Vercel CONGELA la instancia entre invocaciones: los timers de idle_timeout no
+// corren y el NAT descarta el TCP idle en silencio. Reusar esa conexion "viva"
+// cuelga la query hasta la retransmision TCP (minutos) — era la causa de los
+// timeouts generalizados post-migracion (el driver de Neon iba por HTTP y no
+// mantenia TCP entre invocaciones). Si paso >60s sin uso, se descarta el cliente
+// y se conecta de cero (idle_timeout 20s lo habria cerrado igual si corriera).
+let client = null;
+let lastUsed = 0;
+function live() {
+  const now = Date.now();
+  if (client && now - lastUsed > 60000) {
+    client.end({ timeout: 0 }).catch(() => {});
+    client = null;
+  }
+  if (!client) client = mkClient();
+  lastUsed = now;
+  return client;
+}
+
+export function sql(...args) { return live()(...args); }
 
 let schemaReady = false;
 export async function ensureSchema() {
   if (schemaReady) return;
+  // Sonda barata (1 round trip): p2p_rate es lo ULTIMO que crea este bloque; si ya
+  // existe, el schema esta completo y se saltan los ~20 DDLs secuenciales que
+  // hacian eterno cada cold start. Si se agrega un DDL nuevo abajo, mover la sonda
+  // al objeto mas nuevo (o borrarla temporalmente para que el DDL corra).
+  const probe = await sql`SELECT to_regclass('p2p.p2p_rate') AS t`.catch(() => []);
+  if (probe[0] && probe[0].t) { schemaReady = true; return; }
   await sql`CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,

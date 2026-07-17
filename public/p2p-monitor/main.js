@@ -227,7 +227,9 @@ async function loadUserSettings() {
 async function apiPost(path, body, auth) {
   var headers = { 'Content-Type': 'application/json' };
   if (auth && SESSION.token) headers['Authorization'] = 'Bearer ' + SESSION.token;
-  var r = await fetchRetry(API_BASE + path, { method: 'POST', headers: headers, body: JSON.stringify(body || {}) });
+  // 20s: binance-connect valida contra Binance + cold start de Vercel; con 8s el
+  // cliente abortaba con "Timeout" antes de que el servidor terminara.
+  var r = await fetchRetry(API_BASE + path, { method: 'POST', headers: headers, body: JSON.stringify(body || {}) }, 20000);
   var d = await r.json().catch(function(){ return {}; });
   if (!r.ok) { var err = new Error(d.error || ('HTTP ' + r.status)); err.data = d; throw err; }
   return d;
@@ -1597,11 +1599,13 @@ function botUpdateCeiling() {
 
 async function botCallWorker(path, body) {
   if (!SESSION.token) throw new Error('Inicia sesión primero');
+  // 20s: rutas como /update-limit hacen 2 llamadas a Binance + cold start; con el
+  // default de 8s el cliente abortaba con "Timeout" aunque el servidor iba bien.
   var r = await fetchRetry(BOT_CFG.url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SESSION.token },
     body: JSON.stringify({ path: path, params: body || {} })
-  });
+  }, 20000);
   var data = await r.json().catch(function() { return {}; });
   if (!r.ok) throw new Error('Worker ' + r.status + (data.error ? ': ' + data.error : ''));
   return data;
@@ -2622,7 +2626,7 @@ function renderMon24(statusText) {
   if (st) st.textContent = MON24.enabled ? (statusText || 'Corriendo en el servidor') : (statusText || '');
 }
 
-async function hydrateMon24() {
+async function hydrateMon24(isRetry) {
   if (!SESSION.token) return;
   try {
     var d = await botCallWorker('/monitor-state');
@@ -2632,7 +2636,11 @@ async function hydrateMon24() {
     surfaceMonitorErrors(d); // siembra lastLogTs sin avisar errores viejos
     // Si el monitor 24/7 quedo activo, arranca la vista (tablas a CFG.interval) sin pulsar Iniciar.
     if (MON24.enabled && !ST.running) startMonitorView();
-  } catch(e) {}
+  } catch(e) {
+    // Fallo transitorio al abrir la app (cold start): si se traga el error, la UI
+    // muestra el monitor "apagado" aunque siga corriendo en el servidor. Reintentar una vez.
+    if (!isRetry) setTimeout(function(){ hydrateMon24(true); }, 5000);
+  }
 }
 
 // ── Config ────────────────────────────────────────────
