@@ -270,12 +270,17 @@ async function tickUser(row) {
 
 // Notifica por Telegram las ordenes nuevas del usuario (24/7, app cerrada). Throttle ~60s.
 // Primera vez: siembra known_orders sin notificar. Devuelve { known, checkedAt, log } o null.
-async function maybeCheckOrders(row, now) {
+async function maybeCheckOrders(row, now, notify = true) {
   if (row.orders_checked_at && now - new Date(row.orders_checked_at).getTime() < 60 * 1000) return null;
   const cfg = row.config || {};
   const key = decrypt({ ct: row.enc_key, iv: row.iv_key, tag: row.tag_key });
   const secret = decrypt({ ct: row.enc_secret, iv: row.iv_secret, tag: row.tag_secret });
-  const { ok, orders, raw } = await listOrders(key, secret, 15 * 60 * 1000);
+  // Ventana adaptativa: cubre el hueco desde el ultimo chequeo (+5 min de margen).
+  // Con bot apagado los ticks pueden espaciarse 35 min (app abierta) o 1h (noche);
+  // los 15 min fijos dejarian ordenes sin capturar. Tope 24h (la API trae max 20 filas).
+  const gapMs = row.orders_checked_at ? now - new Date(row.orders_checked_at).getTime() : 0;
+  const sinceMs = Math.min(Math.max(15 * 60 * 1000, gapMs + 5 * 60 * 1000), 24 * 3600 * 1000);
+  const { ok, orders, raw } = await listOrders(key, secret, sinceMs);
   const checkedAt = new Date(now).toISOString();
   let log = row.log;
   if (!ok) {
@@ -308,7 +313,7 @@ async function maybeCheckOrders(row, now) {
   const knownSet = new Set(prev);
   const fresh = orders.filter(o => !knownSet.has(String(o.orderNumber)));
   const newKnown = Array.from(new Set([...ids, ...prev])).slice(0, 50);
-  if (fresh.length) {
+  if (fresh.length && notify) {
     let token = '';
     try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
     const chatId = cfg.tg && cfg.tg.chatId;
@@ -395,6 +400,28 @@ export default async function handler(req, res) {
       // OJO: last_tick NO se re-sella aqui: lo marca el claim al INICIO del tick.
       // Sellarlo al final sumaba el tiempo de proceso y hacia saltar 1 de cada 2 ticks (~36s).
       ticked++;
+    }
+
+    // Captura de ordenes con el bot APAGADO (ventas manuales del usuario): monta
+    // sobre la cadencia del monitor, sin notificar ni tocar el log — solo persiste
+    // en la tabla orders para las metricas de rotacion.
+    const qrows = await sql`
+      SELECT b.user_id, b.known_orders, b.orders_checked_at, b.log,
+             c.enc_key, c.iv_key, c.tag_key, c.enc_secret, c.iv_secret, c.tag_secret
+      FROM bot_state b
+      JOIN binance_creds c ON c.user_id = b.user_id
+      JOIN monitor_state m ON m.user_id = b.user_id AND m.enabled = true
+      WHERE b.enabled = false
+      LIMIT ${MAX_USERS}`;
+    for (const row of qrows) {
+      try {
+        const oc = await maybeCheckOrders(row, Date.now(), false);
+        if (oc) await sql`
+          UPDATE bot_state SET
+            known_orders = ${oc.known != null ? JSON.stringify(oc.known) : null}::jsonb,
+            orders_checked_at = ${oc.checkedAt}
+          WHERE user_id = ${row.user_id}`;
+      } catch (e) {}
     }
 
     // Monitor server-side (alertas Telegram 24/7 con silencio nocturno).
