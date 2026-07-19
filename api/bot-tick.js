@@ -283,6 +283,21 @@ async function maybeCheckOrders(row, now) {
     return { known: row.known_orders, checkedAt, log };
   }
 
+  // Persistir para metricas de rotacion (volumen/dia, tiempo entre ordenes).
+  // Upsert de status: una orden PENDING de un chequeo anterior puede completarse despues.
+  for (const o of orders) {
+    try {
+      const amt = parseFloat(o.amount || 0) || null;
+      const total = parseFloat(o.totalPrice || 0) || null;
+      const price = parseFloat(o.unitPrice || o.price || 0) || (amt && total ? total / amt : null);
+      await sql`
+        INSERT INTO orders (order_no, user_id, trade_type, amount, total, price, status, created_at)
+        VALUES (${String(o.orderNumber)}, ${row.user_id}, ${o.tradeType || null}, ${amt}, ${total}, ${price},
+                ${String(o.orderStatus != null ? o.orderStatus : '')}, ${o.createTime ? new Date(Number(o.createTime)).toISOString() : null})
+        ON CONFLICT (order_no) DO UPDATE SET status = EXCLUDED.status`;
+    } catch (e) {}
+  }
+
   const ids = orders.map(o => String(o.orderNumber));
   const prev = Array.isArray(row.known_orders) ? row.known_orders : null;
   if (prev === null) {

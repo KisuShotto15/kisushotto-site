@@ -107,6 +107,44 @@ export default async function handler(req, res) {
     }
   }
 
+  // Metricas de rotacion desde la tabla orders (la alimenta bot-tick). Solo DB.
+  if (path === '/order-stats') {
+    try {
+      const done = ['4', 'COMPLETED'];
+      const today = await sql`
+        SELECT count(*)::int n, count(*) FILTER (WHERE status = ANY(${done}))::int done,
+               COALESCE(sum(amount) FILTER (WHERE status = ANY(${done})), 0)::float usdt,
+               COALESCE(sum(total) FILTER (WHERE status = ANY(${done})), 0)::float ves
+        FROM orders WHERE user_id = ${user.uid}
+          AND (created_at AT TIME ZONE 'America/Caracas')::date = (now() AT TIME ZONE 'America/Caracas')::date`;
+      const week = await sql`
+        SELECT count(*)::int n, count(*) FILTER (WHERE status = ANY(${done}))::int done,
+               COALESCE(sum(amount) FILTER (WHERE status = ANY(${done})), 0)::float usdt,
+               COALESCE(sum(total) FILTER (WHERE status = ANY(${done})), 0)::float ves
+        FROM orders WHERE user_id = ${user.uid} AND created_at > now() - interval '7 days'`;
+      const gap = await sql`
+        SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY diff)::float med_sec FROM (
+          SELECT extract(epoch FROM created_at - lag(created_at) OVER (ORDER BY created_at)) diff
+          FROM orders WHERE user_id = ${user.uid} AND status = ANY(${done})
+            AND created_at > now() - interval '7 days') d
+        WHERE diff > 0 AND diff < 6 * 3600`;
+      const hours = await sql`
+        SELECT extract(hour FROM created_at AT TIME ZONE 'America/Caracas')::int h,
+               count(*)::int n, COALESCE(sum(amount), 0)::float usdt
+        FROM orders WHERE user_id = ${user.uid} AND status = ANY(${done})
+          AND created_at > now() - interval '30 days'
+        GROUP BY 1 ORDER BY 1`;
+      const statuses = await sql`
+        SELECT status, count(*)::int n FROM orders
+        WHERE user_id = ${user.uid} AND created_at > now() - interval '7 days'
+        GROUP BY 1 ORDER BY 2 DESC`;
+      return res.status(200).json({ today: today[0], week: week[0],
+        medGapSec: gap[0] ? gap[0].med_sec : null, hours, statuses });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   // Control del monitor server-side (alertas Telegram 24/7). No requiere creds Binance.
   if (path === '/monitor-enable' || path === '/monitor-disable' || path === '/monitor-state' || path === '/monitor-heartbeat' || path === '/monitor-history') {
     try {

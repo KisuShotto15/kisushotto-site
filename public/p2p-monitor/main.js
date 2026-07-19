@@ -356,7 +356,7 @@ function authLogout() {
 function enterApp() {
   var g = document.getElementById('login-gate');
   if (g) g.style.display = 'none';
-  if (!window._appBooted) { window._appBooted = true; try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} }
+  if (!window._appBooted) { window._appBooted = true; try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} }
 }
 
 // Al cargar: si hay sesion valida (email autorizado), entra; si no, queda el muro.
@@ -417,6 +417,28 @@ async function botSuggestSell() {
   var inp = document.getElementById('cfg-bot-sell');
   inp.value = Math.round(ref);
   botUpdateCeiling();
+}
+
+// Metricas de rotacion: volumen/ordenes desde la tabla orders del servidor.
+// La ganancia es spread x capital x rotaciones: esto mide la rotacion real.
+async function loadOrderStats() {
+  var el = document.getElementById('order-stats');
+  if (!el || !SESSION.token) return;
+  el.textContent = 'Cargando...';
+  try {
+    var d = await botCallWorker('/order-stats');
+    if (d.error) throw new Error(d.error);
+    var gap = d.medGapSec ? (d.medGapSec < 3600 ? Math.round(d.medGapSec / 60) + ' min' : (d.medGapSec / 3600).toFixed(1) + ' h') : '—';
+    var top = (d.hours || []).slice().sort(function(a, b){ return b.usdt - a.usdt; }).slice(0, 3)
+      .map(function(h){ return String(h.h).padStart(2, '0') + 'h (' + Math.round(h.usdt) + ')'; }).join(' · ');
+    el.innerHTML =
+      'Hoy: <b>' + d.today.done + '</b> órdenes · <b>' + Math.round(d.today.usdt) + '</b> USDT · ' + fmt(Math.round(d.today.ves)) + ' Bs<br>' +
+      '7 días: <b>' + d.week.done + '</b> órdenes · <b>' + Math.round(d.week.usdt) + '</b> USDT (' + Math.round(d.week.usdt / 7) + '/día)<br>' +
+      'Tiempo mediano entre órdenes: <b>' + gap + '</b><br>' +
+      (top ? 'Mejores horas (USDT, 30d): ' + top : 'Mejores horas: aún sin datos');
+  } catch (e) {
+    el.textContent = 'Sin datos aún (se acumulan con el bot encendido)';
+  }
 }
 
 async function refreshAuthUI() {

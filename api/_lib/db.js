@@ -160,6 +160,19 @@ export async function ensureSchema() {
     sub JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // Historial de ordenes P2P del usuario (lo alimenta maybeCheckOrders en bot-tick).
+  // Base de las metricas de rotacion: volumen/dia, ordenes/dia, tiempo entre ordenes.
+  await sql`CREATE TABLE IF NOT EXISTS orders (
+    order_no TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    trade_type TEXT,
+    amount NUMERIC,
+    total NUMERIC,
+    price NUMERIC,
+    status TEXT,
+    created_at TIMESTAMPTZ,
+    seen_at TIMESTAMPTZ DEFAULT now()
+  )`;
   // Tasa USDT/VES publica (mediana top-10 merchants por metodo de pago), la
   // actualiza cada refresh del monitor y la lee el portfolio via /api/usdt-ves.
   await sql`CREATE TABLE IF NOT EXISTS p2p_rate (
