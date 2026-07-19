@@ -110,28 +110,27 @@ export default async function handler(req, res) {
   // Metricas de rotacion desde la tabla orders (la alimenta bot-tick). Solo DB.
   if (path === '/order-stats') {
     try {
-      const done = ['4', 'COMPLETED'];
       const today = await sql`
-        SELECT count(*)::int n, count(*) FILTER (WHERE status = ANY(${done}))::int done,
-               COALESCE(sum(amount) FILTER (WHERE status = ANY(${done})), 0)::float usdt,
-               COALESCE(sum(total) FILTER (WHERE status = ANY(${done})), 0)::float ves
+        SELECT count(*)::int n, count(*) FILTER (WHERE status IN ('4', 'COMPLETED'))::int done,
+               COALESCE(sum(amount) FILTER (WHERE status IN ('4', 'COMPLETED')), 0)::float usdt,
+               COALESCE(sum(total) FILTER (WHERE status IN ('4', 'COMPLETED')), 0)::float ves
         FROM orders WHERE user_id = ${user.uid}
           AND (created_at AT TIME ZONE 'America/Caracas')::date = (now() AT TIME ZONE 'America/Caracas')::date`;
       const week = await sql`
-        SELECT count(*)::int n, count(*) FILTER (WHERE status = ANY(${done}))::int done,
-               COALESCE(sum(amount) FILTER (WHERE status = ANY(${done})), 0)::float usdt,
-               COALESCE(sum(total) FILTER (WHERE status = ANY(${done})), 0)::float ves
+        SELECT count(*)::int n, count(*) FILTER (WHERE status IN ('4', 'COMPLETED'))::int done,
+               COALESCE(sum(amount) FILTER (WHERE status IN ('4', 'COMPLETED')), 0)::float usdt,
+               COALESCE(sum(total) FILTER (WHERE status IN ('4', 'COMPLETED')), 0)::float ves
         FROM orders WHERE user_id = ${user.uid} AND created_at > now() - interval '7 days'`;
       const gap = await sql`
         SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY diff)::float med_sec FROM (
           SELECT extract(epoch FROM created_at - lag(created_at) OVER (ORDER BY created_at)) diff
-          FROM orders WHERE user_id = ${user.uid} AND status = ANY(${done})
+          FROM orders WHERE user_id = ${user.uid} AND status IN ('4', 'COMPLETED')
             AND created_at > now() - interval '7 days') d
         WHERE diff > 0 AND diff < 6 * 3600`;
       const hours = await sql`
         SELECT extract(hour FROM created_at AT TIME ZONE 'America/Caracas')::int h,
                count(*)::int n, COALESCE(sum(amount), 0)::float usdt
-        FROM orders WHERE user_id = ${user.uid} AND status = ANY(${done})
+        FROM orders WHERE user_id = ${user.uid} AND status IN ('4', 'COMPLETED')
           AND created_at > now() - interval '30 days'
         GROUP BY 1 ORDER BY 1`;
       const statuses = await sql`
