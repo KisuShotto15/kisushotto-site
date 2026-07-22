@@ -631,13 +631,16 @@ function accumAvail(section, ads, prevMap) {
   return display;
 }
 
-// Indicador +X en el titulo: anuncios fetcheados que no caben en los 8 visibles.
+// Filas visibles en cada libro: 10 por defecto, 15 al expandir con "ver mas".
+var OB_BASE_ROWS = 10, OB_MAX_ROWS = 15;
+// Indicador +X en el titulo: anuncios fetcheados que no caben en los visibles.
 function setExtraCount(id, fetched) {
   var el = document.getElementById(id);
   if (!el) return;
-  var extra = fetched - 8;
+  // +X = comercios traidos de Binance mas alla del maximo que muestra la UI (15).
+  var extra = fetched - OB_MAX_ROWS;
   el.textContent = extra > 0 ? '+' + extra : '';
-  el.title = extra > 0 ? fetched + ' anuncios traidos de Binance, 8 visibles' : '';
+  el.title = extra > 0 ? fetched + ' anuncios traidos de Binance, ' + OB_MAX_ROWS + ' visibles como maximo' : '';
 }
 
 function availArrowHtml(d) {
@@ -697,13 +700,13 @@ async function fetchOnce() {
     // Con filtros VES bajos las primeras paginas vienen dominadas por no-verificados.
     var EXTRA_PAGES = 3;
     var extraBodies = [], extraMeta = [];
-    if (ST.mayoristas.length < 8 && mayRaw.length >= MAY_PAGES * 20) {
+    if (ST.mayoristas.length < OB_MAX_ROWS && mayRaw.length >= MAY_PAGES * 20) {
       for (var ep = MAY_PAGES + 1; ep <= MAY_PAGES + EXTRA_PAGES; ep++) {
         extraBodies.push(buildSearchBody({ transAmount: CFG.mayAmount, page: ep, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
         extraMeta.push('may');
       }
     }
-    if (ST.smallAds.length < 8 && smallRaw.length >= SMALL_PAGES * 20) {
+    if (ST.smallAds.length < OB_MAX_ROWS && smallRaw.length >= SMALL_PAGES * 20) {
       for (var es = SMALL_PAGES + 1; es <= SMALL_PAGES + EXTRA_PAGES; es++) {
         extraBodies.push(buildSearchBody({ transAmount: CFG.smallAmount, page: es, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
         extraMeta.push('small');
@@ -975,8 +978,10 @@ function pisadoCls(ads, idx) {
 function renderOB(id, ads, bestCls) {
   var wrap = document.getElementById(id);
   var rows = '';
-  for (var i = 0; i < 8; i++) {
+  var visible = (ST.showMore && ST.showMore[id]) ? OB_MAX_ROWS : OB_BASE_ROWS;
+  for (var i = 0; i < visible; i++) {
     var ad = ads[i];
+    if (!ad && i >= OB_BASE_ROWS) break; // sin relleno vacio en las filas expandidas
     if (ad) {
       var cls = 'ob-row' + (i === 0 ? ' ' + bestCls : '');
       var rnk = '<span class="rank ' + (i === 0 ? 'n1' : '') + '">' + (i + 1) + '</span>';
@@ -1015,6 +1020,22 @@ function renderOB(id, ads, bestCls) {
     }
   }
   wrap.innerHTML = rows;
+  updateShowMoreBtn(id, ads.length);
+}
+
+// Muestra/oculta el boton "ver mas" segun cuantos comercios hay tras el visible base.
+function updateShowMoreBtn(id, total) {
+  var btn = document.getElementById('more-' + id);
+  if (!btn) return;
+  var expanded = !!(ST.showMore && ST.showMore[id]);
+  if (!expanded && total <= OB_BASE_ROWS) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  btn.textContent = expanded ? '▲ Ver menos' : '▼ Ver ' + Math.min(OB_MAX_ROWS - OB_BASE_ROWS, total - OB_BASE_ROWS) + ' comercios más';
+}
+function toggleShowMore(id) {
+  ST.showMore = ST.showMore || {};
+  ST.showMore[id] = !ST.showMore[id];
+  renderAll();
 }
 
 // ── Buy Section Render ────────────────────────────────
@@ -1022,8 +1043,10 @@ function renderBuySection(ads) {
   var wrap = document.getElementById('ob-buy');
   if (!wrap) return;
   var rows = '';
-  for (var i = 0; i < 8; i++) {
+  var visible = (ST.showMore && ST.showMore['ob-buy']) ? OB_MAX_ROWS : OB_BASE_ROWS;
+  for (var i = 0; i < visible; i++) {
     var ad = ads[i];
+    if (!ad && i >= OB_BASE_ROWS) break;
     if (ad) {
       var cls = 'ob-row' + (i === 0 ? ' best-buy-asc' : '');
       var rnk = '<span class="rank ' + (i === 0 ? 'n1' : '') + '">' + (i + 1) + '</span>';
@@ -1062,6 +1085,7 @@ function renderBuySection(ads) {
     }
   }
   wrap.innerHTML = rows;
+  updateShowMoreBtn('ob-buy', ads.length);
 }
 
 function renderBuySpread() {

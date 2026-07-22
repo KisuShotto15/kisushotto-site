@@ -147,6 +147,8 @@ body {
 .bot-group .cfg-row:last-child { border-bottom: none; }
 .pay-chk { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none; }
 .pay-chk input { accent-color: var(--gold); cursor: pointer; }
+.ob-more { width: 100%; margin-top: 6px; padding: 6px; background: transparent; border: 1px dashed var(--border-2); border-radius: var(--r-sm); color: var(--text-3); font-size: 12px; font-weight: 600; cursor: pointer; transition: color .12s, border-color .12s; }
+.ob-more:hover { color: var(--gold); border-color: var(--gold-b); }
 
 .bot-details {
   background: var(--surf-2);
