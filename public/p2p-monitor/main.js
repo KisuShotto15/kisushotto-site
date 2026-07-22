@@ -700,13 +700,13 @@ async function fetchOnce() {
     // Con filtros VES bajos las primeras paginas vienen dominadas por no-verificados.
     var EXTRA_PAGES = 3;
     var extraBodies = [], extraMeta = [];
-    if (ST.mayoristas.length < OB_MAX_ROWS && mayRaw.length >= MAY_PAGES * 20) {
+    if (ST.mayoristas.length < 8 && mayRaw.length >= MAY_PAGES * 20) {
       for (var ep = MAY_PAGES + 1; ep <= MAY_PAGES + EXTRA_PAGES; ep++) {
         extraBodies.push(buildSearchBody({ transAmount: CFG.mayAmount, page: ep, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
         extraMeta.push('may');
       }
     }
-    if (ST.smallAds.length < OB_MAX_ROWS && smallRaw.length >= SMALL_PAGES * 20) {
+    if (ST.smallAds.length < 8 && smallRaw.length >= SMALL_PAGES * 20) {
       for (var es = SMALL_PAGES + 1; es <= SMALL_PAGES + EXTRA_PAGES; es++) {
         extraBodies.push(buildSearchBody({ transAmount: CFG.smallAmount, page: es, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
         extraMeta.push('small');
