@@ -419,6 +419,15 @@ async function botSuggestSell() {
   botUpdateCeiling();
 }
 
+// Formatea una duracion en segundos de forma legible (seg / min / h).
+function fmtDur(s) {
+  if (s == null) return '—';
+  if (s < 60) return Math.round(s) + ' seg';
+  if (s < 3600) return Math.round(s / 60) + ' min';
+  return (s / 3600).toFixed(1) + ' h';
+}
+function intFmt(n) { return Math.round(n).toLocaleString('es-VE'); }
+
 // Metricas de rotacion: volumen/ordenes desde la tabla orders del servidor.
 // La ganancia es spread x capital x rotaciones: esto mide la rotacion real.
 async function loadOrderStats() {
@@ -428,14 +437,21 @@ async function loadOrderStats() {
   try {
     var d = await botCallWorker('/order-stats');
     if (d.error) throw new Error(d.error);
-    var gap = d.medGapSec ? (d.medGapSec < 3600 ? Math.round(d.medGapSec / 60) + ' min' : (d.medGapSec / 3600).toFixed(1) + ' h') : '—';
+    var perDayUsdt = d.week.usdt / 7, perDayOrd = d.week.done / 7;
     var top = (d.hours || []).slice().sort(function(a, b){ return b.usdt - a.usdt; }).slice(0, 3)
-      .map(function(h){ return String(h.h).padStart(2, '0') + 'h (' + Math.round(h.usdt) + ')'; }).join(' · ');
+      .map(function(h){ return String(h.h).padStart(2, '0') + 'h'; }).join(' · ');
+    function tile(label, val, sub) {
+      return '<div class="rot-tile"><span class="rot-lbl">' + label + '</span>' +
+        '<span class="rot-val">' + val + '</span>' +
+        '<span class="rot-sub">' + (sub || '') + '</span></div>';
+    }
     el.innerHTML =
-      'Hoy: <b>' + d.today.done + '</b> órdenes · <b>' + Math.round(d.today.usdt) + '</b> USDT · ' + fmt(Math.round(d.today.ves)) + ' Bs<br>' +
-      '7 días: <b>' + d.week.done + '</b> órdenes · <b>' + Math.round(d.week.usdt) + '</b> USDT (' + Math.round(d.week.usdt / 7) + '/día)<br>' +
-      'Tiempo mediano entre órdenes: <b>' + gap + '</b><br>' +
-      (top ? 'Mejores horas (USDT, 30d): ' + top : 'Mejores horas: aún sin datos');
+      '<div class="rot-grid">' +
+        tile('Hoy', intFmt(d.today.usdt) + ' <small>USDT</small>', d.today.done + ' órdenes') +
+        tile('Promedio 7 días', intFmt(perDayUsdt) + ' <small>USDT/día</small>', Math.round(perDayOrd) + ' órdenes/día') +
+      '</div>' +
+      '<div class="rot-line"><span>Una orden cada</span><b>' + fmtDur(d.medGapSec) + '</b><span class="rot-mut">mediana</span></div>' +
+      (top ? '<div class="rot-line"><span>Horas más activas</span><b>' + top + '</b></div>' : '');
   } catch (e) {
     el.textContent = 'Sin datos aún (se acumulan con el bot encendido)';
   }
