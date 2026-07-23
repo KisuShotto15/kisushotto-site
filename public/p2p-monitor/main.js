@@ -1567,13 +1567,21 @@ function readBotPayChecks() {
   return Array.prototype.filter.call(box.querySelectorAll('input:checked'), function () { return true; })
     .map(function (c) { return c.value; });
 }
-async function botApplyMethods(silent) {
+function samePaySet(a, b) {
+  a = (a || []).slice().sort(); b = (b || []).slice().sort();
+  if (a.length !== b.length) return false;
+  for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+async function botApplyMethods(silent, skipIfSame) {
   var ids = readBotPayChecks();
   var st = document.getElementById('bot-cfg-st');
   if (!ids.length) { if (!silent && st) { st.textContent = 'Marca al menos un método'; st.style.color = 'var(--red)'; } return false; }
   var adNo = BOT.adNumber || BOT_CFG.adNo;
   if (!adNo) { if (!silent && st) { st.textContent = 'Configura el anuncio primero'; st.style.color = 'var(--red)'; } return false; }
   var pays = botExpandPays(ids);
+  // Si el anuncio ya tiene exactamente esos metodos, no gastar requests (getDetail + update).
+  if (skipIfSame && samePaySet(pays, BOT.adPayTypes)) return true;
   botLog('💳 Aplicando métodos: ' + ids.map(payLabel).join(', '), '#58A6FF');
   try {
     var data = await botCallWorker('/update-methods', { advNo: adNo, payTypes: pays });
@@ -1989,10 +1997,10 @@ async function botToggle() {
       }
     }
 
-    // 1b. Aplicar métodos de pago elegidos (anuncio aún PAUSADO)
+    // 1b. Aplicar métodos de pago elegidos (anuncio aún PAUSADO); salta si ya coinciden
     if ((BOT_CFG.payMethods || []).length && BOT.adNumber) {
       botSetStatus('Aplicando métodos...', '#F0B90B');
-      try { await botApplyMethods(true); } catch(e) {}
+      try { await botApplyMethods(true, true); } catch(e) {}
     }
 
     // 2. Reprice inicial + límite mínimo mientras el anuncio está PAUSADO
