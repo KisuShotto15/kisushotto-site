@@ -1532,9 +1532,9 @@ function botExpandPays(ids) {
   return out;
 }
 
-function stepEl(el, dir) {
+function stepEl(el, dir, mult) {
   if (!el) return;
-  const step = parseFloat(el.step) || 1;
+  const step = (parseFloat(el.step) || 1) * (mult || 1);
   const min  = el.min !== '' ? parseFloat(el.min) : -Infinity;
   const max  = el.max !== '' ? parseFloat(el.max) :  Infinity;
   const cur  = parseFloat(el.value) || 0;
@@ -1545,13 +1545,13 @@ function stepEl(el, dir) {
 function stepInput(id, dir) { stepEl(document.getElementById(id), dir); }
 
 // Scroll del mouse sobre un campo con stepper: sube/baja el valor (compensa que los
-// -/+ solo aparezcan al enfocar). Solo web; en movil no hay rueda.
+// -/+ solo aparezcan al enfocar). Con Shift, medio step (mas fino). Solo web.
 document.addEventListener('wheel', function (e) {
   const el = e.target;
   if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
   if (typeof el.closest !== 'function' || !el.closest('.num-stepper')) return;
   e.preventDefault();
-  stepEl(el, e.deltaY < 0 ? 1 : -1);
+  stepEl(el, e.deltaY < 0 ? 1 : -1, e.shiftKey ? 0.5 : 1);
 }, { passive: false });
 
 function saveBotConfig() {
