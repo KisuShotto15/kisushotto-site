@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=8">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=9">
 </head>
 <body>
 
@@ -55,10 +55,10 @@
   <span style="font-size:15px;color:var(--text-3)" id="last-update"></span>
   <div class="spacer"></div>
   <div class="top-actions">
-  <button class="btn btn-sm" id="btn-activity" onclick="toggleActivityGuard()" title="Alertas de actividad / apagado por inactividad" style="font-size:17px;padding:5px 10px">🛡️</button>
+  <button class="btn btn-sm" id="btn-activity" onclick="toggleActivityGuard()" title="Alertas de actividad / apagado por inactividad">🛡️</button>
   <button class="btn btn-gold" id="btn-start" onclick="toggleMonitor()">▶ Iniciar</button>
   <button class="btn btn-sm" onclick="fetchOnce()" title="Actualizar">&#8635;</button>
-  <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative;font-size:17px;padding:5px 10px" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
+  <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
   </div>
 </div>
 
@@ -211,13 +211,13 @@
 
       <div class="ob-grid">
         <div class="ob-side">
-          <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">🏦 Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="100000" onchange="setFilter('may',this.value)"> VES</span></div>
+          <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="100000" onchange="setFilter('may',this.value)"> VES</span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
           <div id="ob-may"></div>
           <button class="ob-more" id="more-ob-may" onclick="toggleShowMore('ob-may')" style="display:none"></button>
         </div>
         <div class="ob-side">
-          <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">📉 BUY</span><span class="lbl-extra" id="extra-small"></span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="1000" onchange="setFilter('small',this.value)"> VES</span></div>
+          <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">BUY</span><span class="lbl-extra" id="extra-small"></span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="1000" onchange="setFilter('small',this.value)"> VES</span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
           <div id="ob-small"></div>
           <button class="ob-more" id="more-ob-small" onclick="toggleShowMore('ob-small')" style="display:none"></button>
@@ -231,7 +231,7 @@
         </div>
         <div class="buy-section-row" id="buy-section-body">
           <div class="buy-ob-wrap">
-            <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">🟢 SELL</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
+            <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">SELL</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
             <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
             <div id="ob-buy"></div>
             <button class="ob-more" id="more-ob-buy" onclick="toggleShowMore('ob-buy')" style="display:none"></button>
