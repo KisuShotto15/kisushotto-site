@@ -67,15 +67,34 @@ function guarded(c, q) {
     const t = setTimeout(() => {
       if (client === c) client = null;
       c.end({ timeout: 0 }).catch(() => {});
-      reject(new Error('DB sin respuesta en 10s (conexión reciclada, reintenta)'));
+      const e = new Error('DB sin respuesta en 10s (conexión reciclada, reintenta)');
+      e.recycled = true;
+      reject(e);
     }, 10000);
     q.then(r => { clearTimeout(t); resolve(r); }, e => { clearTimeout(t); reject(e); });
   });
 }
 
-export function sql(...args) {
-  const c = live();
-  return guarded(c, c(...args));
+// Errores de conexion muerta: el pooler cerro el socket mientras Vercel tenia la
+// instancia congelada; el primer query sobre ese socket lanza CONNECTION_DESTROYED.
+function isConnErr(e) {
+  if (e && e.recycled) return true;
+  const s = String((e && (e.message || e.code)) || e);
+  return /CONNECTION_DESTROYED|CONNECTION_CLOSED|CONNECTION_ENDED|ECONNRESET|EPIPE|write after end|Connection terminated|not queryable|socket hang up/i.test(s);
+}
+
+// Reintento unico: descarta el cliente muerto y reconecta de cero. Evita que un
+// socket cerrado por el pooler tumbe una request entera con "CONNECTION_DESTROYED".
+export async function sql(...args) {
+  try {
+    const c = live();
+    return await guarded(c, c(...args));
+  } catch (e) {
+    if (!isConnErr(e)) throw e;
+    if (client) { client.end({ timeout: 0 }).catch(() => {}); client = null; }
+    const c2 = live();
+    return await guarded(c2, c2(...args));
+  }
 }
 
 let schemaReady = false;
