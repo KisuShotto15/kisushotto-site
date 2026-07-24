@@ -200,7 +200,7 @@ body {
 .bot-details > summary { padding: 8px 0; }
 #bot-panel .cfg-row { padding: 4px 0; }
 #bot-panel .stp-btn { height: 30px; }
-#bot-panel input[type=number] { padding: 3px 8px; }
+#bot-panel input[type=number] { padding: 3px 8px; font-variant-numeric: tabular-nums; }
 #bot-panel #bot-log { max-height: 100px; }
 
 /* ── Panels ─────────────────────────────────────────── */
@@ -518,25 +518,30 @@ input[type=text] {
 }
 input[type=number] { width: 135px; }
 .num-stepper { display: flex; align-items: center; }
-.num-stepper input[type=number] { width: 100px; border-radius: 0; border-left: none; border-right: none; text-align: center; padding-left: 8px; padding-right: 8px; }
+/* Reposo: input limpio con su propio borde; los -/+ colapsados (look minimalista). */
+.num-stepper input[type=number] { width: 100px; text-align: center; padding-left: 8px; padding-right: 8px; border: 1px solid var(--border-2); border-radius: var(--r-sm); transition: border-radius .12s; }
 .num-stepper input[type=number]::-webkit-inner-spin-button,
 .num-stepper input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .num-stepper input[type=number] { -moz-appearance: textfield; }
 .stp-btn {
-  width: 32px; height: 34px;
-  background: var(--surf-2); border: 1px solid var(--border-2);
+  width: 0; height: 34px; padding: 0; overflow: hidden; opacity: 0;
+  background: var(--surf-2); border: 1px solid transparent;
   color: var(--text-2); font-size: 18px; line-height: 1;
   cursor: pointer; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  transition: background .15s, color .15s;
+  transition: width .12s, opacity .12s, background .15s, color .15s;
   user-select: none; -webkit-user-select: none;
 }
+/* Al tocar/enfocar el campo (o hover en desktop) aparecen los -/+. Funciona en movil via focus. */
+.num-stepper:hover .stp-btn, .num-stepper:focus-within .stp-btn { width: 32px; opacity: 1; border-color: var(--border-2); }
+.num-stepper:hover input[type=number], .num-stepper:focus-within input[type=number] { border-left: none; border-right: none; border-radius: 0; }
 .stp-btn:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); }
 .stp-btn:last-child  { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
 .stp-btn:hover { background: var(--gold-d); color: var(--gold); }
 .stp-btn:active { opacity: 0.7; }
 @media (max-width: 600px) {
-  .stp-btn { width: 36px; height: 38px; font-size: 20px; }
+  .num-stepper:hover .stp-btn, .num-stepper:focus-within .stp-btn { width: 36px; }
+  .stp-btn { height: 38px; font-size: 20px; }
   .num-stepper input[type=number] { width: 80px; }
 }
 input[type=password],

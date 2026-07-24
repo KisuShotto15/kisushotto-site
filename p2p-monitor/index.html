@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=7">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=8">
 </head>
 <body>
 
@@ -274,7 +274,7 @@
     <div class="panel" id="bot-panel" style="position:relative">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="ptitle" style="margin-bottom:0">🤖 Auto-Repricing</div>
+          <div class="ptitle" style="margin-bottom:0">Auto-Repricing</div>
           <span id="bot-pay-badge" style="display:none;font-size:11px;font-weight:700;color:var(--gold);background:var(--gold-d);border:1px solid var(--gold-b);border-radius:4px;padding:2px 6px;letter-spacing:.02em">—</span>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -341,43 +341,39 @@
       <!-- Salud del bot (ultimo tick / reprice del servidor) -->
       <div id="bot-health" style="display:none;justify-content:space-between;font-size:12px;color:var(--text-3);margin:-4px 2px 10px;font-variant-numeric:tabular-nums"><span id="bh-tick">Tick: —</span><span id="bh-reprice">Reprice: —</span></div>
 
-      <!-- Config bot (campos visibles) -->
+      <!-- Config bot: campos primarios (los que se ajustan a diario) -->
       <div class="bot-group">
-      <div class="bot-group-h">Precio y techo</div>
+      <div class="bot-group-h">Configuración</div>
       <div class="cfg-row"><span style="display:flex;align-items:center;gap:6px">Precio de venta (Bs)<button class="btn btn-sm" type="button" onclick="botSuggestSell()" title="Sugerir desde el mercado" style="padding:1px 7px;font-size:11px">sugerir</button></span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="ej. 640" min="1" step="1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
       <div class="cfg-row"><span>Spread mínimo (%)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" value="0.5" min="0.1" max="10" step="0.1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
-      </div>
-      <div class="bot-group">
-      <div class="bot-group-h">Límites</div>
       <div class="cfg-row"><span>Límite mínimo (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
-      <div class="cfg-row"><span>Margen (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" value="10000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
-      </div>
-      <div class="bot-group">
-        <div class="bot-group-h">Métodos de pago del anuncio</div>
-        <div id="bot-paymethods" style="display:flex;flex-wrap:wrap;gap:6px 12px;padding:2px 0 6px"></div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="btn btn-sm" type="button" onclick="botApplyMethods(false)">Aplicar al anuncio ahora</button>
-          <span style="font-size:11px;color:var(--text-3)">se aplican solos al iniciar el bot</span>
-        </div>
       </div>
       <details class="bot-details">
-        <summary>Opciones avanzadas</summary>
+        <summary>Ajustes avanzados</summary>
+        <div class="cfg-row"><span>Margen (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" value="10000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
         <div class="cfg-row"><span>Incremento (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',-1)">−</button><input type="number" id="cfg-bot-inc" value="0.001" min="0.001" step="0.001"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',1)">+</button></div></div>
         <div class="cfg-row"><span>Gap máx. para seguir (Bs)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',-1)">−</button><input type="number" id="cfg-bot-gap" value="1.0" min="0.5" step="0.5"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',1)">+</button></div></div>
+        <div style="margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Métodos de pago del anuncio</div>
+          <div id="bot-paymethods" style="display:flex;flex-wrap:wrap;gap:6px 12px;padding:2px 0 6px"></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-sm" type="button" onclick="botApplyMethods(false)">Aplicar al anuncio ahora</button>
+            <span style="font-size:11px;color:var(--text-3)">se aplican solos al iniciar el bot</span>
+          </div>
+        </div>
       </details>
       <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
         <button class="btn btn-gold" style="flex:1" onclick="saveBotConfig()">Guardar</button>
         <span id="bot-cfg-st" style="font-size:14px;color:#555"></span>
       </div>
 
-
-      <!-- Control manual -->
-      <div class="bot-group">
-        <div class="bot-group-h">Control manual</div>
+      <!-- Control manual (colapsado: uso ocasional) -->
+      <details class="bot-details">
+        <summary>Control manual</summary>
         <div class="cfg-row"><span>Cantidad (USDT)</span><div style="display:flex;gap:6px;align-items:center"><input type="number" id="manual-qty" placeholder="ej. 500" min="1" step="1" style="width:108px" oninput="updateManualTotal()"><button class="btn btn-gold btn-sm" onclick="manualSetQty()" title="Aplicar cantidad" style="flex-shrink:0;padding:5px 13px">✓</button></div></div>
         <div class="cfg-row" style="border-bottom:none"><span style="color:var(--text-3)">Total <span id="manual-balance" style="margin-left:4px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span></span><span id="manual-total" style="font-size:16px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span></div>
         <div id="manual-st" style="font-size:13px;color:var(--text-3);min-height:16px;padding-bottom:6px"></div>
-      </div>
+      </details>
 
       <!-- Log -->
       <!-- Metricas de rotacion (tabla orders, la alimenta el bot server-side) -->
