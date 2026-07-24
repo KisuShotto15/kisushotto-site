@@ -1,3 +1,5 @@
+/* Quita el recuadro azul de tap en movil (WebKit/Chrome Android) */
+* { -webkit-tap-highlight-color: transparent; }
 /* ── Variables ──────────────────────────────────────── */
 :root {
   --bg:        #07090f;
@@ -517,32 +519,29 @@ input[type=text] {
   text-align: right;
 }
 input[type=number] { width: 135px; }
-.num-stepper { display: flex; align-items: center; }
-/* Reposo: input limpio con su propio borde; los -/+ colapsados (look minimalista). */
-.num-stepper input[type=number] { width: 100px; text-align: center; padding-left: 8px; padding-right: 8px; border: 1px solid var(--border-2); border-radius: var(--r-sm); transition: border-radius .12s; }
+/* El recuadro es el .num-stepper; el input va transparente dentro y los -/+ planos
+   pegados a los bordes (sin cajas propias). */
+.num-stepper { display: inline-flex; align-items: center; background: var(--surf-2); border: 1px solid var(--border-2); border-radius: var(--r-sm); overflow: hidden; transition: border-color .15s; }
+.num-stepper:focus-within { border-color: var(--gold); }
+.num-stepper input[type=number] { width: 72px; text-align: center; background: transparent; border: none; border-radius: 0; }
+.num-stepper input[type=number]:focus { box-shadow: none; }
 .num-stepper input[type=number]::-webkit-inner-spin-button,
 .num-stepper input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .num-stepper input[type=number] { -moz-appearance: textfield; }
 .stp-btn {
-  width: 0; height: 34px; padding: 0; overflow: hidden; opacity: 0;
-  background: var(--surf-2); border: 1px solid transparent;
-  color: var(--text-2); font-size: 18px; line-height: 1;
-  cursor: pointer; flex-shrink: 0;
+  width: 30px; height: 32px; padding: 0; flex-shrink: 0;
+  background: transparent; border: none;
+  color: var(--text-3); font-size: 18px; line-height: 1;
+  cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: width .12s, opacity .12s, background .15s, color .15s;
+  transition: color .15s;
   user-select: none; -webkit-user-select: none;
 }
-/* Al tocar/enfocar el campo (o hover en desktop) aparecen los -/+. Funciona en movil via focus. */
-.num-stepper:hover .stp-btn, .num-stepper:focus-within .stp-btn { width: 32px; opacity: 1; border-color: var(--border-2); }
-.num-stepper:hover input[type=number], .num-stepper:focus-within input[type=number] { border-left: none; border-right: none; border-radius: 0; }
-.stp-btn:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); }
-.stp-btn:last-child  { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
-.stp-btn:hover { background: var(--gold-d); color: var(--gold); }
-.stp-btn:active { opacity: 0.7; }
+.stp-btn:hover { color: var(--gold); }
+.stp-btn:active { color: var(--gold); opacity: 0.7; }
 @media (max-width: 600px) {
-  .num-stepper:hover .stp-btn, .num-stepper:focus-within .stp-btn { width: 36px; }
-  .stp-btn { height: 38px; font-size: 20px; }
-  .num-stepper input[type=number] { width: 80px; }
+  .stp-btn { width: 34px; height: 36px; font-size: 20px; }
+  .num-stepper input[type=number] { width: 62px; }
 }
 input[type=password],
 input[type=text]   { width: 140px; text-align: left; }
