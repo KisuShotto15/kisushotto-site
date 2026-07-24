@@ -345,7 +345,7 @@
       <div class="bot-group-h">Configuración</div>
       <div class="cfg-row"><span style="display:flex;align-items:center;gap:6px">Precio de venta (Bs)<button class="btn btn-sm" type="button" onclick="botSuggestSell()" title="Sugerir desde el mercado" style="padding:1px 7px;font-size:11px">sugerir</button></span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="ej. 640" min="1" step="1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
       <div class="cfg-row"><span>Spread mínimo (%)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" value="0.5" min="0.1" max="10" step="0.1" oninput="botUpdateCeiling()"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
-      <div class="cfg-row"><span>Límite mínimo (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="5000"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
+      <div class="cfg-row"><span>Límite mínimo (VES)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="10000"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
       </div>
       <details class="bot-details">
         <summary>Ajustes avanzados</summary>
@@ -395,7 +395,7 @@
   </div>
 </div>
 
-<script src="/p2p-monitor/main.js?v=13"></script>
+<script src="/p2p-monitor/main.js?v=14"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
