@@ -880,6 +880,7 @@ function updateSessionStats() {
 
 function updateTopbarBotPrice(price) {
   var el = document.getElementById('topbar-bot-price');
+  if (!el) return; // se quito de la top bar; el precio vive en el panel del bot
   if (price && BOT.running) {
     el.textContent = fmt(price) + ' Bs';
     el.style.display = 'inline-flex';
