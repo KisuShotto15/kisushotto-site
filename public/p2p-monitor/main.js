@@ -2338,15 +2338,25 @@ function openHistory() {
   if (hp) hp.textContent = ' · ' + payLabel(ACTIVE_PAY);
   document.getElementById('hx-overlay').style.display = 'block';
   document.body.style.overflow = 'hidden';
+  // Entrada en el historial del navegador: el boton atras (movil) cierra el grafico
+  // en vez de salir de la app.
+  try { history.pushState({ hxOpen: true }, ''); } catch (e) {}
   hxBindPointer();
   hxRenderRanges();
   hxLoad();
 }
-function closeHistory() {
+function closeHistory(fromPop) {
+  if (!HX.open) return;
   HX.open = false;
   document.getElementById('hx-overlay').style.display = 'none';
   document.body.style.overflow = '';
+  // Cierre por la UI (X): retroceder para consumir el estado que empujamos.
+  // Si vino del boton atras, el navegador ya lo consumio.
+  if (!fromPop) { try { history.back(); } catch (e) {} }
 }
+window.addEventListener('popstate', function() {
+  if (HX.open) closeHistory(true);
+});
 function hxMerge(histLong, hist24) {
   var byTs = {};
   [histLong, hist24].forEach(function(arr) {
