@@ -221,11 +221,11 @@ body {
 #bot-panel .num-stepper { width: 168px; }
 #bot-panel .num-stepper input[type=number] { width: auto; flex: 1; min-width: 0; }
 #bot-panel .stp-unit { width: 30px; }
-/* Sugerir precio: vive DENTRO del stepper (junto al campo que rellena). Plano como
+/* Sugerir precio: vive DENTRO del stepper, pegado al borde derecho. Plano como
    los -/+; junto a la etiqueta no cabia y partia la fila en dos lineas. */
 .sug-btn {
   flex-shrink: 0; padding: 0 6px; height: 100%;
-  background: transparent; border: none; border-left: 1px solid var(--border);
+  background: transparent; border: none;
   font-size: 13px; line-height: 1; cursor: pointer; opacity: .75;
   display: flex; align-items: center; justify-content: center;
 }
