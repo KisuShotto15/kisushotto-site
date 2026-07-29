@@ -435,6 +435,61 @@ function caretOffset(el) {
   return pre.toString().length;
 }
 
+// Coloca el cursor en un offset de caracteres dentro de un contenteditable.
+function placeCursorAtOffset(el, offset) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let node, acc = 0;
+  while ((node = walker.nextNode())) {
+    const len = node.textContent.length;
+    if (acc + len >= offset) {
+      const range = document.createRange();
+      range.setStart(node, offset - acc);
+      range.collapse(true);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    acc += len;
+  }
+  placeCursorAtEnd(el);
+}
+
+// Backspace al inicio de una fila del checklist: borra la fila y pasa su texto
+// al final de la fila anterior. Devuelve true si manejo el evento.
+function checklistBackspaceMerge(ev) {
+  const e = State.editing;
+  if (!e) return false;
+  const txtEl = ev.target;
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed) return false;
+  if (caretOffset(txtEl) !== 0) return false;
+  const id = txtEl.closest('.ed-check-row')?.dataset.id;
+  if (!id) return false;
+  syncChecklistFromDom();
+  const items = e.checklist_items || [];
+  const idx = items.findIndex(x => x.id === id);
+  if (idx < 0) return false;
+  const text = items[idx].text || '';
+  if (idx === 0 && text !== '') return false;  // primera fila con texto: no hay donde fundir
+
+  ev.preventDefault();
+  EditorHistory.flush();
+  let caret = 0;
+  if (idx > 0) {
+    const prev = items[idx - 1];
+    caret = (prev.text || '').length;
+    prev.text = (prev.text || '') + text;
+  }
+  items.splice(idx, 1);
+  items.forEach((it, i) => { it.order = i; });
+  renderChecklist();
+  scheduleSave();
+  const target = $('#ed-checklist-list').querySelectorAll('.ed-check-text')[Math.max(0, idx - 1)];
+  if (target) { target.focus(); placeCursorAtOffset(target, caret); }
+  return true;
+}
+
 function updateNetBanner(online) {
   const el = $('#net-banner');
   if (!el) return;
@@ -1305,6 +1360,35 @@ function patchGrid(container, notes) {
   });
 }
 
+// Estado vacio: icono + texto segun la vista actual (y si hay busqueda activa).
+const EMPTY_ICONS = {
+  note:    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  archive: '<path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/>',
+  trash:   '<path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
+  shared:  '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>',
+  locked:  '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  search:  '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+};
+
+function renderEmptyState() {
+  const byView = {
+    all:     ['note',    'Todavía no hay notas.',          true],
+    archive: ['archive', 'No hay nada archivado.',         false],
+    trash:   ['trash',   'La papelera está vacía.',        false],
+    shared:  ['shared',  'Nadie compartió notas contigo.', false],
+    locked:  ['locked',  'No hay notas protegidas.',       false],
+  };
+  let [icon, text, cta] = byView[State.view] || ['note', 'Esta etiqueta no tiene notas.', true];
+  const q = State.search.trim();
+  if (q) { icon = 'search'; text = `Sin resultados para "${q}"`; cta = false; }
+
+  $('#empty-icon').innerHTML =
+    `<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${EMPTY_ICONS[icon]}</svg>`;
+  $('#empty-text').textContent = text;
+  $('#empty-cta').hidden = !cta;
+}
+
 function renderGrid() {
   const notes = getCurrentNotes();
   const pinned = notes.filter(n => n.pinned);
@@ -1325,6 +1409,7 @@ function renderGrid() {
   }
   $('#others-title').textContent = title;
   $('#empty-state').hidden = !!notes.length;
+  if (!notes.length) renderEmptyState();
   const ta = $('#trash-actions');
   if (ta) ta.hidden = State.view !== 'trash' || !notes.length;
 }
@@ -2536,21 +2621,7 @@ function bindEditorActions() {
       return;
     }
     if (ev.key === 'Backspace' && ev.target.matches('.ed-check-text')) {
-      if (ev.target.textContent !== '') return;
-      ev.preventDefault();
-      const e = State.editing;
-      if (!e) return;
-      EditorHistory.flush();
-      const row = ev.target.closest('.ed-check-row');
-      const id = row?.dataset.id;
-      if (!id) return;
-      const idx = (e.checklist_items || []).findIndex(x => x.id === id);
-      e.checklist_items = (e.checklist_items || []).filter(x => x.id !== id);
-      renderChecklist();
-      scheduleSave();
-      const newRows = cl.querySelectorAll('.ed-check-text');
-      const target = newRows[Math.max(0, idx - 1)];
-      if (target) { target.focus(); placeCursorAtEnd(target); }
+      checklistBackspaceMerge(ev);
     }
   });
   // Mobile: beforeinput fires more reliably than keydown for backspace on virtual keyboard
@@ -2558,21 +2629,7 @@ function bindEditorActions() {
     if (ev.inputType !== 'deleteContentBackward') return;
     if (!ev.target.matches('.ed-check-text')) return;
     if (ev.isComposing) return;
-    if (ev.target.textContent !== '') return;
-    ev.preventDefault();
-    const e = State.editing;
-    if (!e) return;
-    EditorHistory.flush();
-    const row = ev.target.closest('.ed-check-row');
-    const id = row?.dataset.id;
-    if (!id) return;
-    const idx = (e.checklist_items || []).findIndex(x => x.id === id);
-    e.checklist_items = (e.checklist_items || []).filter(x => x.id !== id);
-    renderChecklist();
-    scheduleSave();
-    const newRows = cl.querySelectorAll('.ed-check-text');
-    const target = newRows[Math.max(0, idx - 1)];
-    if (target) { target.focus(); placeCursorAtEnd(target); }
+    checklistBackspaceMerge(ev);
   });
 }
 

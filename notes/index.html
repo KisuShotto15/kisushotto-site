@@ -13,17 +13,12 @@
 <link rel="icon" type="image/svg+xml" href="/images/notes-favicon.svg">
 <link rel="apple-touch-icon" href="/icons/notes-192.png">
 <link rel="manifest" href="/manifests/notes.json">
-<link rel="stylesheet" href="./style.css?v=34">
-<style>
-#__version_wm{position:fixed;bottom:6px;right:8px;font:600 10px/1 system-ui,sans-serif;
-  color:#fff;background:rgba(220,38,38,.85);padding:3px 6px;border-radius:6px;
-  z-index:99999;pointer-events:none;letter-spacing:.3px}
-</style>
+<link rel="stylesheet" href="./style.css?v=35">
 </head>
 <body>
 
 <div class="topbar">
-  <button class="btn-icon sidebar-toggle" id="sidebar-toggle" title="Menú">
+  <button class="btn-icon sidebar-toggle" id="sidebar-toggle" title="Menú" aria-label="Menú">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
   </button>
   <a href="https://kisushotto.com" class="brand" title="Volver al Hub">
@@ -32,10 +27,10 @@
   </a>
   <div class="search-wrap">
     <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <input type="search" id="search" placeholder="Search" autocomplete="off">
+    <input type="search" id="search" placeholder="Buscar" autocomplete="off" aria-label="Buscar notas">
   </div>
   <div class="topbar-actions">
-    <button class="btn-icon" id="btn-settings" title="Ajustes" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
+    <button class="btn-icon" id="btn-settings" title="Ajustes" aria-label="Ajustes" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
   </div>
 </div>
 
@@ -78,7 +73,7 @@
 
 <main id="main">
   <section id="pinned-section" class="grid-section" hidden>
-    <h2>📌 Fijadas</h2>
+    <h2><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg>Fijadas</h2>
     <div class="masonry" id="grid-pinned"></div>
   </section>
   <section id="others-section" class="grid-section">
@@ -89,24 +84,25 @@
     </div>
     <div class="masonry" id="grid-others"></div>
     <div class="empty" id="empty-state" hidden>
-      <p>No hay notas aquí.</p>
-      <button class="btn-pri" onclick="window.NotesApp.openNew()">Crear la primera</button>
+      <div class="empty-icon" id="empty-icon"></div>
+      <p id="empty-text">No hay notas aquí.</p>
+      <button class="btn-pri" id="empty-cta" onclick="window.NotesApp.openNew()">Crear la primera</button>
     </div>
   </section>
 </main>
 
-<button class="fab" id="fab-new" title="Nueva nota" onclick="window.NotesApp.openNew()">
+<button class="fab" id="fab-new" title="Nueva nota" aria-label="Nueva nota" onclick="window.NotesApp.openNew()">
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
 </button>
 
 <div class="select-bar" id="select-bar" hidden>
-  <button class="btn-icon" id="select-cancel" title="Cancelar">✕</button>
+  <button class="btn-icon" id="select-cancel" title="Cancelar" aria-label="Cancelar selección"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   <span id="select-count"></span>
   <div class="select-actions">
-    <button class="btn-icon" id="select-pin" title="Fijar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
-    <button class="btn-icon" id="select-cats" title="Categorías"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
-    <button class="btn-icon" id="select-archive" title="Archivar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></button>
-    <button class="btn-icon select-danger" id="select-delete" title="Eliminar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+    <button class="btn-icon" id="select-pin" title="Fijar" aria-label="Fijar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
+    <button class="btn-icon" id="select-cats" title="Categorías" aria-label="Categorías"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
+    <button class="btn-icon" id="select-archive" title="Archivar" aria-label="Archivar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></button>
+    <button class="btn-icon select-danger" id="select-delete" title="Eliminar" aria-label="Eliminar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
   </div>
 </div>
 
@@ -116,12 +112,12 @@
   <div class="modal-bg" data-close onclick=""></div>
   <div class="modal-card editor-card">
     <div class="ed-toolbar">
-      <button class="btn-icon" id="ed-close" data-close onclick="" title="Atrás"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"></path><polyline points="12 19 5 12 12 5"></polyline></svg></button>
+      <button class="btn-icon" id="ed-close" data-close onclick="" title="Atrás" aria-label="Atrás"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"></path><polyline points="12 19 5 12 12 5"></polyline></svg></button>
       <div class="ed-meta" id="ed-meta"></div>
       <span class="ed-status" id="ed-status"></span>
       <div class="ed-toolbar-right">
-        <button class="btn-icon" id="ed-pin" title="Fijar" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
-        <button class="btn-icon" id="ed-reminder" title="Recordatorio" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
+        <button class="btn-icon" id="ed-pin" title="Fijar" aria-label="Fijar" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
+        <button class="btn-icon" id="ed-reminder" title="Recordatorio" aria-label="Recordatorio" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
       </div>
     </div>
     <div class="ed-scroll">
@@ -134,13 +130,13 @@
     </div>
 
     <div class="ed-bottom-bar">
-      <button class="btn-icon" id="ed-add" title="Agregar" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
-      <button class="btn-icon" id="ed-color" title="Color" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg></button>
+      <button class="btn-icon" id="ed-add" title="Agregar" aria-label="Agregar" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+      <button class="btn-icon" id="ed-color" title="Color" aria-label="Color" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg></button>
       <div class="ed-undo-redo">
         <span class="ed-edited" id="ed-edited"></span>
-        <button class="btn-icon" id="ed-undo" title="Deshacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg></button>
-        <button class="btn-icon" id="ed-redo" title="Rehacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg></button>
-        <button class="btn-icon" id="ed-more" title="Más opciones" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
+        <button class="btn-icon" id="ed-undo" title="Deshacer" aria-label="Deshacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg></button>
+        <button class="btn-icon" id="ed-redo" title="Rehacer" aria-label="Rehacer" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg></button>
+        <button class="btn-icon" id="ed-more" title="Más opciones" aria-label="Más opciones" onclick=""><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
       </div>
     </div>
 
@@ -194,12 +190,12 @@
   <div class="modal-card cats-modal-card">
     <div class="cats-modal-header">
       <span class="cats-modal-title">Categorías</span>
-      <button class="btn-icon" id="cats-modal-close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button class="btn-icon" id="cats-modal-close" title="Cerrar" aria-label="Cerrar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div id="cats-modal-list" class="cats-modal-list"></div>
     <div class="cats-modal-foot">
       <input type="text" id="popup-new-cat" placeholder="Nueva categoría...">
-      <button class="btn-pri" id="popup-new-cat-btn" onclick="">+</button>
+      <button class="btn-pri btn-add" id="popup-new-cat-btn" title="Agregar" aria-label="Agregar categoría" onclick=""><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     </div>
   </div>
 </div>
@@ -220,7 +216,7 @@
   <div id="popup-share-list"></div>
   <div class="popup-foot">
     <input type="email" id="popup-share-email" placeholder="email@ejemplo.com">
-    <button class="btn-pri" id="popup-share-add" onclick="">+</button>
+    <button class="btn-pri btn-add" id="popup-share-add" title="Compartir" aria-label="Compartir con este email" onclick=""><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
   </div>
 </div>
 
@@ -245,14 +241,14 @@
   <aside class="drawer-card">
     <header class="drawer-head">
       <h2>Ajustes</h2>
-      <button class="btn-icon" data-close-drawer onclick="">✕</button>
+      <button class="btn-icon" data-close-drawer title="Cerrar" aria-label="Cerrar ajustes" onclick=""><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </header>
     <nav class="drawer-nav">
       <div class="drawer-section">Categorías</div>
       <div id="drawer-cat-list"></div>
       <div class="drawer-row">
         <input type="text" id="drawer-cat-name" placeholder="Nueva categoría">
-        <button class="btn-pri" id="drawer-cat-add" onclick="">+</button>
+        <button class="btn-pri btn-add" id="drawer-cat-add" title="Agregar" aria-label="Agregar categoría" onclick=""><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       </div>
       <hr>
       <div class="drawer-section">Seguridad</div>
@@ -274,7 +270,7 @@
 <div class="login-screen hidden" id="loginScreen">
   <div class="login-card">
     <img class="login-icon" src="/images/notes-logo.svg" alt="" width="64" height="64">
-    <h2 class="login-title">NOTAS</h2>
+    <h2 class="login-title">Notes</h2>
     <button class="btn-pri login-btn" id="btnPasskeyLogin">Entrar con passkey</button>
     <div class="login-divider"><span>o</span></div>
     <input type="email" id="loginEmail" class="login-input" placeholder="tu@email.com" autocomplete="email">
@@ -346,8 +342,7 @@
   <img id="lightbox-img" alt="">
 </div>
 
-<div id="__version_wm">v65</div>
-<script type="module" src="./main.js?v=69"></script>
+<script type="module" src="./main.js?v=70"></script>
 <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>
