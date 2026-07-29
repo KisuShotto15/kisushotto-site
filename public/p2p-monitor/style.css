@@ -151,7 +151,7 @@ body {
 .bot-group .cfg-row:last-child { border-bottom: none; }
 /* Chips de contexto del bot (metodo, comision, estado): antes iban sueltos en el
    titulo y se solapaban entre si cuando el texto crecia. */
-.bot-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 6px 0 10px; }
+.bot-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; flex: 1 1 auto; min-width: 0; }
 .bchip {
   font-size: 11px; font-weight: 700; letter-spacing: .02em;
   color: var(--text-2); background: var(--surf-2);

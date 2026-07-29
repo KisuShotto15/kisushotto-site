@@ -158,7 +158,11 @@ function updateBotPayBadge() {
   var el = document.getElementById('bot-pay-badge');
   if (!el) return;
   if (BOT.adPayTypes && BOT.adPayTypes.length) {
-    el.textContent = BOT.adPayTypes.map(payLabel).join(' · ');
+    // Solo el primer metodo: el anuncio suele llevar el banco + "Bank Transfer"
+    // generico y el chip se hacia larguisimo. La lista completa va en el tooltip.
+    var labels = BOT.adPayTypes.map(payLabel);
+    el.textContent = labels[0];
+    el.title = labels.join(' · ');
     el.style.display = '';
   } else {
     el.style.display = 'none';
