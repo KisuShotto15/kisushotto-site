@@ -360,19 +360,18 @@
             <span style="font-size:11px;color:var(--text-3)">se aplican solos al iniciar el bot</span>
           </div>
         </div>
+        <div style="margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Cantidad del anuncio</div>
+          <div class="cfg-row"><span>Cantidad (USDT)</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('manual-qty',-1)">−</button><input type="number" id="manual-qty" placeholder="sin cambio" min="1" step="100" oninput="updateManualTotal()"><button class="stp-btn" onclick="stepInput('manual-qty',1)">+</button></div></div>
+          <div class="cfg-row" style="border-bottom:none"><span style="color:var(--text-3)">Total <span id="manual-balance" style="margin-left:4px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span></span><span id="manual-total" style="font-size:16px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span></div>
+          <div style="font-size:11px;color:var(--text-3);padding-bottom:2px">se aplica al guardar; vacío = no se toca el anuncio</div>
+          <div id="manual-st" style="font-size:13px;color:var(--text-3);min-height:16px;padding-bottom:6px"></div>
+        </div>
       </details>
       <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
-        <button class="btn btn-gold" style="flex:1" onclick="saveBotConfig()">Guardar</button>
+        <button class="btn btn-gold" style="flex:1" onclick="saveBotConfigAndApply()">Guardar</button>
         <span id="bot-cfg-st" style="font-size:14px;color:#555"></span>
       </div>
-
-      <!-- Control manual (colapsado: uso ocasional) -->
-      <details class="bot-details">
-        <summary>Control manual</summary>
-        <div class="cfg-row"><span>Cantidad (USDT)</span><div style="display:flex;gap:6px;align-items:center"><input type="number" id="manual-qty" placeholder="ej. 500" min="1" step="1" style="width:108px" oninput="updateManualTotal()"><button class="btn btn-gold btn-sm" onclick="manualSetQty()" title="Aplicar cantidad" style="flex-shrink:0;padding:5px 13px">✓</button></div></div>
-        <div class="cfg-row" style="border-bottom:none"><span style="color:var(--text-3)">Total <span id="manual-balance" style="margin-left:4px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span></span><span id="manual-total" style="font-size:16px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span></div>
-        <div id="manual-st" style="font-size:13px;color:var(--text-3);min-height:16px;padding-bottom:6px"></div>
-      </details>
 
       <!-- Log -->
       <!-- Metricas de rotacion (tabla orders, la alimenta el bot server-side) -->
@@ -395,7 +394,7 @@
   </div>
 </div>
 
-<script src="/p2p-monitor/main.js?v=15"></script>
+<script src="/p2p-monitor/main.js?v=16"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

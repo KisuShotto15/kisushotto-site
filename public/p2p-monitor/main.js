@@ -1789,12 +1789,13 @@ function updateManualBalance() {
   el.textContent = '(' + usdt.toFixed(2) + ' USDT ' + ves + ')';
 }
 
+// Devuelve true solo si Binance acepto el cambio (el que llama decide si limpia el campo).
 async function manualSetQty() {
   var qty = parseFloat(document.getElementById('manual-qty').value);
   var st = document.getElementById('manual-st');
-  if (!qty || qty <= 0) { st.textContent = 'Ingresa una cantidad válida'; st.style.color = 'var(--red)'; return; }
+  if (!qty || qty <= 0) { st.textContent = 'Ingresa una cantidad válida'; st.style.color = 'var(--red)'; return false; }
   var adNo = BOT.adNumber || BOT_CFG.adNo;
-  if (!adNo) { st.textContent = 'Configura el Ad Number primero'; st.style.color = 'var(--red)'; return; }
+  if (!adNo) { st.textContent = 'Configura el Ad Number primero'; st.style.color = 'var(--red)'; return false; }
   st.textContent = 'Aplicando cantidad...'; st.style.color = 'var(--text-3)';
   try {
     var data = await botCallWorker('/update-quantity', { advNo: adNo, totalAmount: qty });
@@ -1803,9 +1804,22 @@ async function manualSetQty() {
     BOT.cachedAd = null;
     BOT.cachedAdAt = 0;
     st.textContent = '✓ Cantidad actualizada'; st.style.color = 'var(--green)';
+    return true;
   } catch(e) {
     st.textContent = '✗ ' + e.message; st.style.color = 'var(--red)';
+    return false;
   }
+}
+
+// Boton Guardar del panel del bot: guarda la config y, SOLO si hay cantidad escrita,
+// la aplica al anuncio y limpia el campo (para no reaplicarla sin querer al volver a
+// guardar). Va aparte de saveBotConfig() a proposito: esa tambien la llama "Iniciar
+// Bot", y arrancar el bot no debe tocar la cantidad del anuncio.
+async function saveBotConfigAndApply() {
+  saveBotConfig();
+  var inp = document.getElementById('manual-qty');
+  if (!inp || !(parseFloat(inp.value) > 0)) return;
+  if (await manualSetQty()) { inp.value = ''; updateManualTotal(); }
 }
 
 async function botUpdateMinLimit(adNumber, minAmount) {
