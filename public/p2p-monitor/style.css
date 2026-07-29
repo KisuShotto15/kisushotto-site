@@ -149,6 +149,17 @@ body {
 }
 .bot-group .cfg-row { border-bottom: 1px solid var(--border); }
 .bot-group .cfg-row:last-child { border-bottom: none; }
+/* Chips de contexto del bot (metodo, comision, estado): antes iban sueltos en el
+   titulo y se solapaban entre si cuando el texto crecia. */
+.bot-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 6px 0 10px; }
+.bchip {
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  color: var(--text-2); background: var(--surf-2);
+  border: 1px solid var(--border-2); border-radius: 5px; padding: 2px 7px;
+}
+.bchip-gold { color: var(--gold); background: var(--gold-d); border-color: var(--gold-b); }
+/* Nota gris junto al titulo de un bloque plegado (ej. "Metricas · hoy 819 USDT") */
+.sum-note { font-size: 11px; font-weight: 600; color: var(--text-2); letter-spacing: 0; text-transform: none; margin-left: 6px; }
 .pay-chk { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none; }
 .pay-chk input { accent-color: var(--gold); cursor: pointer; }
 .ob-more { width: 100%; margin-top: 6px; padding: 6px; background: transparent; border: 1px dashed var(--border-2); border-radius: var(--r-sm); color: var(--text-3); font-size: 12px; font-weight: 600; cursor: pointer; transition: color .12s, border-color .12s; }
@@ -203,6 +214,22 @@ body {
 .bot-details { margin-top: 8px; }
 .bot-details > summary { padding: 8px 0; }
 #bot-panel .cfg-row { padding: 4px 0; }
+/* Etiqueta secundaria frente al valor: jerarquia y, de paso, cabe en una linea. */
+#bot-panel .cfg-row > span { font-size: 15px; }
+/* Mismo ancho para todos los steppers del panel: las cajas forman columna en vez
+   de quedar escalonadas segun lo que mida cada unidad (Bs / % / VES / USDT). */
+#bot-panel .num-stepper { width: 168px; }
+#bot-panel .num-stepper input[type=number] { width: auto; flex: 1; min-width: 0; }
+#bot-panel .stp-unit { width: 30px; }
+/* Sugerir precio: vive DENTRO del stepper (junto al campo que rellena). Plano como
+   los -/+; junto a la etiqueta no cabia y partia la fila en dos lineas. */
+.sug-btn {
+  flex-shrink: 0; padding: 0 6px; height: 100%;
+  background: transparent; border: none; border-left: 1px solid var(--border);
+  font-size: 13px; line-height: 1; cursor: pointer; opacity: .75;
+  display: flex; align-items: center; justify-content: center;
+}
+.sug-btn:hover, .sug-btn:active { opacity: 1; }
 #bot-panel .stp-btn { height: 30px; }
 #bot-panel input[type=number] { padding: 3px 8px; font-variant-numeric: tabular-nums; }
 /* Dentro del stepper el ancho util es el que manda: sin padding lateral (el id de
@@ -531,6 +558,9 @@ input[type=number] { width: 135px; }
 .num-stepper:focus-within { border-color: var(--gold); }
 .num-stepper input[type=number] { width: 82px; text-align: center; background: transparent; border: none; border-radius: 0; padding-left: 2px; padding-right: 2px; }
 .num-stepper input[type=number]:focus { box-shadow: none; }
+/* Unidad dentro del stepper: saca el "(Bs)" de la etiqueta, que era lo que partia
+   cada fila en dos lineas en movil. */
+.stp-unit { font-size: 11px; font-weight: 600; color: var(--text-3); padding-right: 3px; flex-shrink: 0; user-select: none; }
 .num-stepper input[type=number]::-webkit-inner-spin-button,
 .num-stepper input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .num-stepper input[type=number] { -moz-appearance: textfield; }
@@ -547,8 +577,8 @@ input[type=number] { width: 135px; }
 .stp-btn:active { color: var(--gold); opacity: 0.7; }
 @media (max-width: 600px) {
   /* Botones mas angostos y mas ancho util en el input: 6 digitos (600000) entran sin cortarse. */
-  .stp-btn { width: 30px; height: 36px; font-size: 20px; }
-  .num-stepper input[type=number] { width: 86px; }
+  .stp-btn { width: 28px; height: 36px; font-size: 20px; }
+  .num-stepper input[type=number] { width: 74px; }
 }
 input[type=password],
 input[type=text]   { width: 140px; text-align: left; }

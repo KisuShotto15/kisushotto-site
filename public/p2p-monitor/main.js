@@ -450,8 +450,11 @@ async function loadOrderStats() {
         tile('Hoy', intFmt(d.today.usdt) + ' <small>USDT</small>', d.today.done + ' órdenes') +
         tile('Promedio 7 días', intFmt(perDayUsdt) + ' <small>USDT/día</small>', Math.round(perDayOrd) + ' órdenes/día') +
       '</div>' +
-      '<div class="rot-line"><span>Una orden cada</span><b>' + fmtDur(d.medGapSec) + '</b><span class="rot-mut">mediana</span></div>' +
+      '<div class="rot-line"><span>Una orden cada</span><b>' + fmtDur(d.medGapSec) + '</b></div>' +
       (top ? '<div class="rot-line"><span>Horas más activas</span><b>' + top + '</b></div>' : '');
+    // Resumen en el titulo plegado: el dato de hoy sin tener que desplegar.
+    var sum = document.getElementById('rot-summary');
+    if (sum) sum.textContent = '· hoy ' + intFmt(d.today.usdt) + ' USDT';
   } catch (e) {
     el.textContent = 'Sin datos aún (se acumulan con el bot encendido)';
   }
@@ -1572,8 +1575,11 @@ function saveBotConfig() {
   botUpdateCeiling();
   // Si el bot ya corre en el servidor, empujar la config en caliente (limite, spread, etc.).
   if (BOT.running) botCallWorker('/bot-config', { config: botServerConfig() }).catch(function(){});
+  // Destello corto: el "✓ Guardado" fijo competia con los datos del panel.
   var st = document.getElementById('bot-cfg-st');
   st.textContent = '✓ Guardado'; st.style.color = '#1D9E75';
+  clearTimeout(st._t);
+  st._t = setTimeout(function(){ st.textContent = ''; }, 1800);
   var tgSt = document.getElementById('tg-st');
   if (tgSt) { tgSt.textContent = (TG.token && TG.chatId) ? '✓' : ''; }
   saveUserSettings();
@@ -1652,11 +1658,12 @@ function loadBotConfig() {
 
 function updateCommissionLabels() {
   var c = CFG.commission || 0;
-  ['ob-commission-label','bot-commission-label'].forEach(function(id){
-    var el = document.getElementById(id);
+  // En el bot es un chip (texto corto); en Seccion Vender sigue como etiqueta.
+  [['ob-commission-label', 'COMISIÓN '], ['bot-commission-label', 'com. ']].forEach(function(par){
+    var el = document.getElementById(par[0]);
     if (!el) return;
     if (c > 0) {
-      el.textContent = 'COMISIÓN ' + c + '%';
+      el.textContent = par[1] + c + '%';
       el.style.display = '';
     } else {
       el.style.display = 'none';
