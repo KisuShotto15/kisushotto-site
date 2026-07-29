@@ -205,6 +205,9 @@ body {
 #bot-panel .cfg-row { padding: 4px 0; }
 #bot-panel .stp-btn { height: 30px; }
 #bot-panel input[type=number] { padding: 3px 8px; font-variant-numeric: tabular-nums; }
+/* Dentro del stepper el ancho util es el que manda: sin padding lateral (el id de
+   #bot-panel gana por especificidad, hay que repetirlo aqui). */
+#bot-panel .num-stepper input[type=number] { padding-left: 2px; padding-right: 2px; }
 #bot-panel #bot-log { max-height: 100px; }
 
 /* ── Panels ─────────────────────────────────────────── */
@@ -505,6 +508,8 @@ body {
   color: var(--text-2);
 }
 .cfg-row:last-child { border-bottom: none; }
+/* La etiqueta se encoge; el stepper nunca (si no, el boton + queda cortado). */
+.cfg-row > span { min-width: 0; }
 input[type=number],
 input[type=password],
 input[type=text] {
@@ -520,10 +525,11 @@ input[type=text] {
 }
 input[type=number] { width: 135px; }
 /* El recuadro es el .num-stepper; el input va transparente dentro y los -/+ planos
-   pegados a los bordes (sin cajas propias). */
-.num-stepper { display: inline-flex; align-items: center; background: var(--surf-2); border: 1px solid var(--border-2); border-radius: var(--r-sm); overflow: hidden; transition: border-color .15s; }
+   pegados a los bordes (sin cajas propias). flex-shrink:0: si la etiqueta es larga
+   el stepper no se encoge (el boton + quedaba cortado fuera de la fila). */
+.num-stepper { display: inline-flex; align-items: center; flex-shrink: 0; background: var(--surf-2); border: 1px solid var(--border-2); border-radius: var(--r-sm); overflow: hidden; transition: border-color .15s; }
 .num-stepper:focus-within { border-color: var(--gold); }
-.num-stepper input[type=number] { width: 72px; text-align: center; background: transparent; border: none; border-radius: 0; }
+.num-stepper input[type=number] { width: 82px; text-align: center; background: transparent; border: none; border-radius: 0; padding-left: 2px; padding-right: 2px; }
 .num-stepper input[type=number]:focus { box-shadow: none; }
 .num-stepper input[type=number]::-webkit-inner-spin-button,
 .num-stepper input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -540,8 +546,9 @@ input[type=number] { width: 135px; }
 .stp-btn:hover { color: var(--gold); }
 .stp-btn:active { color: var(--gold); opacity: 0.7; }
 @media (max-width: 600px) {
-  .stp-btn { width: 34px; height: 36px; font-size: 20px; }
-  .num-stepper input[type=number] { width: 62px; }
+  /* Botones mas angostos y mas ancho util en el input: 6 digitos (600000) entran sin cortarse. */
+  .stp-btn { width: 30px; height: 36px; font-size: 20px; }
+  .num-stepper input[type=number] { width: 86px; }
 }
 input[type=password],
 input[type=text]   { width: 140px; text-align: left; }
