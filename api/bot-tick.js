@@ -186,6 +186,21 @@ function pickAd(ads, adNo) {
   }) || null;
 }
 
+// Aviso por Telegram (si esta configurado) + push. Best-effort, no rompe el tick.
+async function botNotify(cfg, userId, tgMsg, pushTitle, pushBody) {
+  let token = '';
+  try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
+  const chatId = cfg.tg && cfg.tg.chatId;
+  if (token && chatId) { try { await sendTelegram(token, chatId, tgMsg); } catch (e) {} }
+  if (pushTitle) sendPush(userId, pushTitle, pushBody || '').catch(() => {});
+}
+
+// Estado LIVE del anuncio segun Binance (advStatus 1 = online; 3 = apagado).
+function adIsLive(ad) {
+  const st = ad.advStatus;
+  return st === 'LIVE' || st === 'ONLINE' || st === 1 || st === '1' || ad.adStatus === 1;
+}
+
 async function tickUser(row) {
   const cfg = row.config || {};
   let log = row.log;
@@ -211,6 +226,17 @@ async function tickUser(row) {
     return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice };
   }
 
+  // Anuncio apagado en Binance por el usuario -> detener el bot (no gastar requests).
+  // Guarda: se ignora en el PRIMER tick (row.last_tick NULL) para no chocar con el
+  // desfase de estado justo tras activar el anuncio al iniciar.
+  if (row.last_tick && ad.advStatus != null && !adIsLive(ad)) {
+    const adNo = String(ad.advNo || ad.adNumber);
+    log = pushLog(log, '🛑 Anuncio apagado en Binance — bot detenido', 'warn');
+    await botNotify(cfg, row.user_id, '🔴 <b>Bot detenido</b>\nApagaste el anuncio en Binance.',
+      '🔴 Bot detenido', 'Apagaste el anuncio en Binance');
+    return { enabled: false, status: 'Detenido: anuncio apagado', log, adNumber: adNo, currentPrice, lastReprice };
+  }
+
   const surplus = parseFloat(ad.surplusAmount || ad.tradableQuantity || ad.remainQuantity || 0);
   if (surplus > 0 && surplus < 100) {
     // Pausar el anuncio en Binance: que no quede vivo y mal posicionado al apagarse el bot.
@@ -218,6 +244,8 @@ async function tickUser(row) {
     const off = await setAdStatus(key, secret, adNo, 3).catch(() => ({ ok: false }));
     log = pushLog(log, off.ok ? '🛑 Fondos insuficientes (<100 USDT) — anuncio pausado y bot detenido'
                               : '🛑 Fondos insuficientes — bot detenido (no se pudo pausar el anuncio)', 'error');
+    await botNotify(cfg, row.user_id, '🔴 <b>Bot detenido: fondos bajos</b>\nMenos de 100 USDT disponibles. Anuncio pausado.',
+      '🔴 Bot detenido: fondos bajos', 'Menos de 100 USDT disponibles');
     return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: adNo, currentPrice, lastReprice };
   }
 
