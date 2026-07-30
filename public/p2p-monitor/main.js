@@ -1562,8 +1562,12 @@ document.addEventListener('wheel', function (e) {
   const el = e.target;
   if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
   if (typeof el.closest !== 'function' || !el.closest('.num-stepper')) return;
+  // Shift+scroll llega como deltaX (scroll horizontal) en la mayoria de navegadores;
+  // sin esto, la direccion quedaba pegada y no ajustaba.
+  const delta = e.deltaY || e.deltaX;
+  if (!delta) return;
   e.preventDefault();
-  stepEl(el, e.deltaY < 0 ? 1 : -1, e.shiftKey ? 0.5 : 1);
+  stepEl(el, delta < 0 ? 1 : -1, e.shiftKey ? 0.5 : 1);
 }, { passive: false });
 
 function saveBotConfig() {
