@@ -1560,14 +1560,18 @@ function stepInput(id, dir) {
 // step (mas fino). Solo web (en movil no hay rueda). El clic de los -/+ tambien lo respeta.
 document.addEventListener('wheel', function (e) {
   const el = e.target;
-  if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
-  if (typeof el.closest !== 'function' || !el.closest('.num-stepper')) return;
+  if (!el || el.tagName !== 'INPUT' || el.type !== 'number' || typeof el.closest !== 'function') return;
+  const inStepper = el.closest('.num-stepper');
+  const inFilter  = el.closest('.lbl-filter');
+  if (!inStepper && !inFilter) return;
   // Shift+scroll llega como deltaX (scroll horizontal) en la mayoria de navegadores;
   // sin esto, la direccion quedaba pegada y no ajustaba.
   const delta = e.deltaY || e.deltaX;
   if (!delta) return;
   e.preventDefault();
+  // stepEl suma relativo al valor escrito (45000 → 55000), no al grid nativo (→ 50000).
   stepEl(el, delta < 0 ? 1 : -1, e.shiftKey ? 0.5 : 1);
+  if (inFilter) el.dispatchEvent(new Event('change')); // los filtros corren en onchange
 }, { passive: false });
 
 function saveBotConfig() {
