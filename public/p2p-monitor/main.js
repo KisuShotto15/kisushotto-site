@@ -1550,10 +1550,14 @@ function stepEl(el, dir, mult) {
   el.value   = Math.max(min, Math.min(max, parseFloat((cur + dir * step).toFixed(dec))));
   el.dispatchEvent(new Event('input'));
 }
-function stepInput(id, dir) { stepEl(document.getElementById(id), dir); }
+// Con Shift presionado, medio step (micro-ajuste). Aplica al clic de los botones -/+.
+function stepInput(id, dir) {
+  var mult = (typeof window !== 'undefined' && window.event && window.event.shiftKey) ? 0.5 : 1;
+  stepEl(document.getElementById(id), dir, mult);
+}
 
-// Scroll del mouse sobre un campo con stepper: sube/baja el valor (compensa que los
-// -/+ solo aparezcan al enfocar). Con Shift, medio step (mas fino). Solo web.
+// Scroll del mouse sobre un campo con stepper: sube/baja el valor. Con Shift, medio
+// step (mas fino). Solo web (en movil no hay rueda). El clic de los -/+ tambien lo respeta.
 document.addEventListener('wheel', function (e) {
   const el = e.target;
   if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
