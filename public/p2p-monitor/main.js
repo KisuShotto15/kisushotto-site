@@ -1571,7 +1571,18 @@ document.addEventListener('wheel', function (e) {
   e.preventDefault();
   // stepEl suma relativo al valor escrito (45000 → 55000), no al grid nativo (→ 50000).
   stepEl(el, delta < 0 ? 1 : -1, e.shiftKey ? 0.5 : 1);
-  if (inFilter) el.dispatchEvent(new Event('change')); // los filtros corren en onchange
+  // Filtros: no refetchar en cada tick; disparar el onchange (fetch) solo al salir del input.
+  if (inFilter) {
+    if (document.activeElement !== el) el.focus();
+    if (!el._wheelBlur) {
+      el._wheelBlur = true;
+      el.addEventListener('blur', function onb() {
+        el.removeEventListener('blur', onb);
+        el._wheelBlur = false;
+        el.dispatchEvent(new Event('change'));
+      });
+    }
+  }
 }, { passive: false });
 
 function saveBotConfig() {
