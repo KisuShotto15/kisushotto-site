@@ -104,7 +104,7 @@ export async function ensureSchema() {
   // existe, el schema esta completo y se saltan los ~20 DDLs secuenciales que
   // hacian eterno cada cold start. Si se agrega un DDL nuevo abajo, mover la sonda
   // al objeto mas nuevo (o borrarla temporalmente para que el DDL corra).
-  const probe = await sql`SELECT to_regclass('p2p.p2p_rate') AS t`.catch(() => []);
+  const probe = await sql`SELECT to_regclass('p2p.market_snapshots') AS t`.catch(() => []);
   if (probe[0] && probe[0].t) { schemaReady = true; return; }
   await sql`CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -200,5 +200,22 @@ export async function ensureSchema() {
     n INTEGER,
     updated_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // Snapshots del mercado BDV (grabador para el indice de debilidad). Lo alimenta el
+  // cliente en lote via /market-snapshot. Base para backtest de senales de caida.
+  await sql`CREATE TABLE IF NOT EXISTS market_snapshots (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    ts TIMESTAMPTZ NOT NULL,
+    may_best NUMERIC,
+    may_avail5 NUMERIC,
+    may_top JSONB,
+    rec_best NUMERIC,
+    rec_avail5 NUMERIC,
+    verde_best NUMERIC,
+    verde_eff NUMERIC,
+    spread_net NUMERIC,
+    commission NUMERIC
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS market_snapshots_user_ts ON market_snapshots (user_id, ts)`;
   schemaReady = true;
 }

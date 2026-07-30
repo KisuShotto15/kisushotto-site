@@ -776,6 +776,7 @@ async function fetchOnce() {
     checkAlerts();
     renderSparkline();
     refreshHist24();
+    recordMarketSnapshot();
     var emptyNote =(!ST.mayoristas.length && !ST.smallAds.length) ? ' — sin anuncios en rango' : '';
     var lu = document.getElementById('last-update');
     lu.style.color = '';
@@ -2277,6 +2278,49 @@ function credibleBest(a) {
 function credibleMay()   { return credibleBest(ST.mayoristas); }
 function credibleSmall() { return credibleBest(ST.smallAds); }
 function bestCredibleMay() { var m = credibleMay(); return m ? m.price : null; }
+
+// ── Grabador de mercado BDV (Paso 1 del indice de debilidad) ──────────
+// Snapshot de los ingredientes crudos (precios, profundidad, spread neto) cada ~30s,
+// en lote cada ~2 min a Supabase. Solo BDV y con el monitor corriendo. Cero costo real.
+var MKT = { buf: [], lastSample: 0, lastFlush: 0 };
+function r3(x) { return (x == null) ? null : Math.round(x * 1000) / 1000; }
+function sumAvail5(arr) { var s = 0; for (var i = 0; i < Math.min(5, arr.length); i++) s += (arr[i].avail || 0); return s; }
+function buildMarketSnapshot() {
+  if (ACTIVE_PAY !== 'BancoDeVenezuela') return null;
+  var cMay = credibleMay(); if (!cMay) return null;
+  var cSmall = credibleSmall();
+  var may = ST.mayoristas || [], rec = ST.smallAds || [], verde = ST.buyAds || [];
+  var mayBest = cMay.price;
+  var recBest = cSmall ? cSmall.price : (rec[0] ? rec[0].price : null);
+  var verdeBest = verde[0] ? verde[0].price : null;
+  var c = (CFG.commission || 0) / 100;
+  var spreadNet = (recBest != null) ? ((mayBest - recBest) / mayBest * 100) - (CFG.commission || 0) : null;
+  var verdeEff = (verdeBest != null) ? verdeBest * (1 - c) : null;
+  return {
+    ts: Date.now(),
+    mb: r3(mayBest), ma: Math.round(sumAvail5(may)),
+    mt: may.slice(0, 5).map(function (a) { return { p: r3(a.price), a: Math.round(a.avail || 0), n: a.merchant }; }),
+    rb: r3(recBest), ra: Math.round(sumAvail5(rec)),
+    vb: r3(verdeBest), ve: r3(verdeEff),
+    sn: r3(spreadNet), c: CFG.commission || 0
+  };
+}
+function recordMarketSnapshot() {
+  try {
+    if (!ST.running) return;
+    var now = Date.now();
+    if (now - MKT.lastSample >= 28000) {
+      var snap = buildMarketSnapshot();
+      if (snap) { MKT.buf.push(snap); MKT.lastSample = now; }
+    }
+    if (MKT.buf.length && (now - MKT.lastFlush > 120000 || MKT.buf.length >= 20)) flushMarketSnapshots();
+  } catch (e) {}
+}
+function flushMarketSnapshots() {
+  if (!MKT.buf.length || !SESSION.token) return;
+  var batch = MKT.buf; MKT.buf = []; MKT.lastFlush = Date.now();
+  botCallWorker('/market-snapshot', { rows: batch }).catch(function () {}); // lote perdido no es critico
+}
 // Mediana del top-10 creible (misma criba que el server: avail >= MIN_AVAIL).
 // Va en el heartbeat para que p2p_rate siga fresca con la app abierta.
 function medianCredibleMay() {

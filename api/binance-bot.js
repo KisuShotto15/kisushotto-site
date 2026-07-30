@@ -144,6 +144,31 @@ export default async function handler(req, res) {
     }
   }
 
+  // Grabador de mercado BDV: el cliente descarga snapshots en lote. Solo DB.
+  if (path === '/market-snapshot') {
+    try {
+      await ensureSchema();
+      const rows = (params && Array.isArray(params.rows)) ? params.rows.slice(0, 200) : [];
+      if (rows.length) {
+        await sql`
+          INSERT INTO market_snapshots (user_id, ts, may_best, may_avail5, may_top, rec_best, rec_avail5, verde_best, verde_eff, spread_net, commission)
+          SELECT ${user.uid}, to_timestamp((x->>'ts')::bigint / 1000.0),
+                 (x->>'mb')::numeric, (x->>'ma')::numeric, x->'mt',
+                 (x->>'rb')::numeric, (x->>'ra')::numeric,
+                 (x->>'vb')::numeric, (x->>'ve')::numeric,
+                 (x->>'sn')::numeric, (x->>'c')::numeric
+          FROM jsonb_array_elements(${JSON.stringify(rows)}::jsonb) AS x`;
+        // Poda ocasional (>60 dias): barata con el indice (user_id, ts).
+        if (Math.random() < 0.05) {
+          await sql`DELETE FROM market_snapshots WHERE user_id = ${user.uid} AND ts < now() - interval '60 days'`.catch(() => {});
+        }
+      }
+      return res.status(200).json({ ok: true, saved: rows.length });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   // Control del monitor server-side (alertas Telegram 24/7). No requiere creds Binance.
   if (path === '/monitor-enable' || path === '/monitor-disable' || path === '/monitor-state' || path === '/monitor-heartbeat' || path === '/monitor-history') {
     try {
