@@ -1719,7 +1719,7 @@ function renderChecklist() {
     const txt = document.createElement('div');
     txt.className = 'ed-check-text';
     txt.contentEditable = 'true';
-    txt.spellcheck = true;
+    txt.spellcheck = false;
     txt.textContent = it.text || '';
 
     const del = document.createElement('button');

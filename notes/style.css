@@ -1626,13 +1626,6 @@ input[type=checkbox]:focus-visible,
 .popup-menu-item:focus-visible,
 .drawer-item:focus-visible { outline-offset: -2px; }
 
-/* [contenteditable] de una sola linea (texto de checkbox): un outline
-   cuadrado se ve como una caja pegada al texto. Usamos un subrayado. */
-.ed-check-text:focus-visible {
-  outline: none;
-  box-shadow: 0 1px 0 var(--accent);
-}
-
 /* Inputs de texto: mismo tratamiento que el del login */
 .popup-foot input:focus,
 .cats-modal-foot input:focus,
