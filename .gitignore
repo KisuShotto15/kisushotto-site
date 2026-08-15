@@ -28,3 +28,5 @@ p2p-twa/build/
 .vercel
 .env*
 .wrangler/
+
+trade-journal-pwa/
