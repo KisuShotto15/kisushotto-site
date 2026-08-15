@@ -206,13 +206,13 @@
         <div class="form-field">
           <label>Qué importar</label>
           <div style="display:flex;gap:16px;margin-top:4px">
-            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size: 13px;color:var(--muted2);cursor:pointer">
               <input type="checkbox" id="chk-linear"  checked style="accent-color:var(--accent)"> Futures Linear
             </label>
-            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size: 13px;color:var(--muted2);cursor:pointer">
               <input type="checkbox" id="chk-inverse"        style="accent-color:var(--accent)"> Futures Inverse
             </label>
-            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size: 13px;color:var(--muted2);cursor:pointer">
               <input type="checkbox" id="chk-spot"           style="accent-color:var(--accent)"> Spot
             </label>
           </div>
@@ -230,10 +230,10 @@
         <div class="form-field">
           <label>Qué importar</label>
           <div style="display:flex;gap:16px;margin-top:4px">
-            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size: 13px;color:var(--muted2);cursor:pointer">
               <input type="checkbox" id="chk-bn-futures" checked style="accent-color:var(--accent)"> Futures (USDⓈ-M)
             </label>
-            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);cursor:pointer">
+            <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size: 13px;color:var(--muted2);cursor:pointer">
               <input type="checkbox" id="chk-bn-spot"          style="accent-color:var(--accent)"> Spot
             </label>
           </div>
@@ -245,14 +245,14 @@
         <div class="ingest-note">Exporta el Transaction Log desde Bybit → Account → Transaction Log → Export (CSV). Filtra por tipo "Trade" antes de exportar para mejores resultados.</div>
         <div class="form-field">
           <label>Archivo CSV</label>
-          <input type="file" id="csv-file" accept=".csv" style="color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;margin-top:4px">
+          <input type="file" id="csv-file" accept=".csv" style="color:var(--text);font-family:'IBM Plex Mono',monospace;font-size: 13px;margin-top:4px">
         </div>
         <button class="btn btn-accent" onclick="doIngestCSV()">Importar CSV</button>
         <div class="ingest-result" id="result-csv"></div>
       </div>
       <div class="isect-panel" id="panel-autosync">
         <div class="ingest-note">⚡ Guarda tu API key una vez y el sistema sincronizará automáticamente cada 4 horas. Solo importa trades nuevos — sin duplicados.</div>
-        <div id="sync-status" style="font-family:'IBM Plex Mono',monospace;font-size:11px;margin-bottom:12px;color:var(--muted)">Cargando…</div>
+        <div id="sync-status" style="font-family:'IBM Plex Mono',monospace;font-size: 13px;margin-bottom:12px;color:var(--muted)">Cargando…</div>
         <div class="form-row">
           <div class="form-field"><label>API Key</label><input type="password" id="sync-key" placeholder="..."></div>
           <div class="form-field"><label>API Secret</label><input type="password" id="sync-secret" placeholder="..."></div>

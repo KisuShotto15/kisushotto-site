@@ -72,10 +72,10 @@ export default {
 
       // ── Analytics ───────────────────────────────────────────────────────────
       if (path === '/analytics'              && method === 'GET') return await analytics(url, env);
-      if (path === '/analytics/by-session'   && method === 'GET') return await byDimension('session',      env);
-      if (path === '/analytics/by-symbol'    && method === 'GET') return await byDimension('symbol',       env);
-      if (path === '/analytics/by-setup'     && method === 'GET') return await byDimension('setup_tag',    env);
-      if (path === '/analytics/by-strategy'  && method === 'GET') return await byDimension('strategy_tag', env);
+      if (path === '/analytics/by-session'   && method === 'GET') return await byDimension('session', env, url);
+      if (path === '/analytics/by-symbol'    && method === 'GET') return await byDimension('symbol', env, url);
+      if (path === '/analytics/by-setup'     && method === 'GET') return await byDimension('setup_tag', env, url);
+      if (path === '/analytics/by-strategy'  && method === 'GET') return await byDimension('strategy_tag', env, url);
       if (path === '/analytics/heatmap'      && method === 'GET') return await heatmap(env);
       if (path === '/analytics/weekly'       && method === 'GET') return await weekly(url, env);
 
@@ -384,10 +384,15 @@ async function analytics(url, env) {
   return json({ stats: computeStats(results) });
 }
 
-async function byDimension(field, env) {
-  const { results } = await env.DB.prepare(
-    "SELECT * FROM trades WHERE status = 'closed'"
-  ).all();
+async function byDimension(field, env, url) {
+  // Respetar from/to: el sidebar dice "ESTE MES" y antes mostraba todo el historial
+  let sql = "SELECT * FROM trades WHERE status = 'closed'";
+  const args = [];
+  const p = url?.searchParams;
+  if (p?.get('from')) { sql += ' AND entry_time >= ?'; args.push(+p.get('from')); }
+  if (p?.get('to'))   { sql += ' AND entry_time <= ?'; args.push(+p.get('to')); }
+
+  const { results } = await env.DB.prepare(sql).bind(...args).all();
   return json({ data: groupByDimension(results, field) });
 }
 

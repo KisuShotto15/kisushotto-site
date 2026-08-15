@@ -179,7 +179,7 @@ async function loadCalendar() {
     const { trades } = await getTrades({ from, to, status: 'closed', limit: 500 });
     renderCalendar(calYear, calMonth, buildDayMap(trades));
   } catch (e) {
-    $('calGrid').innerHTML = `<div style="color:var(--red);font-family:monospace;font-size:12px;padding:20px">${e.message}</div>`;
+    $('calGrid').innerHTML = `<div style="color:var(--red);font-family:monospace;font-size: 14px;padding:20px">${e.message}</div>`;
   }
 }
 
@@ -222,18 +222,18 @@ window.openDayDrawer = async function(dateStr) {
         <div class="drawer-trade ${pClass}">
           <div class="drawer-trade-top">
             <span class="drawer-symbol">${t.symbol}</span>
-            <span class="side-badge side-badge-${t.side}" style="font-size:10px">${t.side.toUpperCase()}</span>
+            <span class="side-badge side-badge-${t.side}" style="font-size: 12px">${t.side.toUpperCase()}</span>
             <span class="drawer-pnl ${pClass}" style="margin-left:auto">${t.pnl != null ? fmtPnl(t.pnl) : '—'}</span>
           </div>
           <div class="drawer-trade-meta">
             <span>${t.exchange || ''}</span>
             <span>⏱ ${hold}</span>
-            ${t.setup_tag ? `<span class="td-pill" style="font-size:9px;padding:2px 6px">${t.setup_tag}</span>` : ''}
+            ${t.setup_tag ? `<span class="td-pill" style="font-size: 11px;padding:2px 6px">${t.setup_tag}</span>` : ''}
           </div>
         </div>`;
     }).join('');
   } catch (e) {
-    $('dayDrawerBody').innerHTML = `<div style="color:var(--red);font-size:12px;font-family:monospace;padding:12px">${e.message}</div>`;
+    $('dayDrawerBody').innerHTML = `<div style="color:var(--red);font-size: 14px;font-family:monospace;padding:12px">${e.message}</div>`;
   }
 };
 
@@ -259,7 +259,7 @@ function renderTopTickers(symbols) {
     return `
       <div class="ticker-row">
         <div class="ticker-row-top">
-          <span class="ticker-name">${s.symbol}</span>
+          <span class="ticker-name">${s.label || s.symbol || '—'}</span>
           <span class="ticker-pnl ${pos ? 'pos' : 'neg'}">${sign}$${Math.abs(s.totalPnl).toFixed(0)}</span>
           <span class="ticker-count">${s.count}t</span>
         </div>
@@ -319,7 +319,7 @@ function renderOpenPositions(data) {
     <div class="open-pos-row live">
       <div class="open-pos-line">
         <span class="open-pos-symbol">${p.symbol}</span>
-        <span class="side-badge side-badge-${p.side}" style="font-size:9px;padding:2px 6px">${p.side.toUpperCase()}</span>
+        <span class="side-badge side-badge-${p.side}" style="font-size: 11px;padding:2px 6px">${p.side.toUpperCase()}</span>
         <span class="open-pos-pnl ${win ? 'pos' : 'neg'}">${fmtPnl(p.unrealized_pnl)}</span>
         <button class="plan-btn ${planned ? 'done' : ''}" onclick="openPlan(${i})"
           title="${planned ? 'Plan guardado — editar' : 'Registrar el plan antes de que cierre'}">${planned ? '✓' : '✎'}</button>
@@ -425,7 +425,7 @@ async function loadLivePositions() {
     $('liveStamp').textContent = 'error';
     $('openPosList').innerHTML =
       `<div class="sidebar-empty" style="color:var(--red)">${err.message}</div>
-       <div class="sidebar-empty" style="font-size:10px">API: ${cfg.base()}</div>`;
+       <div class="sidebar-empty" style="font-size: 12px">API: ${cfg.base()}</div>`;
     console.error('[trade-journal] posiciones en vivo:', err);
   }
 }

@@ -141,7 +141,7 @@ async function load() {
       closed.length ? `<span>${Math.round(wins.length / closed.length * 100)}% win</span>` : '',
     ].join('<span style="color:var(--border2)"> · </span>');
   } catch (err) {
-    $('tradesBody').innerHTML = `<div style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:20px">${err.message}</div>`;
+    $('tradesBody').innerHTML = `<div style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size: 15px;padding:20px">${err.message}</div>`;
     toast(err.message, 'err');
   }
 }

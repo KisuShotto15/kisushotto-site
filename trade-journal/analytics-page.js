@@ -153,7 +153,7 @@ async function loadReview() {
 
 // ── Shared table renderer ─────────────────────────────────────────────────────
 function renderDimTable(data) {
-  if (!data.length) return `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;font-family:'IBM Plex Mono',monospace;font-size:12px">Sin datos</td></tr>`;
+  if (!data.length) return `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;font-family:'IBM Plex Mono',monospace;font-size: 14px">Sin datos</td></tr>`;
   return data.map(d => `
     <tr>
       <td>${d.label}</td>
