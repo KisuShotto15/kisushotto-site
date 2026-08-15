@@ -897,7 +897,47 @@ function updateTopbarBotPrice(price) {
   }
 }
 
+// ── Señal "spread estirado": percentil del SPREAD NETO vs 24h (adaptativo al régimen) ──
+// El backtest mostró que el SPREAD NETO amplio es el mejor predictor de un retroceso.
+// Como el umbral bueno depende del régimen del mercado, se usa percentil relativo a las
+// últimas 24h (auto-ajusta). Solo BDV (única serie que grabamos y con la que se calibró).
+var STRETCH = { buf: null, lastPush: 0 };
+function stretchLoad() {
+  if (STRETCH.buf) return STRETCH.buf;
+  try { STRETCH.buf = JSON.parse(localStorage.getItem('mkt_spread24h') || '[]') || []; }
+  catch (e) { STRETCH.buf = []; }
+  return STRETCH.buf;
+}
+function stretchPush(v) {
+  if (v == null || !isFinite(v)) return;
+  var now = Date.now();
+  if (now - STRETCH.lastPush < 60000) return; // 1 muestra/min: 24h => <=1440 puntos
+  STRETCH.lastPush = now;
+  var buf = stretchLoad();
+  buf.push({ t: now, v: v });
+  var cut = now - 24 * 3600 * 1000;
+  while (buf.length && buf[0].t < cut) buf.shift();
+  try { localStorage.setItem('mkt_spread24h', JSON.stringify(buf)); } catch (e) {}
+}
+function stretchPct(v) { // percentil (0-100) del valor actual; null si poca historia
+  var buf = stretchLoad();
+  if (buf.length < 120) return null; // ~2h de app abierta antes de opinar
+  var below = 0; for (var i = 0; i < buf.length; i++) if (buf[i].v <= v) below++;
+  return below / buf.length * 100;
+}
+function setStretchBadge(pct, spreadNet) {
+  var el = document.getElementById('hero-stretch');
+  if (!el) return;
+  if (pct != null && pct >= 90 && spreadNet > 0) {
+    el.style.display = 'block';
+    el.textContent = '🔥 Spread estirado — top ' + Math.max(1, Math.round(100 - pct)) + '% de 24h · buena ventana para vender';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
 function renderSpreadHero() {
+  setStretchBadge(null); // oculto por defecto; se re-activa abajo si aplica
   // Mismo filtro de credibilidad (>=2000 USDT) que gráfico/alertas.
   var cMayH = credibleMay(), cSmallH = credibleSmall();
   var bestMay   = cMayH   ? cMayH.price   : null;
@@ -929,6 +969,12 @@ function renderSpreadHero() {
   var spread    = (bestMay - bestSmall) / bestMay * 100;
   var spreadNet = spread - (CFG.commission || 0);
   var spreadBs  = bestMay - bestSmall;
+
+  // Señal estirado: solo BDV, alimenta el buffer 24h y evalúa el percentil.
+  if (ACTIVE_PAY === 'BancoDeVenezuela') {
+    stretchPush(spreadNet);
+    setStretchBadge(stretchPct(spreadNet), spreadNet);
+  }
 
   var pct  = document.getElementById('hero-pct');
   var pill = document.getElementById('hero-pill');
