@@ -36,8 +36,16 @@ function rStats(closed) {
   };
 }
 
+// Spot y futuros son negocios distintos y en monedas distintas: mezclarlos no
+// dice nada. Solo entran al calculo los que tienen pnl realizado en USDT.
+export function splitByMarket(trades) {
+  const out = { futures: [], spot: [] };
+  for (const t of trades) (t.category === 'spot' ? out.spot : out.futures).push(t);
+  return out;
+}
+
 export function computeStats(trades) {
-  const closed = trades.filter(t => t.status === 'closed' && t.pnl != null);
+  const closed = trades.filter(t => t.status === 'closed' && t.pnl != null && t.category !== 'spot');
   if (!closed.length) return emptyStats(trades.length);
 
   const wins        = closed.filter(t => t.pnl > 0);
@@ -61,8 +69,12 @@ export function computeStats(trades) {
 
   const sorted = [...closed].sort((a, b) => b.pnl - a.pnl);
 
+  const spot = trades.filter(t => t.category === 'spot');
+
   return {
     tradeCount:    trades.length,
+    spotCount:     spot.length,
+    spotRealized:  r2(spot.reduce((s, t) => s + (t.pnl || 0), 0)),
     closedCount:   closed.length,
     openCount:     trades.length - closed.length,
     winCount:      wins.length,
@@ -96,6 +108,7 @@ function emptyStats(total = 0) {
     currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0,
     bestTrade: null, worstTrade: null, avgHoldMinutes: 0,
     equityCurve: [],
+    spotCount: 0, spotRealized: 0,
     rCount: 0, rCoverage: 0, totalR: 0, avgR: 0,
     avgWinR: 0, avgLossR: 0, bestR: 0, worstR: 0,
   };
@@ -130,7 +143,7 @@ function computeStreaks(trades) {
 
 export function groupByDimension(trades, field) {
   const groups = new Map();
-  for (const t of trades.filter(t => t.status === 'closed' && t.pnl != null)) {
+  for (const t of trades.filter(t => t.status === 'closed' && t.pnl != null && t.category !== 'spot')) {
     const k = t[field] || 'sin tag';
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(t);
@@ -160,7 +173,7 @@ function dimStats(trades) {
 
 // Review semanal: lo que paso cada semana y los trades que hay que revisar.
 export function buildWeeklyReview(trades, weeks = 8) {
-  const closed = trades.filter(t => t.status === 'closed' && t.pnl != null);
+  const closed = trades.filter(t => t.status === 'closed' && t.pnl != null && t.category !== 'spot');
   const groups = new Map();
 
   for (const t of closed) {
@@ -207,7 +220,7 @@ export function buildWeeklyReview(trades, weeks = 8) {
 }
 
 export function buildHeatmap(trades) {
-  const closed = trades.filter(t => t.status === 'closed' && t.pnl != null);
+  const closed = trades.filter(t => t.status === 'closed' && t.pnl != null && t.category !== 'spot');
   const sums   = Array.from({ length: 24 }, () => Array(7).fill(0));
   const counts = Array.from({ length: 24 }, () => Array(7).fill(0));
   for (const t of closed) {

@@ -51,6 +51,7 @@ export default {
     try {
       // ── Health ──────────────────────────────────────────────────────────────
       if (path === '/health') return json({ ok: true, ts: Date.now() });
+      if (path === '/health/audit') return await audit(env);
 
       // ── Trades ──────────────────────────────────────────────────────────────
       if (path === '/trades' && method === 'GET')    return await listTrades(url, env);
@@ -107,6 +108,40 @@ export default {
     }
   },
 };
+
+// Chequeo de coherencia de los datos. Cada bandera corresponde a un bug real
+// que ya ocurrio; si alguna sube, algo se rompio en la ingesta otra vez.
+async function audit(env) {
+  const q = sql => env.DB.prepare(sql).first();
+
+  const [general, dup, spot] = await Promise.all([
+    q(`SELECT COUNT(*) total,
+              SUM(entry_price <= 0 OR size <= 0) precio_o_size_invalido,
+              SUM(exit_time IS NOT NULL AND exit_time < entry_time) salida_antes_de_entrada,
+              SUM(fees < 0) fees_negativos,
+              SUM(category IN ('linear','inverse') AND exit_price = entry_price AND ABS(COALESCE(pnl,0)) > entry_price*size*0.01) ganancia_sin_movimiento,
+              SUM(ABS(fees - entry_price*size*0.00055) < 0.0000001) fees_estimados
+       FROM trades WHERE status = 'closed'`),
+    q(`SELECT COUNT(*) grupos FROM (
+         SELECT 1 FROM trades WHERE status='closed'
+         GROUP BY symbol, side, entry_time, ROUND(COALESCE(pnl,0),8), size HAVING COUNT(*) > 1)`),
+    q(`SELECT SUM(pnl IS NOT NULL) spot_con_pnl, COUNT(*) spot_total
+       FROM trades WHERE category = 'spot' AND status = 'closed'`),
+  ]);
+
+  const flags = {
+    ...general,
+    duplicados: dup.grupos,
+    spot_con_pnl: spot.spot_con_pnl || 0,
+    spot_total: spot.spot_total || 0,
+  };
+
+  // ok = ninguna bandera encendida (los fees estimados son solo un aviso)
+  const problemas = ['precio_o_size_invalido','salida_antes_de_entrada','fees_negativos',
+                     'ganancia_sin_movimiento','duplicados'].filter(k => (flags[k] || 0) > 0);
+
+  return json({ ok: problemas.length === 0, problemas, flags });
+}
 
 // ── Trades CRUD ───────────────────────────────────────────────────────────────
 
