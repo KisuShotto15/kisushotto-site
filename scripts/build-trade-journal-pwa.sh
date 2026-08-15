@@ -46,11 +46,10 @@ cat > "$OUT/_headers" << 'HEADERS'
   Cache-Control: no-cache
 HEADERS
 
-# /trades y /analytics sin .html, y fallback del SPA al dashboard
-cat > "$OUT/_redirects" << 'REDIRECTS'
-/trades     /trades.html     200
-/analytics  /analytics.html  200
-/insights   /insights.html   200
-REDIRECTS
+# Sin _redirects a proposito: Pages ya sirve /trades desde trades.html y
+# redirige /trades.html -> /trades. Agregar reglas propias crea un bucle.
+# Los enlaces internos apuntan directo a la URL limpia para evitar el salto.
+sed -i -E 's#href="\./(trades|analytics|insights)\.html"#href="./\1"#g' "$OUT"/*.html
+sed -i -E 's#href="\./index\.html"#href="./"#g' "$OUT"/*.html
 
 echo "$OUT/ built OK (build ${BUILD_ID})"
