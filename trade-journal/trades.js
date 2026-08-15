@@ -1,4 +1,4 @@
-import { getTrades, updateTrade } from './api.js';
+import { getTrades, updateTrade, bulkTag, downloadCSV } from './api.js';
 
 const $ = id => document.getElementById(id);
 let page = 0;
@@ -7,6 +7,37 @@ let currentTrade = null;
 const tradesMap = {};
 let currentTags = [];
 let currentScreenshots = [];
+let currentStrategy = null;
+const selectedIds = new Set();
+
+// ── R-multiple ────────────────────────────────────────────────────────────────
+function riskOf(t) {
+  if (t.risk_usd > 0) return t.risk_usd;
+  if (t.stop_price > 0 && t.entry_price > 0 && t.size > 0) {
+    return Math.abs(t.entry_price - t.stop_price) * t.size;
+  }
+  return null;
+}
+function rOf(t) {
+  const risk = riskOf(t);
+  return risk && t.pnl != null ? t.pnl / risk : null;
+}
+function fmtR(t) {
+  const r = rOf(t);
+  return r == null ? '—' : (r >= 0 ? '+' : '') + r.toFixed(2) + 'R';
+}
+
+// Los screenshots vivian dentro de strategy_tag; se leen de ahi solo por compatibilidad.
+function screenshotsOf(t) {
+  for (const raw of [t.screenshots, t.strategy_tag]) {
+    if (!raw || !raw.startsWith('[')) continue;
+    try { const v = JSON.parse(raw); if (Array.isArray(v)) return v; } catch { /* no era JSON */ }
+  }
+  return [];
+}
+function strategyOf(t) {
+  return t.strategy_tag && !t.strategy_tag.startsWith('[') ? t.strategy_tag : null;
+}
 
 // ── Tag definitions ───────────────────────────────────────────────────────────
 const SETUP_TAGS = [
@@ -143,6 +174,8 @@ function renderCards(trades) {
     <div class="tc ${isWin ? 'tc-win' : isLoss ? 'tc-loss' : ''}" data-id="${t.id}">
       <div class="tc-body" onclick="openPanel('${t.id}')">
         <div class="tc-symbol-col">
+          <input type="checkbox" class="tc-select" ${selectedIds.has(t.id) ? 'checked' : ''}
+            onclick="event.stopPropagation();toggleSelect('${t.id}',this.checked)" title="Seleccionar">
           <div class="tc-icon ${sideClass}">${iconChar}</div>
           <div class="tc-symbol-info">
             <div class="tc-symbol">${t.symbol}${t.notes || t.setup_tag ? ' <span class="row-dot"></span>' : ''}</div>
@@ -164,6 +197,7 @@ function renderCards(trades) {
         </div>
         <div class="tc-pnl-col">
           <span class="tc-pnl-badge ${pnlClass}">${fmtPnl(t.pnl)} USDT</span>
+          <span class="tc-r ${pnlClass}">${fmtR(t)}</span>
         </div>
         <div class="tc-duration-col">${fmtHoldTime(t.entry_time, t.exit_time)}</div>
         <div class="tc-chevron">›</div>
@@ -171,7 +205,65 @@ function renderCards(trades) {
       <div class="tc-detail" style="display:none"></div>
     </div>`;
   }).join('');
+  renderBulkBar();
 }
+
+// ── Seleccion multiple ────────────────────────────────────────────────────────
+window.toggleSelect = function(id, checked) {
+  if (checked) selectedIds.add(id); else selectedIds.delete(id);
+  renderBulkBar();
+};
+
+window.clearSelection = function() {
+  selectedIds.clear();
+  document.querySelectorAll('.tc-select').forEach(c => { c.checked = false; });
+  renderBulkBar();
+};
+
+window.selectAllVisible = function() {
+  document.querySelectorAll('.tc[data-id]').forEach(c => {
+    selectedIds.add(c.dataset.id);
+    const box = c.querySelector('.tc-select');
+    if (box) box.checked = true;
+  });
+  renderBulkBar();
+};
+
+function renderBulkBar() {
+  const bar = $('bulkBar');
+  if (!bar) return;
+  bar.classList.toggle('show', selectedIds.size > 0);
+  $('bulkCount').textContent = `${selectedIds.size} seleccionado${selectedIds.size !== 1 ? 's' : ''}`;
+}
+
+function bulkOptions(tags) {
+  return ['<option value="">— elegir —</option>', ...tags.map(t => `<option value="${t}">${t}</option>`),
+          '<option value="__clear__">(quitar)</option>'].join('');
+}
+
+window.applyBulkTag = async function(field, value) {
+  if (!value || !selectedIds.size) return;
+  const body = { ids: [...selectedIds] };
+  body[field] = value === '__clear__' ? null : value;
+  try {
+    const res = await bulkTag(body);
+    toast(`${res.updated} trades etiquetados`);
+    clearSelection();
+    load();
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+};
+
+window.doExport = async function() {
+  const { from, to } = getFilters();
+  try {
+    await downloadCSV({ from, to });
+    toast('CSV descargado');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+};
 
 // ── Inline expand ─────────────────────────────────────────────────────────────
 window.openPanel = function(id) {
@@ -198,17 +290,20 @@ window.openPanel = function(id) {
   detail.style.display = 'block';
 
   // Init state
-  currentTags = t.setup_tag ? t.setup_tag.split(',').map(s => s.trim()).filter(Boolean) : [];
-  try { currentScreenshots = JSON.parse(t.strategy_tag || '[]'); } catch { currentScreenshots = []; }
-  if (!Array.isArray(currentScreenshots)) currentScreenshots = [];
+  currentTags        = t.setup_tag ? t.setup_tag.split(',').map(s => s.trim()).filter(Boolean) : [];
+  currentScreenshots = screenshotsOf(t);
+  currentStrategy    = strategyOf(t);
 
   const pnlClass = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : '';
+  const r = rOf(t);
+  const rClass = r == null ? '' : r >= 0 ? 'pnl-pos' : 'pnl-neg';
   detail.innerHTML = `
     <div class="td-stats-row">
       <div class="td-stat"><div class="td-stat-label">Entry</div><div class="td-stat-val">${fmtNum(t.entry_price, 4)}</div></div>
       <div class="td-stat"><div class="td-stat-label">Exit</div><div class="td-stat-val">${t.exit_price != null ? fmtNum(t.exit_price, 4) : '—'}</div></div>
       <div class="td-stat"><div class="td-stat-label">Size</div><div class="td-stat-val">${fmtNum(t.size, 4)}</div></div>
       <div class="td-stat"><div class="td-stat-label">PnL</div><div class="td-stat-val ${pnlClass}">${fmtPnl(t.pnl)} USDT</div></div>
+      <div class="td-stat"><div class="td-stat-label">R</div><div class="td-stat-val ${rClass}">${fmtR(t)}</div></div>
       <div class="td-stat"><div class="td-stat-label">Duración</div><div class="td-stat-val">${fmtHoldTime(t.entry_time, t.exit_time)}</div></div>
       <div class="td-stat"><div class="td-stat-label">Sesión</div><div class="td-stat-val">${t.session || '—'}</div></div>
     </div>
@@ -224,13 +319,22 @@ window.openPanel = function(id) {
             onkeydown="if(event.key==='Enter'){event.preventDefault();addTag()}">
           <button class="td-add-btn" onclick="addTag()">+</button>
         </div>
+        <div class="td-section-title" style="margin-top:16px">Estrategia</div>
+        <div class="tag-grid" id="tagStrategy"></div>
         <div class="td-section-title" style="margin-top:16px">Emoción</div>
         <div class="tag-grid" id="tagEmotion"></div>
       </div>
 
       <!-- Notes -->
       <div class="td-col">
-        <div class="td-section-title">Notes</div>
+        <div class="td-section-title">Riesgo</div>
+        <div class="td-section-hint">Stop loss planeado — de ahi sale la R</div>
+        <div class="td-input-row" style="margin-bottom:10px">
+          <input type="number" step="any" id="panelStop" class="td-text-input" placeholder="Stop price…"
+            oninput="previewRisk()" onkeydown="if(event.key==='Enter'){event.preventDefault();savePanel()}">
+        </div>
+        <div class="td-risk-preview" id="riskPreview">—</div>
+        <div class="td-section-title" style="margin-top:16px">Notes</div>
         <textarea id="panelNotes" class="panel-textarea td-notes-area" placeholder="Type your notes here…"></textarea>
       </div>
 
@@ -258,9 +362,12 @@ window.openPanel = function(id) {
 
   renderChips();
   renderScreenshots();
+  renderStrategyGrid(currentStrategy);
   renderEmotionGrid(t.emotion);
   renderRuleScore(t.rule_score);
   $('panelNotes').value = t.notes || '';
+  $('panelStop').value  = t.stop_price != null ? t.stop_price : '';
+  previewRisk();
 
   requestAnimationFrame(() => detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
 };
@@ -346,6 +453,25 @@ function renderTagGrid(containerId, tags, selected, type) {
   `<button class="tag-pill tag-pill-custom ${!selected || tags.includes(selected) ? '' : 'active'}" data-type="${type}" onclick="promptCustom(this,'${type}','${selected && !tags.includes(selected) ? selected : ''}')">${selected && !tags.includes(selected) ? selected : '+'}</button>`;
 }
 
+function renderStrategyGrid(selected) {
+  renderTagGrid('tagStrategy', STRATEGY_TAGS, selected, 'strategy');
+}
+
+window.previewRisk = function() {
+  const el = $('riskPreview');
+  if (!el || !currentTrade) return;
+  const stop = parseFloat($('panelStop').value);
+  if (!(stop > 0) || !(currentTrade.entry_price > 0) || !(currentTrade.size > 0)) {
+    el.textContent = 'Sin stop no hay R';
+    el.className   = 'td-risk-preview';
+    return;
+  }
+  const risk = Math.abs(currentTrade.entry_price - stop) * currentTrade.size;
+  const r    = currentTrade.pnl != null && risk > 0 ? currentTrade.pnl / risk : null;
+  el.textContent = `Riesgo ${risk.toFixed(2)} USDT` + (r != null ? ` · ${(r >= 0 ? '+' : '')}${r.toFixed(2)}R` : '');
+  el.className   = `td-risk-preview ${r == null ? '' : r >= 0 ? 'pos' : 'neg'}`;
+};
+
 function renderEmotionGrid(selected) {
   const el = $('tagEmotion');
   el.innerHTML = EMOTION_TAGS.map(e => {
@@ -395,15 +521,19 @@ window.promptCustom = function(btn, type, existing) {
 window.savePanel = async function() {
   if (!currentTrade) return;
 
-  const emotionBtn = document.querySelector(`.tag-pill.active[data-type="emotion"]`);
+  const emotionBtn     = document.querySelector(`.tag-pill.active[data-type="emotion"]`);
+  const strategyBtn    = document.querySelector(`.tag-pill.active[data-type="strategy"]`);
   const scoreBtnActive = $('ruleScoreRow').querySelector('.score-btn.active');
+  const stop           = parseFloat($('panelStop').value);
 
   const body = {
     setup_tag:    currentTags.join(',') || null,
-    strategy_tag: currentScreenshots.length ? JSON.stringify(currentScreenshots) : null,
+    strategy_tag: strategyBtn ? (strategyBtn.dataset.val || strategyBtn.textContent.trim() || null) : null,
+    screenshots:  currentScreenshots.length ? JSON.stringify(currentScreenshots) : null,
     emotion:      emotionBtn ? (emotionBtn.dataset.val || null) : null,
     rule_score:   scoreBtnActive ? parseInt(scoreBtnActive.textContent) : null,
     notes:        $('panelNotes').value.trim() || null,
+    stop_price:   stop > 0 ? stop : null,
   };
 
   try {
@@ -426,4 +556,6 @@ document.addEventListener('keydown', e => {
   }
 });
 
+$('bulkSetup').innerHTML    = bulkOptions(SETUP_TAGS);
+$('bulkStrategy').innerHTML = bulkOptions(STRATEGY_TAGS);
 load();

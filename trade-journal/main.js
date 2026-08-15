@@ -1,4 +1,4 @@
-import { getAnalytics, getTrades, getBySymbol, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
+import { getAnalytics, getTrades, getBySymbol, getLivePositions, getPlans, savePlan, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
 
 const $ = id => document.getElementById(id);
 
@@ -80,13 +80,17 @@ function renderKPIs(s) {
   const expEl = $('kpiExp');
   expEl.textContent = fmtPnl(s.expectancy);
   expEl.className   = `kpi-value ${s.expectancy >= 0 ? 'pos' : 'neg'}`;
+  // La R solo existe si el trade tiene stop guardado; se avisa la cobertura.
+  $('kpiExpSub').textContent = s.rCount
+    ? `${fmtPnl(s.avgR)}R prom · ${s.rCoverage}% con stop`
+    : 'USDT / trade · sin stops';
 
   const ddEl = $('kpiDD');
   ddEl.textContent = s.maxDrawdown + '%';
   ddEl.className   = `kpi-value ${s.maxDrawdown <= 10 ? 'neu' : 'neg'}`;
 
   $('kpiCount').textContent = s.closedCount;
-  $('kpiOpen').textContent  = `abiertos: ${s.openCount}`;
+  // "abiertos" lo escribe renderOpenPositions con los datos en vivo del exchange
 }
 
 // ── Calendar ───────────────────────────────────────────────────────────────────
@@ -266,32 +270,167 @@ function renderTopTickers(symbols) {
   }).join('');
 }
 
-// ── Open Positions ─────────────────────────────────────────────────────────────
-function renderOpenPositions(trades) {
-  const open    = trades.filter(t => t.status === 'open');
-  const openPnl = open.reduce((s, t) => s + (t.pnl || 0), 0);
-  const totalEl = $('openPnlTotal');
-  const countEl = $('openCountLabel');
-  const listEl  = $('openPosList');
+// ── Open Positions (en vivo) ───────────────────────────────────────────────────
+const LIVE_POLL_MS = 10000;
+let livePollTimer = null;
 
-  countEl.textContent = `${open.length} posicion${open.length !== 1 ? 'es' : ''} abierta${open.length !== 1 ? 's' : ''}`;
+function fmtPrice(v) {
+  if (v == null) return '—';
+  const n = parseFloat(v);
+  if (n >= 1000) return n.toFixed(1);
+  if (n >= 1)    return n.toFixed(3);
+  return n.toPrecision(4);
+}
 
-  if (!open.length) {
+function renderOpenPositions(data) {
+  const positions = data?.positions || [];
+  const totalPnl  = data?.total_unrealized ?? positions.reduce((s, p) => s + p.unrealized_pnl, 0);
+  const totalEl   = $('openPnlTotal');
+  const countEl   = $('openCountLabel');
+  const listEl    = $('openPosList');
+  const stampEl   = $('liveStamp');
+
+  if (stampEl) {
+    stampEl.textContent = data?.ts
+      ? new Date(data.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      : '—';
+  }
+  $('kpiOpen').textContent = `abiertos: ${positions.length}`;
+  countEl.textContent = `${positions.length} posicion${positions.length !== 1 ? 'es' : ''} abierta${positions.length !== 1 ? 's' : ''}`;
+
+  if (!positions.length) {
     totalEl.textContent = '—';
     totalEl.className   = 'open-pnl-total neu';
-    listEl.innerHTML    = '<div class="sidebar-empty">Sin posiciones abiertas</div>';
+    listEl.innerHTML    = `<div class="sidebar-empty">${data?.reason === 'sin config' ? 'Configura el auto-sync para ver posiciones' : 'Sin posiciones abiertas'}</div>`;
     return;
   }
-  totalEl.textContent = (openPnl >= 0 ? '+' : '') + '$' + Math.abs(openPnl).toFixed(2);
-  totalEl.className   = `open-pnl-total ${openPnl >= 0 ? 'pos' : 'neg'}`;
 
-  listEl.innerHTML = open.slice(0, 8).map(t => `
-    <div class="open-pos-row">
-      <span class="open-pos-symbol">${t.symbol}</span>
-      <span class="side-badge side-badge-${t.side}" style="font-size:9px;padding:2px 6px">${t.side.toUpperCase()}</span>
-      <span class="open-pos-pnl ${(t.pnl || 0) >= 0 ? 'pos' : 'neg'}">${t.pnl != null ? fmtPnl(t.pnl) : '—'}</span>
-    </div>`).join('');
+  totalEl.textContent = (totalPnl >= 0 ? '+' : '') + '$' + Math.abs(totalPnl).toFixed(2);
+  totalEl.className   = `open-pnl-total ${totalPnl >= 0 ? 'pos' : 'neg'}`;
+
+  livePositionsCache = positions;
+  listEl.innerHTML = positions.slice(0, 10).map((p, i) => {
+    const win     = p.unrealized_pnl >= 0;
+    const planned = planKeys.has(planKey(p));
+    return `
+    <div class="open-pos-row live">
+      <div class="open-pos-line">
+        <span class="open-pos-symbol">${p.symbol}</span>
+        <span class="side-badge side-badge-${p.side}" style="font-size:9px;padding:2px 6px">${p.side.toUpperCase()}</span>
+        <span class="open-pos-pnl ${win ? 'pos' : 'neg'}">${fmtPnl(p.unrealized_pnl)}</span>
+        <button class="plan-btn ${planned ? 'done' : ''}" onclick="openPlan(${i})"
+          title="${planned ? 'Plan guardado — editar' : 'Registrar el plan antes de que cierre'}">${planned ? '✓' : '✎'}</button>
+      </div>
+      <div class="open-pos-meta">
+        <span>${fmtPrice(p.entry_price)} → ${fmtPrice(p.mark_price)}</span>
+        ${p.leverage ? `<span>${p.leverage}x</span>` : ''}
+        ${p.roi_pct != null ? `<span class="${win ? 'pos' : 'neg'}">${p.roi_pct >= 0 ? '+' : ''}${p.roi_pct.toFixed(1)}%</span>` : ''}
+        ${p.stop_loss ? `<span title="stop loss">SL ${fmtPrice(p.stop_loss)}</span>` : `<span class="warn" title="Sin stop en el exchange">sin SL</span>`}
+        ${p.take_profit ? `<span title="take profit">TP ${fmtPrice(p.take_profit)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
+
+// ── Plan pre-trade ─────────────────────────────────────────────────────────────
+// Se llena con la posicion abierta; el sync lo pega al trade cuando cierra.
+const SETUP_TAGS    = ['OB','FVG','FVG+OB','BOS','CHoCH','MSS','BREAKER','RETEST','LIQUIDITY','STOP HUNT','SNR','RECLAIM','IMBALANCE','TURTLE SOUP','TREND'];
+const STRATEGY_TAGS = ['ICT','Smart Money','Scalp','Swing','Reversal','Continuation','Breakout','News','Grid'];
+const CHECKLIST = [
+  'Contexto de temporalidad alta a favor',
+  'Nivel/zona marcada antes de entrar',
+  'Confirmacion de entrada, no anticipacion',
+  'Stop puesto en el exchange',
+  'Riesgo dentro de mi limite',
+  'Sin operar por revancha ni FOMO',
+];
+
+let livePositionsCache = [];
+let planKeys = new Set();
+let planCache = {};
+let planIndex = null;
+
+const planKey = p => `${p.symbol}|${p.side}|${p.opened_at}`;
+
+async function loadPlans() {
+  try {
+    const { plans } = await getPlans();
+    planKeys  = new Set(plans.map(planKey));
+    planCache = Object.fromEntries(plans.map(p => [planKey(p), p]));
+  } catch (_) { /* el plan es opcional, no rompe el dashboard */ }
+}
+
+window.openPlan = function(i) {
+  const p = livePositionsCache[i];
+  if (!p) return;
+  planIndex = i;
+  const saved = planCache[planKey(p)] || {};
+  let checked = [];
+  try { checked = JSON.parse(saved.checklist || '[]'); } catch { checked = []; }
+
+  $('planTitle').textContent = `${p.symbol} · ${p.side.toUpperCase()} · entrada ${fmtPrice(p.entry_price)}`;
+  $('planSetup').innerHTML    = ['<option value="">Setup…</option>', ...SETUP_TAGS.map(t => `<option ${saved.setup_tag === t ? 'selected' : ''}>${t}</option>`)].join('');
+  $('planStrategy').innerHTML = ['<option value="">Estrategia…</option>', ...STRATEGY_TAGS.map(t => `<option ${saved.strategy_tag === t ? 'selected' : ''}>${t}</option>`)].join('');
+  $('planChecklist').innerHTML = CHECKLIST.map((c, n) => `
+    <label class="plan-check">
+      <input type="checkbox" value="${c}" ${checked.includes(c) ? 'checked' : ''} onchange="updatePlanScore()">
+      <span>${c}</span>
+    </label>`).join('');
+  $('planNotes').value = saved.notes || '';
+  updatePlanScore();
+  $('planModal').classList.remove('hidden');
+};
+
+window.closePlan = function() { $('planModal').classList.add('hidden'); planIndex = null; };
+
+window.updatePlanScore = function() {
+  const boxes = [...document.querySelectorAll('#planChecklist input')];
+  const hits  = boxes.filter(b => b.checked).length;
+  // El rule_score sale del checklist, no de un numero a ojo
+  $('planScore').textContent = `${Math.round(hits / CHECKLIST.length * 10)}/10 · ${hits} de ${CHECKLIST.length} reglas`;
+};
+
+window.submitPlan = async function() {
+  const p = livePositionsCache[planIndex];
+  if (!p) return;
+  const checklist = [...document.querySelectorAll('#planChecklist input')].filter(b => b.checked).map(b => b.value);
+  try {
+    await savePlan({
+      symbol: p.symbol, side: p.side, opened_at: p.opened_at,
+      setup_tag:    $('planSetup').value    || null,
+      strategy_tag: $('planStrategy').value || null,
+      rule_score:   Math.round(checklist.length / CHECKLIST.length * 10),
+      checklist,
+      notes: $('planNotes').value.trim() || null,
+    });
+    toast('Plan guardado');
+    closePlan();
+    await loadPlans();
+    renderOpenPositions({ positions: livePositionsCache, total_unrealized: livePositionsCache.reduce((s, x) => s + x.unrealized_pnl, 0), ts: Date.now() });
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+};
+
+async function loadLivePositions() {
+  try {
+    renderOpenPositions(await getLivePositions());
+    $('liveDot')?.classList.remove('stale');
+  } catch (_) {
+    $('liveDot')?.classList.add('stale');
+  }
+}
+
+function startLivePolling() {
+  clearInterval(livePollTimer);
+  if (document.visibilityState !== 'visible') return;
+  livePollTimer = setInterval(loadLivePositions, LIVE_POLL_MS);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { loadLivePositions(); startLivePolling(); }
+  else clearInterval(livePollTimer);
+});
 
 // ── Profit Factor donut ────────────────────────────────────────────────────────
 function renderProfitFactor(pf, grossWins, grossLosses) {
@@ -368,15 +507,13 @@ async function loadStats() {
   updateTickerLabel();
   const { from, to } = getPeriodRange();
   try {
-    const [analyticsData, symbolData, openData] = await Promise.all([
+    const [analyticsData, symbolData] = await Promise.all([
       getAnalytics({ from, to }),
       getBySymbol({ from, to }),
-      getTrades({ status: 'open', limit: 50 }),
     ]);
     const s = analyticsData.stats;
     renderKPIs(s);
     renderTopTickers(symbolData.symbols || symbolData.data || []);
-    renderOpenPositions(openData.trades || []);
     if (s && s.profitFactor != null) {
       const pf = s.profitFactor;
       // derive gross wins/losses if possible
@@ -394,7 +531,9 @@ async function loadStats() {
 }
 
 async function init() {
-  await Promise.all([ loadStats(), loadCalendar() ]);
+  await loadPlans();
+  await Promise.all([ loadStats(), loadCalendar(), loadLivePositions() ]);
+  startLivePolling();
 }
 
 // ── Exchange / ingest functions (unchanged) ────────────────────────────────────
@@ -517,6 +656,11 @@ window.doRunSync = async function() {
 async function loadSyncStatus() {
   try {
     const { config } = await getSyncConfig();
+    // Si el cron aun no corrio hace rato, dispara un sync al abrir la pagina.
+    if (config?.enabled) {
+      const age = Math.floor(Date.now() / 1000) - (config.last_sync || 0);
+      if (age > 300) runSync().then(r => { if (r?.inserted > 0) init(); }).catch(() => {});
+    }
     const el = $('sync-status');
     if (!el) return;
     if (config?.enabled) {

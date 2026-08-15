@@ -63,7 +63,10 @@ export async function fetchBybitFutures(apiKey, apiSecret, opts = {}) {
         exit_price:  parseFloat(t.avgExitPrice  || 0) || null,
         size:        parseFloat(t.qty || t.size || 0),
         pnl:         parseFloat(t.closedPnl || 0),
-        fees:        Math.abs(parseFloat(t.cumEntryValue || 0)) * 0.00055,
+        // openFee/closeFee son los fees reales del endpoint; el estimado solo es fallback
+        fees:        (t.openFee != null || t.closeFee != null)
+                       ? Math.abs(parseFloat(t.openFee || 0)) + Math.abs(parseFloat(t.closeFee || 0))
+                       : Math.abs(parseFloat(t.cumEntryValue || 0)) * 0.00055,
         entry_time:  entryTs,
         exit_time:   exitTs,
         session:     session(entryTs),
@@ -78,6 +81,61 @@ export async function fetchBybitFutures(apiKey, apiSecret, opts = {}) {
   } while (cursor && trades.length < 1000);
 
   return trades;
+}
+
+// Live open positions — /v5/position/list. Solo lectura, no toca la DB.
+export async function fetchBybitPositions(apiKey, apiSecret, opts = {}) {
+  const groups = opts.groups || [
+    { category: 'linear',  settleCoin: 'USDT' },
+    { category: 'linear',  settleCoin: 'USDC' },
+    { category: 'inverse', settleCoin: 'BTC'  },
+  ];
+
+  const settled = await Promise.allSettled(groups.map(async ({ category, settleCoin }) => {
+    const qs      = `category=${category}&settleCoin=${settleCoin}&limit=200`;
+    const headers = await bybitHeaders(apiKey, apiSecret, qs);
+    const res     = await fetch(`https://api.bybit.com/v5/position/list?${qs}`, { headers });
+    if (!res.ok) throw new Error(`Bybit ${res.status}: ${await res.text()}`);
+    const d = await res.json();
+    if (d.retCode !== 0) throw new Error(`Bybit ${category}/${settleCoin}: ${d.retMsg}`);
+    return (d.result?.list || []).map(p => ({ ...p, _category: category }));
+  }));
+
+  const errors = settled.filter(s => s.status === 'rejected').map(s => s.reason?.message || String(s.reason));
+  if (errors.length === settled.length) throw new Error(errors[0]);
+
+  const positions = settled
+    .filter(s => s.status === 'fulfilled')
+    .flatMap(s => s.value)
+    .filter(p => parseFloat(p.size || 0) > 0)
+    .map(p => {
+      const size   = parseFloat(p.size);
+      const entry  = parseFloat(p.avgPrice || 0);
+      const upnl   = parseFloat(p.unrealisedPnl || 0);
+      const value  = parseFloat(p.positionValue || 0) || entry * size;
+      const lev    = parseFloat(p.leverage || 0) || null;
+      const margin = lev ? value / lev : null;
+      return {
+        symbol:         p.symbol,
+        category:       p._category,
+        side:           p.side === 'Buy' ? 'long' : 'short',
+        size,
+        entry_price:    entry,
+        mark_price:     parseFloat(p.markPrice || 0) || null,
+        unrealized_pnl: upnl,
+        roi_pct:        margin ? (upnl / margin) * 100 : (value ? (upnl / value) * 100 : null),
+        leverage:       lev,
+        position_value: value,
+        take_profit:    parseFloat(p.takeProfit || 0) || null,
+        stop_loss:      parseFloat(p.stopLoss   || 0) || null,
+        liq_price:      parseFloat(p.liqPrice   || 0) || null,
+        opened_at:      p.createdTime ? Math.floor(parseInt(p.createdTime) / 1000) : null,
+        exchange:       'bybit',
+      };
+    })
+    .sort((a, b) => b.position_value - a.position_value);
+
+  return { positions, errors };
 }
 
 // Spot — uses /v5/order/history
@@ -117,7 +175,96 @@ export async function fetchBybitSpot(apiKey, apiSecret, symbol) {
 
 // ── Binance ───────────────────────────────────────────────────────────────────
 
-// Futures (fapi) — userTrades endpoint (fill-level, grouped by orderId)
+// Futures (fapi) — userTrades da fills sueltos, no posiciones. Hay que
+// reconstruir cada posicion recorriendo los fills en orden y acumulando la
+// cantidad neta: la posicion abre cuando el neto sale de 0 y cierra al volver a 0.
+export function buildBinancePositions(fills) {
+  const groups = new Map();
+  for (const f of fills) {
+    const key = `${f.symbol}|${f.positionSide || 'BOTH'}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+
+  const out = [];
+  for (const [, list] of groups) {
+    list.sort((a, b) => a.time - b.time || a.id - b.id);
+
+    let pos = null;
+    const openPos = (dir, firstFill) => ({
+      dir,
+      net: 0,
+      entryQty: 0, entryNotional: 0,
+      exitQty: 0,  exitNotional: 0,
+      pnl: 0, fees: 0,
+      openTime: Math.floor(firstFill.time / 1000),
+      closeTime: null,
+      firstId: String(firstFill.id),
+      symbol: firstFill.symbol,
+    });
+    const emit = (p) => {
+      if (!p.entryQty) return;
+      out.push({
+        symbol:      p.symbol,
+        category:    'linear',
+        side:        p.dir > 0 ? 'long' : 'short',
+        entry_price: p.entryNotional / p.entryQty,
+        exit_price:  p.exitQty ? p.exitNotional / p.exitQty : null,
+        size:        p.entryQty,
+        pnl:         p.pnl,
+        fees:        p.fees,
+        entry_time:  p.openTime,
+        exit_time:   p.closeTime,
+        session:     session(p.openTime),
+        exec_type:   'bot',
+        status:      'closed',
+        exchange:    'binance',
+        exchange_id: `${p.symbol}:${p.firstId}`,
+      });
+    };
+
+    for (const f of list) {
+      const qty    = parseFloat(f.qty);
+      const price  = parseFloat(f.price);
+      const signed = f.side === 'BUY' ? qty : -qty;
+      const fee    = parseFloat(f.commission  || 0);
+      const rpnl   = parseFloat(f.realizedPnl || 0);
+
+      if (!pos) pos = openPos(Math.sign(signed), f);
+
+      // Parte del fill que reduce la posicion actual y parte que la invierte
+      const reducing = Math.sign(signed) !== pos.dir && pos.net !== 0
+        ? Math.min(qty, Math.abs(pos.net))
+        : 0;
+      const adding = qty - reducing;
+
+      pos.fees += fee;
+
+      if (reducing > 0) {
+        pos.exitQty      += reducing;
+        pos.exitNotional += reducing * price;
+        pos.pnl          += rpnl;
+        pos.net          += pos.dir > 0 ? -reducing : reducing;
+      }
+
+      if (reducing > 0 && pos.net === 0) {
+        pos.closeTime = Math.floor(f.time / 1000);
+        emit(pos);
+        pos = adding > 0 ? openPos(Math.sign(signed), f) : null;
+      }
+
+      if (adding > 0) {
+        if (!pos) pos = openPos(Math.sign(signed), f);
+        pos.entryQty      += adding;
+        pos.entryNotional += adding * price;
+        pos.net           += pos.dir > 0 ? adding : -adding;
+      }
+    }
+    // La posicion que quedo abierta no se emite: solo guardamos trades cerrados.
+  }
+  return out;
+}
+
 export async function fetchBinanceFutures(apiKey, apiSecret, symbol, limit = 1000) {
   const ts  = Date.now();
   const qs  = `symbol=${symbol}&limit=${limit}&timestamp=${ts}`;
@@ -126,41 +273,7 @@ export async function fetchBinanceFutures(apiKey, apiSecret, symbol, limit = 100
     headers: { 'X-MBX-APIKEY': apiKey },
   });
   if (!res.ok) throw new Error(`Binance Futures ${res.status}: ${await res.text()}`);
-  const fills = await res.json();
-
-  // Group fills → positions
-  const orders = new Map();
-  for (const f of fills) {
-    const id = String(f.orderId);
-    if (!orders.has(id)) orders.set(id, []);
-    orders.get(id).push(f);
-  }
-
-  return [...orders.values()].map(fls => {
-    const first = fls[0];
-    const qty   = fls.reduce((s, f) => s + parseFloat(f.qty), 0);
-    const avg   = fls.reduce((s, f) => s + parseFloat(f.price) * parseFloat(f.qty), 0) / qty;
-    const pnl   = fls.reduce((s, f) => s + parseFloat(f.realizedPnl || 0), 0);
-    const fees  = fls.reduce((s, f) => s + parseFloat(f.commission  || 0), 0);
-    const ts2   = Math.floor(first.time / 1000);
-    return {
-      symbol:      first.symbol,
-      category:    'linear',
-      side:        first.side === 'BUY' ? 'long' : 'short',
-      entry_price: avg,
-      exit_price:  null,
-      size:        qty,
-      pnl,
-      fees,
-      entry_time:  ts2,
-      exit_time:   null,
-      session:     session(ts2),
-      exec_type:   'bot',
-      status:      'closed',
-      exchange:    'binance',
-      exchange_id: String(first.orderId),
-    };
-  });
+  return buildBinancePositions(await res.json());
 }
 
 // Spot

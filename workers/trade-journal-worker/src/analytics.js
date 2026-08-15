@@ -3,6 +3,39 @@
 function r2(n) { return Math.round(n * 100) / 100; }
 function r1(n) { return Math.round(n * 10) / 10; }
 
+// R = cuanto gano/pierdo en multiplos del riesgo que puse en el trade.
+// Si no hay risk_usd guardado se deriva de |entrada - stop| * size.
+export function riskOf(t) {
+  if (t.risk_usd > 0) return t.risk_usd;
+  if (t.stop_price > 0 && t.entry_price > 0 && t.size > 0) {
+    const r = Math.abs(t.entry_price - t.stop_price) * t.size;
+    return r > 0 ? r : null;
+  }
+  return null;
+}
+
+export function rMultiple(t) {
+  const risk = riskOf(t);
+  return risk && t.pnl != null ? t.pnl / risk : null;
+}
+
+function rStats(closed) {
+  const rs = closed.map(rMultiple).filter(v => v != null && Number.isFinite(v));
+  if (!rs.length) return { rCount: 0, totalR: 0, avgR: 0, bestR: 0, worstR: 0, rCoverage: 0 };
+  const wins   = rs.filter(v => v > 0);
+  const losses = rs.filter(v => v < 0);
+  return {
+    rCount:    rs.length,
+    rCoverage: r1(rs.length / closed.length * 100),
+    totalR:    r2(rs.reduce((s, v) => s + v, 0)),
+    avgR:      r2(rs.reduce((s, v) => s + v, 0) / rs.length),
+    avgWinR:   wins.length   ? r2(wins.reduce((s, v) => s + v, 0) / wins.length)     : 0,
+    avgLossR:  losses.length ? r2(losses.reduce((s, v) => s + v, 0) / losses.length) : 0,
+    bestR:     r2(Math.max(...rs)),
+    worstR:    r2(Math.min(...rs)),
+  };
+}
+
 export function computeStats(trades) {
   const closed = trades.filter(t => t.status === 'closed' && t.pnl != null);
   if (!closed.length) return emptyStats(trades.length);
@@ -50,6 +83,7 @@ export function computeStats(trades) {
     worstTrade:    sorted[sorted.length - 1] || null,
     avgHoldMinutes:Math.round(avgHoldS / 60),
     equityCurve:   curve,
+    ...rStats(closed),
   };
 }
 
@@ -62,6 +96,8 @@ function emptyStats(total = 0) {
     currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0,
     bestTrade: null, worstTrade: null, avgHoldMinutes: 0,
     equityCurve: [],
+    rCount: 0, rCoverage: 0, totalR: 0, avgR: 0,
+    avgWinR: 0, avgLossR: 0, bestR: 0, worstR: 0,
   };
 }
 
@@ -109,6 +145,7 @@ function dimStats(trades) {
   const totalPnl  = trades.reduce((s, t) => s + t.pnl, 0);
   const gProfit   = wins.reduce((s, t) => s + t.pnl, 0);
   const gLoss     = Math.abs(trades.filter(t => t.pnl < 0).reduce((s, t) => s + t.pnl, 0));
+  const rs        = trades.map(rMultiple).filter(v => v != null && Number.isFinite(v));
   return {
     count:        trades.length,
     winCount:     wins.length,
@@ -116,7 +153,57 @@ function dimStats(trades) {
     totalPnl:     r2(totalPnl),
     avgPnl:       trades.length ? r2(totalPnl / trades.length) : 0,
     profitFactor: gLoss > 0 ? r2(gProfit / gLoss) : (gProfit > 0 ? 99 : 0),
+    totalR:       rs.length ? r2(rs.reduce((s, v) => s + v, 0)) : null,
+    avgR:         rs.length ? r2(rs.reduce((s, v) => s + v, 0) / rs.length) : null,
   };
+}
+
+// Review semanal: lo que paso cada semana y los trades que hay que revisar.
+export function buildWeeklyReview(trades, weeks = 8) {
+  const closed = trades.filter(t => t.status === 'closed' && t.pnl != null);
+  const groups = new Map();
+
+  for (const t of closed) {
+    const d = new Date(t.entry_time * 1000);
+    // Lunes de esa semana, en UTC
+    const monday = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7)) / 1000;
+    if (!groups.has(monday)) groups.set(monday, []);
+    groups.get(monday).push(t);
+  }
+
+  return [...groups.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .slice(0, weeks)
+    .map(([weekStart, group]) => {
+      const sorted  = [...group].sort((a, b) => a.pnl - b.pnl);
+      const rs      = group.map(rMultiple).filter(v => v != null && Number.isFinite(v));
+      const scores  = group.map(t => t.rule_score).filter(v => v != null);
+      const emotions = {};
+      for (const t of group) if (t.emotion) emotions[t.emotion] = (emotions[t.emotion] || 0) + 1;
+
+      return {
+        weekStart,
+        weekEnd:   weekStart + 7 * 86400 - 1,
+        ...dimStats(group),
+        totalFees: r2(group.reduce((s, t) => s + (t.fees || 0), 0)),
+        avgRuleScore: scores.length ? r1(scores.reduce((s, v) => s + v, 0) / scores.length) : null,
+        emotions,
+        untagged:  group.filter(t => !t.setup_tag && !t.strategy_tag).length,
+        unreviewed: group.filter(t => !t.notes).length,
+        // Los tres peores son los que hay que mirar en la revision
+        worst:     sorted.slice(0, 3).filter(t => t.pnl < 0).map(t => ({
+          id: t.id, symbol: t.symbol, side: t.side, pnl: r2(t.pnl),
+          r: rMultiple(t) != null ? r2(rMultiple(t)) : null,
+          entry_time: t.entry_time, notes: t.notes || null,
+        })),
+        best:      sorted.slice(-1).filter(t => t.pnl > 0).map(t => ({
+          id: t.id, symbol: t.symbol, side: t.side, pnl: r2(t.pnl),
+          r: rMultiple(t) != null ? r2(rMultiple(t)) : null,
+          entry_time: t.entry_time,
+        })),
+        rCount: rs.length,
+      };
+    });
 }
 
 export function buildHeatmap(trades) {
