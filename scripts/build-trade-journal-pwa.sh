@@ -6,18 +6,18 @@ set -e
 OUT="trade-journal-pwa"
 BUILD_ID="$(date +%s)"
 
-# Vite emite dist/trade-journal/*.html con assets en dist/assets/
-npm run build
+# Vite emite dist-trade-journal/trade-journal/*.html con assets en dist-trade-journal/assets/
+npx vite build --config vite.config.trade-journal.js
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
 # Paginas a la raiz: los enlaces internos ya son relativos (./trades.html)
-cp dist/trade-journal/*.html "$OUT/"
+cp dist-trade-journal/trade-journal/*.html "$OUT/"
 
 # Los HTML referencian /assets/ y /images/ absolutos, asi que se copian tal cual
-cp -r dist/assets "$OUT/assets"
-cp -r dist/images "$OUT/images"
+cp -r dist-trade-journal/assets "$OUT/assets"
+cp -r dist-trade-journal/images "$OUT/images"
 
 # El manifest se sirve en la raiz del subdominio
 sed -i 's|href="/manifests/trade-journal.json"|href="/manifest.json"|g' "$OUT"/*.html
