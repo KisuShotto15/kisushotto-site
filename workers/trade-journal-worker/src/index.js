@@ -370,7 +370,11 @@ async function attachPlans(env) {
         AND ? BETWEEN entry_time - 900 AND COALESCE(exit_time, entry_time) + 900
     `).bind(
       p.setup_tag, p.strategy_tag, p.rule_score, p.notes,
-      p.symbol, p.side, p.opened_at,
+      p.symbol, p.side,
+      // created_at, no opened_at: el createdTime de Bybit es la primera vez que
+      // existio una posicion en ese simbolo, no la apertura de esta. El plan en
+      // cambio se guarda con la posicion viva, asi que cae dentro del trade.
+      p.created_at,
     ).run();
 
     if (res.meta.changes > 0) {

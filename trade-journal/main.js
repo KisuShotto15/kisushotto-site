@@ -1,4 +1,4 @@
-import { getAnalytics, getTrades, getBySymbol, getLivePositions, getPlans, savePlan, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
+import { cfg, getAnalytics, getTrades, getBySymbol, getLivePositions, getPlans, savePlan, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
 
 const $ = id => document.getElementById(id);
 
@@ -416,8 +416,14 @@ async function loadLivePositions() {
   try {
     renderOpenPositions(await getLivePositions());
     $('liveDot')?.classList.remove('stale');
-  } catch (_) {
+  } catch (err) {
+    // Un punto rojo sin explicacion no sirve para nada: mostrar el motivo real
     $('liveDot')?.classList.add('stale');
+    $('liveStamp').textContent = 'error';
+    $('openPosList').innerHTML =
+      `<div class="sidebar-empty" style="color:var(--red)">${err.message}</div>
+       <div class="sidebar-empty" style="font-size:10px">API: ${cfg.base()}</div>`;
+    console.error('[trade-journal] posiciones en vivo:', err);
   }
 }
 
