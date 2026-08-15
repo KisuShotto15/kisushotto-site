@@ -1,6 +1,6 @@
-import { computeStats, groupByDimension, buildHeatmap } from './analytics.js';
+import { computeStats, groupByDimension, buildHeatmap, buildWeeklyReview, riskOf } from './analytics.js';
 import { generateInsights } from './insights.js';
-import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot, parseBybitCSV } from './ingestion.js';
+import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot, fetchBybitPositions, parseBybitCSV } from './ingestion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -31,10 +31,13 @@ function session(unixSec) {
 
 export default {
   async scheduled(event, env) {
-    try { await runSync(env); } catch (e) { console.error('cron sync failed:', e); }
+    // El snapshot va primero: guarda el stop de lo que sigue abierto antes de
+    // que el sync traiga esos mismos trades ya cerrados.
+    try { await snapshotPositions(env); } catch (e) { console.error('cron snapshot failed:', e); }
+    try { await runSync(env); }          catch (e) { console.error('cron sync failed:', e); }
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (!auth(request, env)) return json({ error: 'Unauthorized' }, 401);
 
@@ -49,6 +52,8 @@ export default {
       // ── Trades ──────────────────────────────────────────────────────────────
       if (path === '/trades' && method === 'GET')    return await listTrades(url, env);
       if (path === '/trades' && method === 'POST')   return await createTrade(request, env);
+      if (path === '/trades/bulk-tag' && method === 'POST') return await bulkTag(request, env);
+      if (path === '/trades/export'   && method === 'GET')  return await exportCSV(url, env);
       const tradeMatch = path.match(/^\/trades\/([\w-]+)$/);
       if (tradeMatch) {
         const id = tradeMatch[1];
@@ -57,6 +62,11 @@ export default {
         if (method === 'DELETE') return await deleteTrade(id, env);
       }
 
+      // ── Posiciones en vivo ──────────────────────────────────────────────────
+      if (path === '/positions/live' && method === 'GET')  return await livePositions(env, ctx);
+      if (path === '/positions/plan' && method === 'GET')  return await listPlans(env);
+      if (path === '/positions/plan' && method === 'POST') return await savePlan(request, env);
+
       // ── Analytics ───────────────────────────────────────────────────────────
       if (path === '/analytics'              && method === 'GET') return await analytics(url, env);
       if (path === '/analytics/by-session'   && method === 'GET') return await byDimension('session',      env);
@@ -64,6 +74,7 @@ export default {
       if (path === '/analytics/by-setup'     && method === 'GET') return await byDimension('setup_tag',    env);
       if (path === '/analytics/by-strategy'  && method === 'GET') return await byDimension('strategy_tag', env);
       if (path === '/analytics/heatmap'      && method === 'GET') return await heatmap(env);
+      if (path === '/analytics/weekly'       && method === 'GET') return await weekly(url, env);
 
       // ── Insights ────────────────────────────────────────────────────────────
       if (path === '/insights' && method === 'GET')  return await listInsights(env);
@@ -133,13 +144,20 @@ async function createTrade(request, env) {
   const now = Math.floor(Date.now() / 1000);
   const et  = b.entry_time || now;
   const status = b.exit_price != null ? 'closed' : (b.status || 'open');
+  const stop = b.stop_price != null ? parseFloat(b.stop_price) : null;
+  const risk = b.risk_usd != null
+    ? parseFloat(b.risk_usd)
+    : (stop > 0 && b.entry_price > 0 && b.size > 0
+        ? Math.abs(parseFloat(b.entry_price) - stop) * parseFloat(b.size)
+        : null);
 
   await env.DB.prepare(`
     INSERT OR IGNORE INTO trades
     (id, symbol, category, side, entry_price, exit_price, size, pnl, fees,
      entry_time, exit_time, strategy_tag, setup_tag, session, exec_type,
-     notes, emotion, rule_score, status, exchange, exchange_id, created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     notes, emotion, rule_score, status, exchange, exchange_id, created_at,
+     stop_price, risk_usd)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).bind(
     b.id || uid(),
     (b.symbol || '').toUpperCase(), b.category || 'linear',
@@ -155,9 +173,65 @@ async function createTrade(request, env) {
     b.notes || null, b.emotion || null,
     b.rule_score != null ? parseInt(b.rule_score) : null,
     status, b.exchange || 'bybit', b.exchange_id || null, now,
+    stop, risk,
   ).run();
 
   return json({ ok: true }, 201);
+}
+
+// Etiquetar varios trades de una en vez de abrirlos uno por uno.
+async function bulkTag(request, env) {
+  const { ids, setup_tag, strategy_tag } = await request.json();
+  if (!Array.isArray(ids) || !ids.length) return json({ error: 'ids required' }, 400);
+  if (setup_tag === undefined && strategy_tag === undefined) {
+    return json({ error: 'setup_tag o strategy_tag required' }, 400);
+  }
+
+  const sets = [];
+  const args = [];
+  if (setup_tag    !== undefined) { sets.push('setup_tag = ?');    args.push(setup_tag    || null); }
+  if (strategy_tag !== undefined) { sets.push('strategy_tag = ?'); args.push(strategy_tag || null); }
+
+  const holes = ids.map(() => '?').join(',');
+  const res = await env.DB.prepare(
+    `UPDATE trades SET ${sets.join(', ')} WHERE id IN (${holes})`
+  ).bind(...args, ...ids).run();
+
+  return json({ ok: true, updated: res.meta.changes });
+}
+
+const CSV_COLS = ['id','symbol','category','side','entry_price','exit_price','stop_price','size',
+                  'pnl','risk_usd','fees','entry_time','exit_time','strategy_tag','setup_tag',
+                  'session','exec_type','emotion','rule_score','status','exchange','notes'];
+
+function csvCell(v) {
+  if (v == null) return '';
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+async function exportCSV(url, env) {
+  const p = url.searchParams;
+  let sql = 'SELECT * FROM trades WHERE 1=1';
+  const args = [];
+  if (p.get('from')) { sql += ' AND entry_time >= ?'; args.push(+p.get('from')); }
+  if (p.get('to'))   { sql += ' AND entry_time <= ?'; args.push(+p.get('to')); }
+  sql += ' ORDER BY entry_time DESC';
+
+  const { results } = await env.DB.prepare(sql).bind(...args).all();
+  const rows = results.map(t => {
+    const risk = riskOf(t);
+    return [...CSV_COLS.map(c => csvCell(t[c])), csvCell(risk && t.pnl != null ? (t.pnl / risk).toFixed(3) : '')].join(',');
+  });
+
+  const csv = [[...CSV_COLS, 'r_multiple'].join(','), ...rows].join('\n');
+  return new Response(csv, {
+    headers: {
+      'Content-Type':        'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="trades-${new Date().toISOString().slice(0, 10)}.csv"`,
+      ...CORS,
+    },
+  });
 }
 
 async function getTrade(id, env) {
@@ -166,15 +240,29 @@ async function getTrade(id, env) {
   return json({ trade });
 }
 
+const EDITABLE_COLS = ['symbol','category','side','entry_price','exit_price','size','pnl','fees',
+                       'entry_time','exit_time','strategy_tag','setup_tag','session','exec_type',
+                       'notes','emotion','rule_score','status','exchange',
+                       'stop_price','risk_usd','screenshots'];
+
 async function updateTrade(id, request, env) {
   const b = await request.json();
-  const COLS = ['symbol','category','side','entry_price','exit_price','size','pnl','fees',
-                'entry_time','exit_time','strategy_tag','setup_tag','session','exec_type',
-                'notes','emotion','rule_score','status','exchange'];
-  const updates = COLS.filter(c => b[c] !== undefined);
+  const updates = EDITABLE_COLS.filter(c => b[c] !== undefined);
   if (!updates.length) return json({ error: 'Nothing to update' }, 400);
   if (b.exit_price != null && !updates.includes('status')) {
     updates.push('status'); b.status = 'closed';
+  }
+
+  // Si mandan un stop y no un riesgo explicito, el riesgo sale de |entrada - stop| * size
+  if (b.stop_price !== undefined && b.risk_usd === undefined) {
+    const cur   = await env.DB.prepare('SELECT entry_price, size FROM trades WHERE id = ?').bind(id).first();
+    const entry = b.entry_price ?? cur?.entry_price;
+    const size  = b.size ?? cur?.size;
+    const risk  = b.stop_price > 0 && entry > 0 && size > 0
+      ? Math.abs(entry - b.stop_price) * size
+      : null;
+    b.risk_usd = risk;
+    updates.push('risk_usd');
   }
   const set    = updates.map(c => `${c} = ?`).join(', ');
   const values = [...updates.map(c => b[c]), id];
@@ -186,6 +274,113 @@ async function updateTrade(id, request, env) {
 async function deleteTrade(id, env) {
   await env.DB.prepare('DELETE FROM trades WHERE id = ?').bind(id).run();
   return json({ ok: true });
+}
+
+// ── Posiciones en vivo ────────────────────────────────────────────────────────
+// Lee de Bybit directo (no de D1) y cachea 5s en el edge para que varias
+// pestañas polleando no multipliquen las llamadas al exchange.
+
+const LIVE_CACHE_KEY = 'https://tj-cache.local/positions/live';
+
+async function livePositions(env, ctx) {
+  const cache = caches.default;
+  const key   = new Request(LIVE_CACHE_KEY);
+  const hit   = await cache.match(key);
+  if (hit) return json({ ...(await hit.json()), cached: true });
+
+  // Con la pagina abierta el snapshot se refresca mas seguido que el cron de 15min,
+  // pero nunca mas de una vez cada 2 minutos.
+  if (ctx) {
+    const last = await env.DB.prepare('SELECT MAX(seen_at) AS s FROM position_snapshots').first();
+    if (Math.floor(Date.now() / 1000) - (last?.s || 0) > 120) {
+      ctx.waitUntil(snapshotPositions(env).catch(() => {}));
+    }
+  }
+
+  const cfg = await env.DB.prepare(
+    'SELECT * FROM sync_configs WHERE id = ? AND enabled = 1'
+  ).bind('bybit').first();
+  if (!cfg) return json({ positions: [], errors: [], total_unrealized: 0, ts: Date.now(), reason: 'sin config' });
+
+  const { positions, errors } = await fetchBybitPositions(cfg.api_key, cfg.api_secret);
+  const payload = {
+    positions,
+    errors,
+    total_unrealized: positions.reduce((s, p) => s + p.unrealized_pnl, 0),
+    ts: Date.now(),
+  };
+
+  await cache.put(key, new Response(JSON.stringify(payload), {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=5' },
+  }));
+
+  return json(payload);
+}
+
+// ── Plan pre-trade ────────────────────────────────────────────────────────────
+
+async function listPlans(env) {
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM trade_plans WHERE applied = 0 ORDER BY created_at DESC LIMIT 100'
+  ).all();
+  return json({ plans: results });
+}
+
+async function savePlan(request, env) {
+  const b = await request.json();
+  if (!b.symbol || !b.side || !b.opened_at) {
+    return json({ error: 'symbol + side + opened_at required' }, 400);
+  }
+  await env.DB.prepare(`
+    INSERT INTO trade_plans (symbol, side, opened_at, setup_tag, strategy_tag, rule_score, checklist, notes, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(symbol, side, opened_at) DO UPDATE SET
+      setup_tag    = excluded.setup_tag,
+      strategy_tag = excluded.strategy_tag,
+      rule_score   = excluded.rule_score,
+      checklist    = excluded.checklist,
+      notes        = excluded.notes
+  `).bind(
+    b.symbol.toUpperCase(), b.side, parseInt(b.opened_at),
+    b.setup_tag || null, b.strategy_tag || null,
+    b.rule_score != null ? parseInt(b.rule_score) : null,
+    b.checklist ? JSON.stringify(b.checklist) : null,
+    b.notes || null, Math.floor(Date.now() / 1000),
+  ).run();
+  return json({ ok: true });
+}
+
+// Pega los planes a los trades ya cerrados. Solo rellena lo que este vacio:
+// si el usuario ya edito el trade a mano, gana lo que puso el usuario.
+async function attachPlans(env) {
+  const { results: plans } = await env.DB.prepare(
+    'SELECT * FROM trade_plans WHERE applied = 0'
+  ).all();
+  if (!plans.length) return 0;
+
+  let applied = 0;
+  for (const p of plans) {
+    const res = await env.DB.prepare(`
+      UPDATE trades SET
+        setup_tag    = COALESCE(setup_tag,    ?),
+        strategy_tag = COALESCE(strategy_tag, ?),
+        rule_score   = COALESCE(rule_score,   ?),
+        notes        = COALESCE(notes,        ?)
+      WHERE status = 'closed' AND symbol = ? AND side = ?
+        AND ? BETWEEN entry_time - 900 AND COALESCE(exit_time, entry_time) + 900
+    `).bind(
+      p.setup_tag, p.strategy_tag, p.rule_score, p.notes,
+      p.symbol, p.side, p.opened_at,
+    ).run();
+
+    if (res.meta.changes > 0) {
+      await env.DB.prepare(
+        'UPDATE trade_plans SET applied = 1 WHERE symbol = ? AND side = ? AND opened_at = ?'
+      ).bind(p.symbol, p.side, p.opened_at).run();
+      applied++;
+    }
+  }
+  return applied;
 }
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
@@ -205,6 +400,14 @@ async function byDimension(field, env) {
     "SELECT * FROM trades WHERE status = 'closed'"
   ).all();
   return json({ data: groupByDimension(results, field) });
+}
+
+async function weekly(url, env) {
+  const weeks = Math.min(parseInt(url.searchParams.get('weeks') || 8), 52);
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM trades WHERE status = 'closed' ORDER BY entry_time DESC LIMIT 2000"
+  ).all();
+  return json({ weeks: buildWeeklyReview(results, weeks) });
 }
 
 async function heatmap(env) {
@@ -259,25 +462,43 @@ async function tagTable(table, request, env, method) {
 // ── Ingestion ─────────────────────────────────────────────────────────────────
 
 async function upsertTrades(trades, env) {
+  if (!trades.length) return { total: 0, inserted: 0, updated: 0 };
+
+  // ON CONFLICT DO UPDATE (no OR IGNORE) para que un re-sync corrija datos viejos.
+  // Solo pisa campos que vienen del exchange: notas, tags y emocion son del usuario.
   const stmt = env.DB.prepare(`
-    INSERT OR IGNORE INTO trades
+    INSERT INTO trades
     (id, symbol, category, side, entry_price, exit_price, size, pnl, fees,
      entry_time, exit_time, session, exec_type, status, exchange, exchange_id, created_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(exchange, exchange_id) WHERE exchange_id IS NOT NULL DO UPDATE SET
+      entry_price = excluded.entry_price,
+      exit_price  = excluded.exit_price,
+      size        = excluded.size,
+      pnl         = excluded.pnl,
+      fees        = excluded.fees,
+      exit_time   = excluded.exit_time,
+      status      = excluded.status
   `);
-  let inserted = 0;
-  for (const t of trades) {
-    const res = await stmt.bind(
-      uid(), t.symbol, t.category || 'linear',
-      t.side, t.entry_price, t.exit_price ?? null, t.size,
-      t.pnl ?? null, t.fees ?? 0, t.entry_time, t.exit_time ?? null,
-      t.session, t.exec_type || 'bot', t.status || 'closed',
-      t.exchange, t.exchange_id ?? null,
-      Math.floor(Date.now() / 1000),
-    ).run();
-    if (res.meta.changes > 0) inserted++;
+
+  const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM trades').first();
+  const now    = Math.floor(Date.now() / 1000);
+
+  const rows = trades.map(t => stmt.bind(
+    uid(), t.symbol, t.category || 'linear',
+    t.side, t.entry_price, t.exit_price ?? null, t.size,
+    t.pnl ?? null, t.fees ?? 0, t.entry_time, t.exit_time ?? null,
+    t.session, t.exec_type || 'bot', t.status || 'closed',
+    t.exchange, t.exchange_id ?? null, now,
+  ));
+
+  for (let i = 0; i < rows.length; i += 50) {
+    await env.DB.batch(rows.slice(i, i + 50));
   }
-  return { total: trades.length, inserted, duplicates: trades.length - inserted };
+
+  const after    = await env.DB.prepare('SELECT COUNT(*) AS c FROM trades').first();
+  const inserted = after.c - before.c;
+  return { total: trades.length, inserted, updated: trades.length - inserted, duplicates: trades.length - inserted };
 }
 
 async function ingestBybit(request, env, category) {
@@ -335,6 +556,63 @@ async function setSyncConfig(request, env) {
   return json({ ok: true });
 }
 
+// Guarda el stop/TP de las posiciones abiertas. Bybit no lo devuelve una vez
+// cerradas, asi que sin esto no hay forma de calcular la R automaticamente.
+async function snapshotPositions(env) {
+  const cfg = await env.DB.prepare('SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
+  if (!cfg) return { skipped: true };
+
+  const { positions } = await fetchBybitPositions(cfg.api_key, cfg.api_secret);
+  if (!positions.length) return { saved: 0 };
+
+  const now  = Math.floor(Date.now() / 1000);
+  const stmt = env.DB.prepare(`
+    INSERT INTO position_snapshots (symbol, side, opened_at, entry_price, stop_price, take_profit, size, seen_at)
+    VALUES (?,?,?,?,?,?,?,?)
+    ON CONFLICT(symbol, side, opened_at) DO UPDATE SET
+      entry_price = excluded.entry_price,
+      stop_price  = COALESCE(excluded.stop_price, position_snapshots.stop_price),
+      take_profit = COALESCE(excluded.take_profit, position_snapshots.take_profit),
+      size        = MAX(excluded.size, position_snapshots.size),
+      seen_at     = excluded.seen_at
+  `);
+
+  await env.DB.batch(positions.map(p => stmt.bind(
+    p.symbol, p.side, p.opened_at || now,
+    p.entry_price, p.stop_loss, p.take_profit, p.size, now,
+  )));
+
+  return { saved: positions.length };
+}
+
+// Une los snapshots con los trades cerrados que todavia no tienen stop guardado.
+async function attachStops(env) {
+  const res = await env.DB.prepare(`
+    UPDATE trades SET
+      stop_price = (
+        SELECT s.stop_price FROM position_snapshots s
+        WHERE s.symbol = trades.symbol AND s.side = trades.side
+          AND s.stop_price IS NOT NULL
+          AND s.seen_at BETWEEN trades.entry_time - 900 AND COALESCE(trades.exit_time, trades.entry_time) + 900
+        ORDER BY s.seen_at DESC LIMIT 1
+      ),
+      risk_usd = (
+        SELECT ABS(trades.entry_price - s.stop_price) * trades.size FROM position_snapshots s
+        WHERE s.symbol = trades.symbol AND s.side = trades.side
+          AND s.stop_price IS NOT NULL
+          AND s.seen_at BETWEEN trades.entry_time - 900 AND COALESCE(trades.exit_time, trades.entry_time) + 900
+        ORDER BY s.seen_at DESC LIMIT 1
+      )
+    WHERE status = 'closed' AND stop_price IS NULL AND EXISTS (
+      SELECT 1 FROM position_snapshots s
+      WHERE s.symbol = trades.symbol AND s.side = trades.side
+        AND s.stop_price IS NOT NULL
+        AND s.seen_at BETWEEN trades.entry_time - 900 AND COALESCE(trades.exit_time, trades.entry_time) + 900
+    )
+  `).run();
+  return res.meta.changes;
+}
+
 async function runSync(env) {
   const cfg = await env.DB.prepare('SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
   if (!cfg) return json({ skipped: true, reason: 'no config or disabled' });
@@ -346,9 +624,11 @@ async function runSync(env) {
   ]);
 
   const all = [...linear, ...inverse];
-  const result = await upsertTrades(all, env);
+  const result   = await upsertTrades(all, env);
+  const stopped  = await attachStops(env);
+  const planned  = await attachPlans(env);
   await env.DB.prepare('UPDATE sync_configs SET last_sync = ? WHERE id = ?')
     .bind(Math.floor(Date.now() / 1000), 'bybit').run();
 
-  return json({ ok: true, ...result, synced_at: Date.now() });
+  return json({ ok: true, ...result, stops_attached: stopped, plans_applied: planned, synced_at: Date.now() });
 }

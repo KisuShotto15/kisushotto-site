@@ -83,7 +83,10 @@
       </div>
       <!-- Open Positions -->
       <div class="sidebar-card">
-        <div class="sidebar-card-title">CRÉDITO ABIERTO</div>
+        <div class="sidebar-card-title">
+          CRÉDITO ABIERTO
+          <span class="live-badge"><span class="live-dot" id="liveDot"></span><span id="liveStamp">—</span></span>
+        </div>
         <div class="open-pnl-total neu" id="openPnlTotal">—</div>
         <div class="open-count-label" id="openCountLabel">—</div>
         <div id="openPosList"></div>
@@ -117,7 +120,7 @@
     <div class="kpi-card">
       <div class="kpi-label">Expectancy</div>
       <div class="kpi-value neu" id="kpiExp">—</div>
-      <div class="kpi-sub">USDT / trade</div>
+      <div class="kpi-sub" id="kpiExpSub">USDT / trade</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Max DD</div>
@@ -132,6 +135,28 @@
   </div>
 
 </div><!-- /container -->
+
+<!-- Plan pre-trade -->
+<div class="plan-modal hidden" id="planModal" onclick="if(event.target===this)closePlan()">
+  <div class="plan-box">
+    <div class="plan-head">
+      <div class="plan-title" id="planTitle">—</div>
+      <button class="panel-close" onclick="closePlan()">×</button>
+    </div>
+    <div class="plan-row">
+      <select id="planSetup"></select>
+      <select id="planStrategy"></select>
+    </div>
+    <div class="plan-section-title">Checklist <span class="plan-score" id="planScore">—</span></div>
+    <div id="planChecklist"></div>
+    <div class="plan-section-title">Notas</div>
+    <textarea id="planNotes" class="panel-textarea" placeholder="Por que entre, que espero…"></textarea>
+    <div class="plan-actions">
+      <button class="btn btn-sm" onclick="closePlan()">Cancelar</button>
+      <button class="btn btn-accent" onclick="submitPlan()">Guardar plan</button>
+    </div>
+  </div>
+</div>
 
 <!-- Day drawer backdrop -->
 <div class="day-drawer-backdrop hidden" id="dayDrawerBackdrop" onclick="closeDayDrawer()"></div>

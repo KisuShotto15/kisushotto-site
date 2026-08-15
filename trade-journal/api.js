@@ -39,12 +39,30 @@ export const getTrades       = (params)  => api(`/trades${qs(params)}`);
 export const createTrade     = (body)    => api('/trades',  { method: 'POST', body: JSON.stringify(body) });
 export const updateTrade     = (id, b)   => api(`/trades/${id}`, { method: 'PUT',  body: JSON.stringify(b) });
 export const deleteTrade     = (id)      => api(`/trades/${id}`, { method: 'DELETE' });
+export const getLivePositions = ()       => api('/positions/live');
+export const getPlans        = ()        => api('/positions/plan');
+export const savePlan        = (body)    => api('/positions/plan', { method: 'POST', body: JSON.stringify(body) });
 export const getAnalytics    = (params)  => api(`/analytics${qs(params)}`);
 export const getBySession    = ()        => api('/analytics/by-session');
 export const getBySymbol     = (params)  => api(`/analytics/by-symbol${qs(params)}`);
 export const getBySetup      = ()        => api('/analytics/by-setup');
 export const getByStrategy   = ()        => api('/analytics/by-strategy');
 export const getHeatmap      = ()        => api('/analytics/heatmap');
+export const getWeekly       = (params)  => api(`/analytics/weekly${qs(params)}`);
+export const bulkTag         = (body)    => api('/trades/bulk-tag', { method: 'POST', body: JSON.stringify(body) });
+
+export async function downloadCSV(params) {
+  const res = await fetch(cfg.base() + `/trades/export${qs(params)}`, {
+    headers: { 'Authorization': `Bearer ${cfg.token()}` },
+  });
+  if (!res.ok) throw new Error(`Export ${res.status}`);
+  const url = URL.createObjectURL(await res.blob());
+  const a   = document.createElement('a');
+  a.href = url;
+  a.download = `trades-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 export const getInsights     = ()        => api('/insights');
 export const refreshInsights = ()        => api('/insights/refresh', { method: 'POST' });
 export const getStrategies   = ()        => api('/strategies');

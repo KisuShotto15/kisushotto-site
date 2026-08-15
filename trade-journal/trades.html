@@ -70,10 +70,24 @@
     <input type="date" id="fFrom" onchange="applyFilters()" title="Desde">
     <input type="date" id="fTo"   onchange="applyFilters()" title="Hasta">
     <button class="btn btn-sm" onclick="resetFilters()">↺ Reset</button>
+    <button class="btn btn-sm" onclick="doExport()" title="Exportar CSV con los filtros de fecha aplicados">↓ CSV</button>
   </div>
 
   <!-- Mini summary -->
   <div id="miniSummary" class="mini-summary"></div>
+
+  <!-- Etiquetado masivo -->
+  <div class="bulk-bar" id="bulkBar">
+    <span class="bulk-count" id="bulkCount">0 seleccionados</span>
+    <select id="bulkSetup" onchange="applyBulkTag('setup_tag', this.value); this.value=''">
+      <option value="">Setup…</option>
+    </select>
+    <select id="bulkStrategy" onchange="applyBulkTag('strategy_tag', this.value); this.value=''">
+      <option value="">Estrategia…</option>
+    </select>
+    <button class="btn btn-sm" onclick="selectAllVisible()">Todos</button>
+    <button class="btn btn-sm" onclick="clearSelection()">Limpiar</button>
+  </div>
 
   <!-- Trades list -->
   <div class="trades-list">

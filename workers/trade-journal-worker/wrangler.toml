@@ -6,9 +6,10 @@ compatibility_date = "2025-04-10"
 binding = "DB"
 database_name = "trade-journal-db"
 database_id = "0d902c20-5ba7-4646-a1f6-d2dc00d982e8"
+migrations_dir = "migrations"
 
 [vars]
 TOKEN = "151322"
 
 [triggers]
-crons = ["0 */4 * * *"]
+crons = ["*/15 * * * *"]

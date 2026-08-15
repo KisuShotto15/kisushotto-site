@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS trades (
   notes        TEXT,
   emotion      TEXT,
   rule_score   INTEGER,
+  stop_price   REAL,
+  risk_usd     REAL,
+  screenshots  TEXT,
   status       TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed')),
   exchange     TEXT    NOT NULL DEFAULT 'bybit',
   exchange_id  TEXT,
@@ -45,6 +48,46 @@ CREATE TABLE IF NOT EXISTS insights (
   severity     TEXT    NOT NULL DEFAULT 'info',
   data         TEXT,
   generated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE IF NOT EXISTS position_snapshots (
+  symbol      TEXT    NOT NULL,
+  side        TEXT    NOT NULL,
+  opened_at   INTEGER NOT NULL,
+  entry_price REAL,
+  stop_price  REAL,
+  take_profit REAL,
+  size        REAL,
+  seen_at     INTEGER NOT NULL,
+  PRIMARY KEY (symbol, side, opened_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_seen ON position_snapshots(symbol, side, seen_at DESC);
+
+CREATE TABLE IF NOT EXISTS trade_plans (
+  symbol       TEXT    NOT NULL,
+  side         TEXT    NOT NULL,
+  opened_at    INTEGER NOT NULL,
+  setup_tag    TEXT,
+  strategy_tag TEXT,
+  rule_score   INTEGER,
+  checklist    TEXT,
+  notes        TEXT,
+  applied      INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+  PRIMARY KEY (symbol, side, opened_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plans_pending ON trade_plans(applied, symbol, side);
+
+CREATE TABLE IF NOT EXISTS sync_configs (
+  id         TEXT    PRIMARY KEY,
+  exchange   TEXT    NOT NULL,
+  api_key    TEXT    NOT NULL,
+  api_secret TEXT    NOT NULL,
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  last_sync  INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 CREATE INDEX IF NOT EXISTS idx_trades_time     ON trades(entry_time DESC);

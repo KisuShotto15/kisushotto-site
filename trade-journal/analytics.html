@@ -42,13 +42,16 @@
     <button class="tab-btn" onclick="switchTab('symbols')">Símbolos</button>
     <button class="tab-btn" onclick="switchTab('setups')">Setups</button>
     <button class="tab-btn" onclick="switchTab('heatmap')">Heatmap</button>
+    <button class="tab-btn" onclick="switchTab('review')">Review semanal</button>
   </div>
 
   <!-- OVERVIEW -->
   <div class="tab-panel active" id="panel-overview">
-    <div class="kpi-grid" id="overviewKPIs" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi-grid" id="overviewKPIs" style="grid-template-columns:repeat(6,1fr)">
       <div class="kpi-card"><div class="kpi-label">Avg Win</div><div class="kpi-value pos" id="aWin">—</div></div>
       <div class="kpi-card"><div class="kpi-label">Avg Loss</div><div class="kpi-value neg" id="aLoss">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Avg R</div><div class="kpi-value neu" id="aAvgR">—</div><div class="kpi-sub" id="aRCov">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Total R</div><div class="kpi-value neu" id="aTotalR">—</div><div class="kpi-sub" id="aRRange">—</div></div>
       <div class="kpi-card"><div class="kpi-label">Max Racha Win</div><div class="kpi-value acc" id="aMaxW">—</div></div>
       <div class="kpi-card"><div class="kpi-label">Max Racha Loss</div><div class="kpi-value neg" id="aMaxL">—</div></div>
     </div>
@@ -84,7 +87,7 @@
     <div class="section-card">
       <div class="section-card-title">detalle sesiones</div>
       <table class="stats-table">
-        <thead><tr><th>Sesión</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th></tr></thead>
+        <thead><tr><th>Sesión</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th><th>Avg R</th></tr></thead>
         <tbody id="sessionTable"></tbody>
       </table>
     </div>
@@ -105,7 +108,7 @@
     <div class="section-card">
       <div class="section-card-title">detalle símbolos</div>
       <table class="stats-table">
-        <thead><tr><th>Símbolo</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th></tr></thead>
+        <thead><tr><th>Símbolo</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th><th>Avg R</th></tr></thead>
         <tbody id="symbolTable"></tbody>
       </table>
     </div>
@@ -126,7 +129,7 @@
     <div class="section-card">
       <div class="section-card-title">detalle setups</div>
       <table class="stats-table">
-        <thead><tr><th>Setup</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th></tr></thead>
+        <thead><tr><th>Setup</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th><th>Avg R</th></tr></thead>
         <tbody id="setupTable"></tbody>
       </table>
     </div>
@@ -141,6 +144,11 @@
     <div style="margin-top:12px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">
       Eje Y: hora UTC · Eje X: L=Lunes … D=Domingo · Celda vacía = sin datos suficientes
     </div>
+  </div>
+
+  <!-- REVIEW SEMANAL -->
+  <div class="tab-panel" id="panel-review">
+    <div id="weeklyReview"><div class="chart-empty">Cargando…</div></div>
   </div>
 
 </div>
