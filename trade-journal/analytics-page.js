@@ -1,3 +1,4 @@
+import { swr } from './cache.js';
 import { getAnalytics, getBySession, getBySymbol, getBySetup, getHeatmap, getWeekly } from './api.js';
 import { drawEquityCurve, drawBars, drawHeatmap, drawWinLossBars } from './charts.js';
 
@@ -43,7 +44,7 @@ async function loadTab(tab) {
 
 // ── Overview ──────────────────────────────────────────────────────────────────
 async function loadOverview() {
-  const { stats: s } = await getAnalytics();
+  const { stats: s } = await swr('a:overview', () => getAnalytics());
 
   $('aWin').textContent  = '+' + s.avgWin.toFixed(2);
   $('aLoss').textContent = '-' + s.avgLoss.toFixed(2);
@@ -77,7 +78,7 @@ async function loadOverview() {
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 async function loadSessions() {
-  const { data } = await getBySession();
+  const { data } = await swr('a:bysession', () => getBySession());
   drawBars($('sessionPnlChart'), data.map(d => ({ label: d.label, value: d.totalPnl, count: d.count })));
   drawBars($('sessionWrChart'),  data.map(d => ({ label: d.label, value: d.winRate,  count: d.count })));
   $('sessionTable').innerHTML = renderDimTable(data);
@@ -85,7 +86,7 @@ async function loadSessions() {
 
 // ── Symbols ───────────────────────────────────────────────────────────────────
 async function loadSymbols() {
-  const { data } = await getBySymbol();
+  const { data } = await swr('a:bysymbol', () => getBySymbol());
   const top = data.slice(0, 10);
   drawBars($('symbolPnlChart'), top.map(d => ({ label: d.label, value: d.totalPnl, count: d.count })));
   drawBars($('symbolWrChart'),  top.map(d => ({ label: d.label, value: d.winRate,  count: d.count })));
@@ -94,7 +95,7 @@ async function loadSymbols() {
 
 // ── Setups ────────────────────────────────────────────────────────────────────
 async function loadSetups() {
-  const { data } = await getBySetup();
+  const { data } = await swr('a:bysetup', () => getBySetup());
   drawBars($('setupPnlChart'), data.map(d => ({ label: d.label, value: d.totalPnl, count: d.count })));
   drawBars($('setupExpChart'), data.map(d => ({ label: d.label, value: d.avgPnl,   count: d.count })));
   $('setupTable').innerHTML = renderDimTable(data);
@@ -102,7 +103,7 @@ async function loadSetups() {
 
 // ── Heatmap ───────────────────────────────────────────────────────────────────
 async function loadHeatmap() {
-  const { heatmap } = await getHeatmap();
+  const { heatmap } = await swr('a:heatmap', () => getHeatmap());
   drawHeatmap($('heatmapChart'), heatmap);
 }
 
@@ -111,7 +112,7 @@ const fmtDay = ts => new Date(ts * 1000).toLocaleDateString('es', { day: '2-digi
 const sgn    = v => (v >= 0 ? '+' : '') + v.toFixed(2);
 
 async function loadReview() {
-  const { weeks } = await getWeekly({ weeks: 8 });
+  const { weeks } = await swr('a:weekly', () => getWeekly({ weeks: 8 }));
   const el = $('weeklyReview');
   if (!weeks.length) { el.innerHTML = '<div class="chart-empty">Sin trades cerrados todavía</div>'; return; }
 

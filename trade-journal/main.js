@@ -1,3 +1,4 @@
+import { swr, invalidate } from './cache.js';
 import { cfg, getAnalytics, getTrades, getBySymbol, getLivePositions, getPlans, savePlan, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
 
 const $ = id => document.getElementById(id);
@@ -176,7 +177,11 @@ async function loadCalendar() {
   $('calGrid').innerHTML = '<div class="loading">Cargando…</div>';
   const { from, to } = getCalRange();
   try {
-    const { trades } = await getTrades({ from, to, status: 'closed', limit: 500 });
+    const { trades } = await swr(
+      `cal:${from}:${to}`,
+      () => getTrades({ from, to, status: 'closed', limit: 500 }),
+      d => renderCalendar(calYear, calMonth, buildDayMap(d.trades)),
+    );
     renderCalendar(calYear, calMonth, buildDayMap(trades));
   } catch (e) {
     $('calGrid').innerHTML = `<div style="color:var(--red);font-family:monospace;font-size: 14px;padding:20px">${e.message}</div>`;
@@ -284,7 +289,10 @@ function fmtPrice(v) {
 
 function renderOpenPositions(data) {
   const positions = data?.positions || [];
-  const totalPnl  = data?.total_unrealized ?? positions.reduce((s, p) => s + p.unrealized_pnl, 0);
+  const totalPnl  = data?.total_unrealized ?? 0;
+  // inverse liquida en su moneda base, se listan aparte para no sumar peras con manzanas
+  const otherCoins = Object.entries(data?.totals_by_coin || {})
+    .filter(([c]) => c !== 'USDT' && c !== 'USDC');
   const totalEl   = $('openPnlTotal');
   const countEl   = $('openCountLabel');
   const listEl    = $('openPosList');
@@ -310,6 +318,9 @@ function renderOpenPositions(data) {
 
   totalEl.textContent = (totalPnl >= 0 ? '+' : '') + '$' + Math.abs(totalPnl).toFixed(2);
   totalEl.className   = `open-pnl-total ${totalPnl >= 0 ? 'pos' : 'neg'}`;
+  countEl.innerHTML = countEl.textContent + otherCoins
+    .map(([c, v]) => ` · <span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${v.toFixed(4)} ${c}</span>`)
+    .join('');
 
   livePositionsCache = positions;
   listEl.innerHTML = positions.slice(0, 10).map((p, i) => {
@@ -320,7 +331,7 @@ function renderOpenPositions(data) {
       <div class="open-pos-line">
         <span class="open-pos-symbol">${p.symbol}</span>
         <span class="side-badge side-badge-${p.side}" style="font-size: 11px;padding:2px 6px">${p.side.toUpperCase()}</span>
-        <span class="open-pos-pnl ${win ? 'pos' : 'neg'}">${fmtPnl(p.unrealized_pnl)}</span>
+        <span class="open-pos-pnl ${win ? 'pos' : 'neg'}">${fmtPnl(p.unrealized_pnl)}${p.settle_coin && p.settle_coin !== 'USDT' ? ' ' + p.settle_coin : ''}</span>
         <button class="plan-btn ${planned ? 'done' : ''}" onclick="openPlan(${i})"
           title="${planned ? 'Plan guardado — editar' : 'Registrar el plan antes de que cierre'}">${planned ? '✓' : '✎'}</button>
       </div>
@@ -517,8 +528,10 @@ async function loadStats() {
   const { from, to } = getPeriodRange();
   try {
     const [analyticsData, symbolData] = await Promise.all([
-      getAnalytics({ from, to }),
-      getBySymbol({ from, to }),
+      swr(`analytics:${from}:${to}`, () => getAnalytics({ from, to }),
+          d => renderKPIs(d.stats)),
+      swr(`bysymbol:${from}:${to}`, () => getBySymbol({ from, to }),
+          d => renderTopTickers(d.symbols || d.data || [])),
     ]);
     const s = analyticsData.stats;
     renderKPIs(s);
@@ -620,7 +633,7 @@ window.doIngestCSV = async function() {
     resultEl.className = `ingest-result show ${res.inserted > 0 ? 'ok' : 'err'}`;
     resultEl.textContent = `+${res.inserted} nuevos (${res.duplicates} dup) de ${res.total} filas`;
     toast(`${res.inserted} trades importados desde CSV`);
-    if (res.inserted > 0) setTimeout(() => init(), 1200);
+    if (res.inserted > 0) { invalidate(); setTimeout(() => init(), 1200); }
   } catch (err) {
     resultEl.className = 'ingest-result show err';
     resultEl.textContent = '✗ ' + err.message;
@@ -655,7 +668,7 @@ window.doRunSync = async function() {
     resultEl.textContent = res.skipped
       ? '⚠ Sin config guardada. Guarda tu API key primero.'
       : `✓ +${res.inserted} nuevos (${res.duplicates} dup)`;
-    if (res.inserted > 0) setTimeout(() => init(), 1200);
+    if (res.inserted > 0) { invalidate(); setTimeout(() => init(), 1200); }
   } catch (err) {
     resultEl.className = 'ingest-result show err';
     resultEl.textContent = '✗ ' + err.message;
@@ -668,7 +681,7 @@ async function loadSyncStatus() {
     // Si el cron aun no corrio hace rato, dispara un sync al abrir la pagina.
     if (config?.enabled) {
       const age = Math.floor(Date.now() / 1000) - (config.last_sync || 0);
-      if (age > 300) runSync().then(r => { if (r?.inserted > 0) init(); }).catch(() => {});
+      if (age > 300) runSync().then(r => { if (r?.inserted > 0) { invalidate(); init(); } }).catch(() => {});
     }
     const el = $('sync-status');
     if (!el) return;

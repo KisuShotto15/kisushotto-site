@@ -1,3 +1,4 @@
+import { swr, invalidate } from './cache.js';
 import { getTrades, updateTrade, bulkTag, downloadCSV } from './api.js';
 
 const $ = id => document.getElementById(id);
@@ -124,22 +125,28 @@ window.prevPage = function() { if (page > 0) { page--; load(); } };
 window.nextPage = function() { page++; load(); };
 
 // ── Load & render ─────────────────────────────────────────────────────────────
+function renderSummary(trades) {
+  const closed   = trades.filter(t => t.status === 'closed' && t.pnl != null);
+  const totalPnl = closed.reduce((s, t) => s + t.pnl, 0);
+  const wins     = closed.filter(t => t.pnl > 0);
+  $('miniSummary').innerHTML = [
+    `<span>${trades.length} trades</span>`,
+    closed.length ? `<span class="${totalPnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)} USDT</span>` : '',
+    closed.length ? `<span>${Math.round(wins.length / closed.length * 100)}% win</span>` : '',
+  ].join('<span style="color:var(--border2)"> · </span>');
+}
+
 async function load() {
   $('tradesBody').innerHTML = `<div class="loading">Cargando…</div>`;
   try {
-    const { trades } = await getTrades(getFilters());
+    const f = getFilters();
+    const { trades } = await swr(`trades:${JSON.stringify(f)}`, () => getTrades(f), d => {
+      renderCards(d.trades); renderSummary(d.trades);
+    });
     renderCards(trades);
+    renderSummary(trades);
     $('pageInfo').textContent = `Página ${page + 1}`;
     $('btnPrev').disabled = page === 0;
-
-    const closed = trades.filter(t => t.status === 'closed' && t.pnl != null);
-    const totalPnl = closed.reduce((s, t) => s + t.pnl, 0);
-    const wins = closed.filter(t => t.pnl > 0);
-    $('miniSummary').innerHTML = [
-      `<span>${trades.length} trades</span>`,
-      closed.length ? `<span class="${totalPnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)} USDT</span>` : '',
-      closed.length ? `<span>${Math.round(wins.length / closed.length * 100)}% win</span>` : '',
-    ].join('<span style="color:var(--border2)"> · </span>');
   } catch (err) {
     $('tradesBody').innerHTML = `<div style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size: 15px;padding:20px">${err.message}</div>`;
     toast(err.message, 'err');
@@ -247,6 +254,7 @@ window.applyBulkTag = async function(field, value) {
   body[field] = value === '__clear__' ? null : value;
   try {
     const res = await bulkTag(body);
+    invalidate();
     toast(`${res.updated} trades etiquetados`);
     clearSelection();
     load();
@@ -538,6 +546,7 @@ window.savePanel = async function() {
 
   try {
     await updateTrade(currentTrade.id, body);
+    invalidate();
     toast('Trade actualizado');
     currentTrade = { ...currentTrade, ...body };
     // Update cache so re-opening shows latest data

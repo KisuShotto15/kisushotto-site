@@ -292,10 +292,19 @@ async function livePositions(env) {
   ).all();
 
   const updatedAt = results.length ? Math.max(...results.map(p => p.updated_at)) : null;
+
+  // No se pueden sumar monedas distintas: inverse paga en ETH/BTC, linear en USDT
+  const byCoin = {};
+  for (const p of results) {
+    const c = p.settle_coin || 'USDT';
+    byCoin[c] = (byCoin[c] || 0) + (p.unrealized_pnl || 0);
+  }
+
   return json({
     positions:        results,
     errors:           [],
-    total_unrealized: results.reduce((s, p) => s + (p.unrealized_pnl || 0), 0),
+    totals_by_coin:   byCoin,
+    total_unrealized: (byCoin.USDT || 0) + (byCoin.USDC || 0),
     ts:               updatedAt ? updatedAt * 1000 : Date.now(),
     age_seconds:      updatedAt ? Math.floor(Date.now() / 1000) - updatedAt : null,
     source:           'cron',
@@ -591,14 +600,14 @@ async function mirrorLivePositions(positions, env, now) {
   const ins  = env.DB.prepare(`
     INSERT INTO live_positions
     (symbol, side, category, size, entry_price, mark_price, unrealized_pnl, roi_pct,
-     leverage, position_value, take_profit, stop_loss, liq_price, opened_at, updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     leverage, position_value, take_profit, stop_loss, liq_price, opened_at, updated_at, settle_coin)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `);
   for (const p of positions) {
     rows.push(ins.bind(
       p.symbol, p.side, p.category, p.size, p.entry_price, p.mark_price,
       p.unrealized_pnl, p.roi_pct, p.leverage, p.position_value,
-      p.take_profit, p.stop_loss, p.liq_price, p.opened_at, now,
+      p.take_profit, p.stop_loss, p.liq_price, p.opened_at, now, p.settle_coin,
     ));
   }
   await env.DB.batch(rows);

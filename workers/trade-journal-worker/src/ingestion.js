@@ -85,19 +85,21 @@ export async function fetchBybitFutures(apiKey, apiSecret, opts = {}) {
 
 // Live open positions — /v5/position/list. Solo lectura, no toca la DB.
 export async function fetchBybitPositions(apiKey, apiSecret, opts = {}) {
+  // En inverse no se filtra por settleCoin: cada par liquida en su propia
+  // moneda (ETHUSD en ETH, BTCUSD en BTC), asi que filtrar se come posiciones.
   const groups = opts.groups || [
     { category: 'linear',  settleCoin: 'USDT' },
     { category: 'linear',  settleCoin: 'USDC' },
-    { category: 'inverse', settleCoin: 'BTC'  },
+    { category: 'inverse' },
   ];
 
   const settled = await Promise.allSettled(groups.map(async ({ category, settleCoin }) => {
-    const qs      = `category=${category}&settleCoin=${settleCoin}&limit=200`;
+    const qs      = `category=${category}${settleCoin ? `&settleCoin=${settleCoin}` : ''}&limit=200`;
     const headers = await bybitHeaders(apiKey, apiSecret, qs);
     const res     = await fetch(`https://api.bybit.com/v5/position/list?${qs}`, { headers });
     if (!res.ok) throw new Error(`Bybit ${res.status}: ${await res.text()}`);
     const d = await res.json();
-    if (d.retCode !== 0) throw new Error(`Bybit ${category}/${settleCoin}: ${d.retMsg}`);
+    if (d.retCode !== 0) throw new Error(`Bybit ${category}${settleCoin ? '/' + settleCoin : ''}: ${d.retMsg}`);
     return (d.result?.list || []).map(p => ({ ...p, _category: category }));
   }));
 
@@ -130,6 +132,10 @@ export async function fetchBybitPositions(apiKey, apiSecret, opts = {}) {
         stop_loss:      parseFloat(p.stopLoss   || 0) || null,
         liq_price:      parseFloat(p.liqPrice   || 0) || null,
         opened_at:      p.createdTime ? Math.floor(parseInt(p.createdTime) / 1000) : null,
+        // inverse liquida en la moneda base: ETHUSD paga en ETH, no en USDT
+        settle_coin:    p._category === 'inverse'
+                          ? p.symbol.replace(/USD.*$/, '')
+                          : (p.symbol.endsWith('USDC') ? 'USDC' : 'USDT'),
         exchange:       'bybit',
       };
     })
@@ -160,7 +166,9 @@ export async function fetchBybitSpot(apiKey, apiSecret, symbol) {
       entry_price: price,
       exit_price:  null,
       size:        qty,
-      pnl:         side === 'sell' ? price * qty - fee : null,
+      // Sin casar la venta contra sus compras no hay PnL: price*qty es el
+      // importe recibido, no la ganancia. Registrarlo como pnl inflaba todo.
+      pnl:         null,
       fees:        fee,
       entry_time:  ts,
       exit_time:   null,
@@ -296,7 +304,7 @@ export async function fetchBinanceSpot(apiKey, apiSecret, symbol, limit = 1000) 
       entry_price: parseFloat(t.price),
       exit_price:  null,
       size:        parseFloat(t.qty),
-      pnl:         t.isBuyer ? null : parseFloat(t.qty) * parseFloat(t.price),
+      pnl:         null,  // idem Bybit spot: el importe de venta no es ganancia
       fees:        parseFloat(t.commission || 0),
       entry_time:  ts2,
       exit_time:   null,
