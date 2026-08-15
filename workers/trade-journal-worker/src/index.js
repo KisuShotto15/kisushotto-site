@@ -98,7 +98,7 @@ export default {
       // ── Sync config ─────────────────────────────────────────────────────────
       if (path === '/sync/config' && method === 'GET')  return await getSyncConfig(env);
       if (path === '/sync/config' && method === 'POST') return await setSyncConfig(request, env);
-      if (path === '/sync/run'    && method === 'POST') return await runSync(env);
+      if (path === '/sync/run'    && method === 'POST') return await runSync(env, url.searchParams);
 
       return json({ error: 'Not found' }, 404);
     } catch (err) {
@@ -641,22 +641,34 @@ async function attachStops(env) {
   return res.meta.changes;
 }
 
-async function runSync(env) {
+// full=true reprocesa todo el historial disponible en vez de solo lo nuevo.
+// Sirve para corregir filas viejas: el upsert pisa fees, pnl y precios.
+// El backfill historico se pide por tramos (?from=&to= en ms). Cloudflare corta
+// a 50 subpeticiones por invocacion y closed-pnl solo acepta ventanas de 7 dias,
+// asi que un anio entero no entra en una sola llamada.
+async function runSync(env, params) {
   const cfg = await env.DB.prepare('SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
   if (!cfg) return json({ skipped: true, reason: 'no config or disabled' });
 
-  const since = cfg.last_sync > 0 ? cfg.last_sync * 1000 : 0;
+  const from = params?.get('from') ? +params.get('from') : null;
+  const to   = params?.get('to')   ? +params.get('to')   : null;
+  const backfill = from != null;
+
+  const since = backfill ? from : (cfg.last_sync > 0 ? cfg.last_sync * 1000 : 0);
+  const opts  = { since, until: to || Date.now() };
   const [linear, inverse] = await Promise.all([
-    fetchBybitFutures(cfg.api_key, cfg.api_secret, { category: 'linear',  since }),
-    fetchBybitFutures(cfg.api_key, cfg.api_secret, { category: 'inverse', since }),
+    fetchBybitFutures(cfg.api_key, cfg.api_secret, { category: 'linear',  ...opts }),
+    fetchBybitFutures(cfg.api_key, cfg.api_secret, { category: 'inverse', ...opts }),
   ]);
 
   const all = [...linear, ...inverse];
   const result   = await upsertTrades(all, env);
   const stopped  = await attachStops(env);
   const planned  = await attachPlans(env);
-  await env.DB.prepare('UPDATE sync_configs SET last_sync = ? WHERE id = ?')
-    .bind(Math.floor(Date.now() / 1000), 'bybit').run();
+  if (!backfill) {
+    await env.DB.prepare('UPDATE sync_configs SET last_sync = ? WHERE id = ?')
+      .bind(Math.floor(Date.now() / 1000), 'bybit').run();
+  }
 
-  return json({ ok: true, ...result, stops_attached: stopped, plans_applied: planned, synced_at: Date.now() });
+  return json({ ok: true, ...result, stops_attached: stopped, plans_applied: planned, backfill, synced_at: Date.now() });
 }

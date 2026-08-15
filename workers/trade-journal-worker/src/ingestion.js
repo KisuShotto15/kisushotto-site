@@ -33,15 +33,27 @@ async function bybitHeaders(apiKey, apiSecret, queryString) {
 }
 
 // Linear/Inverse futures — uses /v5/position/closed-pnl
-export async function fetchBybitFutures(apiKey, apiSecret, opts = {}) {
-  const { category = 'linear', symbol, limit = 200, since = 0 } = opts;
-  const trades = [];
-  let cursor = '';
-  // since > 0: incremental sync; otherwise fetch last year
-  const startTime = since > 0 ? since : Date.now() - 365 * 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
+export async function fetchBybitFutures(apiKey, apiSecret, opts = {}) {
+  const { category = 'linear', symbol, limit = 200, since = 0, until = 0, maxTrades = 2000 } = opts;
+  // closed-pnl solo acepta ventanas de 7 dias: pedir un rango mayor devuelve
+  // vacio en silencio. Se recorre semana por semana hacia atras.
+  const now   = until > 0 ? until : Date.now();
+  const start = since > 0 ? since : now - 365 * 24 * 60 * 60 * 1000;
+
+  const trades = [];
+  for (let to = now; to > start && trades.length < maxTrades; to -= WEEK_MS) {
+    const from = Math.max(start, to - WEEK_MS);
+    await fetchClosedPnlWindow(apiKey, apiSecret, { category, symbol, limit, from, to, trades });
+  }
+  return trades;
+}
+
+async function fetchClosedPnlWindow(apiKey, apiSecret, { category, symbol, limit, from, to, trades }) {
+  let cursor = '';
   do {
-    let qs = `category=${category}&limit=${limit}&startTime=${startTime}`;
+    let qs = `category=${category}&limit=${limit}&startTime=${Math.floor(from)}&endTime=${Math.floor(to)}`;
     if (symbol) qs += `&symbol=${symbol}`;
     if (cursor) qs += `&cursor=${encodeURIComponent(cursor)}`;
 
@@ -78,9 +90,7 @@ export async function fetchBybitFutures(apiKey, apiSecret, opts = {}) {
     }
 
     cursor = d.result?.nextPageCursor || '';
-  } while (cursor && trades.length < 1000);
-
-  return trades;
+  } while (cursor);
 }
 
 // Live open positions — /v5/position/list. Solo lectura, no toca la DB.
@@ -144,41 +154,86 @@ export async function fetchBybitPositions(apiKey, apiSecret, opts = {}) {
   return { positions, errors };
 }
 
-// Spot — uses /v5/order/history
-export async function fetchBybitSpot(apiKey, apiSecret, symbol) {
-  const qs      = `category=spot${symbol ? '&symbol=' + symbol : ''}&limit=50&orderStatus=Filled`;
-  const headers = await bybitHeaders(apiKey, apiSecret, qs);
-  const res     = await fetch(`https://api.bybit.com/v5/order/history?${qs}`, { headers });
-  if (!res.ok) throw new Error(`Bybit Spot ${res.status}: ${await res.text()}`);
-  const d = await res.json();
-  if (d.retCode !== 0) throw new Error(`Bybit Spot: ${d.retMsg}`);
+// Spot — /v5/order/history, paginado con cursor.
+// Sin paginar solo llegaban 50 ordenes, lo que dejaba el historial incompleto
+// y hacia imposible calcular el costo base de una venta.
+export async function fetchBybitSpot(apiKey, apiSecret, symbol, maxOrders = 1000) {
+  const orders = [];
+  let cursor = '';
 
-  return (d.result?.list || []).map(o => {
-    const ts    = Math.floor(parseInt(o.createdTime) / 1000);
-    const side  = o.side?.toLowerCase() === 'buy' ? 'buy' : 'sell';
-    const price = parseFloat(o.avgPrice || o.price || 0);
-    const qty   = parseFloat(o.cumExecQty || 0);
-    const fee   = parseFloat(o.cumExecFee || 0);
-    return {
-      symbol:      o.symbol,
-      category:    'spot',
-      side,
-      entry_price: price,
-      exit_price:  null,
-      size:        qty,
-      // Sin casar la venta contra sus compras no hay PnL: price*qty es el
-      // importe recibido, no la ganancia. Registrarlo como pnl inflaba todo.
-      pnl:         null,
-      fees:        fee,
-      entry_time:  ts,
-      exit_time:   null,
-      session:     session(ts),
-      exec_type:   'bot',
-      status:      side === 'sell' ? 'closed' : 'open',
-      exchange:    'bybit',
-      exchange_id: o.orderId,
-    };
-  });
+  do {
+    let qs = `category=spot${symbol ? '&symbol=' + symbol : ''}&limit=50&orderStatus=Filled`;
+    if (cursor) qs += `&cursor=${encodeURIComponent(cursor)}`;
+
+    const headers = await bybitHeaders(apiKey, apiSecret, qs);
+    const res     = await fetch(`https://api.bybit.com/v5/order/history?${qs}`, { headers });
+    if (!res.ok) throw new Error(`Bybit Spot ${res.status}: ${await res.text()}`);
+    const d = await res.json();
+    if (d.retCode !== 0) throw new Error(`Bybit Spot: ${d.retMsg}`);
+
+    orders.push(...(d.result?.list || []));
+    cursor = d.result?.nextPageCursor || '';
+  } while (cursor && orders.length < maxOrders);
+
+  return buildSpotTrades(orders);
+}
+
+// Casa ventas contra compras por costo promedio. Una venta solo lleva PnL si
+// hay compras previas que la respalden; si el historial no alcanza, queda null
+// en vez de un numero inventado.
+export function buildSpotTrades(orders) {
+  const bySymbol = new Map();
+  for (const o of orders) {
+    if (!bySymbol.has(o.symbol)) bySymbol.set(o.symbol, []);
+    bySymbol.get(o.symbol).push(o);
+  }
+
+  const out = [];
+  for (const [, list] of bySymbol) {
+    list.sort((a, b) => parseInt(a.createdTime) - parseInt(b.createdTime));
+
+    let heldQty = 0, heldCost = 0;   // inventario y su costo acumulado
+    for (const o of list) {
+      const ts    = Math.floor(parseInt(o.createdTime) / 1000);
+      const isBuy = o.side?.toLowerCase() === 'buy';
+      const price = parseFloat(o.avgPrice || o.price || 0);
+      const qty   = parseFloat(o.cumExecQty || 0);
+      const fee   = parseFloat(o.cumExecFee || 0);
+      if (!(qty > 0)) continue;
+
+      let pnl = null;
+      if (isBuy) {
+        heldQty  += qty;
+        heldCost += qty * price;
+      } else if (heldQty > 0) {
+        // Solo se puede casar contra lo que tenemos registrado
+        const matched  = Math.min(qty, heldQty);
+        const avgCost  = heldCost / heldQty;
+        pnl      = (price - avgCost) * matched - fee;
+        heldCost -= avgCost * matched;
+        heldQty  -= matched;
+      }
+
+      out.push({
+        symbol:      o.symbol,
+        category:    'spot',
+        side:        isBuy ? 'buy' : 'sell',
+        entry_price: price,
+        exit_price:  null,
+        size:        qty,
+        pnl,
+        fees:        fee,
+        entry_time:  ts,
+        exit_time:   null,
+        session:     session(ts),
+        exec_type:   'bot',
+        status:      isBuy ? 'open' : 'closed',
+        exchange:    'bybit',
+        exchange_id: o.orderId,
+      });
+    }
+  }
+  return out;
 }
 
 // ── Binance ───────────────────────────────────────────────────────────────────
