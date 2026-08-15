@@ -277,7 +277,6 @@
         <div class="bot-chips">
           <span id="bot-pay-badge" class="bchip bchip-gold" style="display:none">—</span>
           <span id="bot-commission-label" class="bchip" style="display:none">—</span>
-          <span id="bot-status" class="bchip">Detenido</span>
         </div>
         <button id="bot-gear-btn" class="btn btn-sm" onclick="toggleBotGear(event)" title="Configuración API" style="font-size:15px;padding:3px 9px;flex-shrink:0">⚙</button>
       </div>
@@ -319,8 +318,11 @@
         </div>
       </div>
 
-      <!-- Accion principal (el estado vive en los chips de arriba) -->
-      <button class="btn" id="bot-toggle" onclick="botToggle()" style="width:100%;font-weight:700;font-size:17px;margin-bottom:10px">▶ Iniciar Bot</button>
+      <!-- Accion principal + estado del bot al lado (mitad y mitad) -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <button class="btn" id="bot-toggle" onclick="botToggle()" style="flex:0 0 50%;font-weight:700;font-size:17px">▶ Iniciar Bot</button>
+        <span id="bot-status" style="flex:1;min-width:0;font-size:14px;color:var(--text-3);text-align:center">Detenido</span>
+      </div>
 
       <!-- Info en vivo -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px" id="bot-live">
