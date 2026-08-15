@@ -34,7 +34,10 @@ export default {
     // El snapshot va primero: guarda el stop de lo que sigue abierto antes de
     // que el sync traiga esos mismos trades ya cerrados.
     try { await snapshotPositions(env); } catch (e) { console.error('cron snapshot failed:', e); }
-    try { await runSync(env); }          catch (e) { console.error('cron sync failed:', e); }
+    // El sync completo es pesado, solo cada 15 min
+    if (event.cron !== '* * * * *') {
+      try { await runSync(env); } catch (e) { console.error('cron sync failed:', e); }
+    }
   },
 
   async fetch(request, env, ctx) {
@@ -63,7 +66,7 @@ export default {
       }
 
       // ── Posiciones en vivo ──────────────────────────────────────────────────
-      if (path === '/positions/live' && method === 'GET')  return await livePositions(env, ctx);
+      if (path === '/positions/live' && method === 'GET')  return await livePositions(env);
       if (path === '/positions/plan' && method === 'GET')  return await listPlans(env);
       if (path === '/positions/plan' && method === 'POST') return await savePlan(request, env);
 
@@ -280,41 +283,23 @@ async function deleteTrade(id, env) {
 // Lee de Bybit directo (no de D1) y cachea 5s en el edge para que varias
 // pestañas polleando no multipliquen las llamadas al exchange.
 
-const LIVE_CACHE_KEY = 'https://tj-cache.local/positions/live';
+// Se sirve el espejo de D1, nunca se llama a Bybit aca: el worker corre en el
+// colo mas cercano a quien pide y desde varios paises CloudFront responde 403.
+// El cron es el unico que habla con Bybit, cada minuto.
+async function livePositions(env) {
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM live_positions ORDER BY position_value DESC'
+  ).all();
 
-async function livePositions(env, ctx) {
-  const cache = caches.default;
-  const key   = new Request(LIVE_CACHE_KEY);
-  const hit   = await cache.match(key);
-  if (hit) return json({ ...(await hit.json()), cached: true });
-
-  // Con la pagina abierta el snapshot se refresca mas seguido que el cron de 15min,
-  // pero nunca mas de una vez cada 2 minutos.
-  if (ctx) {
-    const last = await env.DB.prepare('SELECT MAX(seen_at) AS s FROM position_snapshots').first();
-    if (Math.floor(Date.now() / 1000) - (last?.s || 0) > 120) {
-      ctx.waitUntil(snapshotPositions(env).catch(() => {}));
-    }
-  }
-
-  const cfg = await env.DB.prepare(
-    'SELECT * FROM sync_configs WHERE id = ? AND enabled = 1'
-  ).bind('bybit').first();
-  if (!cfg) return json({ positions: [], errors: [], total_unrealized: 0, ts: Date.now(), reason: 'sin config' });
-
-  const { positions, errors } = await fetchBybitPositions(cfg.api_key, cfg.api_secret);
-  const payload = {
-    positions,
-    errors,
-    total_unrealized: positions.reduce((s, p) => s + p.unrealized_pnl, 0),
-    ts: Date.now(),
-  };
-
-  await cache.put(key, new Response(JSON.stringify(payload), {
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=5' },
-  }));
-
-  return json(payload);
+  const updatedAt = results.length ? Math.max(...results.map(p => p.updated_at)) : null;
+  return json({
+    positions:        results,
+    errors:           [],
+    total_unrealized: results.reduce((s, p) => s + (p.unrealized_pnl || 0), 0),
+    ts:               updatedAt ? updatedAt * 1000 : Date.now(),
+    age_seconds:      updatedAt ? Math.floor(Date.now() / 1000) - updatedAt : null,
+    source:           'cron',
+  });
 }
 
 // ── Plan pre-trade ────────────────────────────────────────────────────────────
@@ -567,9 +552,14 @@ async function snapshotPositions(env) {
   if (!cfg) return { skipped: true };
 
   const { positions } = await fetchBybitPositions(cfg.api_key, cfg.api_secret);
-  if (!positions.length) return { saved: 0 };
+  const now = Math.floor(Date.now() / 1000);
 
-  const now  = Math.floor(Date.now() / 1000);
+  if (!positions.length) {
+    // Sin posiciones abiertas el espejo tiene que quedar vacio, no congelado
+    await env.DB.prepare('DELETE FROM live_positions').run();
+    return { saved: 0 };
+  }
+
   const stmt = env.DB.prepare(`
     INSERT INTO position_snapshots (symbol, side, opened_at, entry_price, stop_price, take_profit, size, seen_at)
     VALUES (?,?,?,?,?,?,?,?)
@@ -586,7 +576,27 @@ async function snapshotPositions(env) {
     p.entry_price, p.stop_loss, p.take_profit, p.size, now,
   )));
 
+  await mirrorLivePositions(positions, env, now);
   return { saved: positions.length };
+}
+
+// Reemplaza el espejo completo: lo que ya no viene de Bybit es que cerro.
+async function mirrorLivePositions(positions, env, now) {
+  const rows = [env.DB.prepare('DELETE FROM live_positions')];
+  const ins  = env.DB.prepare(`
+    INSERT INTO live_positions
+    (symbol, side, category, size, entry_price, mark_price, unrealized_pnl, roi_pct,
+     leverage, position_value, take_profit, stop_loss, liq_price, opened_at, updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `);
+  for (const p of positions) {
+    rows.push(ins.bind(
+      p.symbol, p.side, p.category, p.size, p.entry_price, p.mark_price,
+      p.unrealized_pnl, p.roi_pct, p.leverage, p.position_value,
+      p.take_profit, p.stop_loss, p.liq_price, p.opened_at, now,
+    ));
+  }
+  await env.DB.batch(rows);
 }
 
 // Une los snapshots con los trades cerrados que todavia no tienen stop guardado.

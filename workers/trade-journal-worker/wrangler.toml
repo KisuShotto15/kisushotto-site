@@ -12,4 +12,6 @@ migrations_dir = "migrations"
 TOKEN = "151322"
 
 [triggers]
-crons = ["*/15 * * * *"]
+# Cada minuto: espejo de posiciones abiertas (el fetch a Bybit solo funciona
+# desde el cron, no desde el colo del usuario). Cada 15: sync de cerrados.
+crons = ["* * * * *", "*/15 * * * *"]

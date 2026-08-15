@@ -291,9 +291,12 @@ function renderOpenPositions(data) {
   const stampEl   = $('liveStamp');
 
   if (stampEl) {
-    stampEl.textContent = data?.ts
-      ? new Date(data.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      : '—';
+    // El dato lo refresca el cron cada minuto, asi que se muestra la antiguedad
+    const age = data?.age_seconds;
+    stampEl.textContent = age == null ? '—'
+      : age < 90 ? `hace ${age}s`
+      : `hace ${Math.floor(age / 60)} min`;
+    $('liveDot')?.classList.toggle('stale', age != null && age > 300);
   }
   $('kpiOpen').textContent = `abiertos: ${positions.length}`;
   countEl.textContent = `${positions.length} posicion${positions.length !== 1 ? 'es' : ''} abierta${positions.length !== 1 ? 's' : ''}`;

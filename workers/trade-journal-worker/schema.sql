@@ -64,6 +64,25 @@ CREATE TABLE IF NOT EXISTS position_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_seen ON position_snapshots(symbol, side, seen_at DESC);
 
+CREATE TABLE IF NOT EXISTS live_positions (
+  symbol         TEXT    NOT NULL,
+  side           TEXT    NOT NULL,
+  category       TEXT,
+  size           REAL,
+  entry_price    REAL,
+  mark_price     REAL,
+  unrealized_pnl REAL,
+  roi_pct        REAL,
+  leverage       REAL,
+  position_value REAL,
+  take_profit    REAL,
+  stop_loss      REAL,
+  liq_price      REAL,
+  opened_at      INTEGER,
+  updated_at     INTEGER NOT NULL,
+  PRIMARY KEY (symbol, side)
+);
+
 CREATE TABLE IF NOT EXISTS trade_plans (
   symbol       TEXT    NOT NULL,
   side         TEXT    NOT NULL,
