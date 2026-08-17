@@ -46,7 +46,7 @@ export function splitByMarket(trades) {
 
 export function computeStats(trades, opts = {}) {
   const closed = trades.filter(t => t.status === 'closed' && t.pnl != null && t.category !== 'spot');
-  if (!closed.length) return emptyStats(trades.length);
+  if (!closed.length) return emptyStats(trades.length, opts);
 
   const wins        = closed.filter(t => t.pnl > 0);
   const losses      = closed.filter(t => t.pnl < 0);
@@ -59,7 +59,7 @@ export function computeStats(trades, opts = {}) {
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? 999 : 0);
   const expectancy   = (winRate * avgWin) - ((1 - winRate) * avgLoss);
 
-  const { maxDD, maxDDAbs, curve } = buildEquityCurve(closed, opts.equityNow);
+  const { maxDD, maxDDAbs, curve } = buildEquityCurve(closed, opts.equityNow, opts.startCapital);
   const { current, maxWin, maxLoss } = computeStreaks(closed);
 
   const withTime  = closed.filter(t => t.exit_time && t.entry_time);
@@ -89,7 +89,10 @@ export function computeStats(trades, opts = {}) {
     expectancy:    r2(expectancy),
     maxDrawdown:   maxDD,
     maxDrawdownAbs: r2(maxDDAbs),
-    drawdownBase:  opts.equityNow ? 'capital' : 'pico',
+    drawdownBase:  opts.startCapital > 0 ? 'capital declarado'
+                 : opts.equityNow ? 'capital estimado' : 'pico',
+    startCapital:  opts.startCapital || null,
+    returnPct:     opts.startCapital > 0 ? r2(totalPnl / opts.startCapital * 100) : null,
     currentStreak: current,
     maxWinStreak:  maxWin,
     maxLossStreak: maxLoss,
@@ -101,7 +104,7 @@ export function computeStats(trades, opts = {}) {
   };
 }
 
-function emptyStats(total = 0) {
+function emptyStats(total = 0, opts = {}) {
   return {
     tradeCount: total, closedCount: 0, openCount: total,
     winCount: 0, lossCount: 0, winRate: 0, totalPnl: 0,
@@ -110,6 +113,7 @@ function emptyStats(total = 0) {
     currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0,
     bestTrade: null, worstTrade: null, avgHoldMinutes: 0,
     maxDrawdownAbs: 0, drawdownBase: 'pico',
+    startCapital: opts.startCapital || null, returnPct: opts.startCapital > 0 ? 0 : null,
     equityCurve: [],
     spotCount: 0, spotRealized: 0,
     rCount: 0, rCoverage: 0, totalR: 0, avgR: 0,
@@ -122,14 +126,15 @@ function emptyStats(total = 0) {
 // luego pierdes 12, el pico es 10 y sale 120% de drawdown.
 // Con equityNow se reconstruye el capital inicial (equity actual - PnL total)
 // y se mide contra la curva de capital real. Sin el, solo se reporta absoluto.
-export function buildEquityCurve(trades, equityNow = null) {
+export function buildEquityCurve(trades, equityNow = null, declaredCapital = null) {
   const sorted   = [...trades].sort((a, b) => a.entry_time - b.entry_time);
   const totalPnl = sorted.reduce((s, t) => s + t.pnl, 0);
 
-  // Capital antes del primer trade; si no da un numero sensato se ignora
-  const startCapital = equityNow != null && equityNow - totalPnl > 0
-    ? equityNow - totalPnl
-    : null;
+  // Un capital declarado es siempre mejor que deducirlo: los depositos y el
+  // capital inmovilizado hacen que equity - pnl no sea el capital de partida.
+  const startCapital = declaredCapital > 0
+    ? declaredCapital
+    : (equityNow != null && equityNow - totalPnl > 0 ? equityNow - totalPnl : null);
 
   let balance = 0, peakBal = 0, maxDDAbs = 0;
   let peakEquity = startCapital ?? 0, maxDD = 0;

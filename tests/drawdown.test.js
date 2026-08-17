@@ -47,12 +47,29 @@ test('un capital incoherente se ignora en vez de dar negativos', () => {
 });
 
 test('computeStats expone la base usada para el drawdown', () => {
-  const conCapital = computeStats([t(10, 0), t(-12, 1)], { equityNow: 1000 });
-  assert.equal(conCapital.drawdownBase, 'capital');
-  assert.ok(conCapital.maxDrawdown <= 100);
+  const estimado = computeStats([t(10, 0), t(-12, 1)], { equityNow: 1000 });
+  assert.equal(estimado.drawdownBase, 'capital estimado');
+  assert.ok(estimado.maxDrawdown <= 100);
 
   const sinCapital = computeStats([t(10, 0), t(-12, 1)]);
   assert.equal(sinCapital.drawdownBase, 'pico');
   assert.equal(sinCapital.maxDrawdown, null);
   assert.equal(sinCapital.maxDrawdownAbs, 12, 'el absoluto sigue estando');
+});
+
+test('el capital declarado gana sobre el estimado', () => {
+  // equityNow deduciria 1002 de capital; el declarado dice 500 y manda
+  const s = computeStats([t(10, 0), t(-12, 1)], { equityNow: 1000, startCapital: 500 });
+  assert.equal(s.drawdownBase, 'capital declarado');
+  assert.equal(s.startCapital, 500);
+  // 12 de caida sobre un pico de 510 es ~2.35%
+  assert.ok(s.maxDrawdown > 2 && s.maxDrawdown < 3, `salio ${s.maxDrawdown}%`);
+  assert.equal(s.returnPct, -0.4, 'el -2 sobre 500 es -0.4%');
+});
+
+test('sin trades cerrados igual se reporta el capital declarado', () => {
+  const s = computeStats([], { startCapital: 1000 });
+  assert.equal(s.startCapital, 1000);
+  assert.equal(s.returnPct, 0);
+  assert.equal(s.closedCount, 0);
 });

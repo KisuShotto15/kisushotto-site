@@ -56,6 +56,8 @@ export const getLivePositions = ()       => api('/positions/live');
 export const getPlans        = ()        => api('/positions/plan');
 export const savePlan        = (body)    => api('/positions/plan', { method: 'POST', body: JSON.stringify(body) });
 export const getAnalytics    = (params)  => api(`/analytics${qs(params)}`);
+export const getConfig       = ()        => api('/config');
+export const setConfig       = (b)       => api('/config', { method: 'POST', body: JSON.stringify(b) });
 export const getBySession    = ()        => api('/analytics/by-session');
 export const getBySymbol     = (params)  => api(`/analytics/by-symbol${qs(params)}`);
 export const getBySetup      = ()        => api('/analytics/by-setup');

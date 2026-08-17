@@ -115,6 +115,8 @@ export default {
       // ── Health ──────────────────────────────────────────────────────────────
       if (path === '/health') return json({ ok: true, ts: Date.now() });
       if (path === '/health/audit') return await audit(env);
+      if (path === '/config' && method === 'GET')  return await getConfig(env);
+      if (path === '/config' && method === 'POST') return await setConfig(request, env);
 
       // ── Trades ──────────────────────────────────────────────────────────────
       if (path === '/trades' && method === 'GET')    return await listTrades(url, env);
@@ -392,10 +394,18 @@ async function livePositions(env) {
   ).all();
 
   const updatedAt = results.length ? Math.max(...results.map(p => p.updated_at)) : null;
+  const conf = await env.DB.prepare('SELECT legacy_symbols FROM journal_config WHERE id = ?').bind('main').first();
+
+  // Capital inmovilizado de la etapa anterior: se muestra pero no cuenta como
+  // resultado de la etapa actual. Va por simbolo declarado, no por fecha.
+  const legacy = new Set(String(conf?.legacy_symbols || '')
+    .split(/[\s,;]+/).map(x => x.trim().toUpperCase()).filter(Boolean));
+  for (const p of results) p.legacy = legacy.has(p.symbol.toUpperCase()) ? 1 : 0;
 
   // No se pueden sumar monedas distintas: inverse paga en ETH/BTC, linear en USDT
   const byCoin = {};
   for (const p of results) {
+    if (p.legacy) continue;
     const c = p.settle_coin || 'USDT';
     byCoin[c] = (byCoin[c] || 0) + (p.unrealized_pnl || 0);
   }
@@ -483,6 +493,32 @@ async function attachPlans(env) {
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
+async function getConfig(env) {
+  const row = await env.DB.prepare('SELECT * FROM journal_config WHERE id = ?').bind('main').first();
+  return json({ config: row || null });
+}
+
+async function setConfig(request, env) {
+  const b = await request.json();
+  await env.DB.prepare(`
+    INSERT INTO journal_config (id, start_capital, start_date, updated_at)
+    VALUES ('main', ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      start_capital = excluded.start_capital,
+      start_date    = excluded.start_date,
+      updated_at    = excluded.updated_at
+  `).bind(
+    b.start_capital != null ? parseFloat(b.start_capital) : null,
+    b.start_date != null ? parseInt(b.start_date) : null,
+    Math.floor(Date.now() / 1000),
+  ).run();
+  if (b.legacy_symbols !== undefined) {
+    await env.DB.prepare('UPDATE journal_config SET legacy_symbols = ? WHERE id = ?')
+      .bind(b.legacy_symbols || null, 'main').run();
+  }
+  return json({ ok: true });
+}
+
 async function refreshBalance(env) {
   const cfg = await env.DB.prepare('SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
   if (!cfg) return null;
@@ -506,14 +542,22 @@ async function analytics(url, env) {
   if (p.get('from')) { sql += ' AND entry_time >= ?'; args.push(+p.get('from')); }
   if (p.get('to'))   { sql += ' AND entry_time <= ?'; args.push(+p.get('to')); }
 
-  const [{ results }, bal] = await Promise.all([
+  const [{ results }, bal, conf] = await Promise.all([
     env.DB.prepare(sql).bind(...args).all(),
     env.DB.prepare('SELECT total_equity FROM account_balance WHERE id = ?').bind('bybit').first(),
+    env.DB.prepare('SELECT * FROM journal_config WHERE id = ?').bind('main').first(),
   ]);
 
   return json({
-    stats: computeStats(results, { equityNow: bal?.total_equity ?? null }),
+    stats: computeStats(results, {
+      equityNow:    bal?.total_equity ?? null,
+      // El capital de $1000 solo describe la etapa nueva: aplicarlo a los
+      // trades viejos seria medirlos contra un capital que no existia entonces
+      startCapital: (conf?.start_date && p.get('from') && +p.get('from') >= conf.start_date)
+                      ? conf.start_capital : null,
+    }),
     equity: bal?.total_equity ?? null,
+    config: conf || null,
   });
 }
 

@@ -2209,3 +2209,13 @@ table col.col-hold { width: 80px; }
 }
 .tj-login-foot a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
 .tj-login-foot a:hover { color: var(--accent); }
+
+.legacy-badge {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--card2);
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+}

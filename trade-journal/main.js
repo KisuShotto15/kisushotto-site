@@ -1,10 +1,11 @@
 import { swr, invalidate } from './cache.js';
-import { cfg, getAnalytics, getTrades, getBySymbol, getLivePositions, getPlans, savePlan, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
+import { cfg, getConfig, getAnalytics, getTrades, getBySymbol, getLivePositions, getPlans, savePlan, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
 
 const $ = id => document.getElementById(id);
 
 // ── State ──────────────────────────────────────────────────────────────────────
-let periodType  = 'month';
+let periodType  = 'start';   // por defecto: desde el deposito
+let journalCfg  = null;
 let customFrom  = null;
 let customTo    = null;
 const _now      = new Date();
@@ -17,6 +18,10 @@ const DAYS_ES   = ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'];
 // ── Period helpers ─────────────────────────────────────────────────────────────
 function getPeriodRange() {
   const n = new Date();
+  // Desde el inicio declarado: es la etapa que importa, no el mes natural
+  if (periodType === 'start' && journalCfg?.start_date) {
+    return { from: journalCfg.start_date, to: ts(n) };
+  }
   if (periodType === 'month') {
     const y = n.getFullYear(), m = n.getMonth();
     return { from: ts(new Date(y, m, 1)), to: ts(new Date(y, m+1, 0, 23, 59, 59)) };
@@ -68,6 +73,9 @@ function renderKPIs(s) {
   const pnlEl = $('kpiPnl');
   pnlEl.textContent = fmtPnl(s.totalPnl);
   pnlEl.className   = `kpi-value ${s.totalPnl >= 0 ? 'pos' : 'neg'}`;
+  $('kpiPnlSub').textContent = s.startCapital
+    ? `${s.returnPct >= 0 ? '+' : ''}${s.returnPct}% sobre $${s.startCapital}`
+    : 'USDT';
 
   const wrEl = $('kpiWr');
   wrEl.textContent = s.winRate + '%';
@@ -376,6 +384,7 @@ function renderOpenPositions(data) {
       <div class="open-pos-line">
         <span class="open-pos-symbol">${p.symbol}</span>
         <span class="side-badge side-badge-${p.side}" style="font-size: 11px;padding:2px 6px">${p.side.toUpperCase()}</span>
+        ${p.legacy ? '<span class="legacy-badge" title="Capital inmovilizado de la etapa anterior: no cuenta en las metricas">heredada</span>' : ''}
         <span class="open-pos-pnl ${win ? 'pos' : 'neg'}">${fmtPnl(p.unrealized_pnl)}${p.settle_coin && p.settle_coin !== 'USDT' ? ' ' + p.settle_coin : ''}</span>
         <button class="plan-btn ${planned ? 'done' : ''}" onclick="openPlan(${i})"
           title="${planned ? 'Plan guardado — editar' : 'Registrar el plan antes de que cierre'}">${planned ? '✓' : '✎'}</button>
@@ -560,8 +569,8 @@ window.applyCustomPeriod = function() {
 };
 
 function updateTickerLabel() {
-  const labels = { month: 'ESTE MES', year: 'ESTE AÑO', custom: 'CUSTOM' };
-  const label = labels[periodType] || 'ESTE MES';
+  const labels = { start: 'DESDE EL INICIO', month: 'ESTE MES', year: 'ESTE AÑO', custom: 'CUSTOM' };
+  const label = labels[periodType] || 'DESDE EL INICIO';
   $('tickerPeriodLabel').textContent = label;
   const pfLbl = $('pfPeriodLabel');
   if (pfLbl) pfLbl.textContent = label;
@@ -598,6 +607,7 @@ async function loadStats() {
 }
 
 async function init() {
+  try { journalCfg = (await getConfig()).config; } catch (_) { /* opcional */ }
   await loadPlans();
   await Promise.all([ loadStats(), loadCalendar(), loadLivePositions() ]);
   startLivePolling();
