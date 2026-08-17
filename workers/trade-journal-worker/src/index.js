@@ -70,7 +70,7 @@ function isAllowed(email, list) {
 const AUTH_BASE = 'https://kisushotto-site.vercel.app';
 const REVOKE_TTL = 300;  // 5 min: una revocacion tarda como mucho eso en aplicar
 
-// La firma y el exp se comprueban aca, pero la revocacion vive en Neon y solo
+// La firma y el exp se comprueban aca, pero la revocacion vive en la base y solo
 // Vercel la ve. Se consulta con cache para no pagar el viaje en cada peticion.
 async function sessionRevoked(tok, ctx) {
   const key = new Request(`https://tj-auth.local/${await sha256hex(tok)}`);
