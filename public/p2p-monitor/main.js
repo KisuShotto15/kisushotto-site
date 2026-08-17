@@ -494,6 +494,8 @@ var ST = {
   priceHist: [],   // {ts, price}
   alerts: [],
   lastFetch: null,
+  lastAttempt: 0, // inicio del ultimo fetchOnce (lo usa el watchdog de reanudacion)
+  fetching: false,
   consecFails: 0
 };
 
@@ -538,10 +540,13 @@ async function fetchWithTimeout(url, opts, ms) {
 
 async function fetchRetry(url, opts, ms, retries) {
   retries = (retries == null) ? 1 : retries;
+  var base = ms || 8000;
   var lastErr;
   for (var i = 0; i <= retries; i++) {
     try {
-      var r = await fetchWithTimeout(url, opts, ms);
+      // El primer intento puede llevar un timeout corto (ver fetchOnce al reanudar):
+      // los reintentos vuelven al minimo normal para no cortar una respuesta lenta real.
+      var r = await fetchWithTimeout(url, opts, i === 0 ? base : Math.max(base, 8000));
       if (r.status >= 500 || r.status === 429) {
         if (i < retries) { await new Promise(function(res){ setTimeout(res, 600); }); continue; }
       }
@@ -555,17 +560,21 @@ async function fetchRetry(url, opts, ms, retries) {
   throw lastErr;
 }
 
-async function searchBatch(bodies) {
+async function searchBatch(bodies, ms) {
   var r = await fetchRetry(PROXY, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (SESSION.token || '') },
     body: JSON.stringify({ queries: bodies })
-  });
+  }, ms);
   if (r.status === 401 || r.status === 403) { authLogout(); throw new Error('Sesión expirada'); }
   if (!r.ok) throw new Error('HTTP ' + r.status);
   var d = await r.json();
   if (d.error) throw new Error(d.error);
-  return (d.results || []).map(function(res) { return (res && res.data) || []; });
+  var results = d.results || [];
+  // Si TODAS las queries fallaron en Binance es un problema de red, no un mercado
+  // vacio: lanzar para conservar los datos previos en vez de pintar tablas vacias.
+  if (results.length && results.every(function(res) { return !res || res.error; })) throw new Error('Binance no respondió');
+  return results.map(function(res) { return (res && res.data) || []; });
 }
 
 // Solo lo usa el bot (reprice inicial): SIEMPRE mercado VES, sin importar la vista.
@@ -689,7 +698,12 @@ function availPopupHtml(d) {
 // ── Ciclo principal ───────────────────────────────────
 // Un solo batch combinado: paginas may + small + buy en 1 request Vercel
 var MAY_PAGES = 1, SMALL_PAGES = 1;
-async function fetchOnce() {
+async function fetchOnce(fast) {
+  // Sin solapes: al volver del background pueden dispararse varios eventos de
+  // reanudacion y el watchdog a la vez; un solo ciclo en vuelo.
+  if (ST.fetching) return;
+  ST.fetching = true;
+  ST.lastAttempt = Date.now();
   document.getElementById('last-update').textContent = 'Cargando...';
   try {
     // Si la Sección Compra está colapsada, no pedir su página (1 llamada Binance menos por ciclo).
@@ -701,7 +715,11 @@ async function fetchOnce() {
     for (var j = 1; j <= SMALL_PAGES; j++) bodies.push(buildSearchBody({ transAmount: CFG.smallAmount, page: j, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
     if (includeBuy) bodies.push(buildSearchBody({ transAmount: CFG.buyAmount, page: 1, pays: [ACTIVE_PAY], tradeType: 'BUY' }));
 
-    var batch = await searchBatch(bodies);
+    // Al reanudar, la conexion TCP/HTTP2 que quedo abierta antes del background
+    // suele estar muerta y el fetch se cuelga hasta el timeout completo (de ahi los
+    // 10-20s para ver datos). Primer intento corto: si el socket esta muerto se
+    // aborta rapido y el reintento abre uno nuevo.
+    var batch = await searchBatch(bodies, fast ? 3500 : 0);
     var mayRaw   = batch.slice(0, MAY_PAGES).flatMap(function(a){ return a; });
     var smallRaw = batch.slice(MAY_PAGES, MAY_PAGES + SMALL_PAGES).flatMap(function(a){ return a; });
     var buyRaw   = includeBuy ? (batch[MAY_PAGES + SMALL_PAGES] || []) : null;
@@ -793,6 +811,8 @@ async function fetchOnce() {
     }
     // Solo alertar al transicionar a "sin conexion" (no en cada fallo → spam)
     if (ST.consecFails === 2) addAlert('info', 'Error de conexión', e.message);
+  } finally {
+    ST.fetching = false;
   }
 }
 
@@ -826,22 +846,51 @@ function toggleMonitor() {
 
 // Pestana oculta: pausa el fetch visual (sin apagar el monitor). Deja de latir → a los ~70s
 // el servidor toma el relevo (notificaciones siguen). Al volver, reanuda y el servidor cede.
-document.addEventListener('visibilitychange', function() {
-  if (document.hidden) {
-    // Pestaña oculta: sin UI que actualizar. Pausar los pollers que pegan a la red
-    // (fetch de precios y poller del bot) para no gastar invocaciones Vercel en vano.
-    // El servidor cubre monitor y bot 24/7. ACTIVITY es local + seguridad: no se toca.
-    if (ST.running && ST.timer) { clearInterval(ST.timer); ST.timer = null; }
-    if (BOT.running) stopBotPoller();
-    return;
-  }
-  // Volver a visible: pollear de inmediato y re-armar.
-  if (ST.running && !ST.timer) {
-    fetchOnce();
+function appHidden() {
+  // Pestaña oculta: sin UI que actualizar. Pausar los pollers que pegan a la red
+  // (fetch de precios y poller del bot) para no gastar invocaciones Vercel en vano.
+  // El servidor cubre monitor y bot 24/7. ACTIVITY es local + seguridad: no se toca.
+  if (ST.timer) { clearInterval(ST.timer); ST.timer = null; }
+  if (BOT.running) stopBotPoller();
+}
+
+// Reanudar: re-armar los pollers y refrescar YA. Idempotente y con throttle porque
+// al volver del background el navegador puede disparar varios de estos eventos.
+var _lastResume = 0;
+function appResume() {
+  if (document.visibilityState !== 'visible') return;
+  var now = Date.now();
+  if (now - _lastResume < 1500) return;
+  _lastResume = now;
+  if (ST.running) {
+    if (ST.timer) clearInterval(ST.timer);
     ST.timer = setInterval(fetchOnce, CFG.interval * 1000);
+    fetchOnce(true); // fast: primer intento corto (socket muerto tras el background)
   }
   if (BOT.running && !BOT_POLL.timer) startBotPoller();
+}
+
+// En movil (PWA/TWA) volver al primer plano NO siempre dispara visibilitychange:
+// segun el navegador puede llegar solo pageshow (restaurada del bfcache), focus o
+// resume (Page Lifecycle). Se escuchan todos y desembocan en el mismo handler.
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) appHidden(); else appResume();
 });
+window.addEventListener('pageshow', appResume);
+window.addEventListener('focus', appResume);
+document.addEventListener('resume', appResume);
+
+// Red de seguridad: si no llego ningun evento al volver del background (pasa en
+// Android cuando el sistema congela la pagina), esto detecta que la vista lleva
+// demasiado sin refrescar y la re-arma. Es local: no pega a la red por si mismo.
+setInterval(function() {
+  if (document.visibilityState !== 'visible') return;
+  if (ST.running && !ST.fetching && (!ST.timer || Date.now() - ST.lastAttempt > CFG.interval * 1000 * 2 + 5000)) {
+    _lastResume = 0; appResume();
+  } else if (BOT.running && !BOT_POLL.timer) {
+    startBotPoller();
+  }
+}, 5000);
 
 function setBadge(live) {
   document.getElementById('live-badge').className = 'badge ' + (live ? 'badge-live' : 'badge-off');

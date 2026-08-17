@@ -66,11 +66,14 @@ export default async function handler(req, res) {
   // Lote: { queries: [body1, body2, ...] } → fan-out a Binance, 1 sola invocacion Vercel
   const queries = req.body && req.body.queries;
   if (Array.isArray(queries)) {
+    // Timeout por query: sin el, una conexion colgada con Binance retiene la
+    // invocacion hasta maxDuration mucho despues de que el cliente abortara.
     const settled = await Promise.allSettled(queries.map(q =>
       fetch(BINANCE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(q),
+        signal: AbortSignal.timeout(7000),
       }).then(r => r.json())
     ));
     return res.status(200).json({
