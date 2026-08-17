@@ -98,6 +98,16 @@ export async function sql(...args) {
 }
 
 let schemaReady = false;
+// La sonda de ensureSchema salta todos los DDL si el schema ya existe, asi que
+// una columna nueva nunca llegaria a una base ya creada. Esto la asegura aparte,
+// memorizado para que sea un solo round trip por instancia.
+let authColsReady = false;
+export async function ensureAuthColumns() {
+  if (authColsReady) return;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_from BIGINT NOT NULL DEFAULT 0`;
+  authColsReady = true;
+}
+
 export async function ensureSchema() {
   if (schemaReady) return;
   // Sonda barata (1 round trip): p2p_rate es lo ULTIMO que crea este bloque; si ya
@@ -121,6 +131,8 @@ export async function ensureSchema() {
   )`;
   // verified: default true para no bloquear usuarios pre-existentes; register inserta false explicito.
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT true`;
+  // Marca de revocacion: los JWT con iat anterior dejan de valer
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_from BIGINT NOT NULL DEFAULT 0`;
   await sql`CREATE TABLE IF NOT EXISTS auth_tokens (
     token TEXT PRIMARY KEY,
     email TEXT NOT NULL,

@@ -2219,3 +2219,46 @@ table col.col-hold { width: 80px; }
   border: 1px solid var(--border2);
   color: var(--muted2);
 }
+
+/* ── Menu de cuenta ────────────────────────────────────────────────────────── */
+#tj-account { position: relative; margin-top: auto; }
+.tj-acct-btn { background: none; border: none; cursor: pointer; }
+.tj-acct-menu {
+  display: none;
+  position: absolute;
+  left: calc(100% + 12px);
+  bottom: 0;
+  min-width: 240px;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  padding: 8px;
+  z-index: 200;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+}
+.tj-acct-menu.open { display: block; }
+.tj-acct-email {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--muted2);
+  padding: 6px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+.tj-acct-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.tj-acct-menu button:hover { background: var(--card2); }
+#tj-revoke { color: var(--red); }

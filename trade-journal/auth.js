@@ -92,3 +92,51 @@ export function logout() {
   session.clear();
   location.reload();
 }
+
+// Cierra la sesion en todos los dispositivos. Un JWT no se puede retirar de
+// circulacion, asi que el servidor marca la fecha de corte y todo lo emitido
+// antes deja de valer, aqui y en el resto de las apps.
+export async function revokeAll() {
+  if (!confirm('Se cerrara la sesion en todos los dispositivos, incluido este. Continuar?')) return;
+  try {
+    await fetch(AUTH_BASE + '/api/auth/revoke', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + session.token() },
+    });
+  } catch { /* aunque falle la red, la sesion local se limpia igual */ }
+  session.clear();
+  location.reload();
+}
+
+// El nav es identico en las cuatro paginas, asi que el control se inyecta una
+// sola vez desde aca en vez de duplicarlo en cada HTML.
+export function mountAccountControl() {
+  const nav = document.querySelector('.left-nav');
+  if (!nav || !session.token() || document.getElementById('tj-account')) return;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'tj-account';
+  wrap.innerHTML = `
+    <div class="left-nav-divider"></div>
+    <button class="left-nav-item tj-acct-btn" title="${session.email() || 'Cuenta'}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M16 17l5-5-5-5M21 12H9M12 19H6a2 2 0 01-2-2V7a2 2 0 012-2h6"/>
+      </svg>
+    </button>
+    <div class="tj-acct-menu" id="tj-acct-menu">
+      <div class="tj-acct-email">${session.email() || ''}</div>
+      <button id="tj-logout">Cerrar sesión</button>
+      <button id="tj-revoke">Cerrar en todos los dispositivos</button>
+    </div>`;
+  nav.appendChild(wrap);
+
+  const menu = wrap.querySelector('#tj-acct-menu');
+  wrap.querySelector('.tj-acct-btn').onclick = e => {
+    e.stopPropagation();
+    menu.classList.toggle('open');
+  };
+  document.addEventListener('click', () => menu.classList.remove('open'));
+  menu.onclick = e => e.stopPropagation();
+  wrap.querySelector('#tj-logout').onclick = logout;
+  wrap.querySelector('#tj-revoke').onclick = revokeAll;
+}

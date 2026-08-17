@@ -1,6 +1,6 @@
 // api.js — shared API client
 
-import { session, showLogin } from './auth.js';
+import { session, showLogin, mountAccountControl } from './auth.js';
 
 const DEFAULT_BASE = 'https://trade-journal-worker.efrenalejandro2010.workers.dev';
 
@@ -10,6 +10,11 @@ export const cfg = {
   base:  () => localStorage.getItem('tj_url') || DEFAULT_BASE,
   token: () => session.token(),
 };
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', mountAccountControl);
+  if (document.readyState !== 'loading') mountAccountControl();
+}
 
 export async function api(path, opts = {}) {
   if (!cfg.token()) {
