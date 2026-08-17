@@ -1,13 +1,18 @@
 import postgres from 'postgres';
 
-// Acepta cualquier nombre que use la integracion de la DB en Vercel (con o sin prefijo).
+// La base es Supabase y se exige explicitamente. Antes esto caia en cascada a
+// DATABASE_URL, POSTGRES_URL y cualquier *_URL que oliera a postgres, asi que
+// si SUPABASE_DB_URL faltaba la app arrancaba contra la Neon vieja (congelada
+// desde la migracion) sin un solo error: login contra usuarios de hace meses y
+// escrituras a una base muerta. Mejor no arrancar que servir datos de otra base.
 function dbUrl() {
-  const e = process.env;
-  const url = e.SUPABASE_DB_URL || e.DATABASE_URL || e.POSTGRES_URL || e.STORAGE_URL || e.STORAGE_DATABASE_URL ||
-    e.STORAGE_POSTGRES_URL || e.POSTGRES_PRISMA_URL ||
-    (Object.keys(e).filter(k => /_URL$/.test(k) && /postgres|neon|supabase|database/i.test(e[k]))
-      .map(k => e[k])[0]);
-  if (!url) throw new Error('No se encontro la connection string de Postgres en env');
+  const url = process.env.SUPABASE_DB_URL;
+  if (!url) {
+    throw new Error(
+      'Falta SUPABASE_DB_URL. No se usa ningun fallback a proposito: ' +
+      'arrancar contra otra base serviria datos incorrectos en silencio.',
+    );
+  }
   return url;
 }
 
