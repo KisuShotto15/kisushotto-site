@@ -67,7 +67,42 @@ function isAllowed(email, list) {
   return allowed.includes(String(email || '').trim().toLowerCase());
 }
 
-async function auth(req, env) {
+const AUTH_BASE = 'https://kisushotto-site.vercel.app';
+const REVOKE_TTL = 300;  // 5 min: una revocacion tarda como mucho eso en aplicar
+
+// La firma y el exp se comprueban aca, pero la revocacion vive en Neon y solo
+// Vercel la ve. Se consulta con cache para no pagar el viaje en cada peticion.
+async function sessionRevoked(tok, ctx) {
+  const key = new Request(`https://tj-auth.local/${await sha256hex(tok)}`);
+  const cache = caches.default;
+  const hit = await cache.match(key);
+  if (hit) return (await hit.json()).revoked;
+
+  let revoked = false;
+  try {
+    const res = await fetch(`${AUTH_BASE}/api/auth/me`, {
+      headers: { 'Authorization': `Bearer ${tok}` },
+    });
+    revoked = res.status === 401;
+  } catch {
+    // Si Vercel no responde no se cierra el paso: la firma y el exp ya se
+    // validaron localmente. Se prefiere disponibilidad ante un fallo de red.
+    return false;
+  }
+
+  const put = cache.put(key, new Response(JSON.stringify({ revoked }), {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': `max-age=${REVOKE_TTL}` },
+  }));
+  if (ctx) ctx.waitUntil(put); else await put;
+  return revoked;
+}
+
+async function sha256hex(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function auth(req, env, ctx) {
   const m = (req.headers.get('Authorization') || '').match(/^Bearer (.+)$/);
   if (!m) return false;
   const tok = m[1];
@@ -76,7 +111,8 @@ async function auth(req, env) {
 
   if (env.JWT_SECRET) {
     const payload = await verifyJWT(tok, env.JWT_SECRET);
-    if (payload && isAllowed(payload.email, env.ALLOWED_EMAILS)) return true;
+    if (!payload || !isAllowed(payload.email, env.ALLOWED_EMAILS)) return false;
+    return !(await sessionRevoked(tok, ctx));
   }
   return false;
 }
@@ -105,7 +141,7 @@ export default {
 
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-    if (!(await auth(request, env))) return json({ error: 'Unauthorized' }, 401);
+    if (!(await auth(request, env, ctx))) return json({ error: 'Unauthorized' }, 401);
 
     const url    = new URL(request.url);
     const path   = url.pathname.replace(/\/$/, '');
