@@ -2016,3 +2016,85 @@ table col.col-hold { width: 80px; }
 .left-nav-item:hover::after,
 .left-nav-back:hover::after { opacity: 1; }
 
+
+/* ── Asimetria ganancia/perdida ─────────────────────────────────────────────── */
+.edge-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
+}
+.edge-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.edge-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--muted2);
+  text-transform: uppercase;
+}
+.edge-verdict { font-size: 15px; font-weight: 600; }
+.edge-verdict.pos { color: var(--green); }
+.edge-verdict.neg { color: var(--red); }
+.edge-row { display: flex; align-items: center; gap: 18px; }
+.edge-big {
+  font-family: 'Inter', sans-serif;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1;
+  min-width: 90px;
+}
+.edge-big.pos { color: var(--green); }
+.edge-big.neg { color: var(--red); }
+.edge-big.neu { color: var(--muted2); }
+.edge-track {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  background: var(--surface);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.edge-bar { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
+.edge-bar.pos { background: var(--green); }
+.edge-bar.neg { background: var(--red); }
+/* La marca del 50% es el punto de equilibrio para tu win rate */
+.edge-breakeven {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--text);
+  opacity: 0.55;
+}
+.edge-need {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.edge-need b { color: var(--text); font-size: 15px; }
+.edge-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  color: var(--muted2);
+}
+.edge-detail .pos { color: var(--green); }
+.edge-detail .neg { color: var(--red); }
+.edge-hint { color: var(--amber); }

@@ -8,8 +8,8 @@ database_name = "trade-journal-db"
 database_id = "0d902c20-5ba7-4646-a1f6-d2dc00d982e8"
 migrations_dir = "migrations"
 
-[vars]
-TOKEN = "151322"
+# TOKEN va como secret (wrangler secret put TOKEN), no como var:
+# en [vars] queda en texto plano dentro del repo.
 
 [triggers]
 # Cada minuto: espejo de posiciones abiertas (el fetch a Bybit solo funciona

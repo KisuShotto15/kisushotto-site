@@ -100,6 +100,23 @@
 
   </div><!-- /dash-body -->
 
+  <!-- Asimetria ganancia/perdida -->
+  <div class="edge-card" id="edgeCard" style="display:none">
+    <div class="edge-head">
+      <div class="edge-label">RATIO GANANCIA / PÉRDIDA</div>
+      <div class="edge-verdict" id="edgeVerdict">—</div>
+    </div>
+    <div class="edge-row">
+      <div class="edge-big neu" id="edgeRatio">—</div>
+      <div class="edge-track">
+        <div class="edge-bar" id="edgeBar" style="width:2%"></div>
+        <div class="edge-breakeven" title="equilibrio"></div>
+      </div>
+      <div class="edge-need">equilibrio<br><b id="edgeNeeded">—</b></div>
+    </div>
+    <div class="edge-detail" id="edgeDetail"></div>
+  </div>
+
   <!-- KPI row -->
   <div class="kpi-grid" id="kpiGrid">
     <div class="kpi-card">
@@ -125,7 +142,7 @@
     <div class="kpi-card">
       <div class="kpi-label">Max DD</div>
       <div class="kpi-value neu" id="kpiDD">—</div>
-      <div class="kpi-sub">desde pico</div>
+      <div class="kpi-sub" id="kpiDDSub">desde pico</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Trades</div>

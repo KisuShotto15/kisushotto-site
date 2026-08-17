@@ -1,6 +1,6 @@
 import { computeStats, groupByDimension, buildHeatmap, buildWeeklyReview, riskOf } from './analytics.js';
 import { generateInsights } from './insights.js';
-import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot, fetchBybitPositions, parseBybitCSV } from './ingestion.js';
+import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot, fetchBybitPositions, fetchBybitBalance, parseBybitCSV } from './ingestion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -16,7 +16,16 @@ function json(data, status = 200) {
 }
 
 function auth(req, env) {
-  return req.headers.get('Authorization') === `Bearer ${env.TOKEN || '151322'}`;
+  // Sin TOKEN configurado no se autoriza nada: un default hardcodeado deja el
+  // journal abierto a cualquiera que lea el bundle del frontend.
+  if (!env.TOKEN) return false;
+  const got = req.headers.get('Authorization') || '';
+  const want = `Bearer ${env.TOKEN}`;
+  // Comparacion de tiempo constante: evita distinguir el token por latencia
+  if (got.length !== want.length) return false;
+  let diff = 0;
+  for (let i = 0; i < want.length; i++) diff |= got.charCodeAt(i) ^ want.charCodeAt(i);
+  return diff === 0;
 }
 
 function uid() { return crypto.randomUUID(); }
@@ -36,7 +45,8 @@ export default {
     try { await snapshotPositions(env); } catch (e) { console.error('cron snapshot failed:', e); }
     // El sync completo es pesado, solo cada 15 min
     if (event.cron !== '* * * * *') {
-      try { await runSync(env); } catch (e) { console.error('cron sync failed:', e); }
+      try { await runSync(env); }         catch (e) { console.error('cron sync failed:', e); }
+      try { await refreshBalance(env); }  catch (e) { console.error('cron balance failed:', e); }
     }
   },
 
@@ -418,14 +428,38 @@ async function attachPlans(env) {
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
+async function refreshBalance(env) {
+  const cfg = await env.DB.prepare('SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
+  if (!cfg) return null;
+  const bal = await fetchBybitBalance(cfg.api_key, cfg.api_secret);
+  if (!bal) return null;
+  await env.DB.prepare(`
+    INSERT INTO account_balance (id, total_equity, wallet_balance, coin, updated_at)
+    VALUES ('bybit', ?, ?, 'USDT', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      total_equity = excluded.total_equity,
+      wallet_balance = excluded.wallet_balance,
+      updated_at = excluded.updated_at
+  `).bind(bal.total_equity, bal.wallet_balance, Math.floor(Date.now() / 1000)).run();
+  return bal;
+}
+
 async function analytics(url, env) {
   const p  = url.searchParams;
   let sql  = "SELECT * FROM trades WHERE status = 'closed'";
   const args = [];
   if (p.get('from')) { sql += ' AND entry_time >= ?'; args.push(+p.get('from')); }
   if (p.get('to'))   { sql += ' AND entry_time <= ?'; args.push(+p.get('to')); }
-  const { results } = await env.DB.prepare(sql).bind(...args).all();
-  return json({ stats: computeStats(results) });
+
+  const [{ results }, bal] = await Promise.all([
+    env.DB.prepare(sql).bind(...args).all(),
+    env.DB.prepare('SELECT total_equity FROM account_balance WHERE id = ?').bind('bybit').first(),
+  ]);
+
+  return json({
+    stats: computeStats(results, { equityNow: bal?.total_equity ?? null }),
+    equity: bal?.total_equity ?? null,
+  });
 }
 
 async function byDimension(field, env, url) {
@@ -700,10 +734,13 @@ async function runSync(env, params) {
   const result   = await upsertTrades(all, env);
   const stopped  = await attachStops(env);
   const planned  = await attachPlans(env);
+  // El balance alimenta el drawdown en %; se refresca aca para que un sync
+  // manual lo actualice sin esperar al cron
+  const balance  = await refreshBalance(env).catch(() => null);
   if (!backfill) {
     await env.DB.prepare('UPDATE sync_configs SET last_sync = ? WHERE id = ?')
       .bind(Math.floor(Date.now() / 1000), 'bybit').run();
   }
 
-  return json({ ok: true, ...result, stops_attached: stopped, plans_applied: planned, backfill, synced_at: Date.now() });
+  return json({ ok: true, ...result, stops_attached: stopped, plans_applied: planned, backfill, equity: balance?.total_equity ?? null, synced_at: Date.now() });
 }

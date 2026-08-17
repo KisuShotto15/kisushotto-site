@@ -86,12 +86,57 @@ function renderKPIs(s) {
     ? `${fmtPnl(s.avgR)}R prom · ${s.rCoverage}% con stop`
     : 'USDT / trade · sin stops';
 
+  // Sin capital conocido el % no tiene base; se muestra la caida en USDT
   const ddEl = $('kpiDD');
-  ddEl.textContent = s.maxDrawdown + '%';
-  ddEl.className   = `kpi-value ${s.maxDrawdown <= 10 ? 'neu' : 'neg'}`;
+  const hasPct = s.maxDrawdown != null;
+  ddEl.textContent = hasPct ? s.maxDrawdown + '%' : '$' + (s.maxDrawdownAbs ?? 0).toFixed(2);
+  ddEl.className   = `kpi-value ${!hasPct || s.maxDrawdown <= 10 ? 'neu' : 'neg'}`;
+  $('kpiDDSub').textContent = hasPct
+    ? `$${(s.maxDrawdownAbs ?? 0).toFixed(2)} desde pico`
+    : 'sin capital de referencia';
+
+  renderEdge(s);
 
   $('kpiCount').textContent = s.closedCount;
   // "abiertos" lo escribe renderOpenPositions con los datos en vivo del exchange
+}
+
+// ── Asimetria ganancia/perdida ─────────────────────────────────────────────────
+// Es lo que decide si el sistema gana o pierde, y no estaba en ningun lado:
+// con 65% de aciertos igual se pierde si los perdedores doblan a los ganadores.
+function renderEdge(s) {
+  const card = $('edgeCard');
+  if (!card) return;
+  if (!s.closedCount || !s.avgLoss) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const wr       = s.winRate / 100;
+  const ratio    = s.avgWin / s.avgLoss;          // cuanto gano por cada 1 que pierdo
+  const needed   = wr > 0 ? (1 - wr) / wr : 0;    // ratio de equilibrio para ese win rate
+  const ok       = ratio >= needed;
+
+  // Ganancia media que haria falta para un profit factor de 1.5
+  const target   = wr > 0 ? (1.5 * (1 - wr) * s.avgLoss) / wr : 0;
+
+  $('edgeRatio').textContent   = ratio.toFixed(2);
+  $('edgeRatio').className     = `edge-big ${ok ? 'pos' : 'neg'}`;
+  $('edgeNeeded').textContent  = needed.toFixed(2);
+  $('edgeVerdict').textContent = ok
+    ? `Tu ratio cubre el ${s.winRate}% de aciertos.`
+    : `Aciertas ${s.winRate}% pero necesitas ${needed.toFixed(2)} para no perder.`;
+  $('edgeVerdict').className   = `edge-verdict ${ok ? 'pos' : 'neg'}`;
+
+  const pct = Math.max(2, Math.min(100, ratio / Math.max(needed, 0.01) * 50));
+  $('edgeBar').style.width     = pct + '%';
+  $('edgeBar').className       = `edge-bar ${ok ? 'pos' : 'neg'}`;
+
+  $('edgeDetail').innerHTML = [
+    `<span>gana <b class="pos">${fmtPnl(s.avgWin)}</b></span>`,
+    `<span>pierde <b class="neg">-${s.avgLoss.toFixed(2)}</b></span>`,
+    target > s.avgWin
+      ? `<span class="edge-hint">con ${target.toFixed(2)} de ganancia media tu profit factor seria 1.50</span>`
+      : '',
+  ].filter(Boolean).join('');
 }
 
 // ── Calendar ───────────────────────────────────────────────────────────────────

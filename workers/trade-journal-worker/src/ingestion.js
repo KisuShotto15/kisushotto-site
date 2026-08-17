@@ -444,3 +444,20 @@ export function parseBybitCSV(csvText) {
   }
   return trades;
 }
+
+// Balance de la cuenta — necesario para expresar el drawdown como % del capital
+export async function fetchBybitBalance(apiKey, apiSecret) {
+  const qs      = 'accountType=UNIFIED';
+  const headers = await bybitHeaders(apiKey, apiSecret, qs);
+  const res     = await fetch(`https://api.bybit.com/v5/account/wallet-balance?${qs}`, { headers });
+  if (!res.ok) throw new Error(`Bybit balance ${res.status}: ${await res.text()}`);
+  const d = await res.json();
+  if (d.retCode !== 0) throw new Error(`Bybit balance: ${d.retMsg}`);
+
+  const acc = d.result?.list?.[0];
+  if (!acc) return null;
+  return {
+    total_equity:   parseFloat(acc.totalEquity || 0) || null,
+    wallet_balance: parseFloat(acc.totalWalletBalance || 0) || null,
+  };
+}
