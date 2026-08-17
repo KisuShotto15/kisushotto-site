@@ -2262,3 +2262,10 @@ table col.col-hold { width: 80px; }
 }
 .tj-acct-menu button:hover { background: var(--card2); }
 #tj-revoke { color: var(--red); }
+
+.tc-tz {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0;
+  text-transform: none;
+}

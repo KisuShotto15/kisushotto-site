@@ -1,6 +1,7 @@
 import { computeStats, groupByDimension, buildHeatmap, buildWeeklyReview, riskOf } from './analytics.js';
 import { generateInsights } from './insights.js';
-import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot, fetchBybitPositions, fetchBybitBalance, parseBybitCSV } from './ingestion.js';
+import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot, fetchBybitPositions, fetchBybitBalance, fetchBybitExecutions,
+         buildPositionWindows, attachOpenTimes, parseBybitCSV } from './ingestion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -685,6 +686,13 @@ async function upsertTrades(trades, env) {
       pnl         = excluded.pnl,
       fees        = excluded.fees,
       exit_time   = excluded.exit_time,
+      -- Solo se acepta una apertura anterior al cierre: si el lote no encontro
+      -- las ejecuciones, excluded.entry_time es el instante del cierre y
+      -- pisaria una apertura ya reconstruida en una pasada anterior.
+      entry_time  = CASE WHEN excluded.entry_time < excluded.exit_time
+                         THEN excluded.entry_time ELSE trades.entry_time END,
+      session     = CASE WHEN excluded.entry_time < excluded.exit_time
+                         THEN excluded.session ELSE trades.session END,
       status      = excluded.status
   `);
 
@@ -867,6 +875,15 @@ async function runSync(env, params) {
   ]);
 
   const all = [...linear, ...inverse];
+
+  // closed-pnl solo conoce el instante del cierre; la apertura sale de las
+  // ejecuciones. Sin esto toda la duracion salia 0m.
+  let opened = 0;
+  try {
+    const execs = await fetchBybitExecutions(cfg.api_key, cfg.api_secret, { category: 'linear', ...opts });
+    opened = attachOpenTimes(all, buildPositionWindows(execs));
+  } catch (e) { console.error('exec fetch failed:', e); }
+
   const result   = await upsertTrades(all, env);
   const stopped  = await attachStops(env);
   const planned  = await attachPlans(env);
@@ -878,5 +895,5 @@ async function runSync(env, params) {
       .bind(Math.floor(Date.now() / 1000), 'bybit').run();
   }
 
-  return json({ ok: true, ...result, stops_attached: stopped, plans_applied: planned, backfill, equity: balance?.total_equity ?? null, synced_at: Date.now() });
+  return json({ ok: true, ...result, stops_attached: stopped, plans_applied: planned, open_times: opened, backfill, equity: balance?.total_equity ?? null, synced_at: Date.now() });
 }

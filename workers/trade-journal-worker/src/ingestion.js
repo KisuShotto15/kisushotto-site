@@ -461,3 +461,100 @@ export async function fetchBybitBalance(apiKey, apiSecret) {
     wallet_balance: parseFloat(acc.totalWalletBalance || 0) || null,
   };
 }
+
+// closed-pnl no dice cuando se abrio la posicion: su createdTime y updatedTime
+// son el mismo instante del cierre (difieren en milisegundos). La apertura solo
+// se puede reconstruir desde las ejecuciones, siguiendo el tamano acumulado.
+export async function fetchBybitExecutions(apiKey, apiSecret, opts = {}) {
+  const { category = 'linear', since = 0, until = 0, maxExecs = 3000 } = opts;
+  const now   = until > 0 ? until : Date.now();
+  const start = since > 0 ? since : now - 365 * 24 * 60 * 60 * 1000;
+
+  const execs = [];
+  for (let to = now; to > start && execs.length < maxExecs; to -= WEEK_MS) {
+    const from = Math.max(start, to - WEEK_MS);
+    let cursor = '';
+    do {
+      let qs = `category=${category}&limit=100&startTime=${Math.floor(from)}&endTime=${Math.floor(to)}`;
+      if (cursor) qs += `&cursor=${encodeURIComponent(cursor)}`;
+      const headers = await bybitHeaders(apiKey, apiSecret, qs);
+      const res = await fetch(`https://api.bybit.com/v5/execution/list?${qs}`, { headers });
+      if (!res.ok) throw new Error(`Bybit exec ${res.status}: ${await res.text()}`);
+      const d = await res.json();
+      if (d.retCode !== 0) throw new Error(`Bybit exec: ${d.retMsg}`);
+      execs.push(...(d.result?.list || []));
+      cursor = d.result?.nextPageCursor || '';
+    } while (cursor && execs.length < maxExecs);
+  }
+  return execs;
+}
+
+// Devuelve, por simbolo, las ventanas [apertura, cierre] de cada posicion.
+// Funding y otros movimientos que no son Trade se ignoran: mueven el balance
+// pero no la posicion.
+export function buildPositionWindows(executions) {
+  const bySymbol = new Map();
+  for (const e of executions) {
+    if (e.execType && e.execType !== 'Trade') continue;
+    if (!bySymbol.has(e.symbol)) bySymbol.set(e.symbol, []);
+    bySymbol.get(e.symbol).push(e);
+  }
+
+  const windows = [];
+  for (const [symbol, list] of bySymbol) {
+    list.sort((a, b) => +a.execTime - +b.execTime);
+
+    let net = 0, openTime = null;
+    for (const e of list) {
+      const qty    = parseFloat(e.execQty || 0);
+      if (!(qty > 0)) continue;
+      const signed = e.side === 'Buy' ? qty : -qty;
+
+      if (net === 0) openTime = Math.floor(+e.execTime / 1000);
+      const prev = net;
+      net += signed;
+
+      // Vuelve a cero: la posicion se cerro en este fill
+      if (Math.abs(net) < 1e-9) {
+        net = 0;
+        windows.push({ symbol, side: prev > 0 ? 'long' : 'short',
+                       openTime, closeTime: Math.floor(+e.execTime / 1000) });
+        openTime = null;
+      } else if (prev !== 0 && Math.sign(prev) !== Math.sign(net)) {
+        // Se invirtio: cierra la anterior y la nueva abre en el mismo instante
+        const t = Math.floor(+e.execTime / 1000);
+        windows.push({ symbol, side: prev > 0 ? 'long' : 'short', openTime, closeTime: t });
+        openTime = t;
+      }
+    }
+  }
+  return windows;
+}
+
+// Pega la apertura real a los trades que vienen de closed-pnl, emparejando por
+// simbolo y cierre. Sin coincidencia se deja lo que habia: mejor un dato
+// aproximado que inventar una duracion.
+export function attachOpenTimes(trades, windows, toleranceSec = 90) {
+  const bySymbol = new Map();
+  for (const w of windows) {
+    if (!bySymbol.has(w.symbol)) bySymbol.set(w.symbol, []);
+    bySymbol.get(w.symbol).push(w);
+  }
+
+  let matched = 0;
+  for (const t of trades) {
+    const cands = bySymbol.get(t.symbol);
+    if (!cands || t.exit_time == null) continue;
+    let best = null, bestDiff = Infinity;
+    for (const w of cands) {
+      const diff = Math.abs(w.closeTime - t.exit_time);
+      if (diff < bestDiff) { bestDiff = diff; best = w; }
+    }
+    if (best && bestDiff <= toleranceSec && best.openTime && best.openTime < t.exit_time) {
+      t.entry_time = best.openTime;
+      t.session    = session(best.openTime);
+      matched++;
+    }
+  }
+  return matched;
+}

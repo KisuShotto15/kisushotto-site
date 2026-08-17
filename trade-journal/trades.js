@@ -72,11 +72,24 @@ function toast(msg, type = 'ok') {
 function fmtDate(ts) {
   return new Date(ts * 1000).toLocaleString('es', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
 }
+// Las horas se muestran en la zona del navegador. Se expone cual es para que
+// una discrepancia con el exchange se detecte de un vistazo.
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+function tzOffsetLabel() {
+  const min = -new Date().getTimezoneOffset();
+  const sign = min >= 0 ? '+' : '-';
+  const a = Math.abs(min);
+  return `UTC${sign}${Math.floor(a / 60)}${a % 60 ? ':' + String(a % 60).padStart(2, '0') : ''}`;
+}
 function fmtShortDate(ts) {
   if (!ts) return '—';
   const d = new Date(ts * 1000);
   return d.toLocaleDateString('en', { month:'short', day:'numeric' }) + ' ' +
          d.toLocaleTimeString('en', { hour:'2-digit', minute:'2-digit', hour12:false });
+}
+function fullDate(ts) {
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleString('es', { dateStyle: 'full', timeStyle: 'long' }) + ` (${TZ})`;
 }
 function fmtNum(v, dec = 4) {
   const n = parseFloat(v);
@@ -194,9 +207,9 @@ function renderCards(trades) {
           <span class="tc-side-label ${sideClass}">${sideLabel}</span>
         </div>
         <div class="tc-times-col">
-          <span>${fmtShortDate(t.entry_time)}</span>
+          <span title="Apertura: ${fullDate(t.entry_time)}">${fmtShortDate(t.entry_time)}</span>
           <span class="tc-time-sep">→</span>
-          <span>${t.exit_time ? fmtShortDate(t.exit_time) : '—'}</span>
+          <span title="Cierre: ${fullDate(t.exit_time)}">${t.exit_time ? fmtShortDate(t.exit_time) : '—'}</span>
         </div>
         <div class="tc-prices-col">
           <span class="tc-price">${fmtNum(t.entry_price, 2)}</span>
@@ -569,6 +582,10 @@ document.addEventListener('keydown', e => {
     closePanel();
   }
 });
+
+// La cabecera dice en que zona se estan mostrando las horas
+const th = [...document.querySelectorAll('.tc-header-cell')].find(e => /open/i.test(e.textContent));
+if (th) th.innerHTML = `Open → Close <span class="tc-tz">${tzOffsetLabel()}</span>`;
 
 $('bulkSetup').innerHTML    = bulkOptions(SETUP_TAGS);
 $('bulkStrategy').innerHTML = bulkOptions(STRATEGY_TAGS);
