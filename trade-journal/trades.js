@@ -199,7 +199,10 @@ function renderCards(trades) {
           <span>${t.exit_time ? fmtShortDate(t.exit_time) : '—'}</span>
         </div>
         <div class="tc-prices-col">
-          <span class="tc-price">${fmtNum(t.entry_price, 2)} → ${t.exit_price != null ? fmtNum(t.exit_price, 2) : '—'}</span>
+          <span class="tc-price">${fmtNum(t.entry_price, 2)}</span>
+        </div>
+        <div class="tc-prices-col">
+          <span class="tc-price">${t.exit_price != null ? fmtNum(t.exit_price, 2) : '—'}</span>
           <span class="tc-price-change ${pctChange}">${pctText}</span>
         </div>
         <div class="tc-pnl-col">
