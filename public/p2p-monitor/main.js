@@ -867,8 +867,16 @@ function appResume() {
     ST.timer = setInterval(fetchOnce, CFG.interval * 1000);
     fetchOnce(true); // fast: primer intento corto (socket muerto tras el background)
   }
-  if (BOT.running && !BOT_POLL.timer) startBotPoller();
+  if (BOT.running) {
+    if (!BOT_POLL.timer) startBotPoller();
+  } else if (!botStarting() && Date.now() - _lastBotSync > 60000) {
+    // El bot pudo encenderse desde otro dispositivo (o la UI quedo desfasada):
+    // re-sincronizar el boton con el estado real del servidor.
+    _lastBotSync = Date.now();
+    hydrateBotState();
+  }
 }
+var _lastBotSync = 0;
 
 // En movil (PWA/TWA) volver al primer plano NO siempre dispara visibilitychange:
 // segun el navegador puede llegar solo pageshow (restaurada del bfcache), focus o
@@ -1608,6 +1616,8 @@ var BOT = {
   appliedMinLimit: 0,
   cachedAd: null,
   cachedAdAt: 0,
+  startSeq: 0,
+  startingSeq: 0, // == startSeq mientras corre la secuencia de arranque (ver botStarting)
   adPayTypes: []
 };
 
@@ -2097,6 +2107,19 @@ function botServerConfig() {
   };
 }
 
+// El boton refleja SIEMPRE BOT.running desde un solo sitio: pintarlo a mano en
+// cada rama era lo que dejaba "▶ Iniciar Bot" con el bot ya encendido.
+function renderBotToggle() {
+  var b = document.getElementById('bot-toggle');
+  if (!b) return;
+  b.textContent = BOT.running ? '⏹ Detener Bot' : '▶ Iniciar Bot';
+  b.style.background = BOT.running ? '#E24B4A' : '';
+}
+
+// La secuencia de arranque tarda (leer anuncio, metodos, reprice, activar). Mientras
+// corre, el servidor aun no esta encendido: nada de fuera debe "corregir" la UI.
+function botStarting() { return !!BOT.startingSeq && BOT.startingSeq === BOT.startSeq; }
+
 async function botToggle() {
   if (BOT.running) {
     // ── STOP ────────────────────────────────────────────
@@ -2108,8 +2131,7 @@ async function botToggle() {
     updateBotPayBadge();
     updateManualBalance();
 
-    document.getElementById('bot-toggle').textContent = '▶ Iniciar Bot';
-    document.getElementById('bot-toggle').style.background = '';
+    renderBotToggle();
     document.getElementById('bot-cur-price').textContent = '—';
     document.getElementById('bot-cur-price').style.color = 'var(--gold)';
     botUpdateCeiling();
@@ -2142,9 +2164,9 @@ async function botToggle() {
     BOT.running = true;
     BOT.startSeq = (BOT.startSeq || 0) + 1;
     var startSeq = BOT.startSeq;
+    BOT.startingSeq = startSeq;
 
-    document.getElementById('bot-toggle').textContent = '⏹ Detener Bot';
-    document.getElementById('bot-toggle').style.background = '#E24B4A';
+    renderBotToggle();
     document.getElementById('bot-live').style.display = 'grid';
     botLog('— Bot iniciado —', '#F0B90B');
 
@@ -2216,6 +2238,8 @@ async function botToggle() {
     }
 
     BOT.running = true;
+    BOT.startingSeq = 0;
+    renderBotToggle(); // el boton pudo quedar desincronizado durante el arranque
     botSetStatus('✓ Bot activo', '#1D9E75');
     if (TG.token && TG.chatId) sendTelegram('🟢 <b>Bot encendido</b>');
     startBotPoller();
@@ -2229,6 +2253,9 @@ var BOT_POLL = { timer: null, lastLogTs: 0 };
 var BOT_LOG_COLORS = { up: '#1D9E75', down: '#5dade2', warn: '#F0B90B', error: '#E24B4A', info: '#8b949e' };
 
 function startBotPoller() {
+  // Durante el arranque el poller leeria estado viejo (enabled:false, status
+  // anterior) y pisaria la UI; lo arranca el final de botToggle.
+  if (botStarting()) return;
   stopBotPoller();
   pollBotState();
   // 15s: el reprice server-side es ~18s, pollear mas rapido solo gastaba invocaciones
@@ -2243,6 +2270,7 @@ async function pollBotState() {
   if (!SESSION.token) return;
   try {
     var d = await botCallWorker('/bot-state');
+    if (botStarting()) return; // arranque en curso: no pisar la UI con estado viejo
     renderBotState(d);
   } catch(e) {}
 }
@@ -2271,11 +2299,11 @@ function renderBotState(d) {
     BOT_POLL.lastLogTs = maxTs;
   }
   // Si el servidor se auto-apagó (fondos bajos), reflejarlo en la UI
-  if (d.enabled === false && BOT.running) {
+  // (durante el arranque el servidor aun no esta encendido: no es un auto-apagado)
+  if (d.enabled === false && BOT.running && !botStarting()) {
     BOT.running = false;
     stopBotPoller();
-    document.getElementById('bot-toggle').textContent = '▶ Iniciar Bot';
-    document.getElementById('bot-toggle').style.background = '';
+    renderBotToggle();
   }
   // Salud del bot: ultimo tick / reprice + watchdog de bot congelado. Si el
   // scheduler (DO/Vercel) muere, el anuncio queda publicado a precio viejo: avisar.
@@ -2318,8 +2346,7 @@ async function hydrateBotState() {
     var d = await botCallWorker('/bot-state');
     if (d && d.enabled) {
       BOT.running = true;
-      document.getElementById('bot-toggle').textContent = '⏹ Detener Bot';
-      document.getElementById('bot-toggle').style.background = '#E24B4A';
+      renderBotToggle();
       document.getElementById('bot-live').style.display = 'grid';
       BOT_POLL.lastLogTs = Array.isArray(d.log) ? d.log.reduce(function(m,e){ return e&&e.ts>m?e.ts:m; }, 0) : 0;
       renderBotState(d);
