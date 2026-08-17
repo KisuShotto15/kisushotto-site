@@ -48,7 +48,10 @@ function jwtSecret() {
   return s;
 }
 
-export function signJWT(payload, ttlSeconds = 7 * 24 * 3600) {
+// 90 dias: es una app personal y volver a entrar cada semana molesta mas de lo
+// que aporta. Ojo: sin store de sesiones un JWT no se puede revocar antes de su
+// exp, asi que una sesion larga es tambien una ventana larga si el token se filtra.
+export function signJWT(payload, ttlSeconds = 90 * 24 * 3600) {
   const now = Math.floor(Date.now() / 1000);
   const body = { ...payload, iat: now, exp: now + ttlSeconds };
   const h = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
