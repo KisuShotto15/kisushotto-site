@@ -2098,3 +2098,15 @@ table col.col-hold { width: 80px; }
 .edge-detail .pos { color: var(--green); }
 .edge-detail .neg { color: var(--red); }
 .edge-hint { color: var(--amber); }
+
+.td-auto-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(0,200,150,0.12);
+  border: 1px solid rgba(0,200,150,0.28);
+  color: var(--green);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}

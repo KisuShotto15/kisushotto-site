@@ -291,7 +291,7 @@ async function getTrade(id, env) {
 const EDITABLE_COLS = ['symbol','category','side','entry_price','exit_price','size','pnl','fees',
                        'entry_time','exit_time','strategy_tag','setup_tag','session','exec_type',
                        'notes','emotion','rule_score','status','exchange',
-                       'stop_price','risk_usd','screenshots'];
+                       'stop_price','risk_usd','screenshots','stop_source'];
 
 async function updateTrade(id, request, env) {
   const b = await request.json();
@@ -311,6 +311,8 @@ async function updateTrade(id, request, env) {
       : null;
     b.risk_usd = risk;
     updates.push('risk_usd');
+    b.stop_source = b.stop_price != null ? 'manual' : null;
+    updates.push('stop_source');
   }
   const set    = updates.map(c => `${c} = ?`).join(', ');
   const values = [...updates.map(c => b[c]), id];
@@ -686,6 +688,7 @@ async function mirrorLivePositions(positions, env, now) {
 async function attachStops(env) {
   const res = await env.DB.prepare(`
     UPDATE trades SET
+      stop_source = 'exchange',
       stop_price = (
         SELECT s.stop_price FROM position_snapshots s
         WHERE s.symbol = trades.symbol AND s.side = trades.side

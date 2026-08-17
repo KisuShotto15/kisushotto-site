@@ -338,8 +338,10 @@ window.openPanel = function(id) {
 
       <!-- Notes -->
       <div class="td-col">
-        <div class="td-section-title">Riesgo</div>
-        <div class="td-section-hint">Stop loss planeado — de ahi sale la R</div>
+        <div class="td-section-title">Riesgo ${t.stop_source === 'exchange' ? '<span class="td-auto-badge">auto</span>' : ''}</div>
+        <div class="td-section-hint">${t.stop_source === 'exchange'
+          ? 'Stop tomado de tu exchange automaticamente. Solo editalo si quieres corregirlo.'
+          : 'Se toma solo del exchange si la posicion estaba abierta. Escribelo si falta.'}</div>
         <div class="td-input-row" style="margin-bottom:10px">
           <input type="number" step="any" id="panelStop" class="td-text-input" placeholder="Stop price…"
             oninput="previewRisk()" onkeydown="if(event.key==='Enter'){event.preventDefault();savePanel()}">
