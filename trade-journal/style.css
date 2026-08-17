@@ -2110,3 +2110,102 @@ table col.col-hold { width: 80px; }
   font-size: 10px;
   letter-spacing: 0.06em;
 }
+
+/* ── Login ─────────────────────────────────────────────────────────────────── */
+#tj-login {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+/* Mismo degradado sutil que las tarjetas KPI */
+#tj-login::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 0%, rgba(0,200,150,0.07) 0%, transparent 55%);
+  pointer-events: none;
+}
+.tj-login-box {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+}
+.tj-login-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  color: var(--accent);
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+.tj-login-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -1px;
+  margin-bottom: 10px;
+}
+.tj-login-title span { color: var(--accent); }
+.tj-login-sub {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+  color: var(--muted2);
+  margin-bottom: 26px;
+}
+#tj-login-form { display: flex; flex-direction: column; gap: 10px; }
+#tj-login input {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 15px;
+  padding: 13px 15px;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#tj-login input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,200,150,0.12);
+}
+#tj-login input::placeholder { color: var(--muted); }
+#tj-login-btn {
+  margin-top: 4px;
+  background: var(--accent);
+  border: none;
+  color: var(--bg);
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+#tj-login-btn:hover:not(:disabled) { background: var(--accent2); }
+#tj-login-btn:disabled { opacity: 0.55; cursor: default; }
+.tj-login-msg {
+  min-height: 20px;
+  margin-top: 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  color: var(--muted2);
+}
+.tj-login-msg.err { color: var(--red); }
+.tj-login-foot {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+}
+.tj-login-foot a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
+.tj-login-foot a:hover { color: var(--accent); }

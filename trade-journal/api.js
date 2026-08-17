@@ -1,50 +1,20 @@
 // api.js — shared API client
 
+import { session, showLogin } from './auth.js';
+
 const DEFAULT_BASE = 'https://trade-journal-worker.efrenalejandro2010.workers.dev';
 
-// El token NO va en el codigo: este bundle es publico y cualquiera que lo abra
-// se lo lleva. Se guarda una sola vez en el navegador de cada dispositivo.
+// La credencial es el JWT del login, el mismo del resto del sitio. Caduca sola
+// y va ligada a tu email; no hay secreto compartido en el bundle.
 export const cfg = {
-  base:  () => localStorage.getItem('tj_url')   || DEFAULT_BASE,
-  token: () => localStorage.getItem('tj_token') || '',
+  base:  () => localStorage.getItem('tj_url') || DEFAULT_BASE,
+  token: () => session.token(),
 };
-
-export function setToken(t) { localStorage.setItem('tj_token', t.trim()); }
-export function hasToken()  { return !!cfg.token(); }
-
-// Pide el token una vez por dispositivo. Vive aca para que lo hereden las
-// cuatro paginas sin duplicar la pantalla en cada una.
-export function askForToken(msg = 'Introduce el token de acceso') {
-  if (document.getElementById('tj-token-gate')) return;
-  const el = document.createElement('div');
-  el.id = 'tj-token-gate';
-  el.style.cssText = 'position:fixed;inset:0;background:#181818;display:flex;align-items:center;' +
-    'justify-content:center;z-index:9999;padding:24px;font-family:Inter,sans-serif;color:#fff';
-  el.innerHTML = `
-    <div style="max-width:420px;width:100%">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.12em;
-        color:#00c896;text-transform:uppercase;margin-bottom:10px">// acceso</div>
-      <div style="font-size:15px;color:#888;margin-bottom:18px">${msg}</div>
-      <input id="tj-token-input" type="password" autocomplete="current-password" placeholder="token"
-        style="width:100%;background:#242424;border:1px solid #3c3c3c;color:#fff;padding:12px 14px;
-        border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:15px;outline:none">
-      <button id="tj-token-ok" style="width:100%;margin-top:12px;background:#00c896;border:none;
-        color:#181818;font-weight:700;padding:12px;border-radius:8px;cursor:pointer;font-size:15px">
-        Entrar</button>
-    </div>`;
-  document.body.appendChild(el);
-
-  const input = el.querySelector('#tj-token-input');
-  const save  = () => { if (input.value.trim()) { setToken(input.value); location.reload(); } };
-  el.querySelector('#tj-token-ok').onclick = save;
-  input.onkeydown = e => { if (e.key === 'Enter') save(); };
-  input.focus();
-}
 
 export async function api(path, opts = {}) {
   if (!cfg.token()) {
-    askForToken();
-    throw new Error('Falta el token de acceso');
+    showLogin();
+    throw new Error('Sesion no iniciada');
   }
   const url = cfg.base() + path;
   let res;
@@ -60,11 +30,11 @@ export async function api(path, opts = {}) {
   } catch (e) {
     throw new Error(`No se puede conectar: ${url} — ${e.message}`);
   }
-  if (res.status === 401) {
-    // Token invalido o rotado: se descarta y se vuelve a pedir
-    localStorage.removeItem('tj_token');
-    askForToken('El token no es valido. Introducelo de nuevo.');
-    throw new Error('Token invalido');
+  if (res.status === 401 || res.status === 403) {
+    // Sesion caducada o revocada: se limpia y se vuelve a pedir login
+    session.clear();
+    showLogin('Tu sesion expiro. Vuelve a entrar.');
+    throw new Error('Sesion expirada');
   }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);

@@ -15,17 +15,70 @@ function json(data, status = 200) {
   });
 }
 
-function auth(req, env) {
-  // Sin TOKEN configurado no se autoriza nada: un default hardcodeado deja el
-  // journal abierto a cualquiera que lea el bundle del frontend.
-  if (!env.TOKEN) return false;
-  const got = req.headers.get('Authorization') || '';
-  const want = `Bearer ${env.TOKEN}`;
-  // Comparacion de tiempo constante: evita distinguir el token por latencia
-  if (got.length !== want.length) return false;
+// ── Autenticacion ─────────────────────────────────────────────────────────────
+// Se aceptan dos credenciales:
+//  - JWT de usuario, el mismo que emite /api/auth/login del resto del sitio.
+//    Se verifica aca con el secreto compartido, sin llamar a Vercel.
+//  - TOKEN de servicio, para el CLI y pruebas. Es un secret, no va en el bundle.
+
+function eq(a, b) {
+  if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < want.length; i++) diff |= got.charCodeAt(i) ^ want.charCodeAt(i);
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
+}
+
+function b64urlToBytes(s) {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4);
+  const bin = atob(b64);
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+
+function bytesToB64url(buf) {
+  let bin = '';
+  for (const b of new Uint8Array(buf)) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// HS256, igual que api/_lib/crypto.js pero con WebCrypto
+async function verifyJWT(token, secret) {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [h, p, sig] = parts;
+
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${h}.${p}`));
+  if (!eq(sig, bytesToB64url(mac))) return null;
+
+  let payload;
+  try { payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(p))); }
+  catch { return null; }
+
+  if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+  return payload;
+}
+
+function isAllowed(email, list) {
+  const allowed = String(list || '').split(/[\s,;]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
+  if (!allowed.length) return false;  // sin lista configurada = no pasa nadie
+  return allowed.includes(String(email || '').trim().toLowerCase());
+}
+
+async function auth(req, env) {
+  const m = (req.headers.get('Authorization') || '').match(/^Bearer (.+)$/);
+  if (!m) return false;
+  const tok = m[1];
+
+  if (env.TOKEN && eq(tok, env.TOKEN)) return true;
+
+  if (env.JWT_SECRET) {
+    const payload = await verifyJWT(tok, env.JWT_SECRET);
+    if (payload && isAllowed(payload.email, env.ALLOWED_EMAILS)) return true;
+  }
+  return false;
 }
 
 function uid() { return crypto.randomUUID(); }
@@ -52,7 +105,7 @@ export default {
 
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-    if (!auth(request, env)) return json({ error: 'Unauthorized' }, 401);
+    if (!(await auth(request, env))) return json({ error: 'Unauthorized' }, 401);
 
     const url    = new URL(request.url);
     const path   = url.pathname.replace(/\/$/, '');
