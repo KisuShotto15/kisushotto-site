@@ -214,7 +214,7 @@ export default async function handler(req, res) {
           const snapLong = histPaySnapshot(cur[0] && cur[0].hist_long, pay);
           const h = pushHist24Pay(cur[0] ? cur[0].hist24 : null, pay, Date.now(), price);
           const hl = pushHistLongPay(cur[0] ? cur[0].hist_long : null, pay, Date.now(), price);
-          // Re-serializar hist24/hist_long solo si cambiaron (suman 1 punto cada 2/30 min;
+          // Re-serializar hist24/hist_long solo si cambiaron (suman 1 punto cada 2/10 min;
           // stringify de la serie completa en cada latido era CPU desperdiciada).
           await sql`UPDATE monitor_state SET client_seen = now(),
             hist24 = COALESCE(${histPayChanged(snap24, h, pay) ? JSON.stringify(h) : null}::jsonb, hist24),

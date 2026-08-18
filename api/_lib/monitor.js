@@ -18,16 +18,18 @@ export function pushHist24(hist, ts, price) {
   return arr;
 }
 
-// Serie larga (1 punto cada ~30 min) para la pagina de historial. Retencion 2 anios:
-// vive como jsonb en UNA fila, asi que cada UPDATE reescribe la serie entera. Sin tope
-// el coste por escritura crece para siempre; 2 anios ≈ 35k puntos (~1 MB), suficiente
-// para el historial y estable en el tiempo.
+// Serie larga (1 punto cada ~10 min) para la pagina de historial. A 30 min una vela de
+// 1h (vista de 7 dias) salia de solo 2 puntos y el O/H/L/C no significaba nada; a 10 min
+// son 6 puntos por vela de 1h y 24 por vela de 4h (vista de 30 dias).
+// Retencion 2 anios: vive como jsonb en UNA fila, asi que cada UPDATE reescribe la serie
+// entera y sin tope el coste por escritura crece para siempre. 2 anios ≈ 105k puntos
+// (~4.6 MB); hoy, con ~1.5 meses acumulados, son ~280 KB.
 const HISTLONG_MS = 2 * 365 * 24 * 3600 * 1000;
 export function pushHistLong(hist, ts, price) {
   if (!price) return Array.isArray(hist) ? hist : [];
   const arr = Array.isArray(hist) ? hist.slice() : [];
   const last = arr[arr.length - 1];
-  if (!last || ts - last.ts >= 30 * 60000) arr.push({ ts, price });
+  if (!last || ts - last.ts >= 10 * 60000) arr.push({ ts, price });
   while (arr.length && ts - arr[0].ts > HISTLONG_MS) arr.shift();
   return arr;
 }

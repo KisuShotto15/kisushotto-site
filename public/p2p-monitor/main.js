@@ -2655,12 +2655,13 @@ function hxVisibleOhlc() {
   var pts = hxVisible();
   if (pts.length < 2) { HX.bucketMs = 900000; return []; }
   var span = pts[pts.length - 1].ts - pts[0].ts;
-  // Objetivo ~60-150 velas: elegir el bucket estandar mas cercano. El piso es 15 min
-  // porque es lo que sostiene el dato: hist24 muestrea cada 2 min (≈7 puntos por vela).
-  // Bajar de ahi daria velas de 1-2 puntos, con O/H/L/C sin significado.
+  // Tope 200 velas por pantalla. Ese numero fija el mapeo que queremos:
+  // 24h -> 15m (96 velas) · 7d -> 1h (168) · 30d -> 4h (180).
+  // El piso es 15 min porque es lo que sostiene el dato: hist24 muestrea cada 2 min
+  // (≈7 puntos por vela). Bajar de ahi daria velas de 1-2 puntos, sin O/H/L/C real.
   var STEPS = [900000, 1800000, 3600000, 2 * 3600000, 4 * 3600000, 6 * 3600000, 12 * 3600000, 24 * 3600000, 3 * 24 * 3600000, 7 * 24 * 3600000];
   var bMs = STEPS[0];
-  for (var s = 0; s < STEPS.length; s++) { bMs = STEPS[s]; if (span / bMs <= 150) break; }
+  for (var s = 0; s < STEPS.length; s++) { bMs = STEPS[s]; if (span / bMs <= 200) break; }
   HX.bucketMs = bMs;
   var buckets = {};
   for (var i = 0; i < pts.length; i++) {
@@ -2678,8 +2679,10 @@ function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
   var ctx = base.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
-  var padL = 58, padR = 14, padT = 14, padB = 26, W = cssW - padL - padR, H = cssH - padT - padB;
-  var bMs = HX.bucketMs || 3600000;
+  // Escala de precio a la DERECHA (como en los graficos de trading): el ultimo precio
+  // queda pegado a su eje. De ahi que padR sea el ancho y padL solo un margen.
+  var padL = 14, padR = 62, padT = 14, padB = 26, W = cssW - padL - padR, H = cssH - padT - padB;
+  var bMs = HX.bucketMs || 900000;
   var t0 = cs[0].t, t1 = cs[cs.length - 1].t + bMs, dt = (t1 - t0) || 1;
   var min = cs[0].l, max = cs[0].h;
   cs.forEach(function(k) { if (k.l < min) min = k.l; if (k.h > max) max = k.h; });
@@ -2687,13 +2690,13 @@ function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
   function X(ts) { return padL + (ts - t0) / dt * W; }
   function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
   var up = cs[cs.length - 1].c >= cs[0].o;
-  HX.px = { padL: padL, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, col: up ? '#2ebd85' : '#f6465d' };
+  HX.px = { padL: padL, padR: padR, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, col: up ? '#2ebd85' : '#f6465d' };
   ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
   for (var i = 0; i <= 5; i++) {
     var val = lo + (hi - lo) * i / 5, y = Y(val);
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
     ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + W, y); ctx.stroke();
-    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'right'; ctx.fillText(fmt(val), padL - 8, y);
+    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'left'; ctx.fillText(fmt(val), padL + W + 8, y);
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   var ticks = Math.min(6, cs.length);
@@ -2702,7 +2705,11 @@ function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
     ctx.fillStyle = '#8b93a7';
     ctx.fillText(hxTimeLabel(ts, dt), Math.max(padL + 14, Math.min(padL + W - 14, X(ts))), padT + H + 7);
   }
-  var cw = Math.max(2, Math.min(14, (W / cs.length) * 0.65));
+  // Ancho por RANURA de tiempo, no por vela dibujada: si hay huecos (buckets sin dato)
+  // cs.length es menor que las ranuras del rango y las velas salian mas anchas que su
+  // propio intervalo, pisandose entre si.
+  var slots = Math.max(1, Math.round(dt / bMs));
+  var cw = Math.max(2, Math.min(14, (W / slots) * 0.7));
   for (var q = 0; q < cs.length; q++) {
     var c = cs[q], cx = X(c.t + bMs / 2), colq = c.c >= c.o ? '#2ebd85' : '#f6465d';
     ctx.strokeStyle = colq; ctx.lineWidth = 1;
@@ -2720,7 +2727,7 @@ function hxDrawBase(pts, cssW, cssH, dpr) {
   var ctx = base.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
-  var padL = 58, padR = 14, padT = 14, padB = 26, W = cssW - padL - padR, H = cssH - padT - padB;
+  var padL = 14, padR = 62, padT = 14, padB = 26, W = cssW - padL - padR, H = cssH - padT - padB;
   var t0 = pts[0].ts, t1 = pts[pts.length - 1].ts, dt = (t1 - t0) || 1;
   var min = pts[0].price, max = pts[0].price;
   pts.forEach(function(p) { if (p.price < min) min = p.price; if (p.price > max) max = p.price; });
@@ -2728,13 +2735,13 @@ function hxDrawBase(pts, cssW, cssH, dpr) {
   function X(ts) { return padL + (ts - t0) / dt * W; }
   function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
   var open = pts[0].price, close = pts[pts.length - 1].price, col = close >= open ? '#2ebd85' : '#f6465d';
-  HX.px = { padL: padL, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, col: col }; // para el crosshair
+  HX.px = { padL: padL, padR: padR, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, col: col }; // para el crosshair
   ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
   for (var i = 0; i <= 5; i++) {
     var val = lo + (hi - lo) * i / 5, y = Y(val);
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
     ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + W, y); ctx.stroke();
-    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'right'; ctx.fillText(fmt(val), padL - 8, y);
+    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'left'; ctx.fillText(fmt(val), padL + W + 8, y);
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   var ticks = Math.min(6, pts.length);
@@ -2817,12 +2824,12 @@ function hxDraw() {
       l1 = fmt(bp.price) + fiatSuf();
       l2 = hxFullLabel(bp.ts);
     }
-    // Etiqueta de precio en el eje Y a la altura del cursor
+    // Etiqueta de precio sobre el eje Y (ahora a la derecha) a la altura del cursor
     var curPrice = lo + (1 - (cy - padT) / H) * dp;
     ctx.font = '600 11px -apple-system, sans-serif';
-    ctx.fillStyle = col; ctx.fillRect(0, cy - 9, padL - 4, 18);
+    ctx.fillStyle = col; ctx.fillRect(padL + W + 4, cy - 9, HX.px.padR - 4, 18);
     ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(fmt(curPrice), 4, cy);
+    ctx.fillText(fmt(curPrice), padL + W + 8, cy);
     // Caja tooltip cerca del cursor
     ctx.font = '600 12px -apple-system, sans-serif';
     var lines = l3 != null ? [l1, l2, l3] : [l1, l2];
