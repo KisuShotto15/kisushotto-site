@@ -1,22 +1,13 @@
 import { requireAllowedUser } from './_lib/auth.js';
+import { rateLimit, clientIp } from './_lib/ratelimit.js';
 
 // ── Rate limit configurable por env (0 / sin setear = desactivado) ──
 const RL_MAX    = parseInt(process.env.RATE_LIMIT_MAX || '0', 10);
 const RL_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
-const rlHits = new Map(); // ip -> { count, resetAt }
 
 function rateLimited(req) {
   if (!RL_MAX) return null; // desactivado
-  const ip = String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown')
-    .split(',')[0].trim();
-  const now = Date.now();
-  let e = rlHits.get(ip);
-  if (!e || now >= e.resetAt) { e = { count: 0, resetAt: now + RL_WINDOW }; rlHits.set(ip, e); }
-  e.count++;
-  if (rlHits.size > 5000) { // poda ocasional para no crecer sin limite
-    for (const [k, v] of rlHits) if (now >= v.resetAt) rlHits.delete(k);
-  }
-  return e.count > RL_MAX ? Math.ceil((e.resetAt - now) / 1000) : null;
+  return rateLimit('search:' + clientIp(req), RL_MAX, RL_WINDOW);
 }
 
 export default async function handler(req, res) {

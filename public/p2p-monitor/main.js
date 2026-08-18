@@ -183,12 +183,13 @@ var CFG = {
   verifiedOnly: true,    // Solo comerciantes con insignia (aplica a monitor y bot)
   monQuietStart: '00:00',// Monitor 24/7: inicio del silencio nocturno (America/Caracas)
   monQuietEnd:   '07:00',// Monitor 24/7: fin del silencio nocturno
-  monQuietRef:   3600,   // Monitor 24/7: refresco nocturno (seg); alto para que Neon se suspenda de noche
   monSummary:    '08:00' // Monitor 24/7: hora del resumen diario por Telegram (Caracas)
 };
 
-var PROXY = 'https://kisushotto-site.vercel.app/api/p2p-search';
+// Unico punto donde vive el origen del backend: el resto se deriva de aqui.
 var API_BASE = 'https://kisushotto-site.vercel.app';
+var PROXY = API_BASE + '/api/p2p-search';
+var BOT_API = API_BASE + '/api/binance-bot';
 
 // ── Sesion (multi-usuario) ────────────────────────────
 var SESSION = { token: null, email: null };
@@ -1063,9 +1064,6 @@ function renderStats() {
   var bestMay   = cMayS   ? cMayS.price   : null;
   var bestSmall = cSmallS ? cSmallS.price : null;
 
-  document.getElementById('st-best').textContent  = bestMay   ? fmt(bestMay)   + fiatSuf() : '—';
-  document.getElementById('st-count').textContent = ST.mayoristas.length;
-
   if (bestMay && bestSmall) {
     var diff = bestMay - bestSmall;
     document.getElementById('st-diff').textContent = fmt(diff) + fiatSuf();
@@ -1622,7 +1620,7 @@ var BOT = {
 };
 
 var BOT_CFG = {
-  url: 'https://kisushotto-site.vercel.app/api/binance-bot',
+  url: BOT_API,
   token: '',
   adNo: '',
   increment: 0.001,
@@ -1771,7 +1769,7 @@ function loadBotConfig() {
     var s = localStorage.getItem('p2p_bot_cfg');
     if (!s) { renderBotPayChecks(); return; }
     Object.assign(BOT_CFG, JSON.parse(s));
-    BOT_CFG.url = 'https://kisushotto-site.vercel.app/api/binance-bot'; // fija (interna)
+    BOT_CFG.url = BOT_API; // fija (interna): ignora la url que hubiera en localStorage
     var _sel = document.getElementById('cfg-bot-adsel');
     if (BOT_CFG.adNo && !Array.prototype.some.call(_sel.options, function(o){ return o.value === BOT_CFG.adNo; })) {
       var _o = document.createElement('option'); _o.value = BOT_CFG.adNo; _o.textContent = 'Ad ' + BOT_CFG.adNo; _sel.appendChild(_o);
@@ -2861,12 +2859,11 @@ async function hxLoad() {
     hxDraw();
   } catch (e) { hxMsg('Error: ' + e.message); }
 }
-// Refresca la serie de 24h desde el servidor (max 1 vez cada 15 min, alineado con
-// el latido para despertar Neon una sola vez por ciclo).
+// Refresca la serie de 24h desde el servidor (max 1 vez cada 5 min, alineado con el latido).
 function refreshHist24() {
   if (!SESSION.token) return;
   var now = Date.now();
-  if (now - MON24.lastHist < 15 * 60000) return;
+  if (now - MON24.lastHist < 5 * 60000) return;
   MON24.lastHist = now;
   botCallWorker('/monitor-state').then(function(d) {
     if (d && d.hist24) { HIST24 = d.hist24; renderSparkline(); }
@@ -2882,9 +2879,9 @@ function monitorHeartbeat() {
   if (ACTIVE_FIAT !== 'VES') return;
   if (!MON24.enabled || !SESSION.token) return;
   var now = Date.now();
-  // 15 min: cada latido despierta Neon ~5 min; a esta cadencia duerme ~2/3 del
-  // tiempo con la app abierta. El servidor toma el relevo a los 35 min sin latido.
-  if (now - MON24.lastHb < 15 * 60 * 1000) return;
+  // 5 min: el servidor toma el relevo a los 12 min sin latido (2 latidos perdidos
+  // + margen). Antes eran 15/35 min para no despertar la Neon vieja.
+  if (now - MON24.lastHb < 5 * 60 * 1000) return;
   MON24.lastHb = now;
   // De paso, el precio que ve la app alimenta hist24 en el servidor (sparkline sin huecos de dia).
   var p = bestCredibleMay() || 0;
@@ -2897,7 +2894,6 @@ function monitorServerConfig() {
     refreshSec: 60, // servidor (app cerrada/oculta): 60s. La vista abierta sigue a CFG.interval (10s).
     quietStart: document.getElementById('cfg-mon-qstart').value || '',
     quietEnd:   document.getElementById('cfg-mon-qend').value   || '',
-    quietRefreshSec: parseInt(document.getElementById('cfg-mon-qref').value) || 3600,
     summaryHour: document.getElementById('cfg-mon-summary').value || '',
     spreadThr: CFG.spreadThr,
     overboughtThr: CFG.overboughtThr,
@@ -2963,7 +2959,6 @@ function saveConfig() {
   CFG.buyAmount   = parseFloat(document.getElementById('cfg-buy-amount').value)   || 2000000;
   CFG.monQuietStart = document.getElementById('cfg-mon-qstart').value || '00:00';
   CFG.monQuietEnd   = document.getElementById('cfg-mon-qend').value   || '07:00';
-  CFG.monQuietRef   = parseInt(document.getElementById('cfg-mon-qref').value) || 3600;
   CFG.monSummary    = document.getElementById('cfg-mon-summary').value || '08:00';
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();
@@ -2992,7 +2987,6 @@ function loadConfig() {
     document.getElementById('cfg-buy-amount').value   = CFG.buyAmount;
     if (CFG.monQuietStart) document.getElementById('cfg-mon-qstart').value = CFG.monQuietStart;
     if (CFG.monQuietEnd)   document.getElementById('cfg-mon-qend').value   = CFG.monQuietEnd;
-    if (CFG.monQuietRef)   document.getElementById('cfg-mon-qref').value   = CFG.monQuietRef;
     if (CFG.monSummary)    document.getElementById('cfg-mon-summary').value = CFG.monSummary;
   } catch(e) {}
   updateVerToggle();

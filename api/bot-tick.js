@@ -33,14 +33,6 @@ function inQuietHours(start, end, now) {
   if (s === e) return false;
   return s < e ? (cur >= s && cur < e) : (cur >= s || cur < e); // soporta franja nocturna
 }
-// ms hasta que termine la franja de silencio (para no dormir de mas y reanudar
-// alertas puntual en la manana). Asume que now cae dentro del silencio.
-function msUntilQuietEnd(end, now) {
-  const e = hmToMin(end), cur = caracasMinutes(now);
-  let left = (e - cur + 1440) % 1440;
-  if (left === 0) left = 1440;
-  return left * 60000;
-}
 function caracasDateStr(now) {
   return new Date(now - 4 * 3600 * 1000).toISOString().slice(0, 10);
 }
@@ -76,23 +68,24 @@ async function tickMonitor(row, now) {
 
   // Si la app esta abierta y refrescando (latido fresco), el cliente cubre el monitor:
   // el servidor no busca ni alerta (evita duplicar requests a Binance y mensajes Telegram).
-  // Ventana 35 min (latido del cliente cada 15 min; 2 perdidos + margen). Ancha a
-  // proposito: mantiene Neon dormida mientras la app esta abierta.
+  // Ventana 12 min (latido del cliente cada 5 min: 2 perdidos + margen). Antes eran
+  // 35 min para mantener dormida la Neon vieja; en Supabase el compute no se cobra y
+  // esa ventana solo dejaba al monitor 35 min ciego al cerrar la app.
   const seenMs = row.client_seen ? now - new Date(row.client_seen).getTime() : Infinity;
-  if (seenMs < 35 * 60 * 1000) return 35 * 60 * 1000 - seenMs;
+  if (seenMs < 12 * 60 * 1000) return 12 * 60 * 1000 - seenMs;
 
+  // El silencio nocturno calla las notificaciones y afloja la cadencia a 5 min, que es
+  // la resolucion real de los datos: hist24 guarda 1 punto cada 4.5 min y las velas son
+  // horarias, asi que refrescar mas rapido de noche no agrega un solo punto al grafico.
+  // (Antes bajaba a 1/hora para suspender la Neon vieja: eso si dejaba el grafico vacio
+  // y, al terminar el silencio, sin referencias de 10/30/60 min para el momentum.)
   const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now);
-  // Silencio nocturno: sin alertas; se busca cada 1h (solo para no perder del todo
-  // el grafico) → Neon se suspende casi toda la noche. Piso 3600s aunque el config
-  // guardado tenga un valor menor.
-  const refreshSec = silent ? Math.max(cfg.quietRefreshSec || 3600, 3600) : (cfg.refreshSec || 30);
-  // De noche, no dormir mas alla del fin del silencio (reanuda alertas puntual).
-  const nightCap = silent ? msUntilQuietEnd(cfg.quietEnd, now) : Infinity;
-  const nextMs = Math.min(refreshSec * 1000, nightCap);
+  const refreshSec = silent ? Math.max(cfg.refreshSec || 30, 300) : (cfg.refreshSec || 30);
+  const nextMs = refreshSec * 1000;
 
   // Respetar la cadencia (el tick base es ~18s; aqui decidimos si toca refrescar).
   const sinceTick = row.last_tick ? now - new Date(row.last_tick).getTime() : Infinity;
-  if (sinceTick < refreshSec * 1000) return Math.min(refreshSec * 1000 - sinceTick, nightCap);
+  if (sinceTick < refreshSec * 1000) return refreshSec * 1000 - sinceTick;
 
   // Claim atomico: si otro tick concurrente ya refresco a este usuario, saltar
   // (evita doble busqueda y doble alerta Telegram).
@@ -103,7 +96,7 @@ async function tickMonitor(row, now) {
     RETURNING user_id`;
   if (!claim.length) return 25 * 1000;
 
-  // Columnas pesadas (hist_long/hist_ohlc crecen sin limite) SOLO cuando toca refrescar:
+  // Columnas pesadas (hist_long/hist_ohlc acumulan anios de puntos) SOLO cuando toca refrescar:
   // parsearlas en cada tick de 18s era CPU desperdiciada.
   const hrows = await sql`
     SELECT price_hist, cooldowns, hist24, hist_long, hist_ohlc, last_summary, log

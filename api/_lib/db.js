@@ -46,7 +46,7 @@ function mkClient() {
 // Vercel CONGELA la instancia entre invocaciones: los timers de idle_timeout no
 // corren y el NAT descarta el TCP idle en silencio. Reusar esa conexion "viva"
 // cuelga la query hasta la retransmision TCP (minutos) — era la causa de los
-// timeouts generalizados post-migracion (el driver de Neon iba por HTTP y no
+// timeouts generalizados post-migracion (el driver anterior iba por HTTP y no
 // mantenia TCP entre invocaciones). Si paso >60s sin uso, se descarta el cliente
 // y se conecta de cero (idle_timeout 20s lo habria cerrado igual si corriera).
 let client = null;

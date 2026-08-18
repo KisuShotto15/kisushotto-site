@@ -16,13 +16,17 @@ export function pushHist24(hist, ts, price) {
   return arr;
 }
 
-// Serie larga (1 punto cada ~30 min) para la pagina de historial. Sin limite de
-// retencion: se guarda indefinidamente (~0.5-1 MB/ano, despreciable para Neon).
+// Serie larga (1 punto cada ~30 min) para la pagina de historial. Retencion 2 anios:
+// vive como jsonb en UNA fila, asi que cada UPDATE reescribe la serie entera. Sin tope
+// el coste por escritura crece para siempre; 2 anios ≈ 35k puntos (~1 MB), suficiente
+// para el historial y estable en el tiempo.
+const HISTLONG_MS = 2 * 365 * 24 * 3600 * 1000;
 export function pushHistLong(hist, ts, price) {
   if (!price) return Array.isArray(hist) ? hist : [];
   const arr = Array.isArray(hist) ? hist.slice() : [];
   const last = arr[arr.length - 1];
   if (!last || ts - last.ts >= 30 * 60000) arr.push({ ts, price });
+  while (arr.length && ts - arr[0].ts > HISTLONG_MS) arr.shift();
   return arr;
 }
 
@@ -46,8 +50,8 @@ export function pushHistLongPay(hist, pay, ts, price) {
 }
 
 // Snapshot ANTES del push (pushHist*Pay muta el mapa en sitio) + comparacion despues.
-// Permite saltarse el JSON.stringify + UPDATE de series grandes (hist_long crece sin
-// limite) cuando no cambiaron.
+// Permite saltarse el JSON.stringify + UPDATE de series grandes (hist_long acumula
+// hasta 2 anios) cuando no cambiaron.
 export function histPaySnapshot(hist, pay) {
   const a = histMap(hist)[pay] || [];
   return { len: a.length, lastTs: a.length ? a[a.length - 1].ts : 0 };
