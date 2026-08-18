@@ -5,13 +5,15 @@ const COOLDOWN_MS = 5 * 60000;
 const TREND_CD_MS = 20 * 60000;
 const HIST24_MS = 25 * 3600 * 1000;
 
-// Serie comprimida de 24h (1 punto cada ~5 min) para el sparkline. La alimentan tanto
-// el tick del servidor como el latido del cliente (app abierta), asi nunca queda hueca.
+// Serie comprimida de 24h (1 punto cada ~2 min) para el sparkline y las velas de 15 min.
+// La alimentan tanto el tick del servidor como el latido del cliente (app abierta), asi
+// nunca queda hueca. El muestreo se puede apretar sin miedo: la serie esta topada a 25h,
+// asi que su tamanio esta acotado (a 2 min son ~750 puntos, 31 KB) y no crece con los anios.
 export function pushHist24(hist, ts, price) {
   if (!price) return Array.isArray(hist) ? hist : [];
   const arr = Array.isArray(hist) ? hist.slice() : [];
   const last = arr[arr.length - 1];
-  if (!last || ts - last.ts >= 4.5 * 60000) arr.push({ ts, price });
+  if (!last || ts - last.ts >= 2 * 60000) arr.push({ ts, price });
   while (arr.length && ts - arr[0].ts > HIST24_MS) arr.shift();
   return arr;
 }
@@ -59,23 +61,6 @@ export function histPaySnapshot(hist, pay) {
 export function histPayChanged(snap, after, pay) {
   const b = histMap(after)[pay] || [];
   return snap.len !== b.length || (b.length ? b[b.length - 1].ts : 0) !== snap.lastTs;
-}
-
-// Velas OHLC por HORA, por metodo de pago. Cada observacion de precio (tick del
-// servidor ~30s o latido del cliente ~28s) actualiza la vela de su bucket horario.
-export function pushOhlcPay(hist, pay, ts, price) {
-  const m = histMap(hist);
-  if (!price) return m;
-  const arr = Array.isArray(m[pay]) ? m[pay].slice() : [];
-  const t = Math.floor(ts / 3600000) * 3600000;
-  const last = arr[arr.length - 1];
-  if (last && last.t === t) {
-    arr[arr.length - 1] = { t, o: last.o, h: Math.max(last.h, price), l: Math.min(last.l, price), c: price };
-  } else {
-    arr.push({ t, o: price, h: price, l: price, c: price });
-  }
-  m[pay] = arr;
-  return m;
 }
 
 // Disponibilidad minima (USDT) para considerar un anuncio creible (mayorista real).

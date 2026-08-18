@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
-import { pushHist24Pay, pushHistLongPay, pushOhlcPay, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
+import { pushHist24Pay, pushHistLongPay, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
 
 const BINANCE = 'https://api.binance.com';
@@ -209,18 +209,16 @@ export default async function handler(req, res) {
             ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});
         }
         if (price > 0) {
-          const cur = await sql`SELECT hist24, hist_long, hist_ohlc FROM monitor_state WHERE user_id = ${user.uid}`;
+          const cur = await sql`SELECT hist24, hist_long FROM monitor_state WHERE user_id = ${user.uid}`;
           const snap24 = histPaySnapshot(cur[0] && cur[0].hist24, pay);
           const snapLong = histPaySnapshot(cur[0] && cur[0].hist_long, pay);
           const h = pushHist24Pay(cur[0] ? cur[0].hist24 : null, pay, Date.now(), price);
           const hl = pushHistLongPay(cur[0] ? cur[0].hist_long : null, pay, Date.now(), price);
-          const ho = pushOhlcPay(cur[0] ? cur[0].hist_ohlc : null, pay, Date.now(), price);
-          // Re-serializar hist24/hist_long solo si cambiaron (suman 1 punto cada 5/30 min;
-          // stringify de la serie completa en cada latido de ~28s era CPU desperdiciada).
+          // Re-serializar hist24/hist_long solo si cambiaron (suman 1 punto cada 2/30 min;
+          // stringify de la serie completa en cada latido era CPU desperdiciada).
           await sql`UPDATE monitor_state SET client_seen = now(),
             hist24 = COALESCE(${histPayChanged(snap24, h, pay) ? JSON.stringify(h) : null}::jsonb, hist24),
-            hist_long = COALESCE(${histPayChanged(snapLong, hl, pay) ? JSON.stringify(hl) : null}::jsonb, hist_long),
-            hist_ohlc = ${JSON.stringify(ho)}::jsonb
+            hist_long = COALESCE(${histPayChanged(snapLong, hl, pay) ? JSON.stringify(hl) : null}::jsonb, hist_long)
             WHERE user_id = ${user.uid}`;
         } else {
           await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
@@ -228,8 +226,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
       if (path === '/monitor-history') {
-        // Sin hist_ohlc: el cliente deriva las velas de hist24+hist_long y esa columna
-        // crece sin limite (hacia la respuesta enorme y lenta en mobile).
+        // El cliente deriva las velas al vuelo de hist24+hist_long (ver hxVisibleOhlc).
         const rows = await sql`SELECT hist_long, hist24 FROM monitor_state WHERE user_id = ${user.uid}`;
         return res.status(200).json(rows[0] || { hist_long: [], hist24: [] });
       }

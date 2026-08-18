@@ -4,7 +4,7 @@ import { sql } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes } from './_lib/reprice.js';
-import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, pushOhlcPay, histMap, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
+import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
 
@@ -74,9 +74,8 @@ async function tickMonitor(row, now) {
   const seenMs = row.client_seen ? now - new Date(row.client_seen).getTime() : Infinity;
   if (seenMs < 12 * 60 * 1000) return 12 * 60 * 1000 - seenMs;
 
-  // El silencio nocturno calla las notificaciones y afloja la cadencia a 5 min, que es
-  // la resolucion real de los datos: hist24 guarda 1 punto cada 4.5 min y las velas son
-  // horarias, asi que refrescar mas rapido de noche no agrega un solo punto al grafico.
+  // El silencio nocturno calla las notificaciones y afloja la cadencia a 5 min: eso deja
+  // 3 puntos por vela de 15 min (suficiente para un O/H/L/C valido) contra los ~7 del dia.
   // (Antes bajaba a 1/hora para suspender la Neon vieja: eso si dejaba el grafico vacio
   // y, al terminar el silencio, sin referencias de 10/30/60 min para el momentum.)
   const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now);
@@ -96,10 +95,10 @@ async function tickMonitor(row, now) {
     RETURNING user_id`;
   if (!claim.length) return 25 * 1000;
 
-  // Columnas pesadas (hist_long/hist_ohlc acumulan anios de puntos) SOLO cuando toca refrescar:
+  // Columna pesada (hist_long acumula hasta 2 anios) SOLO cuando toca refrescar:
   // parsearlas en cada tick de 18s era CPU desperdiciada.
   const hrows = await sql`
-    SELECT price_hist, cooldowns, hist24, hist_long, hist_ohlc, last_summary, log
+    SELECT price_hist, cooldowns, hist24, hist_long, last_summary, log
     FROM monitor_state WHERE user_id = ${row.user_id}`;
   const h = hrows[0] || {};
 
@@ -123,7 +122,6 @@ async function tickMonitor(row, now) {
   const snapLong = histPaySnapshot(h.hist_long, pay);
   const hist24 = pushHist24Pay(h.hist24, pay, now, out.bestMay);
   const histLong = pushHistLongPay(h.hist_long, pay, now, out.bestMay);
-  const histOhlc = pushOhlcPay(h.hist_ohlc, pay, now, out.bestMay);
 
   let log = h.log;
   let token = '';
@@ -153,14 +151,12 @@ async function tickMonitor(row, now) {
     cooldowns: out.cooldowns,
     hist24,
     histLong,
-    histOhlc,
     lastSummary,
     log,
     // Solo re-serializar/escribir las series que realmente cambiaron (hist_long solo
     // suma 1 punto cada 30 min; stringify de anios de datos cada 30s era CPU pura).
     hist24Changed: histPayChanged(snap24, hist24, pay),
     histLongChanged: histPayChanged(snapLong, histLong, pay),
-    ohlcChanged: !!out.bestMay,
     status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
     nextMs: nextMs,
   };
@@ -472,7 +468,6 @@ export default async function handler(req, res) {
           cooldowns = ${JSON.stringify(out.cooldowns || {})}::jsonb,
           hist24 = COALESCE(${out.hist24Changed ? JSON.stringify(out.hist24 || []) : null}::jsonb, hist24),
           hist_long = COALESCE(${out.histLongChanged ? JSON.stringify(out.histLong || []) : null}::jsonb, hist_long),
-          hist_ohlc = COALESCE(${out.ohlcChanged ? JSON.stringify(out.histOhlc || {}) : null}::jsonb, hist_ohlc),
           last_summary = ${out.lastSummary || null},
           log = ${JSON.stringify(out.log || [])}::jsonb,
           status = ${out.status || null},

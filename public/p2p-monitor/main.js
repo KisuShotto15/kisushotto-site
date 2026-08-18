@@ -2610,6 +2610,11 @@ function hxBtnCss(active) {
   return 'border-radius:8px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:600;border:1px solid ' +
     (active ? 'var(--gold);background:var(--gold);color:#000' : 'var(--border);background:var(--surf-2);color:var(--text-3)');
 }
+function hxBucketLabel(ms) {
+  if (!ms) return '';
+  var m = ms / 60000;
+  return 'Velas ' + (m < 60 ? m + 'm' : (m / 60 < 24 ? (m / 60) + 'h' : (m / 1440) + 'd'));
+}
 function hxRenderRanges() {
   var wrap = document.getElementById('hx-ranges');
   wrap.innerHTML = '';
@@ -2620,6 +2625,13 @@ function hxRenderRanges() {
     b.onclick = function() { HX.range = r.id; HX.hoverX = null; hxRenderRanges(); hxDraw(); };
     wrap.appendChild(b);
   });
+  // Tamanio de vela vigente: es adaptativo por rango, y sin mostrarlo no hay forma
+  // de saber si estas viendo velas de 15 min o de 6h.
+  var bl = document.createElement('span');
+  bl.id = 'hx-bucket';
+  bl.style.cssText = 'align-self:center;font-size:12px;color:var(--text-3);font-weight:600';
+  bl.textContent = HX.mode === 'candles' ? hxBucketLabel(HX.bucketMs) : '';
+  wrap.appendChild(bl);
   var sep = document.createElement('span');
   sep.style.cssText = 'flex:1';
   wrap.appendChild(sep);
@@ -2637,14 +2649,16 @@ function hxRenderRanges() {
 }
 // Velas del rango, derivadas AL VUELO de la serie de puntos existente (hist24 +
 // hist_long): asi funcionan desde el primer momento con todo el historial ya
-// guardado, sin esperar a que hist_ohlc del servidor se llene hora a hora.
+// guardado. El servidor ya no precalcula velas: se derivan solo aqui.
 // Bucket adaptativo por rango para no dibujar cientos de velas apretadas.
 function hxVisibleOhlc() {
   var pts = hxVisible();
-  if (pts.length < 2) { HX.bucketMs = 3600000; return []; }
+  if (pts.length < 2) { HX.bucketMs = 900000; return []; }
   var span = pts[pts.length - 1].ts - pts[0].ts;
-  // Objetivo ~60-150 velas: elegir el bucket estandar mas cercano.
-  var STEPS = [3600000, 2 * 3600000, 4 * 3600000, 6 * 3600000, 12 * 3600000, 24 * 3600000, 3 * 24 * 3600000, 7 * 24 * 3600000];
+  // Objetivo ~60-150 velas: elegir el bucket estandar mas cercano. El piso es 15 min
+  // porque es lo que sostiene el dato: hist24 muestrea cada 2 min (≈7 puntos por vela).
+  // Bajar de ahi daria velas de 1-2 puntos, con O/H/L/C sin significado.
+  var STEPS = [900000, 1800000, 3600000, 2 * 3600000, 4 * 3600000, 6 * 3600000, 12 * 3600000, 24 * 3600000, 3 * 24 * 3600000, 7 * 24 * 3600000];
   var bMs = STEPS[0];
   for (var s = 0; s < STEPS.length; s++) { bMs = STEPS[s]; if (span / bMs <= 150) break; }
   HX.bucketMs = bMs;
@@ -2747,6 +2761,10 @@ function hxDraw() {
   var cs = candles ? hxVisibleOhlc() : [];
   // En velas, si el rango no tiene al menos 2 velas caemos a linea automaticamente.
   if (candles && cs.length < 2) candles = false;
+  // El bucket recien se conoce aqui (hxVisibleOhlc lo elige), y hxRenderRanges corre
+  // antes: refrescar el label ahora o mostraria el del rango anterior.
+  var blEl = document.getElementById('hx-bucket');
+  if (blEl) blEl.textContent = candles ? hxBucketLabel(HX.bucketMs) : '';
   if ((candles ? cs.length : pts.length) < 2) { hxMsg('Aún no hay suficientes datos para este rango. El historial se acumula con el tiempo.'); return; }
   hxMsg('');
   var canvas = document.getElementById('hx-chart');
