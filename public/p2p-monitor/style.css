@@ -580,6 +580,12 @@ input[type=number] { width: 135px; }
 /* Unidad dentro del stepper: saca el "(Bs)" de la etiqueta, que era lo que partia
    cada fila en dos lineas en movil. */
 .stp-unit { font-size: 11px; font-weight: 600; color: var(--text-3); padding-right: 3px; flex-shrink: 0; user-select: none; }
+/* Cantidad del anuncio: la unidad es un boton que alterna escribir en USDT o en Bs
+   (en Bs se convierte a USDT con el precio de venta antes de aplicarla). */
+.stp-unit-btn { background: transparent; border: none; cursor: pointer; padding: 2px 3px 2px 0; line-height: 1; white-space: nowrap; color: var(--gold); opacity: .85; font-size: 12px; }
+.stp-unit-btn:active { color: var(--gold); }
+#bot-panel .stp-unit-btn { width: auto; }
+#bot-panel .qty-stepper { width: 196px; } /* la unidad clicable ocupa mas que "USDT" a secas */
 .num-stepper input[type=number]::-webkit-inner-spin-button,
 .num-stepper input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .num-stepper input[type=number] { -moz-appearance: textfield; }

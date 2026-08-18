@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=16">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=17">
 </head>
 <body>
 
@@ -354,7 +354,7 @@
         </div>
         <div style="margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--border)">
           <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Cantidad del anuncio</div>
-          <div class="cfg-row"><span>Cantidad</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('manual-qty',-1)">−</button><input type="number" id="manual-qty" placeholder="opcional" min="1" step="100" oninput="updateManualTotal()"><span class="stp-unit">USDT</span><button class="stp-btn" onclick="stepInput('manual-qty',1)">+</button></div></div>
+          <div class="cfg-row"><span>Cantidad</span><div class="num-stepper qty-stepper"><button class="stp-btn" onclick="stepInput('manual-qty',-1)">−</button><input type="number" id="manual-qty" placeholder="opcional" min="1" step="100" oninput="updateManualTotal()"><button type="button" class="stp-unit stp-unit-btn" id="manual-qty-unit" onclick="toggleQtyUnit()" title="Cambiar entre USDT y Bs">↻ USDT</button><button class="stp-btn" onclick="stepInput('manual-qty',1)">+</button></div></div>
           <div class="cfg-row" style="border-bottom:none"><span style="color:var(--text-3)">Total <span id="manual-balance" style="margin-left:4px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span></span><span id="manual-total" style="font-size:16px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span></div>
           <div id="manual-st" style="font-size:13px;color:var(--text-3);min-height:16px;padding-bottom:6px"></div>
         </div>
@@ -387,7 +387,7 @@
   </div>
 </div>
 
-<script src="/p2p-monitor/main.js?v=28"></script>
+<script src="/p2p-monitor/main.js?v=29"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

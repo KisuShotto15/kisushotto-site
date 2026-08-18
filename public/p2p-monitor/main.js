@@ -1908,11 +1908,41 @@ async function botGetMyAd(allowPaused) {
   }) || null;
 }
 
+// Unidad en la que se ESCRIBE la cantidad. El anuncio siempre se actualiza en USDT:
+// en modo VES se convierte (Bs / precio) antes de mandarlo.
+var QTY_UNIT = 'USDT';
+
+function qtyPrice() {
+  return BOT.currentPrice || parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
+}
+
+// USDT que se le pondra al anuncio con lo escrito en el campo.
+function manualQtyUsdt() {
+  var v = parseFloat(document.getElementById('manual-qty').value) || 0;
+  if (!v || QTY_UNIT === 'USDT') return v;
+  var p = qtyPrice();
+  return p ? Math.floor(v / p * 100) / 100 : 0;
+}
+
+function toggleQtyUnit() {
+  QTY_UNIT = QTY_UNIT === 'USDT' ? 'VES' : 'USDT';
+  var b = document.getElementById('manual-qty-unit');
+  if (b) b.textContent = '↻ ' + (QTY_UNIT === 'USDT' ? 'USDT' : 'Bs');
+  var inp = document.getElementById('manual-qty');
+  if (inp) inp.step = QTY_UNIT === 'USDT' ? 100 : 10000;
+  updateManualTotal();
+}
+
 function updateManualTotal() {
   var qty   = parseFloat(document.getElementById('manual-qty').value) || 0;
-  var price = BOT.currentPrice || parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
+  var price = qtyPrice();
   var el    = document.getElementById('manual-total');
-  el.textContent = (qty && price) ? fmt(price * qty) + ' Bs' : '—';
+  if (QTY_UNIT === 'VES') {
+    var usdt = manualQtyUsdt();
+    el.textContent = usdt ? fmt(usdt) + ' USDT' : '—';
+  } else {
+    el.textContent = (qty && price) ? fmt(price * qty) + ' Bs' : '—';
+  }
 }
 
 function updateManualBalance() {
@@ -1929,8 +1959,12 @@ function updateManualBalance() {
 
 // Devuelve true solo si Binance acepto el cambio (el que llama decide si limpia el campo).
 async function manualSetQty() {
-  var qty = parseFloat(document.getElementById('manual-qty').value);
   var st = document.getElementById('manual-st');
+  var raw = parseFloat(document.getElementById('manual-qty').value);
+  if (raw > 0 && QTY_UNIT === 'VES' && !qtyPrice()) {
+    st.textContent = 'Sin precio de venta: no puedo convertir Bs a USDT'; st.style.color = 'var(--red)'; return false;
+  }
+  var qty = manualQtyUsdt();
   if (!qty || qty <= 0) { st.textContent = 'Ingresa una cantidad válida'; st.style.color = 'var(--red)'; return false; }
   var adNo = BOT.adNumber || BOT_CFG.adNo;
   if (!adNo) { st.textContent = 'Configura el Ad Number primero'; st.style.color = 'var(--red)'; return false; }
