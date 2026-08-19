@@ -1608,6 +1608,7 @@ var BOT = {
   basePrice: null,
   ceiling: null,
   currentPrice: null,
+  adAmount: null, // USDT restante en el anuncio (surplusAmount), lo trae /bot-state — lo usa el P&L
   myMinLimit: null,
   lastReprice: 0,
   cycles: 0,
@@ -1817,6 +1818,31 @@ function botUpdateCeiling() {
     BOT.ceiling = null;
     if (el) el.textContent = '—';
   }
+  updateBotPnl();
+}
+
+// P&L potencial en USDT de llenar el anuncio completo al precio actual, contra el
+// precio de venta configurado (referencia/costo). Binance solo cobra comision al
+// COMPRAR (sobre la cantidad USDT), nunca al vender: por eso se resta aparte, en
+// USDT, y no como % del precio (a diferencia del techo, que si la mete en el precio).
+function botPnl() {
+  var sell = parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
+  var cur  = BOT.currentPrice;
+  var qty  = BOT.adAmount;
+  if (!sell || !cur || !qty) return null;
+  var gross = qty * (sell - cur) / cur;
+  var fee   = qty * (CFG.commission || 0) / 100;
+  return { gross: gross, fee: fee, net: gross - fee };
+}
+
+function updateBotPnl() {
+  var el = document.getElementById('bot-pnl');
+  if (!el) return;
+  var p = botPnl();
+  if (!p) { el.textContent = '—'; el.style.color = ''; el.title = ''; return; }
+  el.textContent = (p.net >= 0 ? '+' : '') + fmt(p.net) + ' USDT';
+  el.style.color = p.net >= 0 ? 'var(--green)' : 'var(--red)';
+  el.title = 'Bruto: ' + (p.gross >= 0 ? '+' : '') + fmt(p.gross) + ' USDT · Comisión: −' + fmt(p.fee) + ' USDT';
 }
 
 async function botCallWorker(path, body) {
@@ -2320,6 +2346,12 @@ function renderBotState(d) {
     updateBotPriceColor();
     updateTopbarBotPrice(p);
   }
+  if (d.ad_amount != null) {
+    BOT.adAmount = parseFloat(d.ad_amount);
+    var qEl = document.getElementById('bot-qty');
+    if (qEl) qEl.textContent = fmt(BOT.adAmount) + ' USDT';
+  }
+  updateBotPnl();
   // Pintar entradas nuevas del log del servidor
   if (Array.isArray(d.log)) {
     d.log.forEach(function(e){

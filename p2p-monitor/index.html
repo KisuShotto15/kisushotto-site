@@ -330,6 +330,14 @@
           <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Techo venta</div>
           <div id="bot-ceiling" style="font-size:20px;color:var(--red);font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
+          <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Cantidad</div>
+          <div id="bot-qty" style="font-size:17px;color:var(--text);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">—</div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px" title="Ganancia potencial en USDT de llenar el anuncio completo al precio actual vs tu precio de venta, neto de la comisión de compra">
+          <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">P&amp;L</div>
+          <div id="bot-pnl" style="font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">—</div>
+        </div>
       </div>
 
       <!-- Salud del bot (ultimo tick / reprice del servidor) -->
@@ -387,7 +395,7 @@
   </div>
 </div>
 
-<script src="/p2p-monitor/main.js?v=30"></script>
+<script src="/p2p-monitor/main.js?v=31"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

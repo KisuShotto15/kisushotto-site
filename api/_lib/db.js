@@ -187,6 +187,8 @@ export async function ensureSchema() {
   // Ordenes ya vistas (para notificar ordenes nuevas server-side) + ultima revision.
   await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS known_orders JSONB`;
   await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS orders_checked_at TIMESTAMPTZ`;
+  // Cantidad USDT restante del anuncio (surplusAmount), la trae gratis cada tick de reprice — la usa el P&L.
+  await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS ad_amount NUMERIC`;
   // Velas OHLC por hora, por metodo de pago: { pay: [{t,o,h,l,c}] }.
   // Suscripciones Web Push (varias por usuario: una por dispositivo/navegador).
   await sql`CREATE TABLE IF NOT EXISTS push_subs (

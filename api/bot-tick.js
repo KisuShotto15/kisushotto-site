@@ -197,6 +197,7 @@ async function tickUser(row) {
   let adNumber = row.ad_number;
   let currentPrice = row.current_price;
   let lastReprice = row.last_reprice;
+  let adAmount = row.ad_amount;
 
   const key = decrypt({ ct: row.enc_key, iv: row.iv_key, tag: row.tag_key });
   const secret = decrypt({ ct: row.enc_secret, iv: row.iv_secret, tag: row.tag_secret });
@@ -205,14 +206,14 @@ async function tickUser(row) {
   if (!my.ok || !my.ads.length) {
     status = 'Sin anuncios';
     log = pushLog(log, 'Sin anuncios o API sin permiso', 'warn');
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
   }
 
   const ad = pickAd(my.ads, cfg.adNo);
   if (!ad) {
     status = 'Anuncio no encontrado';
     log = pushLog(log, 'Anuncio configurado no encontrado', 'warn');
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
   }
 
   // Anuncio apagado en Binance por el usuario -> detener el bot (no gastar requests).
@@ -223,10 +224,11 @@ async function tickUser(row) {
     log = pushLog(log, '🛑 Anuncio apagado en Binance — bot detenido', 'warn');
     await botNotify(cfg, row.user_id, '🔴 <b>Bot detenido</b>\nApagaste el anuncio en Binance.',
       '🔴 Bot detenido', 'Apagaste el anuncio en Binance');
-    return { enabled: false, status: 'Detenido: anuncio apagado', log, adNumber: adNo, currentPrice, lastReprice };
+    return { enabled: false, status: 'Detenido: anuncio apagado', log, adNumber: adNo, currentPrice, lastReprice, adAmount };
   }
 
   const surplus = parseFloat(ad.surplusAmount || ad.tradableQuantity || ad.remainQuantity || 0);
+  adAmount = surplus; // para el P&L del cliente: cantidad USDT restante en el anuncio
   if (surplus > 0 && surplus < 100) {
     // Pausar el anuncio en Binance: que no quede vivo y mal posicionado al apagarse el bot.
     const adNo = String(ad.advNo || ad.adNumber);
@@ -235,13 +237,13 @@ async function tickUser(row) {
                               : '🛑 Fondos insuficientes — bot detenido (no se pudo pausar el anuncio)', 'error');
     await botNotify(cfg, row.user_id, '🔴 <b>Bot detenido: fondos bajos</b>\nMenos de 100 USDT disponibles. Anuncio pausado.',
       '🔴 Bot detenido: fondos bajos', 'Menos de 100 USDT disponibles');
-    return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: adNo, currentPrice, lastReprice };
+    return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: adNo, currentPrice, lastReprice, adAmount };
   }
 
   if (!cfg.sellPrice) {
     status = 'Falta precio de venta';
     log = pushLog(log, 'Configura el precio de venta', 'warn');
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
   }
 
   adNumber = String(ad.advNo || ad.adNumber);
@@ -265,7 +267,7 @@ async function tickUser(row) {
   if (res.targetPrice === null) {
     status = res.reason;
     currentPrice = res.currentPrice;
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
   }
 
   const up = await updateAdPrice(key, secret, adNumber, Number(res.targetPrice.toFixed(3)));
@@ -282,7 +284,7 @@ async function tickUser(row) {
     status = 'Error al actualizar';
     currentPrice = res.currentPrice;
   }
-  return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice };
+  return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
 }
 
 // Notifica por Telegram las ordenes nuevas del usuario (24/7, app cerrada). Throttle ~60s.
@@ -409,6 +411,7 @@ export default async function handler(req, res) {
           log = ${JSON.stringify(out.log || [])}::jsonb,
           ad_number = ${out.adNumber || null},
           current_price = ${out.currentPrice != null ? out.currentPrice : null},
+          ad_amount = ${out.adAmount != null ? out.adAmount : null},
           last_reprice = ${out.lastReprice || null},
           known_orders = ${knownOrders != null ? JSON.stringify(knownOrders) : null}::jsonb,
           orders_checked_at = ${ordersCheckedAt || null},
