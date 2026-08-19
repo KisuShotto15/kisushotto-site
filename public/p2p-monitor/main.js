@@ -1695,7 +1695,8 @@ function saveBotConfig() {
   BOT_CFG.maxGap         = parseFloat(document.getElementById('cfg-bot-gap').value)     || 1.0;
   BOT_CFG.limitThreshold = parseFloat(document.getElementById('cfg-bot-thr').value)     || 10000;
   BOT_CFG.sellPrice      = parseFloat(document.getElementById('cfg-bot-sell').value)    || 0;
-  BOT_CFG.minSpread      = parseFloat(document.getElementById('cfg-bot-spread').value)  || 0.5;
+  var _spr = parseFloat(document.getElementById('cfg-bot-spread').value);
+  BOT_CFG.minSpread      = isNaN(_spr) ? 0.5 : _spr; // puede ser 0 o negativo (comprar sobre el precio de venta)
   BOT_CFG.minLimit       = parseFloat(document.getElementById('cfg-bot-minlimit').value) || 0;
   BOT_CFG.payMethods     = readBotPayChecks();
   localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
@@ -1803,8 +1804,9 @@ function updateCommissionLabels() {
 }
 
 function botUpdateCeiling() {
-  var sell   = parseFloat(document.getElementById('cfg-bot-sell').value)   || 0;
-  var spread = parseFloat(document.getElementById('cfg-bot-spread').value) || 0.5;
+  var sell     = parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
+  var sprInput = parseFloat(document.getElementById('cfg-bot-spread').value);
+  var spread   = isNaN(sprInput) ? 0.5 : sprInput; // puede ser 0 o negativo
   var el     = document.getElementById('bot-ceiling');
   if (sell > 0) {
     var ceiling = sell * (1 - (spread + (CFG.commission || 0)) / 100);

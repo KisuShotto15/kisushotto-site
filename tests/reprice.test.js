@@ -55,6 +55,20 @@ test('solo competidores abajo → baja a mejor + increment (ahorro)', () => {
   assert.match(r.reason, /ahorro/);
 });
 
+test('spread negativo → techo por encima del precio de venta (comprar a perdida)', () => {
+  // sellPrice 100, minSpread -0.5% → techo = 100 * 1.005 = 100.5
+  const cfg = { ...baseCfg, sellPrice: 100, minSpread: -0.5 };
+  const r = computeReprice({ ad: myAd({ price: '99.5' }), marketRaw: [rawAd({ price: 100.3 })], cfg });
+  assert.ok(Math.abs(r.ceiling - 100.5) < 1e-6);
+  assert.equal(r.targetPrice, 100.301);
+});
+
+test('spread 0% → techo igual al precio de venta', () => {
+  const cfg = { ...baseCfg, sellPrice: 100, minSpread: 0 };
+  const r = computeReprice({ ad: myAd({ price: '99.5' }), marketRaw: [], cfg });
+  assert.equal(r.ceiling, 100);
+});
+
 test('target sobre techo se recorta al techo', () => {
   // techo = 115*0.975 = 112.125; competidor 112.1 + increment 0.05 = 112.15 → recorte
   const cfg = { ...baseCfg, minSpread: 2.5, increment: 0.05 };
