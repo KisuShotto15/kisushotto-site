@@ -85,6 +85,23 @@ function mapBest(raw, verifiedOnly) {
     .sort((a, b) => b.price - a.price);
 }
 
+// Margen dentro del cual otro anuncio "confirma" un precio. Un unico anuncio por
+// encima del resto es un dedazo (se borra en segundos o no paga), no el mercado:
+// contaminaba el grafico con picos irreales y disparaba falsas alertas de
+// sobrecomprado. Mercado sobrecomprado = varios mayoristas suben, no uno solo.
+const CORROB_PCT = 1;
+
+// Mejor precio de la lista (ya ordenada desc) que tenga otro anuncio creible a
+// menos de CORROB_PCT por debajo. Si ninguno se confirma, cae al segundo: el
+// primero es justamente el menos fiable.
+function bestCorroborated(list) {
+  if (list.length < 2) return list[0] || null;
+  for (let i = 0; i < list.length - 1; i++) {
+    if ((list[i].price - list[i + 1].price) / list[i].price * 100 <= CORROB_PCT) return list[i];
+  }
+  return list[1];
+}
+
 // Mediana del precio de los primeros N anuncios creibles (misma criba que el
 // grafico: avail >= MIN_AVAIL, verificados segun cfg). Tasa USDT/VES publica que
 // consume el portfolio-tracker via /api/usdt-ves. Mediana > promedio: inmune a
@@ -109,8 +126,10 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
   const hist = Array.isArray(priceHist) ? priceHist.slice() : [];
   const alerts = [];
 
-  const bestMay = may[0] ? may[0].price : null;
-  const bestSmall = small[0] ? small[0].price : null;
+  const topMay = bestCorroborated(may);
+  const topSmall = bestCorroborated(small);
+  const bestMay = topMay ? topMay.price : null;
+  const bestSmall = topSmall ? topSmall.price : null;
   if (!bestMay) return { alerts, priceHist: hist, cooldowns: cd, bestMay: null };
 
   if (!silent) {
@@ -130,7 +149,7 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
         alerts.push({
           type: 'spread',
           title: '💰 Spread ' + spread.toFixed(3) + '%' + netLabel + ' — OPORTUNIDAD',
-          desc: 'Mayorista: ' + bestMay.toFixed(2) + ' Bs (' + escHtml(may[0].merchant) + ') → Compra: ' +
+          desc: 'Mayorista: ' + bestMay.toFixed(2) + ' Bs (' + escHtml(topMay.merchant) + ') → Compra: ' +
                 bestSmall.toFixed(2) + ' Bs · Dif: ' + (bestMay - bestSmall).toFixed(2) + ' Bs/USDT',
         });
       }

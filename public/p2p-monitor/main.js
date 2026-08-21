@@ -2477,14 +2477,21 @@ function surfaceMonitorErrors(d) {
 // vienen ordenadas desc por precio, asi que el primero que supera el umbral es el mejor.
 // Evita que un listing fantasma se registre como pico en el grafico o dispare alertas.
 var MIN_AVAIL = 2000;
-// Escanea el MAX precio entre los creibles (independiente del orden de la lista,
-// que puede venir en orden nativo de Binance si el filtro de monto esta en 0).
+// Margen dentro del cual otro anuncio "confirma" un precio (mismo criterio que el
+// server, ver api/_lib/monitor.js). Un unico anuncio muy por encima del resto es un
+// dedazo, no el mercado: metia picos irreales en el grafico y falsas alertas.
+var CORROB_PCT = 1;
+// Mejor precio creible CONFIRMADO por otro anuncio a menos de CORROB_PCT. Ordena por
+// precio: la lista puede venir en orden nativo de Binance si el filtro de monto esta en 0.
 function credibleBest(a) {
-  var best = null;
-  for (var i = 0; i < (a || []).length; i++) {
-    if (a[i].avail >= MIN_AVAIL && (!best || a[i].price > best.price)) best = a[i];
+  var list = [];
+  for (var i = 0; i < (a || []).length; i++) if (a[i].avail >= MIN_AVAIL) list.push(a[i]);
+  list.sort(function(x, y) { return y.price - x.price; });
+  if (list.length < 2) return list[0] || null;
+  for (var j = 0; j < list.length - 1; j++) {
+    if ((list[j].price - list[j + 1].price) / list[j].price * 100 <= CORROB_PCT) return list[j];
   }
-  return best;
+  return list[1]; // ninguno confirmado: el primero es el menos fiable
 }
 function credibleMay()   { return credibleBest(ST.mayoristas); }
 function credibleSmall() { return credibleBest(ST.smallAds); }

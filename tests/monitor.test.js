@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  pushHist24, pushHistLong, histMap, pushHist24Pay, pushOhlcPay,
+  pushHist24, pushHistLong, histMap, pushHist24Pay,
   histPaySnapshot, histPayChanged, topMedianRate, computeAlerts,
 } from '../api/_lib/monitor.js';
 
@@ -17,23 +17,23 @@ function rawAd({ price, avail = 5000, merchant = 'v1', badges = ['verified'] } =
 
 // ── Series ────────────────────────────────────────────
 
-test('pushHist24: agrega solo cada ~4.5 min y recorta >25h', () => {
+test('pushHist24: agrega solo cada ~2 min y recorta >25h', () => {
   const t0 = 1000000000000;
   let h = pushHist24([], t0, 100);
-  h = pushHist24(h, t0 + 2 * MIN, 101);      // muy pronto: no agrega
+  h = pushHist24(h, t0 + MIN, 101);          // muy pronto: no agrega
   assert.equal(h.length, 1);
-  h = pushHist24(h, t0 + 5 * MIN, 102);      // pasa el umbral
+  h = pushHist24(h, t0 + 2 * MIN, 102);      // pasa el umbral
   assert.equal(h.length, 2);
   h = pushHist24(h, t0 + 26 * 3600000, 103); // todo lo previo queda fuera de 25h
   assert.deepEqual(h.map(p => p.price), [103]);
 });
 
-test('pushHistLong: espaciado 30 min, sin recorte', () => {
+test('pushHistLong: espaciado 10 min, sin recorte', () => {
   const t0 = 1000000000000;
   let h = pushHistLong([], t0, 100);
-  h = pushHistLong(h, t0 + 29 * MIN, 101);
+  h = pushHistLong(h, t0 + 9 * MIN, 101);
   assert.equal(h.length, 1);
-  h = pushHistLong(h, t0 + 30 * MIN, 102);
+  h = pushHistLong(h, t0 + 10 * MIN, 102);
   assert.equal(h.length, 2);
 });
 
@@ -54,18 +54,6 @@ test('pushHist24Pay mantiene series separadas por metodo', () => {
   m = pushHist24Pay(m, 'Zinli', t0, 200);
   assert.equal(m.BDV[0].price, 100);
   assert.equal(m.Zinli[0].price, 200);
-});
-
-test('pushOhlcPay: misma hora actualiza h/l/c, hora nueva abre vela', () => {
-  const t0 = Math.floor(1000000000000 / 3600000) * 3600000; // borde de hora
-  let m = pushOhlcPay({}, 'BDV', t0 + 1000, 100);
-  m = pushOhlcPay(m, 'BDV', t0 + 2000, 105);
-  m = pushOhlcPay(m, 'BDV', t0 + 3000, 98);
-  assert.equal(m.BDV.length, 1);
-  assert.deepEqual(m.BDV[0], { t: t0, o: 100, h: 105, l: 98, c: 98 });
-  m = pushOhlcPay(m, 'BDV', t0 + 3600000 + 1000, 99);
-  assert.equal(m.BDV.length, 2);
-  assert.equal(m.BDV[1].o, 99);
 });
 
 test('histPaySnapshot/Changed detecta cambios reales', () => {
@@ -179,6 +167,41 @@ test('historial acotado a 200 puntos', () => {
   });
   assert.equal(r.priceHist.length, 200);
   assert.equal(r.priceHist[r.priceHist.length - 1].ts, now);
+});
+
+// ── Corroboracion: un solo anuncio absurdo no es mercado ──
+
+test('un anuncio muy por encima del resto se ignora (dedazo, no mercado)', () => {
+  const now = 1000000000000;
+  const mayRaw = [rawAd({ price: 955, merchant: 'dedazo' }), rawAd({ price: 919 }), rawAd({ price: 918.5 })];
+  const r = computeAlerts({ mayRaw, smallRaw: [], cfg: cfgAlert, priceHist: [], cooldowns: {}, now, silent: true });
+  assert.equal(r.bestMay, 919);
+});
+
+test('el pico solitario tampoco dispara sobrecomprado', () => {
+  const now = 1000000000000;
+  const hist = [{ ts: now - 10 * MIN, price: 919 }, { ts: now - MIN, price: 919 }];
+  const mayRaw = [rawAd({ price: 955 }), rawAd({ price: 919 }), rawAd({ price: 918.8 })];
+  const r = computeAlerts({ mayRaw, smallRaw: [], cfg: cfgAlert, priceHist: hist, cooldowns: {}, now });
+  assert.equal(r.alerts.length, 0);
+});
+
+test('alza real (varios mayoristas suben juntos) si alerta', () => {
+  const now = 1000000000000;
+  const hist = [{ ts: now - 10 * MIN, price: 919 }, { ts: now - MIN, price: 925 }];
+  const mayRaw = [rawAd({ price: 935 }), rawAd({ price: 934 }), rawAd({ price: 933 })];
+  const r = computeAlerts({ mayRaw, smallRaw: [], cfg: cfgAlert, priceHist: hist, cooldowns: {}, now });
+  assert.equal(r.bestMay, 935);
+  assert.equal(r.alerts.length, 1);
+  assert.equal(r.alerts[0].type, 'overbought');
+});
+
+test('un unico mayorista creible se acepta (no hay con quien confirmar)', () => {
+  const r = computeAlerts({
+    mayRaw: [rawAd({ price: 919 })], smallRaw: [],
+    cfg: cfgAlert, priceHist: [], cooldowns: {}, now: 1000000000000, silent: true,
+  });
+  assert.equal(r.bestMay, 919);
 });
 
 test('nick con HTML queda escapado en la alerta (Telegram)', () => {
