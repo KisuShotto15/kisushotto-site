@@ -189,6 +189,10 @@ export async function ensureSchema() {
   await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS orders_checked_at TIMESTAMPTZ`;
   // Cantidad USDT restante del anuncio (surplusAmount), la trae gratis cada tick de reprice — la usa el P&L.
   await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS ad_amount NUMERIC`;
+  // Anuncio escondido del listado publico por Binance (exceso de ordenes). Sigue activo
+  // y repreciando; ad_seen_at evita falsos positivos si nunca llegamos a verlo en el libro.
+  await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS ad_hidden BOOLEAN`;
+  await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS ad_seen_at TIMESTAMPTZ`;
   // Velas OHLC por hora, por metodo de pago: { pay: [{t,o,h,l,c}] }.
   // Suscripciones Web Push (varias por usuario: una por dispositivo/navegador).
   await sql`CREATE TABLE IF NOT EXISTS push_subs (

@@ -3,7 +3,7 @@
 import { sql } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
-import { computeReprice, adPayTypes } from './_lib/reprice.js';
+import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
 import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
@@ -198,6 +198,8 @@ async function tickUser(row) {
   let currentPrice = row.current_price;
   let lastReprice = row.last_reprice;
   let adAmount = row.ad_amount;
+  let adHidden = row.ad_hidden;
+  let adSeenAt = row.ad_seen_at;
 
   const key = decrypt({ ct: row.enc_key, iv: row.iv_key, tag: row.tag_key });
   const secret = decrypt({ ct: row.enc_secret, iv: row.iv_secret, tag: row.tag_secret });
@@ -206,14 +208,14 @@ async function tickUser(row) {
   if (!my.ok || !my.ads.length) {
     status = 'Sin anuncios';
     log = pushLog(log, 'Sin anuncios o API sin permiso', 'warn');
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
   }
 
   const ad = pickAd(my.ads, cfg.adNo);
   if (!ad) {
     status = 'Anuncio no encontrado';
     log = pushLog(log, 'Anuncio configurado no encontrado', 'warn');
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
   }
 
   // Anuncio apagado en Binance por el usuario -> detener el bot (no gastar requests).
@@ -224,7 +226,7 @@ async function tickUser(row) {
     log = pushLog(log, '🛑 Anuncio apagado en Binance — bot detenido', 'warn');
     await botNotify(cfg, row.user_id, '🔴 <b>Bot detenido</b>\nApagaste el anuncio en Binance.',
       '🔴 Bot detenido', 'Apagaste el anuncio en Binance');
-    return { enabled: false, status: 'Detenido: anuncio apagado', log, adNumber: adNo, currentPrice, lastReprice, adAmount };
+    return { enabled: false, status: 'Detenido: anuncio apagado', log, adNumber: adNo, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
   }
 
   const surplus = parseFloat(ad.surplusAmount || ad.tradableQuantity || ad.remainQuantity || 0);
@@ -237,13 +239,13 @@ async function tickUser(row) {
                               : '🛑 Fondos insuficientes — bot detenido (no se pudo pausar el anuncio)', 'error');
     await botNotify(cfg, row.user_id, '🔴 <b>Bot detenido: fondos bajos</b>\nMenos de 100 USDT disponibles. Anuncio pausado.',
       '🔴 Bot detenido: fondos bajos', 'Menos de 100 USDT disponibles');
-    return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: adNo, currentPrice, lastReprice, adAmount };
+    return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: adNo, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
   }
 
   if (!cfg.sellPrice) {
     status = 'Falta precio de venta';
     log = pushLog(log, 'Configura el precio de venta', 'warn');
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
   }
 
   adNumber = String(ad.advNo || ad.adNumber);
@@ -262,12 +264,26 @@ async function tickUser(row) {
   }
 
   const marketRaw = await publicSearch({ transAmount: myMin + threshold, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly: cfg.verifiedOnly !== false });
+
+  // Oculto = vivo pero fuera del listado publico (Binance lo esconde con muchas ordenes
+  // y lo devuelve solo). No cambia nada del reprice: solo se refleja en el panel.
+  // null = indeterminado: se conserva el estado anterior. Y solo se concluye "oculto"
+  // si alguna vez lo vimos en el libro (si no, seria un falso positivo permanente
+  // cuando el anuncio no pasa los filtros de la busqueda).
+  const hid = isAdHidden(ad, marketRaw);
+  if (hid === false) { adSeenAt = new Date().toISOString(); adHidden = false; }
+  else if (hid === true && adSeenAt) adHidden = true;
+  if (row.ad_hidden != null && adHidden !== row.ad_hidden) {
+    log = pushLog(log, adHidden ? '🙈 Anuncio oculto por Binance (muchas órdenes) — sigue repreciando'
+                                : '👁 Anuncio visible de nuevo en el mercado', 'info');
+  }
+
   const res = computeReprice({ ad, marketRaw, cfg });
 
   if (res.targetPrice === null) {
     status = res.reason;
     currentPrice = res.currentPrice;
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
   }
 
   const up = await updateAdPrice(key, secret, adNumber, Number(res.targetPrice.toFixed(3)));
@@ -284,7 +300,7 @@ async function tickUser(row) {
     status = 'Error al actualizar';
     currentPrice = res.currentPrice;
   }
-  return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount };
+  return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
 }
 
 // Notifica por Telegram las ordenes nuevas del usuario (24/7, app cerrada). Throttle ~60s.
@@ -370,7 +386,7 @@ export default async function handler(req, res) {
     // Correr ~25 DDLs por cold start cada 18s era costo inutil.
     const rows = await sql`
       SELECT b.user_id, b.enabled, b.config, b.ad_number, b.current_price, b.last_reprice, b.log,
-             b.known_orders, b.orders_checked_at,
+             b.known_orders, b.orders_checked_at, b.ad_amount, b.ad_hidden, b.ad_seen_at,
              c.enc_key, c.iv_key, c.tag_key, c.enc_secret, c.iv_secret, c.tag_secret
       FROM bot_state b
       JOIN binance_creds c ON c.user_id = b.user_id
@@ -391,8 +407,11 @@ export default async function handler(req, res) {
       try {
         out = await tickUser(row);
       } catch (e) {
+        // Conserva el estado del anuncio: un fallo puntual del tick no debe borrar la
+        // cantidad (P&L) ni el estado de visibilidad ya conocidos.
         out = { enabled: row.enabled, status: 'Error: ' + e.message, log: pushLog(row.log, 'Error: ' + e.message, 'error'),
-                adNumber: row.ad_number, currentPrice: row.current_price, lastReprice: row.last_reprice };
+                adNumber: row.ad_number, currentPrice: row.current_price, lastReprice: row.last_reprice,
+                adAmount: row.ad_amount, adHidden: row.ad_hidden, adSeenAt: row.ad_seen_at };
       }
       // Notificacion de ordenes nuevas (independiente del reprice; usa el log ya actualizado).
       let knownOrders = row.known_orders, ordersCheckedAt = row.orders_checked_at;
@@ -412,6 +431,8 @@ export default async function handler(req, res) {
           ad_number = ${out.adNumber || null},
           current_price = ${out.currentPrice != null ? out.currentPrice : null},
           ad_amount = ${out.adAmount != null ? out.adAmount : null},
+          ad_hidden = ${out.adHidden != null ? out.adHidden : null},
+          ad_seen_at = ${out.adSeenAt || null},
           last_reprice = ${out.lastReprice || null},
           known_orders = ${knownOrders != null ? JSON.stringify(knownOrders) : null}::jsonb,
           orders_checked_at = ${ordersCheckedAt || null},

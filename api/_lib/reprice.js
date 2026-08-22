@@ -29,6 +29,27 @@ export function adPayTypes(ad) {
     .filter(id => id && GENERIC_PAY_IDS.indexOf(id) === -1);
 }
 
+// Binance esconde el anuncio del listado publico cuando se acumulan ordenes: no lo
+// apaga (advStatus sigue 1) y vuelve solo al completarse las ordenes. Se detecta por
+// ausencia en el libro que el tick ya trajo, sin pedir nada extra.
+// Devuelve null = indeterminado (no concluir): sin libro, o mi precio por debajo del
+// ultimo que trajimos (mi anuncio cae fuera de la ventana consultada, su ausencia no
+// prueba nada).
+export function isAdHidden(ad, marketRaw) {
+  const myNo = String(ad.advNo || ad.adNumber);
+  const prices = [];
+  for (const it of (marketRaw || [])) {
+    if (!it || !it.adv) continue;
+    if (String(it.adv.advNo) === myNo) return false; // visible en el libro
+    const p = parseFloat(it.adv.price);
+    if (p > 0) prices.push(p);
+  }
+  if (!prices.length) return null;
+  const myPrice = parseFloat(ad.price);
+  if (!(myPrice > 0)) return null;
+  return myPrice >= Math.min(...prices) ? true : null;
+}
+
 export function computeReprice({ ad, marketRaw, cfg }) {
   const currentPrice = parseFloat(ad.price);
   const myMinLimit   = parseFloat(ad.minSingleTransAmount);

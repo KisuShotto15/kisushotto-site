@@ -1609,6 +1609,7 @@ var BOT = {
   ceiling: null,
   currentPrice: null,
   adAmount: null, // USDT restante en el anuncio (surplusAmount), lo trae /bot-state — lo usa el P&L
+  adHidden: false, // Binance lo escondio del mercado (muchas ordenes); sigue activo
   myMinLimit: null,
   lastReprice: 0,
   cycles: 0,
@@ -2174,11 +2175,20 @@ function renderBotToggle() {
   if (!b) return;
   b.textContent = BOT.running ? '⏹ Detener Bot' : '▶ Iniciar Bot';
   b.style.background = BOT.running ? '#E24B4A' : '';
+  renderAdHidden(BOT.adHidden); // el chip "Oculto" no aplica con el bot detenido
 }
 
 // La secuencia de arranque tarda (leer anuncio, metodos, reprice, activar). Mientras
 // corre, el servidor aun no esta encendido: nada de fuera debe "corregir" la UI.
 function botStarting() { return !!BOT.startingSeq && BOT.startingSeq === BOT.startSeq; }
+
+// Chip "Oculto": Binance esconde el anuncio del mercado cuando se acumulan ordenes.
+// El bot sigue repreciando; el anuncio vuelve solo. Solo tiene sentido con el bot activo.
+function renderAdHidden(hidden) {
+  BOT.adHidden = hidden;
+  var el = document.getElementById('bot-hidden-badge');
+  if (el) el.style.display = (hidden && BOT.running) ? '' : 'none';
+}
 
 async function botToggle() {
   if (BOT.running) {
@@ -2351,6 +2361,7 @@ function renderBotState(d) {
     var qEl = document.getElementById('bot-qty');
     if (qEl) qEl.textContent = fmt(BOT.adAmount) + ' USDT';
   }
+  if (d.ad_hidden != null) renderAdHidden(d.ad_hidden === true);
   updateBotPnl();
   // Pintar entradas nuevas del log del servidor
   if (Array.isArray(d.log)) {

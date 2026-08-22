@@ -158,6 +158,8 @@ body {
   border: 1px solid var(--border-2); border-radius: 5px; padding: 2px 7px;
 }
 .bchip-gold { color: var(--gold); background: var(--gold-d); border-color: var(--gold-b); }
+/* Anuncio oculto por Binance: aviso, no error (el bot sigue trabajando). */
+.bchip-red { color: var(--red); background: var(--red-d); border-color: var(--red-b); }
 /* Señal "spread estirado" (percentil top 10% de 24h): buena ventana para vender */
 .sh-stretch { display: none; margin-top: 8px; font-size: 12px; font-weight: 700;
   color: var(--gold); background: var(--gold-d); border: 1px solid var(--gold-b);

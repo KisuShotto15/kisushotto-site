@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=17">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=18">
 </head>
 <body>
 
@@ -273,6 +273,7 @@
         <div class="bot-chips">
           <span id="bot-pay-badge" class="bchip bchip-gold" style="display:none">—</span>
           <span id="bot-commission-label" class="bchip" style="display:none">—</span>
+          <span id="bot-hidden-badge" class="bchip bchip-red" style="display:none" title="Binance ocultó tu anuncio del mercado (se acumularon órdenes). Sigue activo y repreciando; vuelve solo al completarse."><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="vertical-align:-2px"><path d="M2 2l20 20"/><path d="M6.7 6.7C4.4 8.2 2.8 10.4 2 12c1.7 3.6 5.5 6 10 6 1.7 0 3.3-.4 4.7-1"/><path d="M9.9 4.2A10 10 0 0 1 12 4c4.5 0 8.3 2.4 10 6-.7 1.4-1.7 2.7-3 3.7"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg> Oculto</span>
         </div>
         <button id="bot-gear-btn" class="btn btn-sm" onclick="toggleBotGear(event)" title="Configuración API" style="font-size:15px;padding:3px 9px;flex-shrink:0">⚙</button>
       </div>
@@ -395,7 +396,7 @@
   </div>
 </div>
 
-<script src="/p2p-monitor/main.js?v=32"></script>
+<script src="/p2p-monitor/main.js?v=33"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

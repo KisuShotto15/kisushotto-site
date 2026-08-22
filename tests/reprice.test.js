@@ -1,7 +1,7 @@
 // Tests de computeReprice (logica de dinero del bot). Corre con: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeReprice, adPayTypes } from '../api/_lib/reprice.js';
+import { computeReprice, adPayTypes, isAdHidden } from '../api/_lib/reprice.js';
 
 // Anuncio de mercado en el formato crudo de Binance P2P
 function rawAd({ advNo = 'X1', price, minVES = 100, maxVES = 50000, avail = 500, merchant = 'otro', payTypes = ['BancoDeVenezuela'], badges = ['verified'] } = {}) {
@@ -154,4 +154,25 @@ test('sobre techo sin competidores bajo techo → baja al techo sin excederlo', 
 test('adPayTypes ignora ids genericos', () => {
   const ad = { tradeMethods: [{ identifier: 'BancoDeVenezuela' }, { identifier: 'OtherPayments' }, { identifier: 'SpecificBank' }] };
   assert.deepEqual(adPayTypes(ad), ['BancoDeVenezuela']);
+});
+
+// ── Anuncio oculto por Binance (sigue activo, fuera del listado publico) ──
+
+test('anuncio presente en el libro → visible', () => {
+  const market = [rawAd({ advNo: 'MIO', price: 110 }), rawAd({ advNo: 'X2', price: 109 })];
+  assert.equal(isAdHidden(myAd({ price: '110' }), market), false);
+});
+
+test('ausente del libro con precio competitivo → oculto', () => {
+  const market = [rawAd({ advNo: 'X1', price: 110 }), rawAd({ advNo: 'X2', price: 109 })];
+  assert.equal(isAdHidden(myAd({ price: '109.5' }), market), true);
+});
+
+test('ausente pero por debajo del ultimo del libro → indeterminado (fuera de ventana)', () => {
+  const market = [rawAd({ advNo: 'X1', price: 110 }), rawAd({ advNo: 'X2', price: 109 })];
+  assert.equal(isAdHidden(myAd({ price: '105' }), market), null);
+});
+
+test('libro vacio → indeterminado', () => {
+  assert.equal(isAdHidden(myAd({ price: '110' }), []), null);
 });

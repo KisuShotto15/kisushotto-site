@@ -100,7 +100,7 @@ export default async function handler(req, res) {
         await sql`UPDATE bot_state SET config = ${cfg}::jsonb, updated_at = now() WHERE user_id = ${user.uid} AND enabled = true`;
         return res.status(200).json({ ok: true });
       }
-      const rows = await sql`SELECT enabled, config, ad_number, current_price, ad_amount, last_reprice, last_tick, status, log FROM bot_state WHERE user_id = ${user.uid}`;
+      const rows = await sql`SELECT enabled, config, ad_number, current_price, ad_amount, ad_hidden, last_reprice, last_tick, status, log FROM bot_state WHERE user_id = ${user.uid}`;
       return res.status(200).json(rows[0] || { enabled: false });
     } catch (e) {
       return res.status(500).json({ error: e.message });
