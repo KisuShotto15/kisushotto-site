@@ -939,6 +939,7 @@ async function fetchOnce(fast) {
     renderSparkline();
     refreshHist24();
     recordMarketSnapshot();
+    updateDecision();
     var emptyNote =(!ST.mayoristas.length && !ST.smallAds.length) ? ' — sin anuncios en rango' : '';
     var lu = document.getElementById('last-update');
     lu.style.color = '';
@@ -2650,6 +2651,65 @@ function credibleBest(a) {
 function credibleMay()   { return credibleBest(ST.mayoristas); }
 function credibleSmall() { return credibleBest(ST.smallAds); }
 function bestCredibleMay() { var m = credibleMay(); return m ? m.price : null; }
+
+// ── Motor de decision de venta (decision-engine.js + decision-journal.js) ──
+// Responde "¿vendo ahora?" con el libro vivo: spread neto, liquidez arriba/abajo,
+// absorcion del top5, concentracion, momentum y probabilidad de reversion.
+// Solo lee ST (ya descargado): no agrega ni una request.
+var DEC = { hist: [], last: null, lastLabel: null };
+
+function decisionBuyLimit() {
+  // El monto con el que se filtran los anuncios de recompra: define que ofertas
+  // son alcanzables de verdad para el tamano con el que opera.
+  return CFG.smallAmount > 0 ? CFG.smallAmount : 0;
+}
+
+function updateDecision() {
+  if (typeof DE === 'undefined') return;
+  try {
+    DE.pushSnapshot(DEC.hist, ST); // muta el ring buffer y devuelve el snapshot, no la historia
+    var F = DE.computeFeatures(ST, DEC.hist, decisionBuyLimit());
+    var S = (F && !F.degraded) ? DE.score(F) : { raw: 0, parts: {}, vetoes: [] };
+    var d = DE.decide(F, S);
+    DEC.last = { d: d, F: F };
+    renderDecision(d, F);
+    // Al diario solo van los cambios de veredicto: con un tick cada 30s, guardar
+    // todo llenaria IndexedDB de filas identicas y ensuciaria el backtest.
+    if (typeof DJ !== 'undefined' && d.label !== DEC.lastLabel) {
+      DEC.lastLabel = d.label;
+      DJ.recordDecision(d, F);
+    }
+  } catch (e) {}
+}
+
+var DEC_COLORS = {
+  'green-strong': 'var(--green)', green: 'var(--green)',
+  amber: 'var(--gold)', red: 'var(--red)', gray: 'var(--text-3)'
+};
+
+function renderDecision(d, F) {
+  var el = document.getElementById('decision-panel');
+  if (!el || !d) return;
+  var col = DEC_COLORS[d.color] || 'var(--text-3)';
+  var html = '<div class="dec-top">' +
+    '<span class="dec-label" style="color:' + col + ';border-color:' + col + '">' + d.label + '</span>' +
+    (d.score != null ? '<span class="dec-score">' + d.score + '<small>/100</small></span>' : '') +
+    (d.rebuy ? '<span class="dec-rebuy">recompra en ' + d.rebuy.min + '–' + d.rebuy.max + ' min</span>' : '') +
+    '</div>';
+  var li = '';
+  for (var i = 0; i < d.reasons.pos.length; i++) li += '<li class="dec-pos">' + d.reasons.pos[i] + '</li>';
+  for (var j = 0; j < d.reasons.neg.length; j++) li += '<li class="dec-neg">' + d.reasons.neg[j] + '</li>';
+  for (var k = 0; k < (d.conflicts || []).length; k++) li += '<li class="dec-conf">⚠ ' + d.conflicts[k] + '</li>';
+  if (li) html += '<ul class="dec-why">' + li + '</ul>';
+  if (F && !F.degraded) {
+    html += '<div class="dec-feat">' +
+      'spread ' + (F.spreadNet * 100).toFixed(2) + '% · ' +
+      'absorción ' + (F.absRate3m * 100).toFixed(0) + '% · ' +
+      'LA ' + intFmt(F.LA) + ' / LB ' + intFmt(F.LB) +
+      '</div>';
+  }
+  el.innerHTML = html;
+}
 
 // ── Grabador de mercado BDV (Paso 1 del indice de debilidad) ──────────
 // Snapshot de los ingredientes crudos (precios, profundidad, spread neto) cada ~30s,

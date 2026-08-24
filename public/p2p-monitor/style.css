@@ -192,6 +192,20 @@ body {
 .rot-tab th:first-child, .rot-tab td:first-child { text-align: left; }
 .rot-tab td { text-align: right; padding: 3px 0; border-top: 1px solid var(--border); color: var(--text-2); }
 .rot-tab tr.best td { color: var(--green); font-weight: 700; }
+/* Motor de decision de venta */
+.dec-top { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.dec-label { font-size: 15px; font-weight: 800; letter-spacing: .02em; border: 1px solid; border-radius: var(--r-sm); padding: 3px 9px; }
+.dec-score { font-size: 20px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.dec-score small { font-size: 11px; color: var(--text-3); font-weight: 600; }
+.dec-rebuy { font-size: 11px; color: var(--text-2); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 2px 8px; margin-left: auto; }
+.dec-why { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.dec-why li { font-size: 12px; padding-left: 13px; position: relative; color: var(--text-2); }
+.dec-why li::before { position: absolute; left: 0; }
+.dec-pos::before { content: '+'; color: var(--green); font-weight: 700; }
+.dec-neg::before { content: '−'; color: var(--red); font-weight: 700; }
+.dec-conf { color: var(--gold); }
+.dec-conf::before { content: ''; }
+.dec-feat { font-size: 11px; color: var(--text-3); margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
 .rot-hist { display: flex; align-items: flex-end; gap: 2px; height: 32px; }
 .rot-hist span { flex: 1; height: 100%; display: flex; align-items: flex-end; }
 .rot-hist i { display: block; width: 100%; background: var(--gold); border-radius: 1px; opacity: .8; }

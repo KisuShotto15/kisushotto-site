@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=20">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=21">
 </head>
 <body>
 
@@ -265,6 +265,12 @@
   <!-- RIGHT col -->
   <div class="col">
 
+    <!-- Motor de decision de venta: lee el libro vivo, no hace requests propias -->
+    <div class="panel" id="decision-wrap">
+      <div class="ptitle" style="margin-bottom:8px">¿Vendo ahora?</div>
+      <div id="decision-panel"><span style="color:var(--text-3);font-size:13px">Inicia el monitor para evaluar el libro</span></div>
+    </div>
+
     <!-- Auto-Repricing Bot -->
     <div class="panel" id="bot-panel" style="position:relative">
       <!-- Titulo + chips de contexto (metodo, comision, estado) en la misma fila -->
@@ -399,7 +405,9 @@
   </div>
 </div>
 
-<script src="/p2p-monitor/main.js?v=37"></script>
+<script src="/p2p-monitor/decision-engine.js?v=1"></script>
+<script src="/p2p-monitor/decision-journal.js?v=1"></script>
+<script src="/p2p-monitor/main.js?v=38"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
