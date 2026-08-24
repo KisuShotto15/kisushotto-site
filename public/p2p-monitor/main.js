@@ -471,6 +471,12 @@ async function loadPnlStats() {
     if (d.openQty > 0.01) html += '<div class="rot-line"><span>Inventario abierto</span><b>' + intFmt(d.openQty) +
       ' USDT' + (d.openAvgPrice ? ' @ ' + fmt(d.openAvgPrice) : '') + '</b></div>';
     el.innerHTML = html;
+    // Visible con la seccion plegada: la ganancia del dia sin tener que desplegar.
+    var sum = document.getElementById('pnl-summary');
+    if (sum) {
+      sum.textContent = '· ' + (t.netUsdt >= 0 ? '+' : '') + fmt(t.netUsdt) + ' USDT';
+      sum.style.color = col(t.netUsdt);
+    }
   } catch (e) {
     el.textContent = '';
   }
@@ -516,10 +522,11 @@ async function loadSpreadStats() {
           '<td>' + fmt(c.netPerHour) + (isBest ? ' ★' : '') + '</td>' +
           '<td>' + Math.round(c.hours) + ' h</td></tr>';
       }
-      html += '<div class="rot-head">Spread vs llenado (' + d.days + ' días)</div>' +
+      html += '<div class="rot-head">Qué rindió cada spread (' + d.days + ' días)</div>' +
         '<table class="rot-tab"><tr><th>Spread</th><th>Órd/h</th><th>USDT/h</th><th>Neto/h</th><th>Muestra</th></tr>' +
-        rows + '</table>';
-      if (!d.best) html += '<div class="rot-leg" style="margin-top:5px">Aún sin 6 h de muestra por spread: prueba otro valor unos días para comparar.</div>';
+        rows + '</table>' +
+        '<div class="rot-leg" style="margin-top:5px">' + (d.best ? '★ mejor medido con ≥6 h. ' : '') +
+        'El piso lo pones tú: esto solo dice cuánto volumen cuesta cada 0.1% extra de spread.</div>';
     }
     el.innerHTML = html;
   } catch (e) {
