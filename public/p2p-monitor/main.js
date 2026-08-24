@@ -388,7 +388,8 @@ function renderSubModal() {
   var line = document.getElementById('sub-status-line');
   var payBlock = document.getElementById('sub-pay-block');
   var pendBlock = document.getElementById('sub-pending-block');
-  var link = document.getElementById('sub-checkout-link');
+  var priceEl = document.getElementById('sub-price');
+  var linkEl = document.getElementById('sub-pay-link');
   if (!line) return;
   var s = SUB.subscription, inv = SUB.invoice;
   if (s) {
@@ -396,10 +397,11 @@ function renderSubModal() {
     else if (s.status === 'active') line.textContent = 'Activa hasta ' + new Date(s.current_period_end).toLocaleDateString('es-VE');
     else line.textContent = 'Sin suscripción activa';
   }
-  var pending = inv && inv.status === 'pending';
-  if (payBlock) payBlock.style.display = pending ? 'none' : '';
-  if (pendBlock) pendBlock.style.display = pending ? '' : 'none';
-  if (pending && link && (inv.checkout_url || inv.checkoutUrl)) link.href = inv.checkout_url || inv.checkoutUrl;
+  if (priceEl) priceEl.textContent = (SUB.amount || '—') + ' ' + (SUB.currency || 'USDT');
+  if (linkEl) linkEl.href = SUB.paymentLink || '#';
+  var reviewing = inv && inv.status === 'pending_review';
+  if (payBlock) payBlock.style.display = reviewing ? 'none' : '';
+  if (pendBlock) pendBlock.style.display = reviewing ? '' : 'none';
 }
 
 async function loadSubscription() {
@@ -407,14 +409,14 @@ async function loadSubscription() {
   try {
     var d = await apiPost('/api/payments/status', {}, true);
     SUB.subscription = d.subscription; SUB.invoice = d.invoice;
+    SUB.amount = d.amount; SUB.currency = d.currency; SUB.paymentLink = d.paymentLink;
     renderSubBadge(); renderSubModal();
-    if (d.invoice && d.invoice.status === 'pending') schedulePoll(); else stopPoll();
+    if (d.invoice && d.invoice.status === 'pending_review') schedulePoll(); else stopPoll();
   } catch (e) {}
 }
 
-function schedulePoll() { if (!_subPollT) _subPollT = setInterval(loadSubscription, 5000); }
+function schedulePoll() { if (!_subPollT) _subPollT = setInterval(loadSubscription, 8000); }
 function stopPoll() { if (_subPollT) { clearInterval(_subPollT); _subPollT = null; } }
-function cancelSubPolling() { stopPoll(); closeSubModal(); }
 
 function openSubModal() {
   var m = document.getElementById('sub-modal');
@@ -426,19 +428,18 @@ function closeSubModal() {
   if (m) m.style.display = 'none';
 }
 
-async function startBinancePayCheckout() {
-  var btn = document.getElementById('sub-pay-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Generando orden...'; }
+async function markSubPaid() {
+  var btn = document.getElementById('sub-paid-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
   try {
-    var d = await apiPost('/api/payments/create-order', {}, true);
-    SUB.invoice = { id: d.invoiceId, status: 'pending', checkout_url: d.checkoutUrl };
+    var d = await apiPost('/api/payments/mark-pending', {}, true);
+    SUB.invoice = { id: d.invoiceId, status: d.status };
     renderSubModal();
-    if (d.checkoutUrl) window.open(d.checkoutUrl, '_blank');
     schedulePoll();
   } catch (e) {
-    alert('Error al generar el cobro: ' + e.message);
+    alert('No se pudo avisar el pago: ' + e.message);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Pagar con Binance Pay'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Ya pagué'; }
   }
 }
 

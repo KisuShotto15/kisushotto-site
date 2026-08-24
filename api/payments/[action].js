@@ -7,6 +7,7 @@ export const config = { api: { bodyParser: false }, maxDuration: 30 };
 import { requireUser } from '../_lib/auth.js';
 import { sql, ensureSchema } from '../_lib/db.js';
 import { createOrder, queryOrder, verifyWebhookSignature } from '../_lib/binancepay.js';
+import { sendPush } from '../_lib/push.js';
 
 const TRIAL_DAYS = 7;
 const SUB_PRICE = process.env.SUB_PRICE_USDT || '5';
@@ -42,7 +43,8 @@ async function ensureSubscription(userId) {
 // Suma 1 periodo desde el vencimiento actual (si ya vencio, desde ahora) — evita
 // que pagar temprano "regale" dias por encimarse con el periodo vigente.
 async function markPaid(invoiceId, userId, txId) {
-  await sql`UPDATE payment_invoices SET status = 'paid', transaction_id = ${txId || null}, paid_at = now() WHERE id = ${invoiceId} AND status = 'pending'`;
+  await sql`UPDATE payment_invoices SET status = 'paid', transaction_id = ${txId || null}, paid_at = now()
+    WHERE id = ${invoiceId} AND status IN ('pending', 'pending_review')`;
   const now = Date.now();
   const sub = await sql`SELECT current_period_end FROM subscriptions WHERE user_id = ${userId}`;
   const curEnd = sub[0] && sub[0].current_period_end ? new Date(sub[0].current_period_end).getTime() : 0;
@@ -104,7 +106,7 @@ async function statusAction(req, res) {
   // Respaldo por si el webhook no llego todavia (o no esta configurado en el portal de Binance):
   // el cliente hace polling de /status mientras la factura este pendiente, y aca se
   // pregunta a Binance directamente en cada poll.
-  if (invoice && invoice.status === 'pending') {
+  if (invoice && invoice.status === 'pending' && invoice.provider === 'binance_pay' && invoice.prepay_id) {
     const { apiKey, secretKey } = payKeys();
     if (apiKey && secretKey) {
       const { ok, data } = await queryOrder(apiKey, secretKey, invoice.id).catch(() => ({ ok: false }));
@@ -122,7 +124,79 @@ async function statusAction(req, res) {
   }
 
   const subNow = await sql`SELECT * FROM subscriptions WHERE user_id = ${user.uid}`;
-  return res.status(200).json({ subscription: subNow[0] || null, invoice });
+  return res.status(200).json({
+    subscription: subNow[0] || null, invoice,
+    amount: SUB_PRICE, currency: SUB_CURRENCY,
+    paymentLink: process.env.PAYMENT_LINK_URL || null,
+  });
+}
+
+// El usuario paga por el Payment Link compartido (cuenta personal de Binance Pay,
+// sin cuenta Entity/Merchant) y avisa aca: crea una factura en revision y te
+// notifica por push para que la confirmes vos a mano contra el historial de Binance Pay.
+async function markPendingAction(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  await readRawBody(req).catch(() => {});
+  await ensureSchema();
+  await ensureSubscription(user.uid);
+
+  // Si ya hay una factura pendiente de revision, no duplicar.
+  const existing = await sql`SELECT id FROM payment_invoices WHERE user_id = ${user.uid} AND status = 'pending_review'`;
+  if (existing.length) return res.status(200).json({ invoiceId: existing[0].id, status: 'pending_review' });
+
+  const invoiceId = 'man' + user.uid + '_' + Date.now();
+  await sql`
+    INSERT INTO payment_invoices (id, user_id, provider, amount, currency, status)
+    VALUES (${invoiceId}, ${user.uid}, 'binance_pay_link', ${SUB_PRICE}, ${SUB_CURRENCY}, 'pending_review')`;
+
+  const adminId = Number(process.env.ADMIN_USER_ID || 0);
+  if (adminId) {
+    sendPush(adminId, '💳 Pago por confirmar',
+      'Usuario #' + user.uid + ' (' + user.email + ') dice haber pagado ' + SUB_PRICE + ' ' + SUB_CURRENCY
+    ).catch(() => {});
+  }
+  return res.status(200).json({ invoiceId, status: 'pending_review' });
+}
+
+// Confirmacion manual del admin (revisa el historial de Binance Pay a mano). Restringido
+// a ADMIN_EMAIL para no dejar que cualquier usuario se autoconfirme la suscripcion.
+async function adminConfirmAction(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
+
+  const body = await readJsonBody(req);
+  const invoiceId = String(body.invoiceId || '');
+  if (!invoiceId) return res.status(400).json({ error: 'invoiceId requerido' });
+  await ensureSchema();
+  const rows = await sql`SELECT * FROM payment_invoices WHERE id = ${invoiceId}`;
+  const invoice = rows[0];
+  if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
+  if (invoice.status !== 'pending' && invoice.status !== 'pending_review') {
+    return res.status(409).json({ error: 'Factura ya resuelta (' + invoice.status + ')' });
+  }
+  await markPaid(invoice.id, invoice.user_id, body.txId || null);
+  return res.status(200).json({ ok: true });
+}
+
+// Lista de facturas en revision para el admin (dashboard minimo: solo lectura).
+async function adminPendingAction(req, res) {
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
+  await readRawBody(req).catch(() => {});
+  await ensureSchema();
+  const rows = await sql`
+    SELECT i.id, i.user_id, u.email, i.amount, i.currency, i.status, i.created_at
+    FROM payment_invoices i JOIN users u ON u.id = i.user_id
+    WHERE i.status IN ('pending', 'pending_review')
+    ORDER BY i.created_at ASC`;
+  return res.status(200).json({ invoices: rows });
 }
 
 async function webhookAction(req, res) {
@@ -166,10 +240,13 @@ export default async function handler(req, res) {
   const action = String(req.query.action || '');
   try {
     switch (action) {
-      case 'create-order': return await createOrderAction(req, res);
-      case 'status':       return await statusAction(req, res);
-      case 'webhook':      return await webhookAction(req, res);
-      default:             return res.status(404).json({ error: 'Accion desconocida' });
+      case 'create-order':  return await createOrderAction(req, res);
+      case 'status':        return await statusAction(req, res);
+      case 'webhook':       return await webhookAction(req, res);
+      case 'mark-pending':  return await markPendingAction(req, res);
+      case 'admin-confirm': return await adminConfirmAction(req, res);
+      case 'admin-pending': return await adminPendingAction(req, res);
+      default:              return res.status(404).json({ error: 'Accion desconocida' });
     }
   } catch (e) {
     return res.status(500).json({ error: e.message });
