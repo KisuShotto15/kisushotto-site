@@ -1819,18 +1819,30 @@ function botMissingFields() {
   return out;
 }
 
-// ── Guardar visible solo si hay cambios sin guardar ────────────────────
+// ── Guardar/Descartar: solo con el bot corriendo ───────────────────────
+// Detenido, "Iniciar Bot" guarda solo (saveBotConfig() al principio de
+// botToggle()): no hace falta este control ahi. Corriendo, un ajuste a medias
+// importa (puede estar comprando activamente), asi que se pide confirmar.
 var BOT_DIRTY = false;
 
 function renderSaveRow() {
   var row = document.getElementById('bot-save-row');
-  if (row) row.style.display = BOT_DIRTY ? 'flex' : 'none';
+  if (row) row.style.display = (BOT_DIRTY && BOT.running) ? 'flex' : 'none';
 }
 
 function markBotDirty() {
   if (BOT_DIRTY) return;
   BOT_DIRTY = true;
   renderSaveRow();
+}
+
+function discardBotConfig() {
+  loadBotConfig(); // repuebla los inputs desde el ultimo BOT_CFG guardado
+  botMissingFields(); // limpia marcas .inp-missing de valores descartados
+  BOT_DIRTY = false;
+  renderSaveRow();
+  var st = document.getElementById('bot-cfg-st');
+  if (st) { st.textContent = 'Descartado'; st.style.color = '#888'; clearTimeout(st._t); st._t = setTimeout(function(){ st.textContent = ''; }, 1500); }
 }
 
 (function watchBotInputs() {
@@ -2328,6 +2340,7 @@ function renderBotToggle() {
   b.style.background = BOT.running ? '#E24B4A' : '';
   renderAdHidden(BOT.adHidden); // el chip "Oculto" no aplica con el bot detenido
   renderTabDot();
+  renderSaveRow(); // Guardar/Descartar solo aplica con el bot corriendo
 }
 
 // La secuencia de arranque tarda (leer anuncio, metodos, reprice, activar). Mientras
