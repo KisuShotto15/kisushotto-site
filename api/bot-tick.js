@@ -119,6 +119,18 @@ async function tickMonitor(row, now) {
     await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${med.rate}, ${med.n}, now())
       ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});
   }
+  // Historial de spread del mercado 24/7 (cada 5 min). El grabador del cliente solo
+  // corre con la app abierta, asi que las horas sin mirar quedaban en blanco: son
+  // justo las que hacen falta para saber si el capital estuvo parado con razon.
+  if (out.spreadNet != null &&
+      (!row.last_mkt || now - new Date(row.last_mkt).getTime() >= SAMPLE_MS)) {
+    await sql`
+      INSERT INTO market_snapshots (user_id, ts, may_best, rec_best, spread_net, commission)
+      VALUES (${row.user_id}, now(), ${out.bestMay}, ${out.bestSmall}, ${out.spreadNet}, ${cfg.commission || 0})`
+      .then(() => sql`UPDATE monitor_state SET last_mkt = now() WHERE user_id = ${row.user_id}`)
+      .catch(() => {});
+  }
+
   const snap24 = histPaySnapshot(h.hist24, pay);
   const snapLong = histPaySnapshot(h.hist_long, pay);
   const hist24 = pushHist24Pay(h.hist24, pay, now, out.bestMay);
@@ -483,7 +495,7 @@ export default async function handler(req, res) {
     // Monitor server-side (alertas Telegram 24/7 con silencio nocturno).
     // SELECT liviano: las columnas pesadas se leen dentro de tickMonitor solo si toca refrescar.
     const mrows = await sql`
-      SELECT user_id, config, last_tick, client_seen
+      SELECT user_id, config, last_tick, client_seen, last_mkt
       FROM monitor_state WHERE enabled = true LIMIT ${MAX_USERS}`;
     let monitored = 0;
     // ms hasta el proximo trabajo real: el scheduler espacia su alarma con esto.

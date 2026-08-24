@@ -482,6 +482,45 @@ async function loadPnlStats() {
   }
 }
 
+// Ventanas de mercado: cuantas horas hubo spread trabajable y cuantas aprovechaste.
+// El capital parado solo es fuga si el mercado pagaba y no estabas.
+async function loadMarketWindows() {
+  var el = document.getElementById('window-stats');
+  if (!el || !SESSION.token) return;
+  try {
+    var d = await botCallWorker('/spread-windows');
+    if (d.error) throw new Error(d.error);
+    if (!d.coveredH) { el.innerHTML = ''; return; }
+    var html = '<div class="rot-head">Mercado (' + d.days + ' días, piso ' + d.floor + '%)</div>' +
+      '<div class="rot-line"><span>Horas con spread ≥ ' + d.floor + '%</span><b>' +
+        fmtH(d.withSpreadH) + ' <span class="rot-mut">de ' + fmtH(d.coveredH) + '</span></b></div>' +
+      '<div class="rot-line"><span>Aprovechadas (bot encendido)</span><b style="color:var(--green)">' +
+        fmtH(d.takenH) + '</b></div>' +
+      '<div class="rot-line"><span>Perdidas (había spread, bot apagado)</span><b style="color:' +
+        (d.missedH > 0.5 ? 'var(--red)' : 'var(--text)') + '">' + fmtH(d.missedH) + '</b></div>';
+    // Histograma por hora: donde aparece el spread. Es lo accionable — dice cuando
+    // vale la pena estar encendido, no que estes encendido siempre.
+    var hrs = d.byHour || [], max = 0;
+    for (var i = 0; i < hrs.length; i++) if (hrs[i].rate > max) max = hrs[i].rate;
+    if (max > 0) {
+      var byH = {}, k;
+      for (k = 0; k < hrs.length; k++) byH[hrs[k].hour] = hrs[k];
+      var bars = '';
+      for (var h = 0; h < 24; h++) {
+        var r = byH[h], pct = r ? r.rate / max * 100 : 0;
+        bars += '<span title="' + h + 'h: ' + (r ? Math.round(r.rate * 100) : 0) + '% del tiempo con spread">' +
+          '<i style="height:' + Math.max(pct, 2).toFixed(0) + '%"></i></span>';
+      }
+      html += '<div class="rot-head" style="margin-bottom:3px">A qué hora aparece</div>' +
+        '<div class="rot-hist">' + bars + '</div>' +
+        '<div class="rot-leg"><span>0h</span><span style="margin-left:auto">12h</span><span style="margin-left:auto">23h</span></div>';
+    }
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '';
+  }
+}
+
 // Spread vs llenado y reparto del tiempo del anuncio (tabla bot_samples).
 // Un spread mas alto da mas margen por orden pero menos ordenes: lo que importa
 // es el producto. Y el capital parado no cobra spread ninguno.
@@ -534,8 +573,11 @@ async function loadSpreadStats() {
   }
 }
 
+function fmtH(h) { return h < 1 ? Math.round(h * 60) + ' min' : (h < 10 ? h.toFixed(1) : Math.round(h)) + ' h'; }
+
 async function loadOrderStats() {
   loadPnlStats();
+  loadMarketWindows();
   loadSpreadStats();
   var el = document.getElementById('order-stats');
   if (!el || !SESSION.token) return;

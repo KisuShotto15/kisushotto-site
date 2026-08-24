@@ -192,6 +192,9 @@ body {
 .rot-tab th:first-child, .rot-tab td:first-child { text-align: left; }
 .rot-tab td { text-align: right; padding: 3px 0; border-top: 1px solid var(--border); color: var(--text-2); }
 .rot-tab tr.best td { color: var(--green); font-weight: 700; }
+.rot-hist { display: flex; align-items: flex-end; gap: 2px; height: 32px; }
+.rot-hist span { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.rot-hist i { display: block; width: 100%; background: var(--gold); border-radius: 1px; opacity: .8; }
 
 .bot-details {
   background: var(--surf-2);

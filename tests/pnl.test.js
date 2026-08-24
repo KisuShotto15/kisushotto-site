@@ -1,7 +1,7 @@
 // Tests del emparejador FIFO de ganancia realizada. Corre con: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fifoMatch, summarize, lotsSince, spreadCurve, timeBudget } from '../api/_lib/pnl.js';
+import { fifoMatch, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows } from '../api/_lib/pnl.js';
 
 const T0 = Date.parse('2026-08-20T10:00:00Z');
 const min = 60 * 1000;
@@ -156,4 +156,45 @@ test('reparto de tiempo sin muestras no rompe', () => {
   assert.equal(b.onH, 0);
   assert.equal(b.offH, 168);
   assert.equal(b.emptyH, 0);
+});
+
+// ── Ventanas de mercado ────────────────────────────────────────────
+
+test('separa espera justificada de oportunidad perdida', () => {
+  // 24 cubos de 5 min = 2 h por hora del dia; en la hora 9 hubo spread en 12 (1 h)
+  // y el bot estaba encendido en 6 (30 min) → 30 min perdidos.
+  const w = spreadWindows([
+    { h: 9, buckets: 24, with_spread: 12, taken: 6 },
+    { h: 3, buckets: 24, with_spread: 0, taken: 0 },
+  ]);
+  assert.equal(w.coveredH, 4);
+  assert.equal(w.withSpreadH, 1);
+  assert.equal(w.takenH, 0.5);
+  assert.equal(w.missedH, 0.5);
+  assert.equal(w.catchRate, 0.5);
+  assert.equal(w.offerRate, 0.25);
+});
+
+test('sin spread en el mercado no hay nada perdido', () => {
+  const w = spreadWindows([{ h: 2, buckets: 100, with_spread: 0, taken: 0 }]);
+  assert.equal(w.withSpreadH, 0);
+  assert.equal(w.missedH, 0);
+  assert.equal(w.catchRate, null); // no hubo que atrapar
+  assert.equal(w.offerRate, 0);
+});
+
+test('la tasa por hora identifica cuando aparece el spread', () => {
+  const w = spreadWindows([
+    { h: 8, buckets: 100, with_spread: 60, taken: 0 },
+    { h: 20, buckets: 100, with_spread: 5, taken: 0 },
+  ]);
+  assert.equal(w.byHour[0].rate, 0.6);
+  assert.equal(w.byHour[1].rate, 0.05);
+});
+
+test('spreadWindows sin datos no rompe', () => {
+  const w = spreadWindows([]);
+  assert.equal(w.coveredH, 0);
+  assert.equal(w.offerRate, null);
+  assert.deepEqual(w.byHour, []);
 });

@@ -127,6 +127,31 @@ export function timeBudget(row, totalH = 7 * 24, sampleMin = SAMPLE_MIN) {
   };
 }
 
+// ── Ventanas de mercado ────────────────────────────────────────────
+// El capital parado no es fuga si el mercado no pagaba: esto separa la espera
+// justificada (no habia spread) de la oportunidad perdida (lo habia y no estabas).
+// rows: por hora del dia, cubos de 5 min de mercado observado.
+export function spreadWindows(rows, sampleMin = SAMPLE_MIN) {
+  const h = n => (n || 0) * sampleMin / 60;
+  let buckets = 0, withSpread = 0, taken = 0;
+  const byHour = (rows || []).map(r => {
+    buckets += r.buckets; withSpread += r.with_spread; taken += r.taken;
+    return {
+      hour: r.h, coveredH: h(r.buckets), withSpreadH: h(r.with_spread), takenH: h(r.taken),
+      // Que tan seguido esa hora del dia ofrece margen trabajable.
+      rate: r.buckets > 0 ? r.with_spread / r.buckets : 0,
+    };
+  });
+  return {
+    coveredH: h(buckets), withSpreadH: h(withSpread), takenH: h(taken),
+    missedH: h(withSpread - taken),
+    // De todo el tiempo observado, cuanto ofrecio spread; y de ese, cuanto aprovechaste.
+    offerRate: buckets > 0 ? withSpread / buckets : null,
+    catchRate: withSpread > 0 ? taken / withSpread : null,
+    byHour,
+  };
+}
+
 // Filtra lotes por fecha de venta (el momento en que la ganancia se realiza).
 export function lotsSince(lots, sinceMs) {
   return (lots || []).filter(l => l.sellAt != null && l.sellAt >= sinceMs);

@@ -130,7 +130,12 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
   const topSmall = bestCorroborated(small);
   const bestMay = topMay ? topMay.price : null;
   const bestSmall = topSmall ? topSmall.price : null;
-  if (!bestMay) return { alerts, priceHist: hist, cooldowns: cd, bestMay: null };
+  // Spread neto del mercado: lo que el negocio paga ahora mismo. Se devuelve siempre
+  // (aunque haya silencio nocturno) para poder grabar el historial 24/7 y saber
+  // despues cuantas horas del dia hubo margen trabajable de verdad.
+  const spreadNet = (bestMay && bestSmall)
+    ? (bestMay - bestSmall) / bestMay * 100 - (cfg.commission || 0) : null;
+  if (!bestMay) return { alerts, priceHist: hist, cooldowns: cd, bestMay: null, bestSmall, spreadNet };
 
   if (!silent) {
     const commission = cfg.commission || 0;
@@ -215,5 +220,5 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
   hist.push({ ts: now, price: bestMay });
   while (hist.length > 200) hist.shift();
 
-  return { alerts, priceHist: hist, cooldowns: cd, bestMay };
+  return { alerts, priceHist: hist, cooldowns: cd, bestMay, bestSmall, spreadNet };
 }

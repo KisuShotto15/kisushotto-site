@@ -228,6 +228,8 @@ export async function ensureSchema() {
   )`;
   await sql`CREATE INDEX IF NOT EXISTS bot_samples_user_ts ON bot_samples (user_id, ts DESC)`;
   await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS last_sample TIMESTAMPTZ`;
+  // Ultimo registro de spread de mercado escrito por el tick del monitor (throttle 5 min).
+  await sql`ALTER TABLE monitor_state ADD COLUMN IF NOT EXISTS last_mkt TIMESTAMPTZ`;
 
   // Tasa USDT/VES publica (mediana top-10 merchants por metodo de pago), la
   // actualiza cada refresh del monitor y la lee el portfolio via /api/usdt-ves.

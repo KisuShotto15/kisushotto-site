@@ -4,7 +4,7 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { pushHist24Pay, pushHistLongPay, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
-import { fifoMatch, summarize, lotsSince, spreadCurve, timeBudget, SAMPLE_MIN } from './_lib/pnl.js';
+import { fifoMatch, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows, SAMPLE_MIN } from './_lib/pnl.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -223,6 +223,41 @@ export default async function handler(req, res) {
         await sql`DELETE FROM bot_samples WHERE user_id = ${user.uid} AND ts < now() - interval '60 days'`.catch(() => {});
       }
       return res.status(200).json({ days, curve, best, budget });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // Ventanas de mercado: cuantas horas hubo spread trabajable y cuantas aprovechaste.
+  // Agrupa a cubos de 5 min porque las muestras llegan a ritmo mixto (cliente ~30s,
+  // servidor 5 min): contar filas crudas sobrerrepresentaria las horas con la app abierta.
+  if (path === '/spread-windows') {
+    try {
+      const days = Math.min(Math.max(parseInt(params && params.days, 10) || 14, 1), 60);
+      const st = await sql`SELECT config FROM bot_state WHERE user_id = ${user.uid}`;
+      const cfgB = (st[0] && st[0].config) || {};
+      const floor = params && params.floor != null ? parseFloat(params.floor)
+        : (cfgB.minSpread != null ? parseFloat(cfgB.minSpread) : 0.3);
+      const rows = await sql`
+        WITH b5 AS (
+          SELECT to_timestamp(floor(extract(epoch FROM ts) / 300) * 300) t, max(spread_net) sn
+          FROM market_snapshots
+          WHERE user_id = ${user.uid} AND ts > now() - ${days + ' days'}::interval
+            AND spread_net IS NOT NULL
+          GROUP BY 1
+        )
+        SELECT extract(hour FROM b5.t AT TIME ZONE 'America/Caracas')::int h,
+               count(*)::int buckets,
+               count(*) FILTER (WHERE b5.sn >= ${floor})::int with_spread,
+               count(*) FILTER (WHERE b5.sn >= ${floor} AND o.live)::int taken
+        FROM b5
+        LEFT JOIN LATERAL (
+          SELECT true live FROM bot_samples s
+          WHERE s.user_id = ${user.uid} AND s.ts >= b5.t AND s.ts < b5.t + interval '5 minutes'
+          LIMIT 1
+        ) o ON true
+        GROUP BY 1 ORDER BY 1`;
+      return res.status(200).json({ days, floor, ...spreadWindows(rows) });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
