@@ -399,8 +399,6 @@ function renderSubModal() {
   }
   if (priceEl) priceEl.textContent = (SUB.amount || '—') + ' ' + (SUB.currency || 'USDT');
   if (linkEl) linkEl.href = SUB.paymentLink || '#';
-  var nickEl = document.getElementById('sub-nick');
-  if (nickEl && document.activeElement !== nickEl) nickEl.value = SUB.binanceNick || '';
   var reviewing = inv && inv.status === 'pending_review';
   if (payBlock) payBlock.style.display = reviewing ? 'none' : '';
   if (pendBlock) pendBlock.style.display = reviewing ? '' : 'none';
@@ -412,7 +410,6 @@ async function loadSubscription() {
     var d = await apiPost('/api/payments/status', {}, true);
     SUB.subscription = d.subscription; SUB.invoice = d.invoice;
     SUB.amount = d.amount; SUB.currency = d.currency; SUB.paymentLink = d.paymentLink;
-    SUB.binanceNick = d.binanceNick;
     renderSubBadge(); renderSubModal();
     if (d.invoice && d.invoice.status === 'pending_review') schedulePoll(); else stopPoll();
   } catch (e) {}
@@ -431,19 +428,7 @@ function closeSubModal() {
   if (m) m.style.display = 'none';
 }
 
-var _lastSavedNick = '';
-async function saveSubNick() {
-  var el = document.getElementById('sub-nick');
-  var nick = el ? el.value.trim() : '';
-  if (!nick || nick === _lastSavedNick) return;
-  try { await apiPost('/api/payments/set-nick', { nick: nick }, true); _lastSavedNick = nick; SUB.binanceNick = nick; }
-  catch (e) {}
-}
-
 async function markSubPaid() {
-  var nickEl = document.getElementById('sub-nick');
-  if (nickEl && !nickEl.value.trim()) { alert('Escribe tu nick de Binance Pay primero (el mismo con el que aparece el pago)'); nickEl.focus(); return; }
-  await saveSubNick();
   var btn = document.getElementById('sub-paid-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
   try {

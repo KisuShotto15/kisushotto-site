@@ -16,18 +16,21 @@ async function shouldPoll() {
   return Date.now() - last >= POLL_THROTTLE_MS;
 }
 
-// Matchea por nick del pagador (el Payment Link es de monto fijo: el monto solo no
-// alcanza para distinguir dos pagos simultaneos de distintos usuarios).
+// Sin nick registrado (menos friccion en el onboarding): matchea contra la factura
+// pendiente MAS VIEJA de todo el sistema (FIFO). Con 1-2 usuarios y un "Ya pague"
+// justo antes de pagar, la ambiguedad es minima. Antes de elegir, vence las
+// facturas abandonadas (>48h sin pago real) para que no le "roben" el pago a
+// alguien nuevo que si pago.
 async function reconcilePayment(hit) {
-  const subs = await sql`SELECT user_id FROM subscriptions WHERE binance_nick = ${hit.senderNick}`;
-  if (!subs.length) return false;
-  const userId = subs[0].user_id;
+  await sql`
+    UPDATE payment_invoices SET status = 'expired'
+    WHERE status IN ('pending', 'pending_review') AND created_at < now() - interval '48 hours'`;
   const inv = await sql`
-    SELECT id FROM payment_invoices
-    WHERE user_id = ${userId} AND status IN ('pending', 'pending_review')
-    ORDER BY created_at DESC LIMIT 1`;
+    SELECT id, user_id FROM payment_invoices
+    WHERE status IN ('pending', 'pending_review')
+    ORDER BY created_at ASC LIMIT 1`;
   if (!inv.length) return false;
-  return markPaid(inv[0].id, userId, null);
+  return markPaid(inv[0].id, inv[0].user_id, null);
 }
 
 export async function checkPaymentEmails() {
