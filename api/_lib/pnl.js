@@ -86,6 +86,45 @@ export function summarize(lots) {
   };
 }
 
+// ── Ciclo de venta (espejo del anterior) ───────────────────────────
+// Vender USDT alto y recomprarlo mas barato despues. Es el ciclo que evalua el
+// motor de decision ("vendo ahora, recompro en N min"), asi que sirve para
+// calificar sus veredictos contra el resultado real, sin marcar nada a mano.
+export function fifoShort(orders, commission = 0) {
+  const queue = []; // ventas pendientes de recompra
+  const cycles = [];
+  for (const o of orders || []) {
+    const q = parseFloat(o.amount);
+    const p = parseFloat(o.price);
+    if (!(q > EPS) || !(p > 0)) continue;
+    const t = o.created_at ? new Date(o.created_at).getTime() : null;
+
+    if (!isBuy(o.trade_type)) { queue.push({ q, p, t, id: o.order_no }); continue; }
+
+    let left = q;
+    while (left > EPS && queue.length) {
+      const s = queue[0];
+      const take = Math.min(left, s.q);
+      const grossPct = (s.p - p) / p;
+      cycles.push({
+        qty: take,
+        sellId: s.id, sellPrice: s.p, sellAt: s.t,
+        buyPrice: p, buyAt: t,
+        minutes: (s.t && t) ? (t - s.t) / 60000 : null,
+        grossPct,
+        netPct: grossPct - commission / 100,
+        netUsdt: take * grossPct - take * commission / 100,
+      });
+      s.q -= take;
+      left -= take;
+      if (s.q <= EPS) queue.shift();
+    }
+  }
+  let openSellQty = 0;
+  for (const s of queue) openSellQty += s.q;
+  return { cycles, openSellQty };
+}
+
 // ── Spread vs llenado ──────────────────────────────────────────────
 // La ganancia es spread x capital x rotaciones. Subir el spread sube el margen por
 // orden pero baja el llenado, asi que el optimo maximiza USDT netos por hora, no el

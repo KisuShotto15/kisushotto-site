@@ -1,7 +1,7 @@
 // Tests del emparejador FIFO de ganancia realizada. Corre con: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fifoMatch, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows } from '../api/_lib/pnl.js';
+import { fifoMatch, fifoShort, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows } from '../api/_lib/pnl.js';
 
 const T0 = Date.parse('2026-08-20T10:00:00Z');
 const min = 60 * 1000;
@@ -197,4 +197,50 @@ test('spreadWindows sin datos no rompe', () => {
   assert.equal(w.coveredH, 0);
   assert.equal(w.offerRate, null);
   assert.deepEqual(w.byHour, []);
+});
+
+// ── Ciclo venta → recompra (calificacion del motor de decision) ─────
+
+const sellO = (amount, price, tMin = 0, id = 'S' + tMin) =>
+  ({ order_no: id, trade_type: 'SELL', amount, price, created_at: new Date(T0 + tMin * min).toISOString() });
+const buyO = (amount, price, tMin = 0, id = 'B' + tMin) =>
+  ({ order_no: id, trade_type: 'BUY', amount, price, created_at: new Date(T0 + tMin * min).toISOString() });
+
+test('vender alto y recomprar barato cierra un ciclo ganador', () => {
+  // vendo 1000 a 925, recompro a 919 ocho minutos despues
+  const { cycles } = fifoShort([sellO(1000, 925), buyO(1000, 919, 8)], 0.175);
+  assert.equal(cycles.length, 1);
+  const c = cycles[0];
+  assert.ok(Math.abs(c.grossPct - (925 - 919) / 919) < 1e-12);
+  assert.ok(Math.abs(c.netPct - ((925 - 919) / 919 - 0.00175)) < 1e-12);
+  assert.equal(c.minutes, 8);
+  assert.equal(c.sellId, 'S0');
+  assert.ok(c.netUsdt > 0);
+});
+
+test('recomprar mas caro de lo que vendiste da ciclo perdedor', () => {
+  const { cycles } = fifoShort([sellO(500, 919), buyO(500, 925, 5)], 0.175);
+  assert.ok(cycles[0].netPct < 0);
+});
+
+test('una recompra grande cierra varias ventas en orden', () => {
+  const { cycles, openSellQty } = fifoShort([sellO(300, 925, 0), sellO(300, 926, 2), buyO(500, 919, 10)], 0);
+  assert.equal(cycles.length, 2);
+  assert.equal(cycles[0].qty, 300);
+  assert.equal(cycles[0].sellPrice, 925);
+  assert.equal(cycles[1].qty, 200);
+  assert.equal(cycles[1].sellPrice, 926);
+  assert.ok(Math.abs(openSellQty - 100) < 1e-9); // 100 de la segunda venta sin recomprar
+});
+
+test('venta sin recompra queda abierta, no inventa ciclo', () => {
+  const { cycles, openSellQty } = fifoShort([sellO(400, 925)], 0.175);
+  assert.equal(cycles.length, 0);
+  assert.equal(openSellQty, 400);
+});
+
+test('comprar antes de vender no abre ciclo de venta', () => {
+  // esa compra es inventario, no una recompra: sin venta previa no hay nada que cerrar
+  const { cycles } = fifoShort([buyO(1000, 919), sellO(1000, 925, 5)], 0);
+  assert.equal(cycles.length, 0);
 });

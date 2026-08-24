@@ -4,7 +4,7 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { pushHist24Pay, pushHistLongPay, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
-import { fifoMatch, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows, SAMPLE_MIN } from './_lib/pnl.js';
+import { fifoMatch, fifoShort, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows, SAMPLE_MIN } from './_lib/pnl.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -223,6 +223,25 @@ export default async function handler(req, res) {
         await sql`DELETE FROM bot_samples WHERE user_id = ${user.uid} AND ts < now() - interval '60 days'`.catch(() => {});
       }
       return res.status(200).json({ days, curve, best, budget });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // Ciclos venta→recompra para calificar los veredictos del motor de decision.
+  // El cliente los cruza contra su diario (IndexedDB) sin que el usuario marque nada.
+  if (path === '/sell-cycles') {
+    try {
+      const days = Math.min(Math.max(parseInt(params && params.days, 10) || 7, 1), 30);
+      const rows = await sql`
+        SELECT order_no, trade_type, amount, price, created_at FROM orders
+        WHERE user_id = ${user.uid} AND status IN ('4', 'COMPLETED')
+          AND amount > 0 AND price > 0 AND created_at > now() - ${days + ' days'}::interval
+        ORDER BY created_at ASC`;
+      const st = await sql`SELECT config FROM bot_state WHERE user_id = ${user.uid}`;
+      const commission = parseFloat((st[0] && st[0].config || {}).commission) || 0;
+      const { cycles, openSellQty } = fifoShort(rows, commission);
+      return res.status(200).json({ days, commission, openSellQty, cycles: cycles.slice(-200) });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }

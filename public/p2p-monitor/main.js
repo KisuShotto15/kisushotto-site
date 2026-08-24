@@ -579,6 +579,7 @@ async function loadOrderStats() {
   loadPnlStats();
   loadMarketWindows();
   loadSpreadStats();
+  syncJournalFromOrders().then(renderJournalStats);
   var el = document.getElementById('order-stats');
   if (!el || !SESSION.token) return;
   el.textContent = 'Cargando...';
@@ -2680,6 +2681,74 @@ function updateDecision() {
       DJ.recordDecision(d, F);
     }
   } catch (e) {}
+}
+
+// Puente diario ↔ ordenes: cada ciclo venta→recompra de Binance se empareja con
+// el veredicto que estaba vigente al vender, y se cierra en el diario con su
+// resultado real. Sin botones: si la orden existe, el veredicto queda calificado.
+var DEC_MATCH_MS = 15 * 60 * 1000; // veredicto valido hasta 15 min antes de vender
+
+function lastDecisionBefore(decs, ts) {
+  // decs viene de listDecisions: mas nuevo primero.
+  for (var i = 0; i < decs.length; i++) {
+    if (decs[i].ts <= ts && ts - decs[i].ts <= DEC_MATCH_MS) return decs[i];
+  }
+  return null;
+}
+
+async function syncJournalFromOrders() {
+  if (typeof DJ === 'undefined' || !SESSION.token) return null;
+  try {
+    var d = await botCallWorker('/sell-cycles');
+    var cycles = d.cycles || [];
+    if (!cycles.length) return null;
+    var trades = await DJ.listTrades(300);
+    var seen = {};
+    for (var i = 0; i < trades.length; i++) if (trades[i].src) seen[trades[i].src] = 1;
+    var decs = await DJ.listDecisions(500);
+    var imported = 0, noVerdict = 0;
+    for (var j = 0; j < cycles.length; j++) {
+      var c = cycles[j];
+      if (!c.sellId || seen[c.sellId] || c.sellAt == null) continue;
+      var dec = lastDecisionBefore(decs, c.sellAt);
+      // Sin veredicto grabado no hay nada que calificar: el motor solo corre con
+      // la app abierta, asi que las ventas a ciegas quedan fuera a proposito.
+      if (!dec) { noVerdict++; continue; }
+      var id = await DJ.createTrade({ score: dec.score, label: dec.label }, dec.features, c.qty, c.sellPrice);
+      if (id == null) continue;
+      // No se usa recordRebuy: calcula los minutos contra Date.now() y aqui los
+      // tiempos son historicos. Se escribe el desenlace con las fechas reales.
+      var success = c.netPct >= DJ.SUCCESS_NET ? 'win' : (c.netPct >= 0 ? 'neutral' : 'loss');
+      await DJ.updateTrade(id, {
+        ts: c.sellAt, src: c.sellId, status: 'closed',
+        rebuy: {
+          price: c.buyPrice, ts: c.buyAt,
+          minutesElapsed: c.minutes != null ? Math.round(c.minutes * 10) / 10 : null,
+          grossPct: c.grossPct, netPct: c.netPct, success: success
+        }
+      });
+      imported++;
+    }
+    return { imported: imported, noVerdict: noVerdict, cycles: cycles.length };
+  } catch (e) { return null; }
+}
+
+// Resultado historico de los veredictos: sale bajo el panel de decision.
+async function renderJournalStats() {
+  var el = document.getElementById('decision-stats');
+  if (!el || typeof DJ === 'undefined') return;
+  try {
+    var s = await DJ.stats();
+    if (!s || !s.n) { el.innerHTML = ''; return; }
+    var wr = s.winRate != null ? Math.round(s.winRate * 100) : null;
+    el.innerHTML = '<div class="dec-feat" style="display:flex;gap:10px;flex-wrap:wrap">' +
+      '<span>' + s.n + (s.n === 1 ? ' ciclo calificado' : ' ciclos calificados') + '</span>' +
+      (wr != null ? '<span style="color:' + (wr >= 50 ? 'var(--green)' : 'var(--red)') + '">' + wr + '% acierto</span>' : '') +
+      '<span>neto medio ' + (s.avgNetPct * 100).toFixed(2) + '%</span>' +
+      '<span>recompra ' + s.avgMinutesToRebuy.toFixed(0) + ' min</span>' +
+      (s.suggestions.length ? '<span style="color:var(--gold)">' + s.suggestions.length + ' ajustes de peso sugeridos</span>' : '') +
+      '</div>';
+  } catch (e) { el.innerHTML = ''; }
 }
 
 var DEC_COLORS = {
