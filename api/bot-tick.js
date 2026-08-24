@@ -4,7 +4,7 @@ import { sql } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
-import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
+import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged, bestOf } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
 
@@ -105,12 +105,21 @@ async function tickMonitor(row, now) {
 
   const pays = (cfg.payTypes && cfg.payTypes.length) ? cfg.payTypes : [];
   const verifiedOnly = cfg.verifiedOnly !== false;
-  const [mayRaw, smallRaw] = await Promise.all([
+  // Modo Short apagado: el par relevante es Verde (primario) vs Mayoristas (secundario),
+  // Recompra no se pide. mayRaw se mantiene SIEMPRE con datos reales de Mayoristas
+  // (topMedianRate/p2p_rate es la tasa publica del portfolio, ajena al modo del usuario).
+  const shortOff = cfg.shortMode === false;
+  const [mayRaw, otherRaw] = await Promise.all([
     publicSearch({ transAmount: cfg.mayAmount || 2000000, pays, maxPages: 1, tradeType: 'SELL', verifiedOnly }),
-    publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 1, tradeType: 'SELL', verifiedOnly }),
+    shortOff
+      ? publicSearch({ transAmount: cfg.buyAmount || 2000000, pays, maxPages: 1, tradeType: 'BUY', verifiedOnly })
+      : publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 1, tradeType: 'SELL', verifiedOnly }),
   ]);
+  const primaryRaw   = shortOff ? otherRaw : mayRaw;
+  const secondaryRaw = shortOff ? mayRaw   : otherRaw;
+  const labels = shortOff ? { primary: 'Verde', secondary: 'Mayorista' } : { primary: 'Mayorista', secondary: 'Compra' };
 
-  const out = computeAlerts({ mayRaw, smallRaw, cfg, priceHist: h.price_hist, cooldowns: h.cooldowns, now, silent });
+  const out = computeAlerts({ mayRaw: primaryRaw, smallRaw: secondaryRaw, cfg, priceHist: h.price_hist, cooldowns: h.cooldowns, now, silent, labels });
   const pay = pays[0] || 'BancoDeVenezuela';
   // Tasa USDT/VES publica (mediana top-10 mayoristas): la consume el portfolio.
   // Best-effort: un fallo aqui no debe tumbar el tick del monitor.
@@ -131,10 +140,14 @@ async function tickMonitor(row, now) {
       .catch(() => {});
   }
 
+  // Serie persistida "(mayorista)" del sparkline y el resumen diario: SIEMPRE
+  // Mayoristas real, nunca out.bestMay (que en Modo Short apagado es Verde) —
+  // si no, el grafico pega un salto falso cada vez que el usuario cambia de modo.
+  const mayBestTrue = shortOff ? bestOf(mayRaw, verifiedOnly) : out.bestMay;
   const snap24 = histPaySnapshot(h.hist24, pay);
   const snapLong = histPaySnapshot(h.hist_long, pay);
-  const hist24 = pushHist24Pay(h.hist24, pay, now, out.bestMay);
-  const histLong = pushHistLongPay(h.hist_long, pay, now, out.bestMay);
+  const hist24 = pushHist24Pay(h.hist24, pay, now, mayBestTrue);
+  const histLong = pushHistLongPay(h.hist_long, pay, now, mayBestTrue);
 
   let log = h.log;
   let token = '';

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   pushHist24, pushHistLong, histMap, pushHist24Pay,
-  histPaySnapshot, histPayChanged, topMedianRate, computeAlerts,
+  histPaySnapshot, histPayChanged, topMedianRate, computeAlerts, bestOf,
 } from '../api/_lib/monitor.js';
 
 const MIN = 60000;
@@ -210,4 +210,34 @@ test('nick con HTML queda escapado en la alerta (Telegram)', () => {
     cfg: cfgAlert, priceHist: [], cooldowns: {}, now: 1000000000000,
   });
   assert.match(r.alerts[0].desc, /a&lt;b&amp;c/);
+});
+
+// ── Modo Short: labels en la alerta de spread + bestOf ──────────────
+
+test('sin labels, la alerta de spread dice Mayorista/Compra (default)', () => {
+  const r = computeAlerts({
+    mayRaw: [rawAd({ price: 110 })], smallRaw: [rawAd({ price: 100 })],
+    cfg: cfgAlert, priceHist: [], cooldowns: {}, now: 1000000000000,
+  });
+  assert.match(r.alerts[0].desc, /^Mayorista: .* → Compra: /);
+});
+
+test('con labels custom, la alerta de spread usa Verde/Mayorista (Modo Short apagado)', () => {
+  const r = computeAlerts({
+    mayRaw: [rawAd({ price: 110 })], smallRaw: [rawAd({ price: 100 })],
+    cfg: cfgAlert, priceHist: [], cooldowns: {}, now: 1000000000000,
+    labels: { primary: 'Verde', secondary: 'Mayorista' },
+  });
+  assert.match(r.alerts[0].desc, /^Verde: .* → Mayorista: /);
+});
+
+test('bestOf devuelve el mejor precio corroborado, igual que computeAlerts.bestMay', () => {
+  const raw = [rawAd({ price: 921, merchant: 'm1' }), rawAd({ price: 920.5, merchant: 'm2' })];
+  assert.equal(bestOf(raw, true), 921);
+});
+
+test('bestOf respeta verifiedOnly', () => {
+  const raw = [rawAd({ price: 925, badges: [] })];
+  assert.equal(bestOf(raw, true), null);
+  assert.equal(bestOf(raw, false), 925);
 });

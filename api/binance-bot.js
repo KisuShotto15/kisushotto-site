@@ -315,15 +315,19 @@ export default async function handler(req, res) {
         const cfg = (params && params.config) || {};
         const prevM = await sql`SELECT config FROM monitor_state WHERE user_id = ${user.uid}`;
         mergeTg(cfg, prevM[0] && prevM[0].config);
-        // Si cambio el metodo de pago, resetear el momentum (price_hist mezcla precios de metodos distintos)
-        const prevPay = prevM[0] && prevM[0].config && prevM[0].config.payTypes && prevM[0].config.payTypes[0];
+        // Si cambio el metodo de pago o el Modo Short, resetear el momentum: price_hist
+        // mezclaria precios de metodos/pares distintos (Mayoristas vs Verde).
+        const prevCfg = prevM[0] && prevM[0].config;
+        const prevPay = prevCfg && prevCfg.payTypes && prevCfg.payTypes[0];
         const newPay = cfg.payTypes && cfg.payTypes[0];
+        const prevShort = prevCfg ? (prevCfg.shortMode !== false) : null;
+        const newShort = cfg.shortMode !== false;
         const cfgStr = JSON.stringify(cfg);
         await sql`
           INSERT INTO monitor_state (user_id, enabled, config, status, updated_at)
           VALUES (${user.uid}, true, ${cfgStr}::jsonb, 'Iniciando...', now())
           ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfgStr}::jsonb, status = 'Iniciando...', updated_at = now()`;
-        if (prevPay && newPay && prevPay !== newPay) {
+        if ((prevPay && newPay && prevPay !== newPay) || (prevCfg && prevShort !== newShort)) {
           await sql`UPDATE monitor_state SET price_hist = '[]'::jsonb WHERE user_id = ${user.uid}`;
         }
         await pokeScheduler();

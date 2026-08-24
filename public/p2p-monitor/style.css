@@ -397,6 +397,10 @@ body {
   border-radius: var(--r-sm);
   overflow: hidden;
 }
+/* Modo Short apagado: Máx/Mín 24h se ocultan (esa serie persistida sigue siendo
+   la de Mayoristas, mostrarla junto a un spread Verde confundiria); 3 columnas
+   en vez de 5 para no dejar hueco vacio a la derecha. */
+.hero-metrics.hm-3 { grid-template-columns: 1.5fr 1fr 1fr; }
 .hero-metric {
   background: var(--bg);
   padding: 12px 15px;
@@ -426,6 +430,7 @@ body {
   .hero-lead { min-width: 0; }
   .hero-lead .sh-pct { font-size: 40px; }
   .hero-metrics { grid-template-columns: 1fr 1fr; }
+  .hero-metrics.hm-3 { grid-template-columns: 1fr 1fr; }
   .hero-metric.span { grid-column: 1 / -1; }
 }
 .opp-yes  { background: var(--gold-d);  border: 1px solid var(--gold-b);  color: var(--gold);  }
@@ -857,32 +862,10 @@ input:focus {
 }
 
 /* ── Buy Section ─────────────────────────────────────── */
+/* La tarjeta "Spread de Venta" se retiró (el número vive ahora en el hero,
+   ver #sh-mode-note / applyMarketMode en main.js): buy-ob-wrap es la unica
+   columna, a ancho completo. */
 .buy-section-row { display: flex; gap: 10px; align-items: stretch; }
-.buy-ob-wrap { flex: 0 0 calc(50% - 5px); background: var(--surf-2); border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
-.buy-spread-card { flex: 1; background: var(--bg); border: 1px solid var(--border-2); border-radius: var(--r-sm); padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
-.bsc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.bsc-title { font-size: 11px; font-weight: 700; color: var(--text-3); letter-spacing: .08em; text-transform: uppercase; }
-.bsc-pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; letter-spacing: .02em; white-space: nowrap; }
-.bsc-lead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.bsc-lead .bs-val { font-size: 32px; line-height: 1; }
-.bsc-abs { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; font-weight: 600; }
-.bsc-flow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; background: var(--surf-1); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 11px 12px; }
-.bsc-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.bsc-cell-lbl { font-size: 11px; font-weight: 700; color: var(--text-3); letter-spacing: .05em; text-transform: uppercase; }
-.bsc-cell-val { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.bsc-cell-val.g2 { color: var(--green); }
-.bsc-cell-val.r2 { color: var(--red); }
-.bsc-arrow { color: var(--text-3); font-size: 15px; }
-.bsc-foot { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-3); padding-top: 2px; }
-.bsc-foot span:last-child { color: var(--text-2); font-variant-numeric: tabular-nums; font-weight: 600; }
-.bs-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.bs-lbl { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; white-space: nowrap; }
-.bs-val { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); }
-.bs-val.bs-red { color: #E24B4A; }
-.bs-val-sm { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.buy-ob-wrap { flex: 1 1 100%; background: var(--surf-2); border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
 .ob-side-title.buyads { background: linear-gradient(90deg,rgba(29,158,117,.1),transparent); color: var(--green); }
 .ob-row.best-buy-asc { background: linear-gradient(90deg,rgba(240,185,11,.07),transparent); }
-@media (max-width: 640px) {
-  .buy-section-row { flex-direction: column; }
-  .buy-ob-wrap { flex: none; width: 100%; }
-}

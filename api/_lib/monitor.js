@@ -106,6 +106,15 @@ function bestCorroborated(list) {
 // grafico: avail >= MIN_AVAIL, verificados segun cfg). Tasa USDT/VES publica que
 // consume el portfolio-tracker via /api/usdt-ves. Mediana > promedio: inmune a
 // un outlier que pase la criba.
+// Mejor precio real de Mayoristas, sin importar que par este usando computeAlerts
+// en ese momento. El sparkline y el resumen diario estan etiquetados "(mayorista)"
+// y son una serie continua persistida: no pueden mezclar Verde aunque el modo del
+// usuario cambie, o el grafico pega un salto falso y el resumen miente.
+export function bestOf(raw, verifiedOnly) {
+  const top = bestCorroborated(mapBest(raw, verifiedOnly));
+  return top ? top.price : null;
+}
+
 export function topMedianRate(raw, n, verifiedOnly) {
   const prices = mapBest(raw, verifiedOnly).slice(0, n).map(a => a.price);
   if (!prices.length) return null;
@@ -117,8 +126,12 @@ export function topMedianRate(raw, n, verifiedOnly) {
   };
 }
 
-export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now, silent }) {
+// mayRaw/smallRaw son "primario"/"secundario": con Modo Short apagado el caller
+// (bot-tick.js) pasa aqui Verde en mayRaw y Mayoristas en smallRaw, con labels
+// acorde, para reusar exactamente este mismo calculo sin bifurcar el modulo.
+export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now, silent, labels }) {
   now = now || Date.now();
+  const L = labels || { primary: 'Mayorista', secondary: 'Compra' };
   const verifiedOnly = cfg.verifiedOnly !== false;
   const may = mapBest(mayRaw, verifiedOnly);
   const small = mapBest(smallRaw, verifiedOnly);
@@ -154,7 +167,7 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
         alerts.push({
           type: 'spread',
           title: '💰 Spread ' + spread.toFixed(3) + '%' + netLabel + ' — OPORTUNIDAD',
-          desc: 'Mayorista: ' + bestMay.toFixed(2) + ' Bs (' + escHtml(topMay.merchant) + ') → Compra: ' +
+          desc: L.primary + ': ' + bestMay.toFixed(2) + ' Bs (' + escHtml(topMay.merchant) + ') → ' + L.secondary + ': ' +
                 bestSmall.toFixed(2) + ' Bs · Dif: ' + (bestMay - bestSmall).toFixed(2) + ' Bs/USDT',
         });
       }

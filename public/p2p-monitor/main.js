@@ -183,7 +183,8 @@ var CFG = {
   verifiedOnly: true,    // Solo comerciantes con insignia (aplica a monitor y bot)
   monQuietStart: '00:00',// Monitor 24/7: inicio del silencio nocturno (America/Caracas)
   monQuietEnd:   '07:00',// Monitor 24/7: fin del silencio nocturno
-  monSummary:    '08:00' // Monitor 24/7: hora del resumen diario por Telegram (Caracas)
+  monSummary:    '08:00',// Monitor 24/7: hora del resumen diario por Telegram (Caracas)
+  shortMode: true         // ON (defecto) = Mayoristas/Recompra arriba; OFF = Verde/Mayoristas
 };
 
 // Unico punto donde vive el origen del backend: el resto se deriva de aqui.
@@ -851,13 +852,18 @@ async function fetchOnce(fast) {
   ST.lastAttempt = Date.now();
   document.getElementById('last-update').textContent = 'Cargando...';
   try {
-    // Si la Sección Compra está colapsada, no pedir su página (1 llamada Binance menos por ciclo).
+    // Con Modo Short apagado Recompra no se muestra en ningun lado: no pedir su
+    // pagina. Con Short prendido (defecto), Verde solo se pide si la Sección
+    // Compra esta expandida; con Short apagado, Verde es primaria y se pide siempre.
     var buyBody = document.getElementById('buy-section-body');
-    var includeBuy = !buyBody || buyBody.style.display !== 'none';
+    var includeSmall = !isShortOff();
+    var includeBuy = isShortOff() || !buyBody || buyBody.style.display !== 'none';
 
     var bodies = [];
-    for (var i = 1; i <= MAY_PAGES; i++)   bodies.push(buildSearchBody({ transAmount: CFG.mayAmount,   page: i, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
-    for (var j = 1; j <= SMALL_PAGES; j++) bodies.push(buildSearchBody({ transAmount: CFG.smallAmount, page: j, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
+    for (var i = 1; i <= MAY_PAGES; i++) bodies.push(buildSearchBody({ transAmount: CFG.mayAmount, page: i, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
+    var smallOffset = bodies.length;
+    if (includeSmall) for (var j = 1; j <= SMALL_PAGES; j++) bodies.push(buildSearchBody({ transAmount: CFG.smallAmount, page: j, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
+    var buyOffset = bodies.length;
     if (includeBuy) bodies.push(buildSearchBody({ transAmount: CFG.buyAmount, page: 1, pays: [ACTIVE_PAY], tradeType: 'BUY' }));
 
     // Al reanudar, la conexion TCP/HTTP2 que quedo abierta antes del background
@@ -866,8 +872,8 @@ async function fetchOnce(fast) {
     // aborta rapido y el reintento abre uno nuevo.
     var batch = await searchBatch(bodies, fast ? 3500 : 0);
     var mayRaw   = batch.slice(0, MAY_PAGES).flatMap(function(a){ return a; });
-    var smallRaw = batch.slice(MAY_PAGES, MAY_PAGES + SMALL_PAGES).flatMap(function(a){ return a; });
-    var buyRaw   = includeBuy ? (batch[MAY_PAGES + SMALL_PAGES] || []) : null;
+    var smallRaw = includeSmall ? batch.slice(smallOffset, smallOffset + SMALL_PAGES).flatMap(function(a){ return a; }) : [];
+    var buyRaw   = includeBuy ? (batch[buyOffset] || []) : null;
 
     var prevMayAvail = {};
     (ST.mayoristas || []).forEach(function(a){ prevMayAvail[a.advNo] = a.avail; });
@@ -892,7 +898,7 @@ async function fetchOnce(fast) {
         extraMeta.push('may');
       }
     }
-    if (ST.smallAds.length < 8 && smallRaw.length >= SMALL_PAGES * 20) {
+    if (includeSmall && ST.smallAds.length < 8 && smallRaw.length >= SMALL_PAGES * 20) {
       for (var es = SMALL_PAGES + 1; es <= SMALL_PAGES + EXTRA_PAGES; es++) {
         extraBodies.push(buildSearchBody({ transAmount: CFG.smallAmount, page: es, pays: [ACTIVE_PAY], tradeType: 'SELL' }));
         extraMeta.push('small');
@@ -923,10 +929,10 @@ async function fetchOnce(fast) {
 
     ST.allAds     = ST.mayoristas; // para compatibilidad con historial
 
-    // Historial de precio (mejor mayorista creible, sin listings fantasma)
-    var bestMay = bestCredibleMay();
-    if (bestMay) {
-      ST.priceHist.push({ ts: Date.now(), price: bestMay });
+    // Historial de precio (primario del modo actual, creible, sin listings fantasma)
+    var bestPrimary = marketPrimaryPrice();
+    if (bestPrimary) {
+      ST.priceHist.push({ ts: Date.now(), price: bestPrimary });
       if (ST.priceHist.length > 600) ST.priceHist.shift();
     }
 
@@ -1065,7 +1071,7 @@ function renderAll() {
   renderOB('ob-may',   ST.mayoristas, 'best');
   renderOB('ob-small', ST.smallAds,   'best-buy');
   renderBuySection(ST.buyAds);
-  renderBuySpread();
+  updateSellPricePlaceholder();
   updateSessionStats();
 }
 
@@ -1142,7 +1148,7 @@ function setStretchBadge(pct, spreadNet) {
 function renderSpreadHero() {
   setStretchBadge(null); // oculto por defecto; se re-activa abajo si aplica
   // Mismo filtro de credibilidad (>=2000 USDT) que gráfico/alertas.
-  var cMayH = credibleMay(), cSmallH = credibleSmall();
+  var cMayH = marketPrimary(), cSmallH = marketSecondary();
   var bestMay   = cMayH   ? cMayH.price   : null;
   var bestSmall = cSmallH ? cSmallH.price : null;
 
@@ -1173,8 +1179,9 @@ function renderSpreadHero() {
   var spreadNet = spread - (CFG.commission || 0);
   var spreadBs  = bestMay - bestSmall;
 
-  // Señal estirado: solo BDV, alimenta el buffer 24h y evalúa el percentil.
-  if (ACTIVE_PAY === 'BancoDeVenezuela') {
+  // Señal estirado: solo BDV y solo Modo Short ON — el percentil esta calibrado
+  // contra Mayoristas/Recompra; mezclar el spread de Verde lo haria inservible.
+  if (ACTIVE_PAY === 'BancoDeVenezuela' && !isShortOff()) {
     stretchPush(spreadNet);
     setStretchBadge(stretchPct(spreadNet), spreadNet);
   }
@@ -1205,7 +1212,7 @@ function renderSpreadHero() {
 }
 
 function renderStats() {
-  var cMayS = credibleMay(), cSmallS = credibleSmall();
+  var cMayS = marketPrimary(), cSmallS = marketSecondary();
   var bestMay   = cMayS   ? cMayS.price   : null;
   var bestSmall = cSmallS ? cSmallS.price : null;
 
@@ -1359,57 +1366,11 @@ function renderBuySection(ads) {
   updateShowMoreBtn('ob-buy', ads.length);
 }
 
-function renderBuySpread() {
-  // sellPrice = precio del verde (merchant vende USDT, usuario compra del usuario aquí)
-  // buyPrice  = precio del libro de compradores (lo que pagarían por USDT si hubiera que reponerlo)
-  var sellPrice = ST.buyAds[0]     ? ST.buyAds[0].price     : null; // Keria23: precio verde
-  var buyPrice  = ST.smallAds[0]   ? ST.smallAds[0].price   : null; // sección rojo (compra 30k): precio referencia
-
-  var netEl    = document.getElementById('bs-net');
-  var sellEff  = document.getElementById('bs-sell-eff');
-  var sellRef  = document.getElementById('bs-sell-ref');
-  var buyRef   = document.getElementById('bs-buy-ref');
-  if (!netEl) return;
-
-  if (!sellPrice || !buyPrice) {
-    netEl.textContent   = '—'; netEl.className = 'bs-val';
-    if (sellEff) sellEff.textContent = '—';
-    if (sellRef) sellRef.textContent = '—';
-    if (buyRef)  buyRef.textContent  = '—';
-    var p0 = document.getElementById('bs-pill');
-    if (p0) { p0.textContent = 'Sin datos'; p0.className = 'bsc-pill'; p0.style.cssText = 'background:var(--surf-2);color:var(--text-3);border:1px solid var(--border)'; }
-    var a0 = document.getElementById('bs-net-abs');
-    if (a0) a0.textContent = '';
-    return;
-  }
-
-  var c = CFG.commission / 100;
-  // Vendo en el verde: recibo sellPrice, Binance cobra c → recibo efectivo = sellPrice × (1−c)
-  // Compro via libro: costo buyPrice, Binance cobra c → costo efectivo = buyPrice × (1+c)
-  var effectiveSell = sellPrice * (1 - c);
-  var effectiveBuy  = buyPrice  * (1 + c);
-  var netAbs        = effectiveSell - effectiveBuy;
-  var netPct        = netAbs / sellPrice * 100;
-  var isGood        = netPct >= CFG.spreadThr;
-
-  netEl.textContent = netPct.toFixed(3) + '%';
-  netEl.className   = 'bs-val' + (isGood ? '' : ' bs-red');
-  netEl.style.color = '';
-
-  if (sellEff) sellEff.textContent = fmt(effectiveSell) + fiatSuf();
-  if (sellRef) sellRef.textContent = fmt(sellPrice) + fiatSuf();
-  if (buyRef)  buyRef.textContent  = fmt(buyPrice)  + fiatSuf();
-
-  var absEl = document.getElementById('bs-net-abs');
-  if (absEl) absEl.textContent = '≈ ' + fmt(netAbs) + fiatSuf() + '/USDT';
-  var pill = document.getElementById('bs-pill');
-  if (pill) {
-    pill.className = 'bsc-pill';
-    if (netPct <= 0) { pill.textContent = '⚠ Negativo'; pill.style.cssText = 'background:var(--red-d);color:var(--red);border:1px solid var(--red-b)'; }
-    else if (isGood) { pill.textContent = '🟡 Oportunidad'; pill.style.cssText = 'background:var(--gold-d);color:var(--gold);border:1px solid var(--gold-b)'; }
-    else { pill.textContent = 'Bajo umbral'; pill.style.cssText = 'background:var(--surf-2);color:var(--text-3);border:1px solid var(--border)'; }
-  }
-
+// La tarjeta "Spread de Venta" se retiró (ver #sh-mode-note / applyMarketMode);
+// lo unico que sobrevive de renderBuySpread() es esta sugerencia de placeholder,
+// que no tiene relacion con el modo (siempre usa el precio de Verde si existe).
+function updateSellPricePlaceholder() {
+  var sellPrice = ST.buyAds[0] ? ST.buyAds[0].price : null;
   var sellInp = document.getElementById('cfg-bot-sell');
   if (sellInp && sellPrice) sellInp.placeholder = 'sug. ' + Math.round(sellPrice);
 }
@@ -1417,8 +1378,9 @@ function renderBuySpread() {
 // ── Alertas ───────────────────────────────────────────
 function checkAlerts() {
   var now = Date.now();
-  var cMay = credibleMay(), cSmall = credibleSmall();
-  var bestMay   = cMay   ? cMay.price   : null;  // solo mayoristas creibles (>=2000 USDT)
+  var cMay = marketPrimary(), cSmall = marketSecondary();
+  var L = marketLabels();
+  var bestMay   = cMay   ? cMay.price   : null;  // primario del modo actual, creible (>=2000 USDT)
   var bestSmall = cSmall ? cSmall.price : null;
 
   if (!bestMay) return;
@@ -1434,7 +1396,7 @@ function checkAlerts() {
         COOLDOWN.spread = now;
         addAlert('spread',
           '💰 Spread ' + spread.toFixed(3) + '%' + netLabel + ' — OPORTUNIDAD',
-          'Mayorista: ' + fmt(bestMay) + fiatSuf() + ' (' + esc(cMay.merchant) + ') → Compra: ' + fmt(bestSmall) + fiatSuf() + ' · Dif: ' + fmt(bestMay - bestSmall) + fiatSuf() + '/USDT'
+          L.primary + ': ' + fmt(bestMay) + fiatSuf() + ' (' + esc(cMay.merchant) + ') → ' + L.secondary + ': ' + fmt(bestSmall) + fiatSuf() + ' · Dif: ' + fmt(bestMay - bestSmall) + fiatSuf() + '/USDT'
         );
         push('Spread P2P ' + spread.toFixed(3) + '%', 'Vende a ' + fmt(bestMay) + fiatSuf() + ' — compra ref. ' + fmt(bestSmall) + fiatSuf());
       }
@@ -2700,9 +2662,55 @@ function credibleBest(a) {
   }
   return list[1]; // ninguno confirmado: el primero es el menos fiable
 }
+// Reacomoda el DOM segun el modo: mueve el ob-side de Verde entre la Sección
+// Compra (Short ON, su lugar de siempre) y el ob-grid de arriba (Short OFF, en
+// el puesto de Mayoristas), oculta Recompra y la Sección Compra restante, y
+// ajusta el hero. appendChild/insertBefore sobre un nodo existente lo MUEVE
+// (conserva ids/listeners): no hace falta duplicar markup.
+function applyMarketMode() {
+  var off = isShortOff();
+  var grid   = document.getElementById('ob-grid');
+  var mayS   = document.getElementById('ob-side-may');
+  var smallS = document.getElementById('ob-side-small');
+  var buyS   = document.getElementById('ob-side-buy');
+  var buyWrap     = document.getElementById('buy-ob-wrap');
+  var buysecOuter = document.getElementById('buysec-outer');
+  if (grid && mayS && smallS && buyS && buyWrap && buysecOuter) {
+    if (off) {
+      if (buyS.parentNode !== grid) grid.insertBefore(buyS, mayS);
+      smallS.style.display = 'none';
+      buysecOuter.style.display = 'none';
+    } else {
+      if (buyS.parentNode !== buyWrap) buyWrap.appendChild(buyS);
+      smallS.style.display = '';
+      buysecOuter.style.display = '';
+    }
+  }
+  var note = document.getElementById('sh-mode-note');
+  if (note) note.textContent = off ? ' · Verde vs Mayorista' : '';
+  var metrics = document.getElementById('hero-metrics');
+  if (metrics) metrics.classList.toggle('hm-3', off);
+  var hmMax = document.getElementById('hm-max24'), hmMin = document.getElementById('hm-min24');
+  if (hmMax) hmMax.style.display = off ? 'none' : '';
+  if (hmMin) hmMin.style.display = off ? 'none' : '';
+}
+
 function credibleMay()   { return credibleBest(ST.mayoristas); }
 function credibleSmall() { return credibleBest(ST.smallAds); }
+function credibleBuy()   { return credibleBest(ST.buyAds); }
 function bestCredibleMay() { var m = credibleMay(); return m ? m.price : null; }
+function bestCredibleBuy() { var m = credibleBuy(); return m ? m.price : null; }
+
+// ── Modo Short: que par de tablas manda en el hero, las alertas y el momentum ──
+// ON (por defecto, CFG.shortMode !== false): Mayoristas vs Recompra, igual que siempre.
+// OFF: Verde vs Mayoristas — Recompra no se muestra ni se pide en ese modo.
+function isShortOff() { return CFG.shortMode === false; }
+function marketPrimary()      { return isShortOff() ? credibleBuy()      : credibleMay(); }
+function marketSecondary()    { return isShortOff() ? credibleMay()      : credibleSmall(); }
+function marketPrimaryPrice() { return isShortOff() ? bestCredibleBuy()  : bestCredibleMay(); }
+function marketLabels() {
+  return isShortOff() ? { primary: 'Verde', secondary: 'Mayorista' } : { primary: 'Mayorista', secondary: 'Compra' };
+}
 
 // ── Tabs Mercado/Bot (solo movil) ─────────────────────────────────────
 var TABS = ['mercado', 'bot'];
@@ -3374,6 +3382,8 @@ function monitorServerConfig() {
     commission: CFG.commission || 0,
     mayAmount: CFG.mayAmount,
     smallAmount: CFG.smallAmount,
+    buyAmount: CFG.buyAmount,
+    shortMode: CFG.shortMode !== false,
     verifiedOnly: CFG.verifiedOnly !== false,
     payTypes: [ACTIVE_PAY],
     tg: { token: TG.token, chatId: TG.chatId }
@@ -3432,8 +3442,11 @@ function saveConfig() {
   CFG.monQuietStart = document.getElementById('cfg-mon-qstart').value || '00:00';
   CFG.monQuietEnd   = document.getElementById('cfg-mon-qend').value   || '07:00';
   CFG.monSummary    = document.getElementById('cfg-mon-summary').value || '08:00';
+  var shortEl = document.getElementById('cfg-shortmode');
+  if (shortEl) CFG.shortMode = shortEl.checked;
   localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
   syncFilterInputs();
+  applyMarketMode();
   if (ST.running) { clearInterval(ST.timer); ST.timer = setInterval(fetchOnce, CFG.interval * 1000); }
   updateCommissionLabels();
   botUpdateCeiling();
@@ -3460,8 +3473,23 @@ function loadConfig() {
     if (CFG.monQuietStart) document.getElementById('cfg-mon-qstart').value = CFG.monQuietStart;
     if (CFG.monQuietEnd)   document.getElementById('cfg-mon-qend').value   = CFG.monQuietEnd;
     if (CFG.monSummary)    document.getElementById('cfg-mon-summary').value = CFG.monSummary;
+    var shortEl = document.getElementById('cfg-shortmode');
+    if (shortEl) shortEl.checked = CFG.shortMode !== false;
   } catch(e) {}
   updateVerToggle();
+  applyMarketMode();
+}
+
+// Instantaneo, sin pasar por "Guardar" (es un modo de vista, no un parametro de riesgo).
+function toggleShortMode() {
+  var cb = document.getElementById('cfg-shortmode');
+  CFG.shortMode = cb ? cb.checked : true;
+  localStorage.setItem('p2p_cfg2', JSON.stringify(CFG));
+  ST.priceHist = []; // la serie primaria cambia: evita un salto de momentum falso
+  applyMarketMode();
+  fetchOnce();
+  saveUserSettings();
+  if (MON24.enabled && ACTIVE_FIAT === 'VES') { botCallWorker('/monitor-enable', { config: monitorServerConfig() }).catch(function(){}); }
 }
 
 function toggleVerified() {
@@ -3550,4 +3578,4 @@ handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });
 renderOB('ob-may',   [], 'best');
 renderOB('ob-small', [], 'best-buy');
 renderBuySection([]);
-renderBuySpread();
+updateSellPricePlaceholder();

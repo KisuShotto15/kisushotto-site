@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=23">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=24">
 </head>
 <body>
 
@@ -97,13 +97,13 @@
 <div class="hero-wrap">
     <div class="spread-hero-full" id="spread-hero">
       <div class="hero-lead">
-        <div class="sh-label">Spread neto</div>
+        <div class="sh-label">Spread neto<span id="sh-mode-note" style="color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0"></span></div>
         <div class="sh-pct" id="hero-pct">—</div>
         <div id="hero-pill" class="sh-pill opp-no">Sin datos</div>
         <div class="sh-stretch" id="hero-stretch"></div>
         <div class="hero-sublabel" id="hero-label"></div>
       </div>
-      <div class="hero-metrics">
+      <div class="hero-metrics" id="hero-metrics">
         <!-- Precios -->
         <div class="hero-metric span">
           <div class="hm-label">Precios</div>
@@ -124,11 +124,11 @@
           <div class="sc-v" id="st-delta" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
         <!-- Sesión -->
-        <div class="hero-metric">
+        <div class="hero-metric" id="hm-max24">
           <div class="hm-label">Máx 24h</div>
           <div class="sc-v g" id="sess-max" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
-        <div class="hero-metric">
+        <div class="hero-metric" id="hm-min24">
           <div class="hm-label">Mín 24h</div>
           <div class="sc-v" id="sess-min" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
@@ -188,6 +188,7 @@
       <!-- Config popup -->
       <div id="ob-gear-popup" style="display:none;position:absolute;top:44px;right:11px;width:300px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.8);z-index:50">
         <div class="ptitle" style="margin-bottom:8px">Configuración</div>
+        <div class="cfg-row"><span title="ON (por defecto): igual que ahora — Mayoristas y Recompra arriba, Verde plegado en Sección Compra. OFF: Verde y Mayoristas arriba (Recompra se oculta) y el spread se calcula Verde vs Mayorista — útil si tu ciclo es comprar/vender efectivo en vez de recomprar en el libro.">Modo Short</span><input type="checkbox" id="cfg-shortmode" checked onchange="toggleShortMode()" style="width:18px;height:18px;accent-color:var(--gold);cursor:pointer"></div>
         <div class="cfg-row"><span title="Cada cuánto se refresca el monitor mientras la app está abierta">Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="10" max="300"></div>
         <div class="cfg-row"><span title="La comisión que Binance cobra al comprar USDT (0.175% es lo usual). Se descuenta en el spread neto y en el P&amp;L">Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
         <div class="cfg-row" style="border-bottom:none"><span style="font-size:11px;color:var(--text-3)">Los umbrales de alerta y el push están en la 🔔 campana</span></div>
@@ -210,14 +211,14 @@
         </div>
       </div>
 
-      <div class="ob-grid">
-        <div class="ob-side">
+      <div class="ob-grid" id="ob-grid">
+        <div class="ob-side" id="ob-side-may">
           <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="1000000" onchange="setFilter('may',this.value)"> VES</span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Límites</span></div>
           <div id="ob-may"></div>
           <button class="ob-more" id="more-ob-may" onclick="toggleShowMore('ob-may')" style="display:none"></button>
         </div>
-        <div class="ob-side">
+        <div class="ob-side" id="ob-side-small">
           <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">Recompra</span><span class="lbl-extra" id="extra-small"></span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="10000" onchange="setFilter('small',this.value)"> VES</span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Límites</span></div>
           <div id="ob-small"></div>
@@ -225,41 +226,20 @@
         </div>
       </div>
 
-      <!-- Sección Compra (BUY) -->
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <!-- Sección Compra (BUY): tabla Verde. Con Modo Short activo (por defecto) vive
+           aquí, plegada; al desactivarlo, su ob-side se traslada arriba al ob-grid
+           (ver applyMarketMode en main.js) y este bloque entero se oculta. -->
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)" id="buysec-outer">
         <div class="ptitle" onclick="toggleBuySection()" style="margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:7px;user-select:none">
           <span id="buy-chevron" style="display:inline-block;transition:transform .15s;font-size:11px">▼</span>Sección Compra
         </div>
         <div class="buy-section-row" id="buy-section-body">
-          <div class="buy-ob-wrap">
-            <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">Verde</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
-            <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Límites</span></div>
-            <div id="ob-buy"></div>
-            <button class="ob-more" id="more-ob-buy" onclick="toggleShowMore('ob-buy')" style="display:none"></button>
-          </div>
-          <div class="buy-spread-card">
-            <div class="bsc-head">
-              <span class="bsc-title">Spread de Venta</span>
-              <span class="bsc-pill" id="bs-pill">—</span>
-            </div>
-            <div class="bsc-lead">
-              <span class="bs-val" id="bs-net">—</span>
-              <span class="bsc-abs" id="bs-net-abs"></span>
-            </div>
-            <div class="bsc-flow">
-              <div class="bsc-cell">
-                <div class="bsc-cell-lbl">Compras ref.</div>
-                <div class="bsc-cell-val r2" id="bs-buy-ref">—</div>
-              </div>
-              <div class="bsc-arrow">→</div>
-              <div class="bsc-cell">
-                <div class="bsc-cell-lbl">Vendes efectivo</div>
-                <div class="bsc-cell-val g2" id="bs-sell-eff">—</div>
-              </div>
-            </div>
-            <div class="bsc-foot">
-              <span>Ref. verde (bruto)</span>
-              <span id="bs-sell-ref">—</span>
+          <div class="buy-ob-wrap" id="buy-ob-wrap">
+            <div class="ob-side" id="ob-side-buy">
+              <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">Verde</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
+              <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Límites</span></div>
+              <div id="ob-buy"></div>
+              <button class="ob-more" id="more-ob-buy" onclick="toggleShowMore('ob-buy')" style="display:none"></button>
             </div>
           </div>
         </div>
@@ -414,7 +394,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=43"></script>
+<script src="/p2p-monitor/main.js?v=44"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
