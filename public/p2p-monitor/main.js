@@ -366,7 +366,7 @@ function enterApp() {
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
-var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly' };
+var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly', linkClicked: false };
 var _subPollT = null;
 
 function daysLeft(iso) {
@@ -387,6 +387,7 @@ function renderSubBadge() {
 
 function selectSubPlan(plan) {
   SUB.selectedPlan = plan;
+  SUB.linkClicked = false; // cambio de plan = link distinto, hay que abrirlo de nuevo
   renderSubModal();
 }
 
@@ -402,6 +403,8 @@ function onSubPayLinkClick(e) {
     alert('El link de pago del plan ' + (plan === 'annual' ? 'anual' : 'mensual') + ' todavía no está configurado.');
     return false;
   }
+  SUB.linkClicked = true;
+  renderSubModal(); // recien ahora aparece "Ya pagué" — no antes de haber ido al link
   return true;
 }
 
@@ -414,6 +417,7 @@ function renderSubModal() {
   var linkEl = document.getElementById('sub-pay-link');
   var mBtn = document.getElementById('sub-plan-monthly');
   var aBtn = document.getElementById('sub-plan-annual');
+  var paidBtn = document.getElementById('sub-paid-btn');
   if (!line) return;
   var s = SUB.subscription, inv = SUB.invoice;
   if (s) {
@@ -428,6 +432,7 @@ function renderSubModal() {
   if (linkEl) linkEl.href = info.link || '#';
   if (mBtn) mBtn.classList.toggle('btn-gold', plan === 'monthly');
   if (aBtn) aBtn.classList.toggle('btn-gold', plan === 'annual');
+  if (paidBtn) paidBtn.style.display = SUB.linkClicked ? '' : 'none';
 
   var notStarted = s && s.status === 'not_started';
   var reviewing = inv && inv.status === 'pending_review';
@@ -490,6 +495,16 @@ async function markSubPaid() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Ya pagué'; }
   }
+}
+
+async function cancelSubPending() {
+  try {
+    await apiPost('/api/payments/cancel-pending', {}, true);
+  } catch (e) {}
+  SUB.invoice = null;
+  SUB.linkClicked = false;
+  stopPoll();
+  renderSubModal();
 }
 
 // Al cargar: si hay sesion valida (email autorizado), entra; si no, queda el muro.

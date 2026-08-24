@@ -16,15 +16,20 @@ async function shouldPoll() {
   return Date.now() - last >= POLL_THROTTLE_MS;
 }
 
-// Sin nick registrado (menos friccion en el onboarding): matchea contra la factura
-// pendiente MAS VIEJA de todo el sistema (FIFO). Con 1-2 usuarios y un "Ya pague"
-// justo antes de pagar, la ambiguedad es minima. Antes de elegir, vence las
-// facturas abandonadas (>48h sin pago real) para que no le "roben" el pago a
-// alguien nuevo que si pago.
-async function reconcilePayment(hit) {
+// Vence las facturas abandonadas (alguien toco "Ya pague" sin pagar de verdad, o el
+// plan equivocado). Corre en CADA poll, no solo cuando llega un correo — si nadie
+// paga nunca, un "Ya pague" falso se quedaria pending_review para siempre y (por el
+// matching FIFO de abajo) le robaria el pago a la proxima persona que si pague.
+async function expireStale() {
   await sql`
     UPDATE payment_invoices SET status = 'expired'
     WHERE status IN ('pending', 'pending_review') AND created_at < now() - interval '48 hours'`;
+}
+
+// Sin nick registrado (menos friccion en el onboarding): matchea contra la factura
+// pendiente MAS VIEJA de todo el sistema (FIFO). Con 1-2 usuarios y un "Ya pague"
+// justo antes de pagar, la ambiguedad es minima.
+async function reconcilePayment(hit) {
   const inv = await sql`
     SELECT id, user_id FROM payment_invoices
     WHERE status IN ('pending', 'pending_review')
@@ -34,11 +39,16 @@ async function reconcilePayment(hit) {
 }
 
 export async function checkPaymentEmails() {
-  const user = process.env.GMAIL_IMAP_USER;
-  const pass = process.env.GMAIL_IMAP_APP_PASSWORD;
-  if (!user || !pass) return { skipped: 'no-config' };
   if (!(await shouldPoll())) return { skipped: 'throttled' };
   await ensurePlanColumn();
+  await expireStale(); // corre siempre, aunque el IMAP no este configurado todavia
+
+  const user = process.env.GMAIL_IMAP_USER;
+  const pass = process.env.GMAIL_IMAP_APP_PASSWORD;
+  if (!user || !pass) {
+    await sql`UPDATE email_payment_state SET checked_at = now() WHERE id = 1`; // respeta el throttle igual
+    return { skipped: 'no-config' };
+  }
 
   const state = await sql`SELECT last_uid FROM email_payment_state WHERE id = 1`;
   const lastUid = Number((state[0] && state[0].last_uid) || 0);

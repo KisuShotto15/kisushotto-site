@@ -137,6 +137,18 @@ async function markPendingAction(req, res) {
   return res.status(200).json({ invoiceId, status: 'pending_review' });
 }
 
+// El usuario se arrepiente / se equivoco (nunca pago de verdad, o lo hizo por el
+// plan que no era): libera su propia factura en revision para poder reintentar.
+async function cancelPendingAction(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  await readRawBody(req).catch(() => {});
+  await ensureSchema();
+  await sql`UPDATE payment_invoices SET status = 'expired' WHERE user_id = ${user.uid} AND status = 'pending_review'`;
+  return res.status(200).json({ ok: true });
+}
+
 // Activa la prueba gratis (7 dias) — solo cuando el usuario lo pide explicitamente,
 // nunca automatico al entrar.
 async function startTrialAction(req, res) {
@@ -253,6 +265,7 @@ export default async function handler(req, res) {
       case 'status':        return await statusAction(req, res);
       case 'webhook':       return await webhookAction(req, res);
       case 'mark-pending':  return await markPendingAction(req, res);
+      case 'cancel-pending':return await cancelPendingAction(req, res);
       case 'start-trial':   return await startTrialAction(req, res);
       case 'set-nick':      return await setNickAction(req, res);
       case 'admin-confirm': return await adminConfirmAction(req, res);
