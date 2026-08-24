@@ -119,7 +119,7 @@ export async function ensureSchema() {
   // existe, el schema esta completo y se saltan los ~20 DDLs secuenciales que
   // hacian eterno cada cold start. Si se agrega un DDL nuevo abajo, mover la sonda
   // al objeto mas nuevo (o borrarla temporalmente para que el DDL corra).
-  const probe = await sql`SELECT to_regclass('p2p.subscriptions') AS t`.catch(() => []);
+  const probe = await sql`SELECT to_regclass('p2p.email_payment_state') AS t`.catch(() => []);
   if (probe[0] && probe[0].t) { schemaReady = true; return; }
   await sql`CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -283,5 +283,18 @@ export async function ensureSchema() {
     paid_at TIMESTAMPTZ
   )`;
   await sql`CREATE INDEX IF NOT EXISTS payment_invoices_user ON payment_invoices (user_id, created_at DESC)`;
+  // Nick de Binance Pay del usuario: el correo "Payment Receive Successful" solo trae ese
+  // nick como remitente, y el Payment Link personal cobra siempre el mismo monto fijo, asi
+  // que sin esto dos pagos simultaneos del mismo monto son indistinguibles entre si.
+  await sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS binance_nick TEXT`;
+  // Checkpoint (1 sola fila) del lector de correo: hasta que UID de IMAP ya se proceso,
+  // para no releer ni reprocesar el buzon completo en cada poll.
+  await sql`CREATE TABLE IF NOT EXISTS email_payment_state (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    last_uid BIGINT NOT NULL DEFAULT 0,
+    checked_at TIMESTAMPTZ,
+    CONSTRAINT single_row CHECK (id = 1)
+  )`;
+  await sql`INSERT INTO email_payment_state (id, last_uid) VALUES (1, 0) ON CONFLICT (id) DO NOTHING`;
   schemaReady = true;
 }

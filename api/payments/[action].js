@@ -8,11 +8,7 @@ import { requireUser } from '../_lib/auth.js';
 import { sql, ensureSchema } from '../_lib/db.js';
 import { createOrder, queryOrder, verifyWebhookSignature } from '../_lib/binancepay.js';
 import { sendPush } from '../_lib/push.js';
-
-const TRIAL_DAYS = 7;
-const SUB_PRICE = process.env.SUB_PRICE_USDT || '5';
-const SUB_CURRENCY = 'USDT';
-const PERIOD_MS = 30 * 24 * 3600 * 1000;
+import { ensureSubscription, markPaid, SUB_PRICE, SUB_CURRENCY } from '../_lib/subscriptions.js';
 
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -26,31 +22,6 @@ function readRawBody(req) {
 async function readJsonBody(req) {
   const raw = await readRawBody(req);
   try { return JSON.parse(raw || '{}'); } catch (e) { return {}; }
-}
-
-async function ensureSubscription(userId) {
-  const rows = await sql`SELECT * FROM subscriptions WHERE user_id = ${userId}`;
-  if (rows.length) return rows[0];
-  const trialEnd = new Date(Date.now() + TRIAL_DAYS * 24 * 3600 * 1000).toISOString();
-  await sql`
-    INSERT INTO subscriptions (user_id, status, trial_end)
-    VALUES (${userId}, 'trialing', ${trialEnd})
-    ON CONFLICT (user_id) DO NOTHING`;
-  const out = await sql`SELECT * FROM subscriptions WHERE user_id = ${userId}`;
-  return out[0];
-}
-
-// Suma 1 periodo desde el vencimiento actual (si ya vencio, desde ahora) — evita
-// que pagar temprano "regale" dias por encimarse con el periodo vigente.
-async function markPaid(invoiceId, userId, txId) {
-  await sql`UPDATE payment_invoices SET status = 'paid', transaction_id = ${txId || null}, paid_at = now()
-    WHERE id = ${invoiceId} AND status IN ('pending', 'pending_review')`;
-  const now = Date.now();
-  const sub = await sql`SELECT current_period_end FROM subscriptions WHERE user_id = ${userId}`;
-  const curEnd = sub[0] && sub[0].current_period_end ? new Date(sub[0].current_period_end).getTime() : 0;
-  const base = curEnd > now ? curEnd : now;
-  const periodEnd = new Date(base + PERIOD_MS).toISOString();
-  await sql`UPDATE subscriptions SET status = 'active', current_period_end = ${periodEnd}, updated_at = now() WHERE user_id = ${userId}`;
 }
 
 function payKeys() {
@@ -128,6 +99,7 @@ async function statusAction(req, res) {
     subscription: subNow[0] || null, invoice,
     amount: SUB_PRICE, currency: SUB_CURRENCY,
     paymentLink: process.env.PAYMENT_LINK_URL || null,
+    binanceNick: (subNow[0] && subNow[0].binance_nick) || null,
   });
 }
 
@@ -158,6 +130,21 @@ async function markPendingAction(req, res) {
     ).catch(() => {});
   }
   return res.status(200).json({ invoiceId, status: 'pending_review' });
+}
+
+// Nick de Binance Pay del usuario: es la unica forma de distinguir pagos simultaneos
+// del mismo monto fijo cuando el poller de correo (mail-poll.js) intente matchearlos.
+async function setNickAction(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  const body = await readJsonBody(req);
+  const nick = String(body.nick || '').trim().slice(0, 64);
+  if (!nick) return res.status(400).json({ error: 'nick requerido' });
+  await ensureSchema();
+  await ensureSubscription(user.uid);
+  await sql`UPDATE subscriptions SET binance_nick = ${nick}, updated_at = now() WHERE user_id = ${user.uid}`;
+  return res.status(200).json({ ok: true });
 }
 
 // Confirmacion manual del admin (revisa el historial de Binance Pay a mano). Restringido
@@ -244,6 +231,7 @@ export default async function handler(req, res) {
       case 'status':        return await statusAction(req, res);
       case 'webhook':       return await webhookAction(req, res);
       case 'mark-pending':  return await markPendingAction(req, res);
+      case 'set-nick':      return await setNickAction(req, res);
       case 'admin-confirm': return await adminConfirmAction(req, res);
       case 'admin-pending': return await adminPendingAction(req, res);
       default:              return res.status(404).json({ error: 'Accion desconocida' });

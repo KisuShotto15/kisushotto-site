@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
+    "imapflow": "^1.7.6",
     "lightweight-charts": "^4.2.0",
+    "mailparser": "^3.9.16",
     "postgres": "^3.4.9",
     "web-push": "^3.6.7"
   },
