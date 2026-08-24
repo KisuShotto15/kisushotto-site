@@ -361,7 +361,7 @@ function authLogout() {
 function enterApp() {
   var g = document.getElementById('login-gate');
   if (g) g.style.display = 'none';
-  if (!window._appBooted) { window._appBooted = true; try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} }
+  if (!window._appBooted) { window._appBooted = true; try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} }
 }
 
 // Al cargar: si hay sesion valida (email autorizado), entra; si no, queda el muro.
@@ -2321,6 +2321,7 @@ function renderBotToggle() {
   b.textContent = BOT.running ? '⏹ Detener Bot' : '▶ Iniciar Bot';
   b.style.background = BOT.running ? '#E24B4A' : '';
   renderAdHidden(BOT.adHidden); // el chip "Oculto" no aplica con el bot detenido
+  renderTabDot();
 }
 
 // La secuencia de arranque tarda (leer anuncio, metodos, reprice, activar). Mientras
@@ -2653,6 +2654,33 @@ function credibleMay()   { return credibleBest(ST.mayoristas); }
 function credibleSmall() { return credibleBest(ST.smallAds); }
 function bestCredibleMay() { var m = credibleMay(); return m ? m.price : null; }
 
+// ── Tabs Mercado/Bot (solo movil) ─────────────────────────────────────
+var TABS = ['mercado', 'bot'];
+
+function showTab(name) {
+  if (TABS.indexOf(name) < 0) name = 'mercado';
+  for (var i = 0; i < TABS.length; i++) {
+    var on = TABS[i] === name;
+    var btn = document.getElementById('tab-' + TABS[i]);
+    var col = document.getElementById('col-' + TABS[i]);
+    if (btn) btn.classList.toggle('is-on', on);
+    if (col) col.classList.toggle('is-on', on);
+  }
+  try { localStorage.setItem('p2p-tab', name); } catch (e) {}
+}
+
+function initTabs() {
+  var saved = 'mercado';
+  try { saved = localStorage.getItem('p2p-tab') || 'mercado'; } catch (e) {}
+  showTab(saved);
+}
+
+// Punto verde en la tab del Bot: ver que sigue corriendo sin cambiar de pestaña.
+function renderTabDot() {
+  var d = document.getElementById('tab-bot-dot');
+  if (d) d.classList.toggle('on', !!BOT.running);
+}
+
 // ── Motor de decision de venta (decision-engine.js + decision-journal.js) ──
 // Responde "¿vendo ahora?" con el libro vivo: spread neto, liquidez arriba/abajo,
 // absorcion del top5, concentracion, momentum y probabilidad de reversion.
@@ -2756,12 +2784,23 @@ var DEC_COLORS = {
   amber: 'var(--gold)', red: 'var(--red)', gray: 'var(--text-3)'
 };
 
+// Los label del motor son identificadores internos (decide() los compara y el
+// diario los guarda): se traducen al pintar, no en el motor.
+var DEC_LABELS = {
+  'STRONG SELL':  'VENDER YA',
+  'SELL':         'VENDER',
+  'PARTIAL SELL': 'VENDER PARCIAL',
+  'WAIT':         'ESPERAR',
+  'DO NOT SELL':  'NO VENDER',
+  'HIGH RISK':    'RIESGO ALTO'
+};
+
 function renderDecision(d, F) {
   var el = document.getElementById('decision-panel');
   if (!el || !d) return;
   var col = DEC_COLORS[d.color] || 'var(--text-3)';
   var html = '<div class="dec-top">' +
-    '<span class="dec-label" style="color:' + col + ';border-color:' + col + '">' + d.label + '</span>' +
+    '<span class="dec-label" style="color:' + col + ';border-color:' + col + '">' + (DEC_LABELS[d.label] || d.label) + '</span>' +
     (d.score != null ? '<span class="dec-score">' + d.score + '<small>/100</small></span>' : '') +
     (d.rebuy ? '<span class="dec-rebuy">recompra en ' + d.rebuy.min + '–' + d.rebuy.max + ' min</span>' : '') +
     '</div>';
@@ -2774,7 +2813,7 @@ function renderDecision(d, F) {
     html += '<div class="dec-feat">' +
       'spread ' + (F.spreadNet * 100).toFixed(2) + '% · ' +
       'absorción ' + (F.absRate3m * 100).toFixed(0) + '% · ' +
-      'LA ' + intFmt(F.LA) + ' / LB ' + intFmt(F.LB) +
+      'liquidez para vender ' + intFmt(F.LA) + ' / para recomprar ' + intFmt(F.LB) +
       '</div>';
   }
   el.innerHTML = html;

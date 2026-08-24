@@ -330,7 +330,7 @@
     if (F.topUSDT < 25000 && F.LB < 30000) vetoes.push('liquidez insuficiente ambos lados');
     if (F.priceMom < -0.004 && F.absRate3m < 0.05) vetoes.push('precio cae sin absorción');
     if (F.events.top1Gone && F.events.priceDropTop) vetoes.push('pared cayó (trampa)');
-    if (F.majorCount < 3) vetoes.push('< 3 majors');
+    if (F.majorCount < 3) vetoes.push('menos de 3 mayoristas solidos');
 
     return { raw: raw, parts: parts, vetoes: vetoes };
   }
@@ -339,7 +339,7 @@
   function decide(F, S) {
     if (!F || F.degraded) {
       return { score: null, label: 'WAIT', color: 'gray',
-               reasons: { pos: [], neg: ['libro degradado'] }, conflicts: [], rebuy: null };
+               reasons: { pos: [], neg: ['libro sin datos suficientes'] }, conflicts: [], rebuy: null };
     }
     if (S.vetoes.length) {
       return { score: 0, label: 'HIGH RISK', color: 'red',
@@ -363,24 +363,24 @@
     var pos = [], neg = [];
     if (F.spreadNet >= 0.004)  pos.push('spread ' + (F.spreadNet * 100).toFixed(2) + '% neto');
     else                       pos.push('spread ' + (F.spreadNet * 100).toFixed(2) + '% (apenas)');
-    if (F.absRate3m >= 0.20)   pos.push('absorbió ' + (F.absRate3m * 100).toFixed(0) + '% top5 en 3m');
+    if (F.absRate3m >= 0.20)   pos.push('absorbió ' + (F.absRate3m * 100).toFixed(0) + '% del top 5 en 3 min');
     else if (F.absRate3m >= 0.10) pos.push('absorción ' + (F.absRate3m * 100).toFixed(0) + '%');
-    if (F.momentum >= 0.3)     pos.push('momentum +' + F.momentum.toFixed(2));
-    if (F.LA > F.LB * 1.5)     pos.push('LA/LB ' + (F.LA / Math.max(F.LB, 1)).toFixed(1) + 'x');
-    if (F.events.rapidDeplete) pos.push('vaciado rápido top1');
+    if (F.momentum >= 0.3)     pos.push('impulso al alza +' + F.momentum.toFixed(2));
+    if (F.LA > F.LB * 1.5)     pos.push('liquidez para vender ' + (F.LA / Math.max(F.LB, 1)).toFixed(1) + 'x la de recomprar');
+    if (F.events.rapidDeplete) pos.push('el primero se vació rápido');
 
-    if (F.HHI > 0.5)           neg.push('HHI ' + F.HHI.toFixed(2) + ' (concentrado)');
-    if (F.gapBigCnt >= 2)      neg.push(F.gapBigCnt + ' gaps grandes');
+    if (F.HHI > 0.5)           neg.push('oferta concentrada en pocos (' + F.HHI.toFixed(2) + ')');
+    if (F.gapBigCnt >= 2)      neg.push(F.gapBigCnt + ' huecos grandes de precio');
     if (F.weakness > 0.4)      neg.push('debilidad ' + F.weakness.toFixed(2));
-    if (F.momentum < -0.2)     neg.push('momentum ' + F.momentum.toFixed(2));
-    if (F.revProb >= 0.6)      neg.push('reversal prob ' + (F.revProb * 100).toFixed(0) + '%');
-    if (F.LB < 20000)          neg.push('LB ' + Math.round(F.LB) + ' baja');
+    if (F.momentum < -0.2)     neg.push('impulso a la baja ' + F.momentum.toFixed(2));
+    if (F.revProb >= 0.6)      neg.push('probabilidad de reversión ' + (F.revProb * 100).toFixed(0) + '%');
+    if (F.LB < 20000)          neg.push('poca liquidez para recomprar (' + Math.round(F.LB) + ')');
 
     var conflicts = [];
     if (F.HHI > 0.5 && F.absRate3m >= 0.20)
-      conflicts.push('alta concentración + absorción fuerte');
+      conflicts.push('oferta concentrada pero absorción fuerte');
     if (F.momentum >= 0.3 && F.revProb >= 0.6)
-      conflicts.push('momentum alcista vs reversal alta');
+      conflicts.push('impulso al alza pero reversión probable');
 
     // Rebuy ETA
     var rebuy = null;

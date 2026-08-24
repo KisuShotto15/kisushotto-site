@@ -127,7 +127,25 @@ body {
   align-items: start;
   max-width: none;
 }
-@media(max-width:900px){ .layout { grid-template-columns: 1fr; } }
+/* Tabs Mercado/Bot: en escritorio no existen (las dos columnas caben juntas);
+   en movil evitan el scroll eterno de un panel encima del otro. */
+.tabs { display: none; }
+@media(max-width:900px){
+  .layout { grid-template-columns: 1fr; }
+  .tabs { display: flex; gap: 6px; padding: 10px 14px 0; }
+  .tab-btn {
+    flex: 1; padding: 11px 8px; font: inherit; font-size: 14px; font-weight: 700;
+    color: var(--text-3); background: var(--surf-2); border: 1px solid var(--border-2);
+    border-radius: var(--r-sm); cursor: pointer; -webkit-tap-highlight-color: transparent;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .tab-btn.is-on { color: #0b0e11; background: var(--gold); border-color: var(--gold); }
+  .tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: none; }
+  .tab-dot.on { display: inline-block; }
+  .tab-btn.is-on .tab-dot { background: #0b0e11; }
+  .layout > .col { display: none; }
+  .layout > .col.is-on { display: flex; }
+}
 .hero-wrap { max-width: none; padding: 14px 14px 0; }
 .col { display: flex; flex-direction: column; gap: 12px; }
 
@@ -781,7 +799,11 @@ input:focus {
   #top-section > div:first-child { grid-template-columns: 1fr !important; }
   .layout { padding: 8px; gap: 8px; }
 
-  .spread-hero-full { padding: 12px; }
+  /* El hero se apila en vertical en telefono: sin compactar se come la primera
+     pantalla y empuja las tabs fuera de vista. */
+  .spread-hero-full { padding: 12px; gap: 10px; }
+  .hero-metric { padding: 8px 10px; gap: 3px; }
+  .hm-label { font-size: 10px; letter-spacing: .04em; }
   .sh-pct { font-size: 32px !important; }
   #hero-net { font-size: 28px !important; }
   #st-diff, #st-delta { font-size: 18px !important; }
