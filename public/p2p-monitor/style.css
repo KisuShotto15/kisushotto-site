@@ -181,6 +181,17 @@ body {
 .rot-line:first-of-type { border-top: none; }
 .rot-line b { color: var(--text); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; margin-left: auto; }
 .rot-line .rot-mut { color: var(--text-3); font-size: 11px; }
+/* Spread vs llenado + reparto del tiempo del anuncio */
+.rot-head { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); font-weight: 600; margin: 10px 0 5px; }
+.rot-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--bg); margin-bottom: 5px; }
+.rot-bar span { display: block; }
+.rot-leg { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--text-2); }
+.rot-leg i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 4px; font-style: normal; }
+.rot-tab { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.rot-tab th { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); font-weight: 600; text-align: right; padding: 0 0 3px; }
+.rot-tab th:first-child, .rot-tab td:first-child { text-align: left; }
+.rot-tab td { text-align: right; padding: 3px 0; border-top: 1px solid var(--border); color: var(--text-2); }
+.rot-tab tr.best td { color: var(--green); font-weight: 700; }
 
 .bot-details {
   background: var(--surf-2);

@@ -476,8 +476,60 @@ async function loadPnlStats() {
   }
 }
 
+// Spread vs llenado y reparto del tiempo del anuncio (tabla bot_samples).
+// Un spread mas alto da mas margen por orden pero menos ordenes: lo que importa
+// es el producto. Y el capital parado no cobra spread ninguno.
+async function loadSpreadStats() {
+  var el = document.getElementById('spread-stats');
+  if (!el || !SESSION.token) return;
+  try {
+    var d = await botCallWorker('/spread-stats');
+    if (d.error) throw new Error(d.error);
+    var html = '';
+    var b = d.budget;
+    if (b && b.onH > 0.5) {
+      var seg = [
+        { l: 'Productivo', h: b.productiveH, c: 'var(--green)' },
+        { l: 'Oculto',     h: b.hiddenH,     c: 'var(--gold)' },
+        { l: 'Sin saldo',  h: b.emptyH,      c: 'var(--red)' },
+        { l: 'Apagado',    h: b.offH,        c: 'var(--border-2)' }
+      ];
+      var bar = '', leg = '';
+      for (var i = 0; i < seg.length; i++) {
+        var pct = seg[i].h / b.totalH * 100;
+        if (pct <= 0) continue;
+        bar += '<span style="width:' + pct.toFixed(1) + '%;background:' + seg[i].c + '"></span>';
+        leg += '<span><i style="background:' + seg[i].c + '"></i>' + seg[i].l + ' ' + Math.round(pct) + '%</span>';
+      }
+      html += '<div class="rot-head">Dónde se va el capital (7 días)</div>' +
+        '<div class="rot-bar">' + bar + '</div><div class="rot-leg">' + leg + '</div>';
+    }
+    var curve = (d.curve || []).filter(function(c) { return c.hours >= 1; });
+    if (curve.length) {
+      var rows = '';
+      for (var j = 0; j < curve.length; j++) {
+        var c = curve[j];
+        var isBest = d.best && c.spread === d.best.spread && curve.length > 1;
+        rows += '<tr' + (isBest ? ' class="best"' : '') + '><td>' + c.spread + '%</td>' +
+          '<td>' + c.ordersPerHour.toFixed(1) + '</td>' +
+          '<td>' + intFmt(c.usdtPerHour) + '</td>' +
+          '<td>' + fmt(c.netPerHour) + (isBest ? ' ★' : '') + '</td>' +
+          '<td>' + Math.round(c.hours) + ' h</td></tr>';
+      }
+      html += '<div class="rot-head">Spread vs llenado (' + d.days + ' días)</div>' +
+        '<table class="rot-tab"><tr><th>Spread</th><th>Órd/h</th><th>USDT/h</th><th>Neto/h</th><th>Muestra</th></tr>' +
+        rows + '</table>';
+      if (!d.best) html += '<div class="rot-leg" style="margin-top:5px">Aún sin 6 h de muestra por spread: prueba otro valor unos días para comparar.</div>';
+    }
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '';
+  }
+}
+
 async function loadOrderStats() {
   loadPnlStats();
+  loadSpreadStats();
   var el = document.getElementById('order-stats');
   if (!el || !SESSION.token) return;
   el.textContent = 'Cargando...';

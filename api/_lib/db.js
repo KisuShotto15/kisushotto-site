@@ -214,6 +214,21 @@ export async function ensureSchema() {
     created_at TIMESTAMPTZ,
     seen_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // Muestreo del estado del anuncio cada ~5 min mientras el bot corre (~288 filas/dia).
+  // Sirve para dos cosas que antes no se podian medir: (1) que spread llena mas rapido
+  // —el optimo maximiza spread x llenado, no el spread— y (2) cuanto tiempo del dia el
+  // capital estuvo parado (anuncio oculto, agotado o bot apagado).
+  await sql`CREATE TABLE IF NOT EXISTS bot_samples (
+    user_id INTEGER NOT NULL,
+    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    min_spread NUMERIC,
+    ad_hidden BOOLEAN,
+    ad_amount NUMERIC,
+    price NUMERIC
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS bot_samples_user_ts ON bot_samples (user_id, ts DESC)`;
+  await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS last_sample TIMESTAMPTZ`;
+
   // Tasa USDT/VES publica (mediana top-10 merchants por metodo de pago), la
   // actualiza cada refresh del monitor y la lee el portfolio via /api/usdt-ves.
   await sql`CREATE TABLE IF NOT EXISTS p2p_rate (

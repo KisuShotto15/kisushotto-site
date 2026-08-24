@@ -86,6 +86,47 @@ export function summarize(lots) {
   };
 }
 
+// ── Spread vs llenado ──────────────────────────────────────────────
+// La ganancia es spread x capital x rotaciones. Subir el spread sube el margen por
+// orden pero baja el llenado, asi que el optimo maximiza USDT netos por hora, no el
+// spread. expo: exposicion por spread (muestras de 5 min); fills: ordenes por spread.
+
+export const SAMPLE_MIN = 5;
+const MIN_HOURS = 6; // exposicion minima para tomar en serio un spread
+
+export function spreadCurve(expo, fills, sampleMin = SAMPLE_MIN) {
+  const by = new Map((fills || []).map(f => [Number(f.spread), f]));
+  const curve = (expo || []).map(e => {
+    const f = by.get(Number(e.spread)) || { n: 0, usdt: 0 };
+    const hours = e.samples * sampleMin / 60;
+    const usdtPerHour = hours > 0 ? f.usdt / hours : 0;
+    return {
+      spread: Number(e.spread), hours, samples: e.samples, orders: f.n, usdt: f.usdt,
+      ordersPerHour: hours > 0 ? f.n / hours : 0,
+      usdtPerHour,
+      netPerHour: usdtPerHour * Number(e.spread) / 100,
+    };
+  });
+  let best = null;
+  for (const c of curve) if (c.hours >= MIN_HOURS && (!best || c.netPerHour > best.netPerHour)) best = c;
+  return { curve, best };
+}
+
+// Reparto del tiempo: cada muestra son 5 min de bot encendido; lo que falta para
+// completar el periodo es tiempo apagado, con el capital totalmente parado.
+export function timeBudget(row, totalH = 7 * 24, sampleMin = SAMPLE_MIN) {
+  const b = row || {};
+  const h = n => (n || 0) * sampleMin / 60;
+  const onH = h(b.samples);
+  return {
+    totalH, onH,
+    offH: Math.max(0, totalH - onH),
+    hiddenH: h(b.hidden),
+    productiveH: h(b.productive),
+    emptyH: Math.max(0, h(b.samples) - h(b.hidden) - h(b.productive)),
+  };
+}
+
 // Filtra lotes por fecha de venta (el momento en que la ganancia se realiza).
 export function lotsSince(lots, sinceMs) {
   return (lots || []).filter(l => l.sellAt != null && l.sellAt >= sinceMs);

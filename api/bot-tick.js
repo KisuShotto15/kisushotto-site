@@ -11,6 +11,7 @@ import { sendPush, stripHtml } from './_lib/push.js';
 export const config = { maxDuration: 60 };
 
 const MAX_USERS = 25; // tope por tick (secuencial)
+const SAMPLE_MS = 5 * 60 * 1000; // cadencia del muestreo de estado del anuncio
 
 function pushLog(log, msg, level) {
   const arr = Array.isArray(log) ? log.slice(-19) : [];
@@ -386,7 +387,7 @@ export default async function handler(req, res) {
     // Correr ~25 DDLs por cold start cada 18s era costo inutil.
     const rows = await sql`
       SELECT b.user_id, b.enabled, b.config, b.ad_number, b.current_price, b.last_reprice, b.log,
-             b.known_orders, b.orders_checked_at, b.ad_amount, b.ad_hidden, b.ad_seen_at,
+             b.known_orders, b.orders_checked_at, b.ad_amount, b.ad_hidden, b.ad_seen_at, b.last_sample,
              c.enc_key, c.iv_key, c.tag_key, c.enc_secret, c.iv_secret, c.tag_secret
       FROM bot_state b
       JOIN binance_creds c ON c.user_id = b.user_id
@@ -421,6 +422,11 @@ export default async function handler(req, res) {
           if (oc) { knownOrders = oc.known; ordersCheckedAt = oc.checkedAt; if (oc.log) out.log = oc.log; }
         } catch (e) {}
       }
+      // Muestra cada 5 min del estado del anuncio (spread vigente, oculto, saldo).
+      // Es la unica forma de saber despues que spread llenaba mas rapido y cuanto
+      // tiempo estuvo el capital parado: la config viva no deja rastro historico.
+      const sampleNow = out.enabled &&
+        (!row.last_sample || Date.now() - new Date(row.last_sample).getTime() >= SAMPLE_MS);
       // enabled = enabled AND out.enabled: el tick solo puede APAGAR, nunca re-encender.
       // Si el usuario pulso Detener mientras este tick corria, no resucitar el bot.
       await sql`
@@ -436,8 +442,17 @@ export default async function handler(req, res) {
           last_reprice = ${out.lastReprice || null},
           known_orders = ${knownOrders != null ? JSON.stringify(knownOrders) : null}::jsonb,
           orders_checked_at = ${ordersCheckedAt || null},
+          last_sample = ${sampleNow ? new Date().toISOString() : (row.last_sample || null)},
           updated_at = now()
         WHERE user_id = ${row.user_id}`;
+      if (sampleNow) {
+        const scfg = row.config || {};
+        await sql`
+          INSERT INTO bot_samples (user_id, ts, min_spread, ad_hidden, ad_amount, price)
+          VALUES (${row.user_id}, now(), ${scfg.minSpread != null ? scfg.minSpread : null},
+                  ${out.adHidden === true}, ${out.adAmount != null ? out.adAmount : null},
+                  ${out.currentPrice != null ? out.currentPrice : null})`.catch(() => {});
+      }
       // OJO: last_tick NO se re-sella aqui: lo marca el claim al INICIO del tick.
       // Sellarlo al final sumaba el tiempo de proceso y hacia saltar 1 de cada 2 ticks (~36s).
       ticked++;

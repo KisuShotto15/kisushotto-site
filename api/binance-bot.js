@@ -4,7 +4,7 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { pushHist24Pay, pushHistLongPay, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
-import { fifoMatch, summarize, lotsSince } from './_lib/pnl.js';
+import { fifoMatch, summarize, lotsSince, spreadCurve, timeBudget, SAMPLE_MIN } from './_lib/pnl.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -173,6 +173,56 @@ export default async function handler(req, res) {
         commission, minSpread,
         counts: { orders: rows.length, buys, sells: rows.length - buys },
       });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // Spread vs llenado + presupuesto de tiempo del anuncio (tabla bot_samples). Solo DB.
+  // La ganancia es spread x capital x rotaciones: subir el spread sube el margen pero
+  // baja el llenado, asi que el optimo es el que maximiza USDT netos por hora.
+  if (path === '/spread-stats') {
+    try {
+      const days = Math.min(Math.max(parseInt(params && params.days, 10) || 30, 1), 60);
+      const since = `${days} days`;
+      // Exposicion: cuanto tiempo estuvo el bot corriendo con cada spread configurado.
+      const expo = await sql`
+        SELECT round(min_spread::numeric, 2)::float spread, count(*)::int samples,
+               count(*) FILTER (WHERE ad_hidden)::int hidden,
+               count(*) FILTER (WHERE COALESCE(ad_amount, 0) > 0)::int stocked
+        FROM bot_samples
+        WHERE user_id = ${user.uid} AND ts > now() - ${since}::interval AND min_spread IS NOT NULL
+        GROUP BY 1 ORDER BY 1`;
+      // Llenado: cada compra completada se atribuye al spread vigente en ese momento
+      // (la muestra inmediatamente anterior, con tope de 10 min para no adivinar).
+      const fills = await sql`
+        SELECT round(s.min_spread::numeric, 2)::float spread, count(*)::int n,
+               COALESCE(sum(o.amount), 0)::float usdt
+        FROM orders o
+        JOIN LATERAL (
+          SELECT b.min_spread FROM bot_samples b
+          WHERE b.user_id = o.user_id AND b.min_spread IS NOT NULL
+            AND b.ts <= o.created_at AND b.ts > o.created_at - interval '10 minutes'
+          ORDER BY b.ts DESC LIMIT 1
+        ) s ON true
+        WHERE o.user_id = ${user.uid} AND o.status IN ('4', 'COMPLETED')
+          AND o.created_at > now() - ${since}::interval
+        GROUP BY 1 ORDER BY 1`;
+
+      const { curve, best } = spreadCurve(expo, fills, SAMPLE_MIN);
+
+      // Presupuesto de tiempo: donde se va el dia. Cada muestra = 5 min de bot encendido;
+      // el resto del periodo es tiempo con el bot apagado (capital totalmente parado).
+      const bud = await sql`
+        SELECT count(*)::int samples,
+               count(*) FILTER (WHERE ad_hidden)::int hidden,
+               count(*) FILTER (WHERE COALESCE(ad_amount, 0) > 0 AND NOT COALESCE(ad_hidden, false))::int productive
+        FROM bot_samples WHERE user_id = ${user.uid} AND ts > now() - interval '7 days'`;
+      const budget = timeBudget(bud[0], 7 * 24, SAMPLE_MIN);
+      if (Math.random() < 0.05) {
+        await sql`DELETE FROM bot_samples WHERE user_id = ${user.uid} AND ts < now() - interval '60 days'`.catch(() => {});
+      }
+      return res.status(200).json({ days, curve, best, budget });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
