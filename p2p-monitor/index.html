@@ -58,6 +58,28 @@
   <button class="btn btn-gold" id="btn-start" onclick="toggleMonitor()">▶ Iniciar</button>
   <button class="btn btn-sm" onclick="fetchOnce()" title="Actualizar">&#8635;</button>
   <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
+  <button class="btn btn-sm" id="btn-sub" onclick="openSubModal()" title="Suscripción">💳<span id="sub-badge" style="display:none;margin-left:4px"></span></button>
+  </div>
+</div>
+
+<!-- Suscripcion -->
+<div id="sub-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:22px;text-align:center;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7)">
+    <div style="font-size:19px;font-weight:700;color:var(--gold);margin-bottom:4px">Suscripción</div>
+    <div id="sub-status-line" style="color:var(--text-2);font-size:14px;margin-bottom:16px">—</div>
+
+    <div id="sub-pay-block">
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:10px">Mensual, pago con Binance Pay (USDT)</div>
+      <button class="btn btn-gold" id="sub-pay-btn" onclick="startBinancePayCheckout()" style="width:100%;padding:11px;font-size:15px;font-weight:700">Pagar con Binance Pay</button>
+    </div>
+
+    <div id="sub-pending-block" style="display:none;margin-top:6px">
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:10px">Esperando confirmación del pago…</div>
+      <a id="sub-checkout-link" href="#" target="_blank" rel="noopener" class="btn" style="display:block;width:100%;padding:10px;margin-bottom:8px;box-sizing:border-box">Abrir Binance Pay</a>
+      <button class="btn btn-sm" onclick="cancelSubPolling()">Cancelar</button>
+    </div>
+
+    <div style="margin-top:16px"><button class="btn btn-sm" onclick="closeSubModal()">Cerrar</button></div>
   </div>
 </div>
 
@@ -398,7 +420,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=46"></script>
+<script src="/p2p-monitor/main.js?v=47"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

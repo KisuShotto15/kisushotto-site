@@ -115,11 +115,11 @@ export async function ensureAuthColumns() {
 
 export async function ensureSchema() {
   if (schemaReady) return;
-  // Sonda barata (1 round trip): p2p_rate es lo ULTIMO que crea este bloque; si ya
+  // Sonda barata (1 round trip): subscriptions es lo ULTIMO que crea este bloque; si ya
   // existe, el schema esta completo y se saltan los ~20 DDLs secuenciales que
   // hacian eterno cada cold start. Si se agrega un DDL nuevo abajo, mover la sonda
   // al objeto mas nuevo (o borrarla temporalmente para que el DDL corra).
-  const probe = await sql`SELECT to_regclass('p2p.market_snapshots') AS t`.catch(() => []);
+  const probe = await sql`SELECT to_regclass('p2p.subscriptions') AS t`.catch(() => []);
   if (probe[0] && probe[0].t) { schemaReady = true; return; }
   await sql`CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -256,5 +256,32 @@ export async function ensureSchema() {
     commission NUMERIC
   )`;
   await sql`CREATE INDEX IF NOT EXISTS market_snapshots_user_ts ON market_snapshots (user_id, ts)`;
+
+  // Suscripcion mensual (trial 7 dias, luego pago). 1 fila por usuario.
+  await sql`CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'trialing',
+    trial_end TIMESTAMPTZ,
+    current_period_end TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+  )`;
+  // Ordenes de pago (Binance Pay por ahora). id = merchantTradeNo que le mandamos a Binance.
+  await sql`CREATE TABLE IF NOT EXISTS payment_invoices (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL DEFAULT 'binance_pay',
+    amount NUMERIC NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'USDT',
+    status TEXT NOT NULL DEFAULT 'pending',
+    prepay_id TEXT,
+    transaction_id TEXT,
+    checkout_url TEXT,
+    qr_content TEXT,
+    raw JSONB,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    paid_at TIMESTAMPTZ
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS payment_invoices_user ON payment_invoices (user_id, created_at DESC)`;
   schemaReady = true;
 }

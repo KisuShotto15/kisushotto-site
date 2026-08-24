@@ -362,7 +362,84 @@ function authLogout() {
 function enterApp() {
   var g = document.getElementById('login-gate');
   if (g) g.style.display = 'none';
-  if (!window._appBooted) { window._appBooted = true; try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} }
+  if (!window._appBooted) { window._appBooted = true; try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} }
+}
+
+// ── Suscripcion (Binance Pay) ───────────────────────────
+var SUB = { subscription: null, invoice: null };
+var _subPollT = null;
+
+function daysLeft(iso) {
+  if (!iso) return 0;
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
+}
+
+function renderSubBadge() {
+  var b = document.getElementById('sub-badge');
+  if (!b) return;
+  var s = SUB.subscription;
+  if (!s || s.status === 'active') { b.style.display = 'none'; return; }
+  b.style.display = '';
+  if (s.status === 'trialing') { b.textContent = daysLeft(s.trial_end) + 'd'; b.style.color = 'var(--text-3)'; }
+  else { b.textContent = '!'; b.style.color = 'var(--red)'; }
+}
+
+function renderSubModal() {
+  var line = document.getElementById('sub-status-line');
+  var payBlock = document.getElementById('sub-pay-block');
+  var pendBlock = document.getElementById('sub-pending-block');
+  var link = document.getElementById('sub-checkout-link');
+  if (!line) return;
+  var s = SUB.subscription, inv = SUB.invoice;
+  if (s) {
+    if (s.status === 'trialing') line.textContent = 'Prueba gratis: ' + daysLeft(s.trial_end) + ' día(s) restantes';
+    else if (s.status === 'active') line.textContent = 'Activa hasta ' + new Date(s.current_period_end).toLocaleDateString('es-VE');
+    else line.textContent = 'Sin suscripción activa';
+  }
+  var pending = inv && inv.status === 'pending';
+  if (payBlock) payBlock.style.display = pending ? 'none' : '';
+  if (pendBlock) pendBlock.style.display = pending ? '' : 'none';
+  if (pending && link && (inv.checkout_url || inv.checkoutUrl)) link.href = inv.checkout_url || inv.checkoutUrl;
+}
+
+async function loadSubscription() {
+  if (!SESSION.token) return;
+  try {
+    var d = await apiPost('/api/payments/status', {}, true);
+    SUB.subscription = d.subscription; SUB.invoice = d.invoice;
+    renderSubBadge(); renderSubModal();
+    if (d.invoice && d.invoice.status === 'pending') schedulePoll(); else stopPoll();
+  } catch (e) {}
+}
+
+function schedulePoll() { if (!_subPollT) _subPollT = setInterval(loadSubscription, 5000); }
+function stopPoll() { if (_subPollT) { clearInterval(_subPollT); _subPollT = null; } }
+function cancelSubPolling() { stopPoll(); closeSubModal(); }
+
+function openSubModal() {
+  var m = document.getElementById('sub-modal');
+  if (m) m.style.display = 'flex';
+  loadSubscription();
+}
+function closeSubModal() {
+  var m = document.getElementById('sub-modal');
+  if (m) m.style.display = 'none';
+}
+
+async function startBinancePayCheckout() {
+  var btn = document.getElementById('sub-pay-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generando orden...'; }
+  try {
+    var d = await apiPost('/api/payments/create-order', {}, true);
+    SUB.invoice = { id: d.invoiceId, status: 'pending', checkout_url: d.checkoutUrl };
+    renderSubModal();
+    if (d.checkoutUrl) window.open(d.checkoutUrl, '_blank');
+    schedulePoll();
+  } catch (e) {
+    alert('Error al generar el cobro: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Pagar con Binance Pay'; }
+  }
 }
 
 // Al cargar: si hay sesion valida (email autorizado), entra; si no, queda el muro.
