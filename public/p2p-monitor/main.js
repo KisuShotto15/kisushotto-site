@@ -561,11 +561,11 @@ async function loadSpreadStats() {
           '<td>' + fmt(c.netPerHour) + (isBest ? ' ★' : '') + '</td>' +
           '<td>' + Math.round(c.hours) + ' h</td></tr>';
       }
-      html += '<div class="rot-head">Qué rindió cada spread (' + d.days + ' días)</div>' +
-        '<table class="rot-tab"><tr><th>Spread</th><th>Órd/h</th><th>USDT/h</th><th>Neto/h</th><th>Muestra</th></tr>' +
+      html += '<div class="rot-head">Qué rindió cada margen (' + d.days + ' días)</div>' +
+        '<table class="rot-tab"><tr><th>Margen</th><th>Órd/h</th><th>USDT/h</th><th>Neto/h</th><th>Muestra</th></tr>' +
         rows + '</table>' +
         '<div class="rot-leg" style="margin-top:5px">' + (d.best ? '★ mejor medido con ≥6 h. ' : '') +
-        'El piso lo pones tú: esto solo dice cuánto volumen cuesta cada 0.1% extra de spread.</div>';
+        'El piso lo pones tú: esto solo dice cuánto volumen cuesta cada 0.1% extra de margen.</div>';
     }
     el.innerHTML = html;
   } catch (e) {
@@ -1835,6 +1835,49 @@ document.addEventListener('wheel', function (e) {
   }
 }, { passive: false });
 
+// ── Campos obligatorios: el usuario elige, no hereda defaults ──────────
+// El valor sugerido va de placeholder (gris). Si el campo queda vacio el bot
+// NO arranca con un default silencioso: lo dice y marca el campo.
+var BOT_REQUIRED = [
+  { id: 'cfg-bot-sell',     label: 'Precio de venta' },
+  { id: 'cfg-bot-spread',   label: 'Margen mínimo' },
+  { id: 'cfg-bot-minlimit', label: 'Límite mínimo' }
+];
+
+function botMissingFields() {
+  var out = [];
+  for (var i = 0; i < BOT_REQUIRED.length; i++) {
+    var el = document.getElementById(BOT_REQUIRED[i].id);
+    // OJO: el margen admite 0 y negativos, asi que se valida el campo vacio,
+    // no que el numero sea falsy.
+    var empty = !el || el.value.trim() === '' || isNaN(parseFloat(el.value));
+    if (el) el.classList.toggle('inp-missing', empty);
+    if (empty) out.push(BOT_REQUIRED[i].label);
+  }
+  return out;
+}
+
+// ── Guardar visible solo si hay cambios sin guardar ────────────────────
+var BOT_DIRTY = false;
+
+function renderSaveRow() {
+  var row = document.getElementById('bot-save-row');
+  if (row) row.style.display = BOT_DIRTY ? 'flex' : 'none';
+}
+
+function markBotDirty() {
+  if (BOT_DIRTY) return;
+  BOT_DIRTY = true;
+  renderSaveRow();
+}
+
+(function watchBotInputs() {
+  var panel = document.getElementById('bot-panel');
+  if (!panel) return;
+  panel.addEventListener('input', markBotDirty);
+  panel.addEventListener('change', markBotDirty);
+})();
+
 function saveBotConfig() {
   BOT_CFG.adNo           = document.getElementById('cfg-bot-adsel').value;
   BOT_CFG.myNick         = document.getElementById('cfg-bot-nick').value.trim();
@@ -1858,7 +1901,8 @@ function saveBotConfig() {
   var st = document.getElementById('bot-cfg-st');
   st.textContent = '✓ Guardado'; st.style.color = '#1D9E75';
   clearTimeout(st._t);
-  st._t = setTimeout(function(){ st.textContent = ''; }, 1800);
+  // La fila se oculta junto con el destello: dejarla antes se lleva el "✓ Guardado".
+  st._t = setTimeout(function(){ st.textContent = ''; BOT_DIRTY = false; renderSaveRow(); }, 1800);
   var tgSt = document.getElementById('tg-st');
   if (tgSt) { tgSt.textContent = (TG.token && TG.chatId) ? '✓' : ''; }
   saveUserSettings();
@@ -2373,8 +2417,14 @@ async function botToggle() {
   } else {
     // ── START ────────────────────────────────────────────
     saveBotConfig();
-    if (!SESSION.token)     { toast('Inicia sesión primero'); return; }
-    if (!BOT_CFG.sellPrice) { toast('Ingresa el Precio de venta primero'); return; }
+    if (!SESSION.token) { toast('Inicia sesión primero'); return; }
+    var falta = botMissingFields();
+    if (falta.length) {
+      toast('Falta configurar: ' + falta.join(', '));
+      var first = document.querySelector('.inp-missing');
+      if (first) { try { first.scrollIntoView({ block: 'center', behavior: 'smooth' }); first.focus(); } catch (e) {} }
+      return;
+    }
 
     // Marcar corriendo YA, para que un segundo toque dispare Detener durante el arranque.
     BOT.running = true;

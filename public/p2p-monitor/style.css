@@ -127,6 +127,11 @@ body {
   align-items: start;
   max-width: none;
 }
+/* Sugerido en gris: es una pista, no un valor puesto. El usuario elige. */
+.num-stepper input::placeholder { color: var(--text-3); opacity: .55; font-weight: 400; }
+/* Campo obligatorio sin llenar al intentar arrancar el bot */
+.num-stepper input.inp-missing { border-color: var(--red); box-shadow: inset 0 0 0 1px var(--red); }
+
 /* Tabs Mercado/Bot: en escritorio no existen (las dos columnas caben juntas);
    en movil evitan el scroll eterno de un panel encima del otro. */
 .tabs { display: none; }
@@ -798,6 +803,13 @@ input:focus {
   #top-section { padding: 8px 8px 0 !important; gap: 8px !important; }
   #top-section > div:first-child { grid-template-columns: 1fr !important; }
   .layout { padding: 8px; gap: 8px; }
+
+  /* Tarjetas del bot: en telefono el padding de escritorio las hace altas
+     sin agregar informacion. */
+  #bot-live > div { padding: 7px 9px !important; }
+  #bot-live .bl-lbl, #bot-live > div > div:first-child { font-size: 10px !important; }
+  #bot-cur-price, #bot-ceiling { font-size: 18px !important; }
+  #bot-qty, #bot-pnl { font-size: 15px !important; }
 
   /* El hero se apila en vertical en telefono: sin compactar se come la primera
      pantalla y empuja las tabs fuera de vista. */
