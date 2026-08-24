@@ -435,7 +435,49 @@ function intFmt(n) { return Math.round(n).toLocaleString('es-VE'); }
 
 // Metricas de rotacion: volumen/ordenes desde la tabla orders del servidor.
 // La ganancia es spread x capital x rotaciones: esto mide la rotacion real.
+// Ganancia realizada (FIFO compra→venta). Complementa al P&L potencial del panel:
+// aquel dice cuanto ganaria el anuncio, este cuanto entro de verdad y a que margen.
+async function loadPnlStats() {
+  var el = document.getElementById('pnl-stats');
+  if (!el || !SESSION.token) return;
+  try {
+    var d = await botCallWorker('/order-pnl');
+    if (d.error) throw new Error(d.error);
+    if (!d.counts.sells) {
+      el.innerHTML = '<div class="rot-line"><span>Ganancia realizada</span><b>sin ventas registradas</b></div>';
+      return;
+    }
+    function money(v) { return (v >= 0 ? '+' : '') + fmt(v) + ' <small>USDT</small>'; }
+    function tile(label, val, sub, color) {
+      return '<div class="rot-tile"><span class="rot-lbl">' + label + '</span>' +
+        '<span class="rot-val"' + (color ? ' style="color:' + color + '"' : '') + '>' + val + '</span>' +
+        '<span class="rot-sub">' + (sub || '') + '</span></div>';
+    }
+    var t = d.today, w = d.d7;
+    var col = function(v) { return v >= 0 ? 'var(--green)' : 'var(--red)'; };
+    var html = '<div class="rot-grid">' +
+      tile('Ganancia hoy', money(t.netUsdt), t.lots + ' cierres', col(t.netUsdt)) +
+      tile('Promedio 7 días', money(w.netUsdt / 7) + '/día', intFmt(w.qty) + ' USDT rotados', col(w.netUsdt)) +
+      '</div>';
+    // La brecha entre el margen real y el configurado es la fuga: fills parciales,
+    // ordenes canceladas y ventas fuera del precio planeado.
+    if (w.marginPct != null) {
+      var gapTxt = w.marginPct.toFixed(3) + '%';
+      if (d.minSpread != null) gapTxt += ' <span style="color:var(--text-3)">vs ' + d.minSpread + '% config</span>';
+      html += '<div class="rot-line"><span>Margen real 7d</span><b style="color:' +
+        (d.minSpread == null || w.marginPct >= d.minSpread ? 'var(--green)' : 'var(--red)') + '">' + gapTxt + '</b></div>';
+    }
+    if (w.medHoldSec != null) html += '<div class="rot-line"><span>Ciclo de capital</span><b>' + fmtDur(w.medHoldSec) + '</b></div>';
+    if (d.openQty > 0.01) html += '<div class="rot-line"><span>Inventario abierto</span><b>' + intFmt(d.openQty) +
+      ' USDT' + (d.openAvgPrice ? ' @ ' + fmt(d.openAvgPrice) : '') + '</b></div>';
+    el.innerHTML = html;
+  } catch (e) {
+    el.textContent = '';
+  }
+}
+
 async function loadOrderStats() {
+  loadPnlStats();
   var el = document.getElementById('order-stats');
   if (!el || !SESSION.token) return;
   el.textContent = 'Cargando...';

@@ -4,6 +4,7 @@ import { sql, ensureSchema } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { pushHist24Pay, pushHistLongPay, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
+import { fifoMatch, summarize, lotsSince } from './_lib/pnl.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -139,6 +140,39 @@ export default async function handler(req, res) {
         GROUP BY 1 ORDER BY 2 DESC`;
       return res.status(200).json({ today: today[0], week: week[0],
         medGapSec: gap[0] ? gap[0].med_sec : null, hours, statuses });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // Ganancia REALIZADA: FIFO de compras contra ventas sobre orders. Solo DB.
+  // Corre el emparejamiento sobre 30 dias y despues corta por fecha de venta, para
+  // que el inventario comprado ayer y vendido hoy quede bien atribuido.
+  if (path === '/order-pnl') {
+    try {
+      const rows = await sql`
+        SELECT trade_type, amount, price, created_at FROM orders
+        WHERE user_id = ${user.uid} AND status IN ('4', 'COMPLETED')
+          AND amount > 0 AND price > 0 AND created_at > now() - interval '30 days'
+        ORDER BY created_at ASC`;
+      const st = await sql`SELECT config FROM bot_state WHERE user_id = ${user.uid}`;
+      const cfg = (st[0] && st[0].config) || {};
+      const commission = parseFloat(cfg.commission) || 0;
+      const minSpread = cfg.minSpread == null ? null : parseFloat(cfg.minSpread);
+
+      const { lots, openQty, openAvgPrice, unmatchedSell } = fifoMatch(rows, commission);
+      const dayMs = 24 * 3600 * 1000, now = Date.now();
+      const CCS = -4 * 3600 * 1000; // America/Caracas, offset fijo
+      const midnight = Math.floor((now + CCS) / dayMs) * dayMs - CCS;
+      const buys = rows.filter(r => String(r.trade_type || '').toUpperCase().includes('BUY')).length;
+      return res.status(200).json({
+        today: summarize(lotsSince(lots, midnight)),
+        d7: summarize(lotsSince(lots, now - 7 * dayMs)),
+        d30: summarize(lots),
+        openQty, openAvgPrice, unmatchedSell,
+        commission, minSpread,
+        counts: { orders: rows.length, buys, sells: rows.length - buys },
+      });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
