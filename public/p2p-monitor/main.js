@@ -1760,7 +1760,9 @@ function stepEl(el, dir, mult) {
   const cur  = parseFloat(el.value) || 0;
   const dec  = (step.toString().split('.')[1] || '').length;
   el.value   = Math.max(min, Math.min(max, parseFloat((cur + dir * step).toFixed(dec))));
-  el.dispatchEvent(new Event('input'));
+  // bubbles:true — el listener de Guardar/Descartar escucha por delegacion en
+  // #bot-panel; sin esto, los botones −/+ del stepper no marcaban el panel "sucio".
+  el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 // Con Shift presionado, medio step (micro-ajuste). Aplica al clic de los botones -/+.
 function stepInput(id, dir) {
@@ -1791,7 +1793,7 @@ document.addEventListener('wheel', function (e) {
       el.addEventListener('blur', function onb() {
         el.removeEventListener('blur', onb);
         el._wheelBlur = false;
-        el.dispatchEvent(new Event('change'));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
       });
     }
   }
