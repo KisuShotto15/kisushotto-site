@@ -213,13 +213,13 @@
       <div class="ob-grid">
         <div class="ob-side">
           <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="1000000" onchange="setFilter('may',this.value)"> VES</span></div>
-          <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
+          <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Límites</span></div>
           <div id="ob-may"></div>
           <button class="ob-more" id="more-ob-may" onclick="toggleShowMore('ob-may')" style="display:none"></button>
         </div>
         <div class="ob-side">
           <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">Recompra</span><span class="lbl-extra" id="extra-small"></span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="10000" onchange="setFilter('small',this.value)"> VES</span></div>
-          <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
+          <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Límites</span></div>
           <div id="ob-small"></div>
           <button class="ob-more" id="more-ob-small" onclick="toggleShowMore('ob-small')" style="display:none"></button>
         </div>
@@ -233,7 +233,7 @@
         <div class="buy-section-row" id="buy-section-body">
           <div class="buy-ob-wrap">
             <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">Verde</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
-            <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Amount</span><span style="text-align:center">Price</span><span style="text-align:center">Límites</span></div>
+            <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Límites</span></div>
             <div id="ob-buy"></div>
             <button class="ob-more" id="more-ob-buy" onclick="toggleShowMore('ob-buy')" style="display:none"></button>
           </div>
@@ -341,7 +341,7 @@
           <div id="bot-cur-price" style="font-size:20px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
-          <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Techo venta</div>
+          <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Precio máximo</div>
           <div id="bot-ceiling" style="font-size:20px;color:var(--red);font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
@@ -362,7 +362,7 @@
       <div class="bot-group-h">Configuración</div>
       <div class="cfg-row"><span>Precio venta</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><button class="sug-btn" type="button" onclick="botSuggestSell()" title="Sugerir precio desde el mercado" aria-label="Sugerir precio desde el mercado">✨</button><input type="number" id="cfg-bot-sell" placeholder="640" min="1" step="1" oninput="botUpdateCeiling()"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
       <div class="cfg-row"><span title="Tu ganancia mínima exigida antes de comprar. Negativo = techo por encima del precio de venta, para comprar a pérdida sin inflar el precio">Margen mínimo</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" placeholder="0.5" min="-5" max="10" step="0.1" oninput="botUpdateCeiling()"><span class="stp-unit">%</span><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
-      <div class="cfg-row"><span>Límite mín.</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="10000"><span class="stp-unit">VES</span><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
+      <div class="cfg-row"><span>Límite mínimo</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="10000"><span class="stp-unit">VES</span><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
       </div>
       <details class="bot-details">
         <summary>Ajustes avanzados</summary>
@@ -414,7 +414,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=41"></script>
+<script src="/p2p-monitor/main.js?v=42"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
