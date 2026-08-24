@@ -436,8 +436,9 @@ function renderSubModal() {
 
   var notStarted = s && s.status === 'not_started';
   var reviewing = inv && inv.status === 'pending_review';
+  var justPaid = s && s.status === 'active' && inv && inv.status === 'paid';
   if (startBlock) startBlock.style.display = notStarted ? '' : 'none';
-  if (payBlock) payBlock.style.display = (!notStarted && !reviewing) ? '' : 'none';
+  if (payBlock) payBlock.style.display = (!notStarted && !reviewing && !justPaid) ? '' : 'none';
   if (pendBlock) pendBlock.style.display = (!notStarted && reviewing) ? '' : 'none';
 }
 
@@ -486,10 +487,11 @@ async function markSubPaid() {
   var btn = document.getElementById('sub-paid-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
   try {
-    var d = await apiPost('/api/payments/mark-pending', { plan: SUB.selectedPlan || 'monthly' }, true);
-    SUB.invoice = { id: d.invoiceId, status: d.status };
-    renderSubModal();
-    schedulePoll();
+    await apiPost('/api/payments/mark-pending', { plan: SUB.selectedPlan || 'monthly' }, true);
+    // mark-pending ya intenta confirmar de una (por si el correo llego antes del click):
+    // recargar el estado completo en vez de parchear a mano, para que "pagado al toque"
+    // tambien refresque la suscripcion (no solo la factura).
+    await loadSubscription();
   } catch (e) {
     alert('No se pudo avisar el pago: ' + e.message);
   } finally {

@@ -7,7 +7,6 @@ import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
 import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged, bestOf } from './_lib/monitor.js';
 import { sendTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
-import { checkPaymentEmails } from './_lib/mail-poll.js';
 
 export const config = { maxDuration: 60 };
 
@@ -541,19 +540,13 @@ export default async function handler(req, res) {
       monitored++;
     }
 
-    // Reconciliacion de pagos por correo (Payment Link personal, sin Merchant API).
-    // Se autolimita a 1 vez cada 2 min (ver POLL_THROTTLE_MS); un fallo aca no debe
-    // tumbar el tick del bot/monitor.
-    let payments = null;
-    try { payments = await checkPaymentEmails(); } catch (e) { payments = { error: e.message }; }
-
     // bots/monitors: se los lee el scheduler de CF para adaptar la cadencia
     // (18s con bots, 30s solo-monitor, backoff si no hay nada habilitado).
     // nextSec: sin bots, cuando toca el proximo refresh de monitor. tickMonitor
     // ya devuelve cuanto falta (incluye silencio nocturno y latido del cliente).
     const nextSec = (!rows.length && mrows.length && nextMs !== Infinity)
       ? Math.max(Math.round(nextMs / 1000), 5) : null;
-    return res.status(200).json({ ok: true, ticked, monitored, bots: rows.length, monitors: mrows.length, nextSec, payments });
+    return res.status(200).json({ ok: true, ticked, monitored, bots: rows.length, monitors: mrows.length, nextSec });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

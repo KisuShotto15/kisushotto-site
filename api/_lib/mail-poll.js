@@ -1,13 +1,19 @@
 // Lee por IMAP (App Password de Gmail, requiere 2FA activo en esa cuenta) los correos
 // de confirmacion de Binance Pay y reconcilia pagos de suscripcion automaticamente.
-// Se llama best-effort desde bot-tick.js; nunca debe tumbar el tick si falla.
+// A DEMANDA: no hay ningun cron ni tick periodico. Lo dispara /api/payments cuando
+// hace falta (el usuario avisa "Ya pague", o mientras hay una factura pending_review
+// el cliente hace polling de /status) — asi no se gasta nada mientras nadie esta
+// pagando. best-effort: nunca debe tumbar la respuesta si falla.
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { sql, ensurePlanColumn } from './db.js';
 import { markPaid } from './subscriptions.js';
 import { parsePaymentReceivedEmail } from './binancepay-email.js';
 
-const POLL_THROTTLE_MS = 2 * 60 * 1000; // no vale la pena chequear el correo mas seguido
+// Corto: es a demanda, no un barrido de fondo — no hace falta espaciarlo mucho,
+// solo evitar que 2 llamadas casi simultaneas (ej. mark-pending + el primer poll
+// de status) abran 2 conexiones IMAP a la vez.
+const POLL_THROTTLE_MS = 15 * 1000;
 const BINANCE_FROM_RE = /@ses\.binance\.com$/i;
 
 async function shouldPoll() {
@@ -38,8 +44,10 @@ async function reconcilePayment(hit) {
   return markPaid(inv[0].id, inv[0].user_id, null);
 }
 
-export async function checkPaymentEmails() {
-  if (!(await shouldPoll())) return { skipped: 'throttled' };
+// force=true: ignora el throttle (lo usa mark-pending, el momento donde mas vale
+// la pena intentar de una — el usuario recien dijo que pago).
+export async function checkPaymentEmails(force) {
+  if (!force && !(await shouldPoll())) return { skipped: 'throttled' };
   await ensurePlanColumn();
   await expireStale(); // corre siempre, aunque el IMAP no este configurado todavia
 

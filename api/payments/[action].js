@@ -9,6 +9,7 @@ import { sql, ensureSchema, ensurePlanColumn } from '../_lib/db.js';
 import { createOrder, queryOrder, verifyWebhookSignature } from '../_lib/binancepay.js';
 import { sendPush } from '../_lib/push.js';
 import { ensureSubscription, startTrial, markPaid, planInfo, PLANS, SUB_CURRENCY } from '../_lib/subscriptions.js';
+import { checkPaymentEmails } from '../_lib/mail-poll.js';
 
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -98,6 +99,15 @@ async function statusAction(req, res) {
     }
   }
 
+  // Igual de respaldo, pero para el pago por Payment Link (mail-poll.js): mientras el
+  // cliente hace polling de /status con una factura en revision, cada poll intenta un
+  // chequeo de correo (con su propio throttle corto interno, no cuesta nada de mas
+  // si no hay nada pendiente).
+  if (invoice && invoice.status === 'pending_review') {
+    try { await checkPaymentEmails(); } catch (e) {}
+    invoice = (await sql`SELECT * FROM payment_invoices WHERE id = ${invoice.id}`)[0];
+  }
+
   const subNow = await sql`SELECT * FROM subscriptions WHERE user_id = ${user.uid}`;
   return res.status(200).json({
     subscription: subNow[0] || null, invoice,
@@ -128,13 +138,22 @@ async function markPendingAction(req, res) {
     INSERT INTO payment_invoices (id, user_id, provider, amount, currency, status, plan)
     VALUES (${invoiceId}, ${user.uid}, 'binance_pay_link', ${price}, ${SUB_CURRENCY}, 'pending_review', ${plan})`;
 
-  const adminId = Number(process.env.ADMIN_USER_ID || 0);
-  if (adminId) {
-    sendPush(adminId, '💳 Pago por confirmar',
-      'Usuario #' + user.uid + ' (' + user.email + ') dice haber pagado ' + price + ' ' + SUB_CURRENCY + ' (' + plan + ')'
-    ).catch(() => {});
+  // Chequeo forzado (sin esperar el throttle): si el correo de Binance ya llego antes
+  // de que el usuario tocara el boton, confirma en el momento — sin esto habria que
+  // esperar a la primera vuelta del polling de /status.
+  try { await checkPaymentEmails(true); } catch (e) {}
+  const after = await sql`SELECT status FROM payment_invoices WHERE id = ${invoiceId}`;
+  const finalStatus = (after[0] && after[0].status) || 'pending_review';
+
+  if (finalStatus !== 'paid') {
+    const adminId = Number(process.env.ADMIN_USER_ID || 0);
+    if (adminId) {
+      sendPush(adminId, '💳 Pago por confirmar',
+        'Usuario #' + user.uid + ' (' + user.email + ') dice haber pagado ' + price + ' ' + SUB_CURRENCY + ' (' + plan + ')'
+      ).catch(() => {});
+    }
   }
-  return res.status(200).json({ invoiceId, status: 'pending_review' });
+  return res.status(200).json({ invoiceId, status: finalStatus });
 }
 
 // El usuario se arrepiente / se equivoco (nunca pago de verdad, o lo hizo por el
