@@ -113,6 +113,13 @@ export async function ensureAuthColumns() {
   authColsReady = true;
 }
 
+let planColReady = false;
+export async function ensurePlanColumn() {
+  if (planColReady) return;
+  await sql`ALTER TABLE payment_invoices ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'monthly'`;
+  planColReady = true;
+}
+
 export async function ensureSchema() {
   if (schemaReady) return;
   // Sonda barata (1 round trip): subscriptions es lo ULTIMO que crea este bloque; si ya
@@ -274,6 +281,7 @@ export async function ensureSchema() {
     amount NUMERIC NOT NULL,
     currency TEXT NOT NULL DEFAULT 'USDT',
     status TEXT NOT NULL DEFAULT 'pending',
+    plan TEXT NOT NULL DEFAULT 'monthly',
     prepay_id TEXT,
     transaction_id TEXT,
     checkout_url TEXT,

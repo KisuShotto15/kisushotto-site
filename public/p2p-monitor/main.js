@@ -366,7 +366,7 @@ function enterApp() {
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
-var SUB = { subscription: null, invoice: null };
+var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly' };
 var _subPollT = null;
 
 function daysLeft(iso) {
@@ -381,37 +381,72 @@ function renderSubBadge() {
   if (!s || s.status === 'active') { b.style.display = 'none'; return; }
   b.style.display = '';
   if (s.status === 'trialing') { b.textContent = daysLeft(s.trial_end) + 'd'; b.style.color = 'var(--text-3)'; }
+  else if (s.status === 'not_started') { b.textContent = ''; b.style.display = 'none'; }
   else { b.textContent = '!'; b.style.color = 'var(--red)'; }
+}
+
+function selectSubPlan(plan) {
+  SUB.selectedPlan = plan;
+  renderSubModal();
+}
+
+// Nunca deja navegar a un href vacio ("#") — si el link del plan no esta
+// configurado, avisa en vez de mandar al usuario de vuelta a la app (que es
+// exactamente lo que pasaba: el <a href="#"> recargaba la SPA y parecia que
+// "no hacia nada"/volvia al monitor).
+function onSubPayLinkClick(e) {
+  var plan = SUB.selectedPlan || 'monthly';
+  var info = SUB.plans && SUB.plans[plan];
+  if (!info || !info.link) {
+    e.preventDefault();
+    alert('El link de pago del plan ' + (plan === 'annual' ? 'anual' : 'mensual') + ' todavía no está configurado.');
+    return false;
+  }
+  return true;
 }
 
 function renderSubModal() {
   var line = document.getElementById('sub-status-line');
+  var startBlock = document.getElementById('sub-start-block');
   var payBlock = document.getElementById('sub-pay-block');
   var pendBlock = document.getElementById('sub-pending-block');
   var priceEl = document.getElementById('sub-price');
   var linkEl = document.getElementById('sub-pay-link');
+  var mBtn = document.getElementById('sub-plan-monthly');
+  var aBtn = document.getElementById('sub-plan-annual');
   if (!line) return;
   var s = SUB.subscription, inv = SUB.invoice;
   if (s) {
     if (s.status === 'trialing') line.textContent = 'Prueba gratis: ' + daysLeft(s.trial_end) + ' día(s) restantes';
     else if (s.status === 'active') line.textContent = 'Activa hasta ' + new Date(s.current_period_end).toLocaleDateString('es-VE');
+    else if (s.status === 'not_started') line.textContent = 'Prueba gratis disponible';
     else line.textContent = 'Sin suscripción activa';
   }
-  if (priceEl) priceEl.textContent = (SUB.amount || '—') + ' ' + (SUB.currency || 'USDT');
-  if (linkEl) linkEl.href = SUB.paymentLink || '#';
+  var plan = SUB.selectedPlan || 'monthly';
+  var info = (SUB.plans && SUB.plans[plan]) || {};
+  if (priceEl) priceEl.textContent = (info.price || '—') + ' ' + (info.currency || 'USDT');
+  if (linkEl) linkEl.href = info.link || '#';
+  if (mBtn) mBtn.classList.toggle('btn-gold', plan === 'monthly');
+  if (aBtn) aBtn.classList.toggle('btn-gold', plan === 'annual');
+
+  var notStarted = s && s.status === 'not_started';
   var reviewing = inv && inv.status === 'pending_review';
-  if (payBlock) payBlock.style.display = reviewing ? 'none' : '';
-  if (pendBlock) pendBlock.style.display = reviewing ? '' : 'none';
+  if (startBlock) startBlock.style.display = notStarted ? '' : 'none';
+  if (payBlock) payBlock.style.display = (!notStarted && !reviewing) ? '' : 'none';
+  if (pendBlock) pendBlock.style.display = (!notStarted && reviewing) ? '' : 'none';
 }
 
 async function loadSubscription() {
   if (!SESSION.token) return;
   try {
     var d = await apiPost('/api/payments/status', {}, true);
-    SUB.subscription = d.subscription; SUB.invoice = d.invoice;
-    SUB.amount = d.amount; SUB.currency = d.currency; SUB.paymentLink = d.paymentLink;
+    SUB.subscription = d.subscription; SUB.invoice = d.invoice; SUB.plans = d.plans;
     renderSubBadge(); renderSubModal();
     if (d.invoice && d.invoice.status === 'pending_review') schedulePoll(); else stopPoll();
+    if (!window._trialPromptShown && d.subscription && d.subscription.status === 'not_started') {
+      window._trialPromptShown = true;
+      openSubModal();
+    }
   } catch (e) {}
 }
 
@@ -428,11 +463,25 @@ function closeSubModal() {
   if (m) m.style.display = 'none';
 }
 
+async function startTrialClick() {
+  var btn = document.getElementById('sub-start-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Activando...'; }
+  try {
+    var d = await apiPost('/api/payments/start-trial', {}, true);
+    SUB.subscription = d.subscription;
+    renderSubBadge(); renderSubModal();
+  } catch (e) {
+    alert('No se pudo activar la prueba: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Comenzar prueba gratis'; }
+  }
+}
+
 async function markSubPaid() {
   var btn = document.getElementById('sub-paid-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
   try {
-    var d = await apiPost('/api/payments/mark-pending', {}, true);
+    var d = await apiPost('/api/payments/mark-pending', { plan: SUB.selectedPlan || 'monthly' }, true);
     SUB.invoice = { id: d.invoiceId, status: d.status };
     renderSubModal();
     schedulePoll();

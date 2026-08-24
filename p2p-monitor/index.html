@@ -68,16 +68,24 @@
     <div style="font-size:19px;font-weight:700;color:var(--gold);margin-bottom:4px">Suscripción</div>
     <div id="sub-status-line" style="color:var(--text-2);font-size:14px;margin-bottom:16px">—</div>
 
-    <div id="sub-pay-block">
-      <div style="font-size:13px;color:var(--text-3);margin-bottom:10px">Mensual · <span id="sub-price">—</span> · Binance Pay</div>
-      <a id="sub-pay-link" href="#" target="_blank" rel="noopener" class="btn btn-gold" style="display:block;width:100%;padding:11px;font-size:15px;font-weight:700;box-sizing:border-box">Abrir link de pago</a>
+    <div id="sub-start-block" style="display:none">
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:14px">Prueba el producto 7 días sin costo. La cuenta regresiva empieza recién cuando la actives.</div>
+      <button class="btn btn-gold" id="sub-start-btn" onclick="startTrialClick()" style="width:100%;padding:11px;font-size:15px;font-weight:700">Comenzar prueba gratis</button>
+    </div>
+
+    <div id="sub-pay-block" style="display:none">
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button type="button" class="btn btn-sm" id="sub-plan-monthly" onclick="selectSubPlan('monthly')" style="flex:1">Mensual</button>
+        <button type="button" class="btn btn-sm" id="sub-plan-annual" onclick="selectSubPlan('annual')" style="flex:1">Anual</button>
+      </div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:10px"><span id="sub-price">—</span> · Binance Pay</div>
+      <a id="sub-pay-link" href="#" target="_blank" rel="noopener" class="btn btn-gold" onclick="return onSubPayLinkClick(event)" style="display:block;width:100%;padding:11px;font-size:15px;font-weight:700;box-sizing:border-box">Abrir link de pago</a>
       <div style="font-size:12px;color:var(--text-3);margin:8px 0">Paga el monto exacto y luego confirma abajo</div>
       <button class="btn" id="sub-paid-btn" onclick="markSubPaid()" style="width:100%">Ya pagué</button>
     </div>
 
-    <div id="sub-pending-block" style="display:none;margin-top:6px">
+    <div id="sub-pending-block" style="display:none">
       <div style="font-size:13px;color:var(--text-3);margin-bottom:10px">Pago en revisión — te confirmamos en breve</div>
-      <button class="btn btn-sm" onclick="closeSubModal()">Cerrar</button>
     </div>
 
     <div style="margin-top:16px"><button class="btn btn-sm" onclick="closeSubModal()">Cerrar</button></div>
@@ -421,7 +429,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=50"></script>
+<script src="/p2p-monitor/main.js?v=51"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

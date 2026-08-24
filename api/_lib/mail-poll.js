@@ -3,7 +3,7 @@
 // Se llama best-effort desde bot-tick.js; nunca debe tumbar el tick si falla.
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { sql } from './db.js';
+import { sql, ensurePlanColumn } from './db.js';
 import { markPaid } from './subscriptions.js';
 import { parsePaymentReceivedEmail } from './binancepay-email.js';
 
@@ -38,6 +38,7 @@ export async function checkPaymentEmails() {
   const pass = process.env.GMAIL_IMAP_APP_PASSWORD;
   if (!user || !pass) return { skipped: 'no-config' };
   if (!(await shouldPoll())) return { skipped: 'throttled' };
+  await ensurePlanColumn();
 
   const state = await sql`SELECT last_uid FROM email_payment_state WHERE id = 1`;
   const lastUid = Number((state[0] && state[0].last_uid) || 0);
