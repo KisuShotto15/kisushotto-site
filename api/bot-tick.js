@@ -7,7 +7,8 @@ import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
 import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged, bestOf } from './_lib/monitor.js';
 import { sendTelegram, resolveTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
-import { adminUserId } from './_lib/subscriptions.js';
+import { adminUserId, GRACE_MS } from './_lib/subscriptions.js';
+import { sweepRenewals } from './_lib/renewals.js';
 
 export const config = { maxDuration: 60 };
 
@@ -488,6 +489,10 @@ export default async function handler(req, res) {
     // exento). Sin esto cualquiera cerraba el popup de suscripcion y el bot y el
     // monitor 24/7 le corrian igual, a costa nuestra.
     const adminId = await adminUserId();
+    // Cortesia tras vencer: el pago es manual, un despiste de horas no debe cortarle
+    // el bot a nadie. Los avisos de sweepRenewals le explican al usuario que pasa.
+    const graceFrom = new Date(Date.now() - GRACE_MS).toISOString();
+    try { await sweepRenewals(); } catch (e) {}
 
     // Sin ensureSchema(): el schema ya existe (lo crean los endpoints de auth/app).
     // Correr ~25 DDLs por cold start cada 18s era costo inutil.
@@ -501,7 +506,7 @@ export default async function handler(req, res) {
       WHERE b.enabled = true
         AND (b.user_id = ${adminId}
           OR (s.status = 'trialing' AND s.trial_end > now())
-          OR (s.status = 'active' AND s.current_period_end > now()))
+          OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))
       LIMIT ${MAX_USERS}`;
 
     let ticked = 0;
@@ -581,7 +586,7 @@ export default async function handler(req, res) {
       WHERE b.enabled = false
         AND (b.user_id = ${adminId}
           OR (s.status = 'trialing' AND s.trial_end > now())
-          OR (s.status = 'active' AND s.current_period_end > now()))
+          OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))
       LIMIT ${MAX_USERS}`;
     for (const row of qrows) {
       try {
@@ -603,7 +608,7 @@ export default async function handler(req, res) {
       WHERE m.enabled = true
         AND (m.user_id = ${adminId}
           OR (s.status = 'trialing' AND s.trial_end > now())
-          OR (s.status = 'active' AND s.current_period_end > now()))
+          OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))
       LIMIT ${MAX_USERS}`;
     let monitored = 0;
     // ms hasta el proximo trabajo real: el scheduler espacia su alarma con esto.

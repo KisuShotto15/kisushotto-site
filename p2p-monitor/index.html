@@ -98,6 +98,8 @@
 
     <div id="sub-rejected-note" style="display:none;font-size:13px;color:var(--red);margin-bottom:12px">No pudimos verificar tu pago anterior. Revisa el monto exacto e inténtalo de nuevo.</div>
 
+    <div id="sub-grace-note" style="display:none;font-size:13px;color:var(--gold);margin-bottom:12px">Tu suscripción venció. El monitor y el bot siguen funcionando <b id="sub-grace-days">2 días</b> más de cortesía — renueva para no perderlos.</div>
+
     <div id="sub-pay-block" style="display:none">
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <button type="button" class="btn plan-btn" id="sub-plan-monthly" onclick="selectSubPlan('monthly')">Mensual</button>
@@ -502,7 +504,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=81"></script>
+<script src="/p2p-monitor/main.js?v=82"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

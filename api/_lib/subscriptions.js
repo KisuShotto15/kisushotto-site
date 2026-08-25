@@ -1,11 +1,17 @@
 // Logica de suscripcion compartida entre la ruta HTTP (/api/payments) y el poller
 // de Binance Pay (pay-poll.js), para no duplicar el criterio de "que significa pagar".
-import { sql } from './db.js';
+import { sql, ensureRenewColumn } from './db.js';
 
 export const TRIAL_DAYS = 7;
 export const SUB_CURRENCY = 'USDT';
 
 const DAY_MS = 24 * 3600 * 1000;
+
+// Cortesia despues de vencer. El pago es manual y la gente se despista: cortarle el
+// bot a alguien por unas horas de retraso pierde al cliente por nada. Solo aplica a
+// suscripciones pagas — la prueba gratis termina cuando termina.
+export const GRACE_DAYS = 2;
+export const GRACE_MS = GRACE_DAYS * DAY_MS;
 
 // Cada plan tiene su propio Payment Link (monto fijo en Binance Pay: un solo link
 // no puede cobrar dos montos distintos). PAYMENT_LINK_URL sin sufijo queda como
@@ -58,7 +64,13 @@ export async function markPaid(invoiceId, userId, txId) {
   const curEnd = sub[0] && sub[0].current_period_end ? new Date(sub[0].current_period_end).getTime() : 0;
   const base = curEnd > now ? curEnd : now;
   const periodEnd = new Date(base + PLANS[plan].periodMs).toISOString();
-  await sql`UPDATE subscriptions SET status = 'active', current_period_end = ${periodEnd}, updated_at = now() WHERE user_id = ${userId}`;
+  // renew_notified_at a null: empieza un periodo nuevo, y los avisos del anterior no
+  // deben silenciar los del proximo vencimiento.
+  await ensureRenewColumn();
+  await sql`
+    UPDATE subscriptions
+    SET status = 'active', current_period_end = ${periodEnd}, renew_notified_at = NULL, updated_at = now()
+    WHERE user_id = ${userId}`;
   return true;
 }
 
@@ -93,11 +105,12 @@ export async function hasActiveSub(userId) {
     if (userId === await adminUserId()) {
       ok = true;
     } else {
+      const graceFrom = new Date(Date.now() - GRACE_MS).toISOString();
       const rows = await sql`
         SELECT 1 FROM subscriptions
         WHERE user_id = ${userId}
           AND ((status = 'trialing' AND trial_end > now())
-            OR (status = 'active' AND current_period_end > now()))`;
+            OR (status = 'active' AND current_period_end > ${graceFrom}))`;
       ok = rows.length > 0;
     }
   } catch (e) {

@@ -120,12 +120,6 @@ export async function ensurePlanColumn() {
   planColReady = true;
 }
 
-// Vinculo con el bot de Telegram compartido. Una fila por usuario: el codigo es
-// de un solo uso (lo consume el /start del deep link) y chat_id es el destino
-// privado de ese usuario — cada quien recibe solo sus propias alertas.
-// Marca de tiempo del ultimo sondeo al historial de Binance Pay. Va en la tabla de
-// estado que ya existia (no vale ampliarla en ensureSchema: ese arranque esta
-// cortocircuitado por la sonda sobre esta misma tabla).
 // binance_nick vive dentro de ensureSchema, que sale antes por la sonda: si la
 // columna se añadio despues de que la tabla de estado ya existiera, alli nunca se
 // llego a aplicar. Aca se garantiza suelta.
@@ -136,13 +130,29 @@ export async function ensureNickColumn() {
   nickColReady = true;
 }
 
+// Marcas de tiempo de los sondeos periodicos. Van en la tabla de estado que ya
+// existia (no vale ampliarla en ensureSchema: ese arranque esta cortocircuitado
+// por la sonda sobre esta misma tabla).
 let payStateReady = false;
 export async function ensurePayState() {
   if (payStateReady) return;
   await sql`ALTER TABLE email_payment_state ADD COLUMN IF NOT EXISTS pay_checked_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE email_payment_state ADD COLUMN IF NOT EXISTS renew_checked_at TIMESTAMPTZ`;
   payStateReady = true;
 }
 
+// Cuando se le mando el ultimo aviso de vencimiento a cada usuario, para no
+// repetirselo en cada barrido.
+let renewColReady = false;
+export async function ensureRenewColumn() {
+  if (renewColReady) return;
+  await sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS renew_notified_at TIMESTAMPTZ`;
+  renewColReady = true;
+}
+
+// Vinculo con el bot de Telegram compartido. Una fila por usuario: el codigo es
+// de un solo uso (lo consume el /start del deep link) y chat_id es el destino
+// privado de ese usuario — cada quien recibe solo sus propias alertas.
 let tgLinksReady = false;
 export async function ensureTelegramLinks() {
   if (tgLinksReady) return;

@@ -397,22 +397,41 @@ function renderSubBadge() {
   var b = document.getElementById('sub-badge');
   if (!b) return;
   var s = SUB.subscription;
-  if (!s || s.status === 'active') { b.style.display = 'none'; return; }
+  if (!s || s.status === 'not_started') { b.style.display = 'none'; return; }
+  if (s.status === 'active') {
+    // Vencida pero dentro de la cortesia: hay que verlo, todavia se puede renovar
+    // sin perder nada. Y en los ultimos 3 dias, cuenta regresiva.
+    if (subInGrace()) { b.style.display = ''; b.textContent = '!'; b.style.color = 'var(--red)'; return; }
+    var d = daysLeft(s.current_period_end);
+    if (d > 3) { b.style.display = 'none'; return; }
+    b.style.display = ''; b.textContent = d + 'd'; b.style.color = 'var(--gold)';
+    return;
+  }
   b.style.display = '';
-  if (s.status === 'trialing') { b.textContent = daysLeft(s.trial_end) + 'd'; b.style.color = 'var(--text-3)'; }
-  else if (s.status === 'not_started') { b.textContent = ''; b.style.display = 'none'; }
+  if (s.status === 'trialing') { b.textContent = daysLeft(s.trial_end) + 'd'; b.style.color = 'var(--text-2)'; }
   else { b.textContent = '!'; b.style.color = 'var(--red)'; }
 }
 
-// Vigente = prueba sin vencer o periodo pagado sin vencer. El estado solo no basta:
-// una prueba que caduco se queda en 'trialing' con trial_end pasado.
+// Debe coincidir con GRACE_DAYS del backend (api/_lib/subscriptions.js): si el
+// cliente corta antes que el servidor, apaga el monitor de alguien que si tiene paso.
+var GRACE_MS = 2 * 24 * 3600 * 1000;
+
+// Vigente = prueba sin vencer, o periodo pagado sin vencer (mas la cortesia). El
+// estado solo no basta: una prueba que caduco se queda en 'trialing' con trial_end pasado.
 function subActive() {
   var s = SUB.subscription;
   if (!s) return false;
   var now = Date.now();
   if (s.status === 'trialing') return !!s.trial_end && new Date(s.trial_end).getTime() > now;
-  if (s.status === 'active') return !!s.current_period_end && new Date(s.current_period_end).getTime() > now;
+  if (s.status === 'active') return !!s.current_period_end && new Date(s.current_period_end).getTime() > now - GRACE_MS;
   return false;
+}
+
+// Ya vencio pero sigue andando por la cortesia.
+function subInGrace() {
+  var s = SUB.subscription;
+  if (!s || s.status !== 'active' || !s.current_period_end) return false;
+  return new Date(s.current_period_end).getTime() <= Date.now() && subActive();
 }
 
 // Puerta de entrada al monitor y al bot. Si todavia no se sabe el estado, lo pide
@@ -524,10 +543,23 @@ function renderSubModal() {
 
   var notStarted = s && s.status === 'not_started';
   var reviewing = inv && inv.status === 'pending_review';
-  var justPaid = s && s.status === 'active' && inv && inv.status === 'paid';
+  // Con el periodo pagado y holgado no hay nada que cobrar. Pero en los ultimos 3
+  // dias (y durante la cortesia) el bloque de pago vuelve: es justo cuando el
+  // usuario quiere renovar, y markPaid encadena el periodo nuevo sin regalar dias.
+  var justPaid = s && s.status === 'active' && inv && inv.status === 'paid' &&
+    daysLeft(s.current_period_end) > 3 && !subInGrace();
   var rejected = inv && inv.status === 'rejected';
   var rejEl = document.getElementById('sub-rejected-note');
   if (rejEl) rejEl.style.display = rejected ? '' : 'none';
+  var graceEl = document.getElementById('sub-grace-note');
+  if (graceEl) {
+    graceEl.style.display = subInGrace() ? '' : 'none';
+    var gd = document.getElementById('sub-grace-days');
+    if (gd && subInGrace()) {
+      var left = Math.max(1, Math.ceil((new Date(s.current_period_end).getTime() + GRACE_MS - Date.now()) / 86400000));
+      gd.textContent = left === 1 ? '1 día' : left + ' días';
+    }
+  }
   // El "que incluye" se muestra justo cuando el usuario esta decidiendo: sin
   // empezar la prueba, o con la prueba vencida y el pago por delante.
   var valueBox = document.getElementById('sub-value');
