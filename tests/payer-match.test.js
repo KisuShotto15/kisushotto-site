@@ -70,28 +70,35 @@ test('una transaccion saliente no matchea a un suscriptor', () => {
 // transaccion, asi que no hay ambiguedad posible.
 import { orderMatches, refMatches } from '../api/_lib/payer-match.js';
 
-test('el Order ID matchea el transactionId exacto', () => {
-  const t = { transactionId: 'M_P_71800000001' };
-  assert.ok(orderMatches(t, 'M_P_71800000001'));
+// Transaccion real: el Order ID que el pagador ve en su pantalla es orderId, no
+// transactionId. Son dos identificadores distintos del mismo pago.
+const REAL = {
+  orderId: '450541395316375552',
+  transactionId: 'P_A23YT42NEJD71118',
+  amount: '496.94', currency: 'USDT',
+  payerInfo: { name: 'DynaMalz', type: 'USER' },
+};
+
+test('matchea el Order ID que el pagador copia de su pantalla', () => {
+  assert.ok(orderMatches(REAL, '450541395316375552'));
+  assert.ok(orderMatches(REAL, ' 450541395316375552 '), 'con espacios de sobra');
 });
 
-test('el Order ID matchea aunque lo copien sin guiones o en minuscula', () => {
-  const t = { transactionId: 'M_P_71800000001' };
-  assert.ok(orderMatches(t, 'mp71800000001'), 'normalizado da lo mismo');
-  assert.ok(orderMatches(t, ' M_P_71800000001 '), 'con espacios de sobra');
+test('matchea tambien el transactionId, por si es lo unico que hay', () => {
+  assert.ok(orderMatches(REAL, 'P_A23YT42NEJD71118'));
+  assert.ok(orderMatches(REAL, 'pa23yt42nejd71118'), 'normalizado da lo mismo');
 });
 
-test('un Order ID de otra transaccion no matchea', () => {
-  assert.equal(orderMatches({ transactionId: 'M_P_71800000001' }, 'M_P_71800000002'), false);
+test('un Order ID de otro pago no matchea', () => {
+  assert.equal(orderMatches(REAL, '450541395316375553'), false);
 });
 
 test('un Order ID parcial no matchea: tiene que ser exacto', () => {
-  assert.equal(orderMatches({ transactionId: 'M_P_71800000001' }, 'M_P_718'), false);
+  assert.equal(orderMatches(REAL, '4505413953'), false);
 });
 
-test('refMatches acepta el Order ID o el nombre, lo que haya dado', () => {
-  const t = { transactionId: 'M_P_71800000001', payerInfo: { name: 'DynaMalz' } };
-  assert.ok(refMatches(t, 'M_P_71800000001'), 'por Order ID');
-  assert.ok(refMatches(t, 'DynaMalz'), 'por nombre');
-  assert.equal(refMatches(t, 'OtroUsuario'), false);
+test('refMatches acepta el Order ID o el usuario, lo que haya dado', () => {
+  assert.ok(refMatches(REAL, '450541395316375552'), 'por Order ID');
+  assert.ok(refMatches(REAL, 'DynaMalz'), 'por usuario');
+  assert.equal(refMatches(REAL, 'OtroUsuario'), false);
 });

@@ -41,14 +41,16 @@ export function payerMatches(t, nick) {
   });
 }
 
-// El Order ID que el usuario ve en Binance Pay contra el transactionId del
-// historial. Exacto tras normalizar: Binance los muestra con prefijos y guiones
-// (M_P_71800000001) que la gente copia de forma inconsistente.
+// El "Order ID" que Binance le muestra al pagador al terminar (450541395316375552)
+// llega en el campo orderId, que NO esta en la documentacion y NO es el
+// transactionId (P_A23YT42NEJD71118). Se aceptan los dos: uno es el que el usuario
+// puede copiar, el otro por si alguna transaccion solo trae ese.
 export function orderMatches(t, ref) {
   const want = norm(ref);
   if (want.length < MIN_LEN) return false;
-  const id = norm(t && t.transactionId);
-  return !!id && id === want;
+  return [t && t.orderId, t && t.transactionId]
+    .map(norm)
+    .some(id => id.length >= MIN_LEN && id === want);
 }
 
 // Criterio unico de la reconciliacion: el Order ID si lo dio, el nombre si no.

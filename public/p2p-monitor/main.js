@@ -460,7 +460,7 @@ function renderPaidBtn() {
   if (help) {
     help.textContent = hasNick
       ? 'Se activa sola en menos de un minuto.'
-      : 'Escribe tu usuario arriba para poder avisar.';
+      : 'Pega el Order ID arriba para poder avisar.';
   }
 }
 
@@ -751,7 +751,7 @@ async function markSubPaid() {
   // Sin nombre no se puede confirmar el pago solo: el monto no distingue esta
   // suscripcion de cualquier otro cobro de USDT que entre a la vez.
   if (!nick) {
-    alert('Escribe tu usuario de Binance para poder identificar tu pago.');
+    alert('Pega el Order ID del pago (o tu nickname de Binance) para poder identificarlo.');
     if (nickEl) nickEl.focus();
     return;
   }
