@@ -79,6 +79,36 @@ export async function adminUserId() {
   return adminIdCache;
 }
 
+// Cache en memoria por instancia: /p2p-search se llama cada 15s por usuario y no
+// puede pagar un round-trip a Postgres en cada refresco. 60s de desfase es el
+// precio (gracia al vencer, o espera corta tras pagar).
+const activeCache = new Map();
+const ACTIVE_TTL_MS = 60 * 1000;
+
+export async function hasActiveSub(userId) {
+  const hit = activeCache.get(userId);
+  if (hit && Date.now() - hit.at < ACTIVE_TTL_MS) return hit.ok;
+  let ok;
+  try {
+    if (userId === await adminUserId()) {
+      ok = true;
+    } else {
+      const rows = await sql`
+        SELECT 1 FROM subscriptions
+        WHERE user_id = ${userId}
+          AND ((status = 'trialing' AND trial_end > now())
+            OR (status = 'active' AND current_period_end > now()))`;
+      ok = rows.length > 0;
+    }
+  } catch (e) {
+    // Si la base falla, dejar pasar: cortarle el monitor a quien si pago es peor
+    // que colarse un rato a quien no.
+    ok = true;
+  }
+  activeCache.set(userId, { ok, at: Date.now() });
+  return ok;
+}
+
 export function planInfo() {
   return {
     monthly: { price: PLANS.monthly.price, currency: SUB_CURRENCY, link: PLANS.monthly.link() },

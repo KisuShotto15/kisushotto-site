@@ -1,5 +1,6 @@
 import { requireAllowedUser } from './_lib/auth.js';
 import { rateLimit, clientIp } from './_lib/ratelimit.js';
+import { hasActiveSub } from './_lib/subscriptions.js';
 
 // ── Rate limit configurable por env (0 / sin setear = desactivado) ──
 const RL_MAX    = parseInt(process.env.RATE_LIMIT_MAX || '0', 10);
@@ -24,7 +25,14 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Rate limit exceeded', retryAfter });
   }
 
-  try { requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  let user;
+  try { user = requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+
+  // La puerta del cliente se puede saltar llamando aca directamente: sin prueba
+  // vigente ni periodo pagado no se sirve el libro.
+  if (!(await hasActiveSub(user.uid))) {
+    return res.status(402).json({ error: 'Suscripcion requerida' });
+  }
 
   const BINANCE_URL = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
 

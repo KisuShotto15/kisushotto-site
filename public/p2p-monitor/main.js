@@ -1088,6 +1088,15 @@ async function searchBatch(bodies, ms) {
     body: JSON.stringify({ queries: bodies })
   }, ms);
   if (r.status === 401 || r.status === 403) { authLogout(); throw new Error('Sesión expirada'); }
+  // El servidor cerro la puerta (suscripcion vencida entre refrescos): apagar el
+  // monitor y mostrar el modal, en vez de reintentar cada 15s contra un 402.
+  if (r.status === 402) {
+    stopMonitorView();
+    monitorServerDisable();
+    loadSubscription();
+    openSubModal();
+    throw new Error('Suscripción requerida');
+  }
   if (!r.ok) throw new Error('HTTP ' + r.status);
   var d = await r.json();
   if (d.error) throw new Error(d.error);
