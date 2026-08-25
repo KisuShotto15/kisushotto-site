@@ -28,8 +28,45 @@ const GLOBAL_PAY = 'BancoDeVenezuela';
 const GLOBAL_AMOUNT = 0;
 const GLOBAL_SAMPLE_MS = 2 * 60 * 1000; // igual que la cadencia de pushHist24
 
+// Siembra unica: la serie global arranca vacia, pero el historial del admin ya tiene
+// meses de mercado (es el mismo mercado). Se copia una sola vez, fusionado con lo poco
+// que la serie global haya acumulado, y queda marcada con seeded para no repetirse.
+async function seedGlobalHist() {
+  const rows = await sql`SELECT hist24, hist_long, seeded FROM market_hist WHERE pay = ${GLOBAL_PAY}`;
+  if (rows.length && rows[0].seeded) return;
+  const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!adminEmail) return;
+  const src = await sql`
+    SELECT m.hist24, m.hist_long FROM monitor_state m
+    JOIN users u ON u.id = m.user_id
+    WHERE lower(u.email) = ${adminEmail}`;
+  if (!src.length) return;
+
+  // Fusion por timestamp: el punto del admin manda si hay choque, y el resultado
+  // queda ordenado (las velas se derivan al vuelo asumiendo orden ascendente).
+  const merge = (mine, theirs) => {
+    const m = new Map();
+    (theirs || []).forEach(p => { if (p && p.ts) m.set(p.ts, p); });
+    (mine || []).forEach(p => { if (p && p.ts) m.set(p.ts, p); });
+    return [...m.values()].sort((a, b) => a.ts - b.ts);
+  };
+  const cur = rows[0] || {};
+  const h24 = merge(histMap(src[0].hist24)[GLOBAL_PAY], histMap(cur.hist24)[GLOBAL_PAY]);
+  const hLong = merge(histMap(src[0].hist_long)[GLOBAL_PAY], histMap(cur.hist_long)[GLOBAL_PAY]);
+  if (!h24.length && !hLong.length) return;
+
+  await sql`
+    INSERT INTO market_hist (pay, hist24, hist_long, seeded, updated_at)
+    VALUES (${GLOBAL_PAY}, ${JSON.stringify({ [GLOBAL_PAY]: h24 })}::jsonb,
+            ${JSON.stringify({ [GLOBAL_PAY]: hLong })}::jsonb, true, now())
+    ON CONFLICT (pay) DO UPDATE SET hist24 = excluded.hist24,
+      hist_long = excluded.hist_long, seeded = true
+    WHERE market_hist.seeded = false`;
+}
+
 async function tickGlobalHist() {
   await ensureMarketHist();
+  await seedGlobalHist();
   // Claim atomico: con varios ticks solapados solo uno hace la busqueda.
   const claim = await sql`
     INSERT INTO market_hist (pay, updated_at) VALUES (${GLOBAL_PAY}, now())

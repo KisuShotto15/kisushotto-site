@@ -127,8 +127,12 @@ export async function ensureMarketHist() {
     pay TEXT PRIMARY KEY,
     hist24 JSONB,
     hist_long JSONB,
+    seeded BOOLEAN NOT NULL DEFAULT false,
     updated_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // Marca de la siembra inicial (historial del admin -> serie global). Sin esto la
+  // siembra correria en cada tick o, peor, no correria nunca al haber ya 1 punto.
+  await sql`ALTER TABLE market_hist ADD COLUMN IF NOT EXISTS seeded BOOLEAN NOT NULL DEFAULT false`;
   marketHistReady = true;
 }
 
