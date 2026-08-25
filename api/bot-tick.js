@@ -20,7 +20,12 @@ const SAMPLE_MS = 5 * 60 * 1000; // cadencia del muestreo de estado del anuncio
 // abria la app con el grafico vacio. Corre aparte del tick por usuario, asi que
 // tambien se alimenta cuando nadie tiene el monitor encendido.
 const GLOBAL_PAY = 'BancoDeVenezuela';
-const GLOBAL_AMOUNT = 2000000;
+// 0 = sin filtro de monto: la serie es el tope real del libro y no depende de lo que
+// cada quien tenga puesto en Mayoristas. No hace falta filtrar por monto para limpiar
+// ruido: mapBest ya descarta anuncios con menos de MIN_AVAIL (2000 USDT) y
+// bestCorroborated exige un segundo anuncio cerca del precio, asi que un dedazo no entra.
+// verifiedOnly SI se mantiene: es parte de la definicion del precio, no un filtro personal.
+const GLOBAL_AMOUNT = 0;
 const GLOBAL_SAMPLE_MS = 2 * 60 * 1000; // igual que la cadencia de pushHist24
 
 async function tickGlobalHist() {
