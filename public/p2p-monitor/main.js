@@ -481,6 +481,10 @@ function renderSubModal() {
   var info = (SUB.plans && SUB.plans[plan]) || {};
   if (priceEl) priceEl.textContent = (info.price || '—') + ' ' + (info.currency || 'USDT');
   if (linkEl) linkEl.href = info.link || '#';
+  // Solo se rellena si esta vacio: renderSubModal corre en cada poll y no debe
+  // pisar lo que el usuario esta escribiendo.
+  var nickEl = document.getElementById('sub-nick');
+  if (nickEl && !nickEl.value && s && s.binance_nick) nickEl.value = s.binance_nick;
   if (mBtn) mBtn.classList.toggle('btn-gold', plan === 'monthly');
   if (aBtn) aBtn.classList.toggle('btn-gold', plan === 'annual');
   if (paidBtn) paidBtn.style.display = SUB.linkClicked ? '' : 'none';
@@ -692,8 +696,18 @@ async function startTrialClick() {
 
 async function markSubPaid() {
   var btn = document.getElementById('sub-paid-btn');
+  var nickEl = document.getElementById('sub-nick');
+  var nick = nickEl ? nickEl.value.trim() : '';
+  // Sin nombre no se puede confirmar el pago solo: el monto no distingue esta
+  // suscripcion de cualquier otro cobro de USDT que entre a la vez.
+  if (!nick) {
+    alert('Escribe tu nombre en Binance para poder identificar tu pago.');
+    if (nickEl) nickEl.focus();
+    return;
+  }
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
   try {
+    await apiPost('/api/payments/set-nick', { nick: nick }, true);
     await apiPost('/api/payments/mark-pending', { plan: SUB.selectedPlan || 'monthly' }, true);
     // mark-pending ya intenta confirmar de una (por si el correo llego antes del click):
     // recargar el estado completo en vez de parchear a mano, para que "pagado al toque"

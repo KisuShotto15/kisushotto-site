@@ -7,8 +7,9 @@
 // "Ya pague" o mientras hace polling con una factura en revision. El endpoint pesa
 // 3000 de los 6000/min que da Binance, asi que el throttle no es opcional.
 import crypto from 'node:crypto';
-import { sql, ensurePlanColumn, ensurePayState } from './db.js';
+import { sql, ensurePlanColumn, ensurePayState, ensureNickColumn } from './db.js';
 import { markPaid } from './subscriptions.js';
+import { payerMatches } from './payer-match.js';
 
 const BINANCE = 'https://api.binance.com';
 const POLL_THROTTLE_MS = 20 * 1000;
@@ -67,6 +68,7 @@ export async function checkPayPayments(force) {
   await ensurePayState();
   if (!force && !(await shouldPoll())) return { skipped: 'throttled' };
   await ensurePlanColumn();
+  await ensureNickColumn();
   await expireStale();
 
   const { key, secret } = payKeys();
@@ -76,9 +78,11 @@ export async function checkPayPayments(force) {
   }
 
   const pend = await sql`
-    SELECT id, user_id, amount, currency FROM payment_invoices
-    WHERE status IN ('pending', 'pending_review')
-    ORDER BY created_at ASC`;
+    SELECT i.id, i.user_id, i.amount, i.currency, s.binance_nick
+    FROM payment_invoices i
+    LEFT JOIN subscriptions s ON s.user_id = i.user_id
+    WHERE i.status IN ('pending', 'pending_review')
+    ORDER BY i.created_at ASC`;
   if (!pend.length) {
     await sql`UPDATE email_payment_state SET pay_checked_at = now() WHERE id = 1`;
     return { pending: 0, matched: 0 };
@@ -98,12 +102,17 @@ export async function checkPayPayments(force) {
   const usedIds = new Set(used.map(r => r.transaction_id));
 
   const incoming = txs.filter(isIncoming).sort((a, b) => a.transactionTime - b.transactionTime);
-  let matched = 0;
+  let matched = 0, noNick = 0;
   for (const inv of pend) {
+    // Sin nick no se confirma sola: el monto por si solo no distingue la suscripcion
+    // de cualquier otro cobro de USDT, y aca entran pagos de P2P todo el dia. Esas
+    // facturas quedan para el panel manual.
+    if (!inv.binance_nick) { noNick++; continue; }
     const hit = incoming.find(t =>
       !usedIds.has(String(t.transactionId)) &&
       String(t.currency).toUpperCase() === String(inv.currency).toUpperCase() &&
-      Math.abs(Number(t.amount) - Number(inv.amount)) <= AMOUNT_EPS
+      Math.abs(Number(t.amount) - Number(inv.amount)) <= AMOUNT_EPS &&
+      payerMatches(t, inv.binance_nick)
     );
     if (!hit) continue;
     if (await markPaid(inv.id, inv.user_id, String(hit.transactionId))) {
@@ -113,7 +122,7 @@ export async function checkPayPayments(force) {
   }
 
   await sql`UPDATE email_payment_state SET pay_checked_at = now() WHERE id = 1`;
-  return { pending: pend.length, seen: txs.length, incoming: incoming.length, matched };
+  return { pending: pend.length, seen: txs.length, incoming: incoming.length, matched, noNick };
 }
 
 // Diagnostico del panel de admin: responde si las claves sirven y que se ve, sin

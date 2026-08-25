@@ -5,7 +5,7 @@
 export const config = { api: { bodyParser: false }, maxDuration: 30 };
 
 import { requireUser } from '../_lib/auth.js';
-import { sql, ensureSchema, ensurePlanColumn } from '../_lib/db.js';
+import { sql, ensureSchema, ensurePlanColumn, ensureNickColumn } from '../_lib/db.js';
 import { createOrder, queryOrder, verifyWebhookSignature } from '../_lib/binancepay.js';
 import { sendPush } from '../_lib/push.js';
 import { ensureSubscription, startTrial, markPaid, planInfo, PLANS, SUB_CURRENCY } from '../_lib/subscriptions.js';
@@ -204,6 +204,7 @@ async function setNickAction(req, res) {
   const nick = String(body.nick || '').trim().slice(0, 64);
   if (!nick) return res.status(400).json({ error: 'nick requerido' });
   await ensureSchema();
+  await ensureNickColumn();
   await ensureSubscription(user.uid);
   await sql`UPDATE subscriptions SET binance_nick = ${nick}, updated_at = now() WHERE user_id = ${user.uid}`;
   return res.status(200).json({ ok: true });

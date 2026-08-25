@@ -126,6 +126,16 @@ export async function ensurePlanColumn() {
 // Marca de tiempo del ultimo sondeo al historial de Binance Pay. Va en la tabla de
 // estado que ya existia (no vale ampliarla en ensureSchema: ese arranque esta
 // cortocircuitado por la sonda sobre esta misma tabla).
+// binance_nick vive dentro de ensureSchema, que sale antes por la sonda: si la
+// columna se añadio despues de que la tabla de estado ya existiera, alli nunca se
+// llego a aplicar. Aca se garantiza suelta.
+let nickColReady = false;
+export async function ensureNickColumn() {
+  if (nickColReady) return;
+  await sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS binance_nick TEXT`;
+  nickColReady = true;
+}
+
 let payStateReady = false;
 export async function ensurePayState() {
   if (payStateReady) return;
