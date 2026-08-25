@@ -120,6 +120,18 @@ export async function ensurePlanColumn() {
   planColReady = true;
 }
 
+let marketHistReady = false;
+export async function ensureMarketHist() {
+  if (marketHistReady) return;
+  await sql`CREATE TABLE IF NOT EXISTS market_hist (
+    pay TEXT PRIMARY KEY,
+    hist24 JSONB,
+    hist_long JSONB,
+    updated_at TIMESTAMPTZ DEFAULT now()
+  )`;
+  marketHistReady = true;
+}
+
 export async function ensureSchema() {
   if (schemaReady) return;
   // Sonda barata (1 round trip): subscriptions es lo ULTIMO que crea este bloque; si ya
@@ -244,6 +256,15 @@ export async function ensureSchema() {
     pay TEXT PRIMARY KEY,
     rate NUMERIC NOT NULL,
     n INTEGER,
+    updated_at TIMESTAMPTZ DEFAULT now()
+  )`;
+  // Serie del grafico, GLOBAL (no por usuario): es el mismo mercado para todos. La
+  // alimenta un muestreo canonico (monto y verificados fijos) para que el filtro de
+  // VES de cada quien no deforme la curva, y existe desde el dia 1 para un usuario nuevo.
+  await sql`CREATE TABLE IF NOT EXISTS market_hist (
+    pay TEXT PRIMARY KEY,
+    hist24 JSONB,
+    hist_long JSONB,
     updated_at TIMESTAMPTZ DEFAULT now()
   )`;
   // Snapshots del mercado BDV (grabador para el indice de debilidad). Lo alimenta el

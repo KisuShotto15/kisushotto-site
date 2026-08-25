@@ -1,6 +1,6 @@
 // Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~18s.
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
-import { sql } from './_lib/db.js';
+import { sql, ensureMarketHist } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
@@ -12,6 +12,41 @@ export const config = { maxDuration: 60 };
 
 const MAX_USERS = 25; // tope por tick (secuencial)
 const SAMPLE_MS = 5 * 60 * 1000; // cadencia del muestreo de estado del anuncio
+
+// ── Serie global del grafico ───────────────────────────
+// Es el mismo mercado para todos, asi que la curva es una sola y se mide SIEMPRE con
+// los mismos parametros: el filtro de VES (cfg.mayAmount) y el toggle de verificados
+// de cada usuario deformaban la serie, y al vivir en monitor_state un usuario nuevo
+// abria la app con el grafico vacio. Corre aparte del tick por usuario, asi que
+// tambien se alimenta cuando nadie tiene el monitor encendido.
+const GLOBAL_PAY = 'BancoDeVenezuela';
+const GLOBAL_AMOUNT = 2000000;
+const GLOBAL_SAMPLE_MS = 2 * 60 * 1000; // igual que la cadencia de pushHist24
+
+async function tickGlobalHist() {
+  await ensureMarketHist();
+  // Claim atomico: con varios ticks solapados solo uno hace la busqueda.
+  const claim = await sql`
+    INSERT INTO market_hist (pay, updated_at) VALUES (${GLOBAL_PAY}, now())
+    ON CONFLICT (pay) DO UPDATE SET updated_at = now()
+    WHERE market_hist.updated_at < now() - ${GLOBAL_SAMPLE_MS + ' milliseconds'}::interval
+    RETURNING pay`;
+  if (!claim.length) return;
+
+  const raw = await publicSearch({
+    transAmount: GLOBAL_AMOUNT, pays: [GLOBAL_PAY], maxPages: 1,
+    tradeType: 'SELL', verifiedOnly: true,
+  });
+  const price = bestOf(raw, true);
+  if (!price) return;
+
+  const cur = await sql`SELECT hist24, hist_long FROM market_hist WHERE pay = ${GLOBAL_PAY}`;
+  const now = Date.now();
+  const h24 = pushHist24Pay(cur[0] && cur[0].hist24, GLOBAL_PAY, now, price);
+  const hLong = pushHistLongPay(cur[0] && cur[0].hist_long, GLOBAL_PAY, now, price);
+  await sql`UPDATE market_hist SET hist24 = ${JSON.stringify(h24)}::jsonb,
+    hist_long = ${JSON.stringify(hLong)}::jsonb WHERE pay = ${GLOBAL_PAY}`;
+}
 
 function pushLog(log, msg, level) {
   const arr = Array.isArray(log) ? log.slice(-19) : [];
@@ -408,6 +443,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Serie global del grafico: independiente de que haya o no usuarios con el
+    // monitor encendido. Best-effort, nunca debe tumbar el tick del bot.
+    try { await tickGlobalHist(); } catch (e) {}
+
     // Sin ensureSchema(): el schema ya existe (lo crean los endpoints de auth/app).
     // Correr ~25 DDLs por cold start cada 18s era costo inutil.
     const rows = await sql`

@@ -1,8 +1,7 @@
 import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
-import { sql, ensureSchema } from './_lib/db.js';
+import { sql, ensureSchema, ensureMarketHist } from './_lib/db.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
-import { pushHist24Pay, pushHistLongPay, histPaySnapshot, histPayChanged } from './_lib/monitor.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
 import { fifoMatch, fifoShort, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows, SAMPLE_MIN } from './_lib/pnl.js';
 
@@ -339,8 +338,6 @@ export default async function handler(req, res) {
       }
       if (path === '/monitor-heartbeat') {
         // La app abierta avisa que esta refrescando; el servidor se queda quieto mientras tanto.
-        // De paso alimenta hist24 con el precio que ve el cliente, asi el sparkline no queda hueco de dia.
-        const price = Number((params && params.price) || 0);
         const pay = (params && params.pay) || 'BancoDeVenezuela';
         // Mediana top-20 que ve el cliente → p2p_rate no se queda vieja mientras la
         // app esta abierta (con app abierta el server no busca). Best-effort.
@@ -350,30 +347,27 @@ export default async function handler(req, res) {
           await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${median}, ${medianN}, now())
             ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});
         }
-        if (price > 0) {
-          const cur = await sql`SELECT hist24, hist_long FROM monitor_state WHERE user_id = ${user.uid}`;
-          const snap24 = histPaySnapshot(cur[0] && cur[0].hist24, pay);
-          const snapLong = histPaySnapshot(cur[0] && cur[0].hist_long, pay);
-          const h = pushHist24Pay(cur[0] ? cur[0].hist24 : null, pay, Date.now(), price);
-          const hl = pushHistLongPay(cur[0] ? cur[0].hist_long : null, pay, Date.now(), price);
-          // Re-serializar hist24/hist_long solo si cambiaron (suman 1 punto cada 2/10 min;
-          // stringify de la serie completa en cada latido era CPU desperdiciada).
-          await sql`UPDATE monitor_state SET client_seen = now(),
-            hist24 = COALESCE(${histPayChanged(snap24, h, pay) ? JSON.stringify(h) : null}::jsonb, hist24),
-            hist_long = COALESCE(${histPayChanged(snapLong, hl, pay) ? JSON.stringify(hl) : null}::jsonb, hist_long)
-            WHERE user_id = ${user.uid}`;
-        } else {
-          await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
-        }
+        // El latido ya NO alimenta el grafico: el precio que ve el cliente sale de SU
+        // filtro de VES y de su toggle de verificados, y la serie es global/canonica
+        // (la alimenta tickGlobalHist, que corre igual con la app abierta).
+        await sql`UPDATE monitor_state SET client_seen = now() WHERE user_id = ${user.uid}`;
         return res.status(200).json({ ok: true });
       }
       if (path === '/monitor-history') {
-        // El cliente deriva las velas al vuelo de hist24+hist_long (ver hxVisibleOhlc).
-        const rows = await sql`SELECT hist_long, hist24 FROM monitor_state WHERE user_id = ${user.uid}`;
+        // Serie GLOBAL: mismo mercado, mismo grafico para todos (y ya poblado para
+        // un usuario nuevo). El cliente deriva las velas al vuelo (ver hxVisibleOhlc).
+        await ensureMarketHist();
+        const rows = await sql`SELECT hist_long, hist24 FROM market_hist WHERE pay = 'BancoDeVenezuela'`;
         return res.status(200).json(rows[0] || { hist_long: [], hist24: [] });
       }
-      const rows = await sql`SELECT enabled, status, last_tick, hist24, log FROM monitor_state WHERE user_id = ${user.uid}`;
-      return res.status(200).json(rows[0] || { enabled: false });
+      await ensureMarketHist();
+      const [rows, g] = await Promise.all([
+        sql`SELECT enabled, status, last_tick, log FROM monitor_state WHERE user_id = ${user.uid}`,
+        sql`SELECT hist24 FROM market_hist WHERE pay = 'BancoDeVenezuela'`,
+      ]);
+      const st = rows[0] || { enabled: false };
+      st.hist24 = (g[0] && g[0].hist24) || {};
+      return res.status(200).json(st);
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }

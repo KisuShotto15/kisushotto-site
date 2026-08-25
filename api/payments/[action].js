@@ -232,6 +232,31 @@ async function adminConfirmAction(req, res) {
   return res.status(200).json({ ok: true });
 }
 
+// Rechazo manual del admin: el usuario avisó "Ya pagué" pero el pago no aparece.
+// Sin esto, una factura falsa se quedaba en revision 48h (hasta expireStale) y el
+// usuario podia seguir avisando sin haber pagado nunca.
+async function adminRejectAction(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
+
+  const body = await readJsonBody(req);
+  const invoiceId = String(body.invoiceId || '');
+  if (!invoiceId) return res.status(400).json({ error: 'invoiceId requerido' });
+  await ensureSchema();
+  await ensurePlanColumn();
+  const upd = await sql`
+    UPDATE payment_invoices SET status = 'rejected'
+    WHERE id = ${invoiceId} AND status IN ('pending', 'pending_review')
+    RETURNING user_id`;
+  if (!upd.length) return res.status(409).json({ error: 'Factura ya resuelta' });
+  sendPush(upd[0].user_id, '❌ Pago no confirmado',
+    'No encontramos tu pago. Revisa el monto y vuelve a intentarlo.').catch(() => {});
+  return res.status(200).json({ ok: true });
+}
+
 // Lista de facturas en revision para el admin (dashboard minimo: solo lectura).
 async function adminPendingAction(req, res) {
   let user;
@@ -299,6 +324,7 @@ export default async function handler(req, res) {
       case 'start-trial':   return await startTrialAction(req, res);
       case 'set-nick':      return await setNickAction(req, res);
       case 'admin-confirm': return await adminConfirmAction(req, res);
+      case 'admin-reject':  return await adminRejectAction(req, res);
       case 'admin-pending': return await adminPendingAction(req, res);
       default:              return res.status(404).json({ error: 'Accion desconocida' });
     }

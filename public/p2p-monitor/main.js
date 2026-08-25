@@ -425,6 +425,17 @@ function renderSubModal() {
     else if (s.status === 'active') line.textContent = 'Activa hasta ' + new Date(s.current_period_end).toLocaleDateString('es-VE');
     else if (s.status === 'not_started') line.textContent = 'Prueba gratis disponible';
     else line.textContent = 'Sin suscripción activa';
+  } else {
+    // El cold start de la funcion tarda; "—" parecia la app colgada.
+    line.textContent = 'Cargando…';
+  }
+  // Nada que mostrar hasta saber en que estado esta: evita el parpadeo del bloque
+  // de pago mientras carga.
+  if (!s) {
+    if (startBlock) startBlock.style.display = 'none';
+    if (payBlock) payBlock.style.display = 'none';
+    if (pendBlock) pendBlock.style.display = 'none';
+    return;
   }
   var plan = SUB.selectedPlan || 'monthly';
   var info = (SUB.plans && SUB.plans[plan]) || {};
@@ -437,6 +448,9 @@ function renderSubModal() {
   var notStarted = s && s.status === 'not_started';
   var reviewing = inv && inv.status === 'pending_review';
   var justPaid = s && s.status === 'active' && inv && inv.status === 'paid';
+  var rejected = inv && inv.status === 'rejected';
+  var rejEl = document.getElementById('sub-rejected-note');
+  if (rejEl) rejEl.style.display = rejected ? '' : 'none';
   if (startBlock) startBlock.style.display = notStarted ? '' : 'none';
   if (payBlock) payBlock.style.display = (!notStarted && !reviewing && !justPaid) ? '' : 'none';
   if (pendBlock) pendBlock.style.display = (!notStarted && reviewing) ? '' : 'none';
@@ -516,24 +530,32 @@ async function renderAdminPending() {
     var btn = document.createElement('button');
     btn.className = 'btn btn-sm';
     btn.textContent = 'Confirmar';
-    btn.onclick = function () { confirmAdminPayment(inv.id, btn); };
-    right.appendChild(amt); right.appendChild(btn);
+    btn.onclick = function () { resolveAdminPayment('admin-confirm', inv.id, btn); };
+    var rej = document.createElement('button');
+    rej.className = 'btn btn-sm';
+    rej.textContent = 'Rechazar';
+    rej.onclick = function () {
+      if (!window.confirm('¿Rechazar el pago de ' + inv.email + '?')) return;
+      resolveAdminPayment('admin-reject', inv.id, rej);
+    };
+    right.appendChild(amt); right.appendChild(btn); right.appendChild(rej);
     row.appendChild(info); row.appendChild(right);
     box.appendChild(row);
   });
 }
 
-async function confirmAdminPayment(invoiceId, btn) {
+async function resolveAdminPayment(action, invoiceId, btn) {
+  var label = btn.textContent;
   btn.disabled = true;
   btn.textContent = '…';
   try {
-    await apiPost('/api/payments/admin-confirm', { invoiceId: invoiceId }, true);
+    await apiPost('/api/payments/' + action, { invoiceId: invoiceId }, true);
     await renderAdminPending();
     checkAdminPending();
   } catch (e) {
     alert('Error: ' + e.message);
     btn.disabled = false;
-    btn.textContent = 'Confirmar';
+    btn.textContent = label;
   }
 }
 
