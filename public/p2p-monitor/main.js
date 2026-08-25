@@ -557,21 +557,24 @@ async function renderPayLinkState() {
   var el = document.getElementById('admin-paylink-state');
   if (!el) return;
   el.textContent = 'Comprobando…';
-  var d;
-  try {
-    d = await apiPost('/api/payments/pay-link', { plan: 'monthly' }, true);
-  } catch (e) {
-    el.innerHTML = '<span style="color:var(--red)">Error: ' + e.message + '</span>';
-    return;
-  }
-  if (d.source === 'agent_pay') {
-    el.innerHTML = '<span style="color:var(--green,#1D9E75)">✓ Agent Pay activo</span>' +
-      '<div style="font-size:11px;color:var(--text-3);word-break:break-all;margin-top:4px">' + (d.url || '') + '</div>';
-    return;
-  }
-  var why = d.detail ? (d.detail + (d.code ? ' (' + d.code + ')' : '')) : 'sin claves configuradas';
-  el.innerHTML = '<span style="color:var(--gold)">Link fijo</span>' +
-    '<div style="font-size:11px;color:var(--text-3);margin-top:4px">' + why + '</div>';
+  // Los dos planes por separado: el anual (700) puede pasar topes que el mensual no.
+  var out = await Promise.all(['monthly', 'annual'].map(async function (plan) {
+    var label = plan === 'annual' ? 'Anual' : 'Mensual';
+    var d;
+    try {
+      d = await apiPost('/api/payments/pay-link', { plan: plan }, true);
+    } catch (e) {
+      return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:var(--red)">' + e.message + '</span></div>';
+    }
+    if (d.source === 'agent_pay') {
+      return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:#1D9E75">✓ Agent Pay</span>' +
+        '<div style="font-size:11px;color:var(--text-3);word-break:break-all">' + (d.url || '') + '</div></div>';
+    }
+    var why = d.detail ? (d.detail + (d.code ? ' (' + d.code + ')' : '')) : 'sin claves configuradas';
+    return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:var(--gold)">link fijo</span>' +
+      '<div style="font-size:11px;color:var(--text-3)">' + why + '</div></div>';
+  }));
+  el.innerHTML = out.join('');
 }
 
 function closeAdminPayModal() {
