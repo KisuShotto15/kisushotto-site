@@ -460,7 +460,7 @@ function renderPaidBtn() {
   if (help) {
     help.textContent = hasNick
       ? 'Se activa sola en menos de un minuto.'
-      : 'Escribe tu nombre arriba para poder avisar.';
+      : 'Pega el Order ID arriba para poder avisar.';
   }
 }
 
@@ -617,7 +617,8 @@ async function renderPayProbe() {
         var quien = t.payer
           ? ' — ' + (t.payerFields || []).map(function (k) { return k + ': ' + t.payer[k]; }).join(', ')
           : ' — sin payerInfo';
-        return t.amount + ' ' + t.currency + ' · ' + new Date(t.when).toLocaleString('es-VE') + quien;
+        var id = t.txId ? '<br><span style="color:var(--gold)">Order ID: ' + t.txId + '</span>' : '';
+        return t.amount + ' ' + t.currency + ' · ' + new Date(t.when).toLocaleString('es-VE') + quien + id;
       }).join('<br>')
     : 'sin movimientos en 24h';
   el.innerHTML = '<span style="color:#1D9E75">✓ Historial accesible</span> · ' +
@@ -741,7 +742,7 @@ async function markSubPaid() {
   // Sin nombre no se puede confirmar el pago solo: el monto no distingue esta
   // suscripcion de cualquier otro cobro de USDT que entre a la vez.
   if (!nick) {
-    alert('Escribe tu nombre en Binance para poder identificar tu pago.');
+    alert('Pega el Order ID del pago (o tu nickname de Binance) para poder identificarlo.');
     if (nickEl) nickEl.focus();
     return;
   }

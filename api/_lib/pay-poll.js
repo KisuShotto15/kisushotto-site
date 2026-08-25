@@ -9,7 +9,7 @@
 import crypto from 'node:crypto';
 import { sql, ensurePlanColumn, ensurePayState, ensureNickColumn } from './db.js';
 import { markPaid } from './subscriptions.js';
-import { payerMatches } from './payer-match.js';
+import { refMatches } from './payer-match.js';
 
 const BINANCE = 'https://api.binance.com';
 const POLL_THROTTLE_MS = 20 * 1000;
@@ -104,15 +104,15 @@ export async function checkPayPayments(force) {
   const incoming = txs.filter(isIncoming).sort((a, b) => a.transactionTime - b.transactionTime);
   let matched = 0, noNick = 0;
   for (const inv of pend) {
-    // Sin nick no se confirma sola: el monto por si solo no distingue la suscripcion
-    // de cualquier otro cobro de USDT, y aca entran pagos de P2P todo el dia. Esas
-    // facturas quedan para el panel manual.
+    // Sin referencia no se confirma sola: el monto por si solo no distingue la
+    // suscripcion de cualquier otro cobro de USDT, y aca entran pagos de P2P todo
+    // el dia. Esas facturas quedan para el panel manual.
     if (!inv.binance_nick) { noNick++; continue; }
     const hit = incoming.find(t =>
       !usedIds.has(String(t.transactionId)) &&
       String(t.currency).toUpperCase() === String(inv.currency).toUpperCase() &&
       Math.abs(Number(t.amount) - Number(inv.amount)) <= AMOUNT_EPS &&
-      payerMatches(t, inv.binance_nick)
+      refMatches(t, inv.binance_nick)
     );
     if (!hit) continue;
     if (await markPaid(inv.id, inv.user_id, String(hit.transactionId))) {
@@ -136,12 +136,12 @@ export async function probePayTransactions() {
       ok: true,
       total: txs.length,
       incoming: txs.filter(isIncoming).length,
-      // payerInfo tal cual lo manda Binance: es la unica forma de saber que nombre
-      // hay que escribir en el panel (¿el de la cuenta? ¿el del anuncio de P2P?)
-      // sin adivinarlo desde la documentacion.
+      // transactionId para poder comprobarlo contra el "Order ID" que Binance
+      // muestra en la app, y payerInfo para saber que nombre llega de verdad.
       last: txs.slice(0, 3).map(t => ({
         amount: t.amount, currency: t.currency,
         when: t.transactionTime ? new Date(t.transactionTime).toISOString() : null,
+        txId: t.transactionId || null,
         payer: t.payerInfo || null,
         payerFields: t.payerInfo ? Object.keys(t.payerInfo) : [],
       })),
