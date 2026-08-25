@@ -1,6 +1,6 @@
 // Decide si una transaccion de Binance Pay corresponde a lo que el usuario declaro
 // al avisar su pago. Separado de pay-poll.js (que arrastra la base de datos) para
-// poder testearlo suelto, igual que binancepay-email.js.
+// poder testearlo suelto.
 //
 // Lo mejor que puede dar el usuario es el Order ID del pago: identifica UNA
 // transaccion, asi que la coincidencia es exacta y no hay heuristica que valga.

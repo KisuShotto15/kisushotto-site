@@ -1,5 +1,5 @@
 // Logica de suscripcion compartida entre la ruta HTTP (/api/payments) y el poller
-// de correo (mail-poll.js), para no duplicar el criterio de "que significa pagar".
+// de Binance Pay (pay-poll.js), para no duplicar el criterio de "que significa pagar".
 import { sql } from './db.js';
 
 export const TRIAL_DAYS = 7;

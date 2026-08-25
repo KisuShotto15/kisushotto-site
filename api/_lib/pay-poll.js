@@ -125,17 +125,6 @@ export async function checkPayPayments(force) {
   return { pending: pend.length, seen: txs.length, incoming: incoming.length, matched, noNick };
 }
 
-// Aplana un objeto anidado a "clave: valor" para poder mirar de un vistazo todo lo
-// que manda Binance, incluidos los campos que no estan en la documentacion.
-function flatten(obj, prefix = '', out = {}) {
-  for (const [k, v] of Object.entries(obj || {})) {
-    const key = prefix ? prefix + '.' + k : k;
-    if (v && typeof v === 'object') flatten(Array.isArray(v) ? { ...v } : v, key, out);
-    else out[key] = String(v);
-  }
-  return out;
-}
-
 // Diagnostico del panel de admin: responde si las claves sirven y que se ve, sin
 // tocar ninguna factura.
 export async function probePayTransactions() {
@@ -154,10 +143,6 @@ export async function probePayTransactions() {
         payer: t.payerInfo || null,
         payerFields: t.payerInfo ? Object.keys(t.payerInfo) : [],
       })),
-      // Volcado crudo de la transaccion mas reciente: el "Order ID" que ve el
-      // pagador (numerico, 18 digitos) NO es el transactionId de la API, asi que
-      // hay que buscar si llega en algun campo sin documentar.
-      raw: txs.length ? flatten(txs[0]) : null,
     };
   } catch (e) {
     return { ok: false, reason: e.message, code: e.code };

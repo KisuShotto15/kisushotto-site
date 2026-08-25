@@ -621,18 +621,9 @@ async function renderPayProbe() {
         return t.amount + ' ' + t.currency + ' · ' + new Date(t.when).toLocaleString('es-VE') + quien + id;
       }).join('<br>')
     : 'sin movimientos en 24h';
-  // Volcado crudo de la ultima transaccion: sirve para cazar el campo donde viene
-  // el Order ID que ve el pagador, que no es el transactionId.
-  var raw = '';
-  if (d.raw) {
-    raw = '<details style="margin-top:6px;text-align:left"><summary style="cursor:pointer;font-size:11px;color:var(--text-2)">Campos crudos de la última</summary>' +
-      '<div style="font-size:10px;color:var(--text-2);word-break:break-all;margin-top:4px">' +
-      Object.keys(d.raw).map(function (k) { return k + ': ' + d.raw[k]; }).join('<br>') +
-      '</div></details>';
-  }
   el.innerHTML = '<span style="color:#1D9E75">✓ Historial accesible</span> · ' +
     d.total + ' en 24h (' + d.incoming + ' entrantes)' +
-    '<div style="font-size:11px;color:var(--text-2);margin-top:4px">' + det + '</div>' + raw;
+    '<div style="font-size:11px;color:var(--text-2);margin-top:4px">' + det + '</div>';
 }
 
 function closeAdminPayModal() {
