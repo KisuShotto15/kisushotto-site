@@ -459,10 +459,20 @@ function renderSubModal() {
   if (pendBlock) pendBlock.style.display = (!notStarted && reviewing) ? '' : 'none';
 }
 
+// Modo prueba del admin: con ?subtest=1 la app pide el estado real de suscripcion
+// en vez de la exencion de admin, para poder recorrer el flujo (trial, pago).
+try {
+  if (/[?&]subtest=1/.test(location.search)) sessionStorage.setItem('p2p_subtest', '1');
+  else if (/[?&]subtest=0/.test(location.search)) sessionStorage.removeItem('p2p_subtest');
+} catch (e) {}
+function subTestMode() {
+  try { return sessionStorage.getItem('p2p_subtest') === '1'; } catch (e) { return false; }
+}
+
 async function loadSubscription() {
   if (!SESSION.token) return;
   try {
-    var d = await apiPost('/api/payments/status', {}, true);
+    var d = await apiPost('/api/payments/status' + (subTestMode() ? '?test=1' : ''), {}, true);
     SUB.subscription = d.subscription; SUB.invoice = d.invoice; SUB.plans = d.plans;
     renderSubBadge(); renderSubModal();
     if (d.invoice && d.invoice.status === 'pending_review') schedulePoll(); else stopPoll();
@@ -545,6 +555,26 @@ async function renderAdminPending() {
     row.appendChild(info); row.appendChild(right);
     box.appendChild(row);
   });
+}
+
+// Reset de testing: deja a todos los usuarios (menos el admin) como recien
+// registrados, para volver a probar el flujo de prueba gratis y pago.
+async function resetAllSubs(btn) {
+  if (!window.confirm('Borrar suscripciones y facturas de TODOS los usuarios menos el admin. ¿Seguro?')) return;
+  btn.disabled = true;
+  var label = btn.textContent;
+  btn.textContent = '…';
+  try {
+    var d = await apiPost('/api/payments/admin-reset-subs', {}, true);
+    alert('Listo: ' + d.subscriptions + ' suscripción(es) y ' + d.invoices + ' factura(s) borradas.');
+    renderAdminPending();
+    checkAdminPending();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
 }
 
 async function resolveAdminPayment(action, invoiceId, btn) {
@@ -3054,6 +3084,54 @@ function initTabs() {
   var saved = 'mercado';
   try { saved = localStorage.getItem('p2p-tab') || 'mercado'; } catch (e) {}
   showTab(saved);
+  initTabSwipe();
+}
+
+// Swipe horizontal para cambiar de tab en movil. Solo cuenta un gesto claramente
+// horizontal (mas ancho que alto) y de recorrido suficiente: si no, cualquier
+// scroll vertical de las tablas cambiaria de pestania sin querer.
+var SWIPE_MIN_X = 60;   // px de recorrido minimo
+var SWIPE_MAX_Y = 45;   // desvio vertical tolerado
+function initTabSwipe() {
+  var layout = document.querySelector('.layout');
+  if (!layout || layout._swipeOn) return;
+  layout._swipeOn = true;
+  var x0 = 0, y0 = 0, tracking = false;
+
+  layout.addEventListener('touchstart', function (e) {
+    // Las tabs no existen en escritorio (CSS: .tabs{display:none}); sin esto el
+    // gesto tambien aplicaria en pantallas anchas donde ambas columnas se ven.
+    var tabs = document.getElementById('main-tabs');
+    if (!tabs || !tabs.offsetParent) { tracking = false; return; }
+    if (e.touches.length !== 1) { tracking = false; return; }
+    // No robar el gesto a lo que se desplaza solo en horizontal (tablas anchas).
+    if (e.target.closest && e.target.closest('.hx-wrap, canvas, input, select, textarea')) { tracking = false; return; }
+    tracking = true;
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+  }, { passive: true });
+
+  layout.addEventListener('touchend', function (e) {
+    if (!tracking) return;
+    tracking = false;
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    var dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dy) > SWIPE_MAX_Y || Math.abs(dx) <= Math.abs(dy)) return;
+    var cur = TABS.indexOf(currentTab());
+    if (cur < 0) return;
+    var next = dx < 0 ? cur + 1 : cur - 1; // arrastrar a la izquierda = avanzar
+    if (next < 0 || next >= TABS.length) return;
+    showTab(TABS[next]);
+  }, { passive: true });
+}
+
+function currentTab() {
+  for (var i = 0; i < TABS.length; i++) {
+    var col = document.getElementById('col-' + TABS[i]);
+    if (col && col.classList.contains('is-on')) return TABS[i];
+  }
+  return 'mercado';
 }
 
 // Punto verde en la tab del Bot: ver que sigue corriendo sin cambiar de pestaña.

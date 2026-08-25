@@ -75,8 +75,11 @@ async function statusAction(req, res) {
 
   // El admin (dueño del producto) no paga su propia suscripcion: se le devuelve
   // siempre activa, sin tocar payment_invoices ni disparar el prompt de trial.
+  // Excepcion: con ?subtest=1 en la app, el admin pide vivir el flujo como un
+  // usuario cualquiera para poder probarlo (trial, pago, etc.).
+  const testMode = String(req.query.test || '') === '1';
   const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-  if (adminEmail && user.email === adminEmail) {
+  if (adminEmail && user.email === adminEmail && !testMode) {
     return res.status(200).json({
       subscription: { status: 'active', current_period_end: '2099-12-31T00:00:00.000Z' },
       invoice: null, plans: planInfo(), currency: SUB_CURRENCY,
@@ -257,6 +260,30 @@ async function adminRejectAction(req, res) {
   return res.status(200).json({ ok: true });
 }
 
+// Borra suscripciones y facturas de TODOS menos el admin. Es una herramienta de
+// testing: deja a cada usuario como recien registrado (sin trial usado), asi el
+// prompt de "Comenzar prueba gratis" vuelve a salir.
+async function adminResetSubsAction(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
+  await readRawBody(req).catch(() => {});
+  await ensureSchema();
+  await ensurePlanColumn();
+
+  const inv = await sql`
+    DELETE FROM payment_invoices
+    WHERE user_id <> (SELECT id FROM users WHERE lower(email) = ${adminEmail})
+    RETURNING id`;
+  const subs = await sql`
+    DELETE FROM subscriptions
+    WHERE user_id <> (SELECT id FROM users WHERE lower(email) = ${adminEmail})
+    RETURNING user_id`;
+  return res.status(200).json({ subscriptions: subs.length, invoices: inv.length });
+}
+
 // Lista de facturas en revision para el admin (dashboard minimo: solo lectura).
 async function adminPendingAction(req, res) {
   let user;
@@ -325,6 +352,7 @@ export default async function handler(req, res) {
       case 'set-nick':      return await setNickAction(req, res);
       case 'admin-confirm': return await adminConfirmAction(req, res);
       case 'admin-reject':  return await adminRejectAction(req, res);
+      case 'admin-reset-subs': return await adminResetSubsAction(req, res);
       case 'admin-pending': return await adminPendingAction(req, res);
       default:              return res.status(404).json({ error: 'Accion desconocida' });
     }
