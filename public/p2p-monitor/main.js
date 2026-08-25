@@ -385,7 +385,7 @@ function enterApp() {
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
-var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly', linkClicked: false };
+var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly', linkClicked: false, payLinks: {} };
 var _subPollT = null;
 
 function daysLeft(iso) {
@@ -414,10 +414,32 @@ function selectSubPlan(plan) {
 // configurado, avisa en vez de mandar al usuario de vuelta a la app (que es
 // exactamente lo que pasaba: el <a href="#"> recargaba la SPA y parecia que
 // "no hacia nada"/volvia al monitor).
+// Pide al backend el link de cobro del plan (uno por monto, con nota que identifica
+// al usuario). Se pide una sola vez por plan y por sesion del modal; si no hay
+// claves de Agent Pay, el backend devuelve el link fijo.
+function currentPayLink(plan) {
+  var dyn = SUB.payLinks[plan];
+  if (dyn && dyn !== 'pending') return dyn;
+  var info = SUB.plans && SUB.plans[plan];
+  return (info && info.link) || '';
+}
+
+async function ensurePayLink(plan) {
+  // undefined = nunca se pidio. '' = se pidio y no hay (no reintentar en cada render).
+  if (SUB.payLinks[plan] !== undefined) return;
+  SUB.payLinks[plan] = 'pending';
+  try {
+    var d = await apiPost('/api/payments/pay-link', { plan: plan }, true);
+    SUB.payLinks[plan] = (d && d.url) || '';
+    renderSubModal();
+  } catch (e) {
+    SUB.payLinks[plan] = '';
+  }
+}
+
 function onSubPayLinkClick(e) {
   var plan = SUB.selectedPlan || 'monthly';
-  var info = SUB.plans && SUB.plans[plan];
-  if (!info || !info.link) {
+  if (!currentPayLink(plan)) {
     e.preventDefault();
     alert('El link de pago del plan ' + (plan === 'annual' ? 'anual' : 'mensual') + ' todavía no está configurado.');
     return false;
@@ -459,7 +481,7 @@ function renderSubModal() {
   var plan = SUB.selectedPlan || 'monthly';
   var info = (SUB.plans && SUB.plans[plan]) || {};
   if (priceEl) priceEl.textContent = (info.price || '—') + ' ' + (info.currency || 'USDT');
-  if (linkEl) linkEl.href = info.link || '#';
+  if (linkEl) linkEl.href = currentPayLink(plan) || '#';
   if (mBtn) mBtn.classList.toggle('btn-gold', plan === 'monthly');
   if (aBtn) aBtn.classList.toggle('btn-gold', plan === 'annual');
   if (paidBtn) paidBtn.style.display = SUB.linkClicked ? '' : 'none';
@@ -471,7 +493,9 @@ function renderSubModal() {
   var rejEl = document.getElementById('sub-rejected-note');
   if (rejEl) rejEl.style.display = rejected ? '' : 'none';
   if (startBlock) startBlock.style.display = notStarted ? '' : 'none';
-  if (payBlock) payBlock.style.display = (!notStarted && !reviewing && !justPaid) ? '' : 'none';
+  var showPay = !notStarted && !reviewing && !justPaid;
+  if (payBlock) payBlock.style.display = showPay ? '' : 'none';
+  if (showPay) ensurePayLink(plan);
   if (pendBlock) pendBlock.style.display = (!notStarted && reviewing) ? '' : 'none';
 }
 

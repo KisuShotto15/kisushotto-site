@@ -6,7 +6,7 @@ export const config = { api: { bodyParser: false }, maxDuration: 30 };
 
 import { requireUser } from '../_lib/auth.js';
 import { sql, ensureSchema, ensurePlanColumn } from '../_lib/db.js';
-import { createOrder, queryOrder, verifyWebhookSignature } from '../_lib/binancepay.js';
+import { createOrder, queryOrder, createReceiveLink, verifyWebhookSignature } from '../_lib/binancepay.js';
 import { sendPush } from '../_lib/push.js';
 import { ensureSubscription, startTrial, markPaid, planInfo, PLANS, SUB_CURRENCY } from '../_lib/subscriptions.js';
 import { checkPaymentEmails } from '../_lib/mail-poll.js';
@@ -127,6 +127,37 @@ async function statusAction(req, res) {
     subscription: subNow[0] || null, invoice,
     plans: planInfo(), currency: SUB_CURRENCY,
   });
+}
+
+// Link de pago del plan. Con claves de Agent Pay (cuenta personal, sin Merchant)
+// genera uno nuevo por cada intento, con el monto exacto y una nota que identifica
+// al usuario en el historial de Binance Pay. Sin claves devuelve el link fijo de
+// siempre. No escribe en la base: la factura se sigue creando en "Ya pagué".
+async function payLinkAction(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  const body = await readJsonBody(req);
+  const plan = body.plan === 'annual' ? 'annual' : 'monthly';
+  const fallback = PLANS[plan].link();
+
+  const apiKey = process.env.BINANCE_PAY_USER_API_KEY || process.env.PAYMENT_API_KEY;
+  const secretKey = process.env.BINANCE_PAY_USER_SECRET_KEY || process.env.PAYMENT_API_SECRET;
+  if (!apiKey || !secretKey) return res.status(200).json({ url: fallback, source: 'static' });
+
+  const { ok, data } = await createReceiveLink(apiKey, secretKey, {
+    amount: PLANS[plan].price,
+    currency: SUB_CURRENCY,
+    description: 'P2P Monitor ' + plan + ' #' + user.uid,
+  }).catch(() => ({ ok: false, data: {} }));
+
+  const d = (data && data.data) || {};
+  // Cualquier fallo (claves mal, limites sin configurar, API caida) degrada al link
+  // fijo en vez de dejar al usuario sin poder pagar.
+  if (!ok || !d.shareLink) {
+    return res.status(200).json({ url: fallback, source: 'static', detail: (data && data.errorMessage) || null });
+  }
+  return res.status(200).json({ url: d.shareLink, qr: d.qrImageUrl || null, source: 'agent_pay' });
 }
 
 // El usuario paga por el Payment Link compartido (cuenta personal de Binance Pay,
@@ -346,6 +377,7 @@ export default async function handler(req, res) {
       case 'create-order':  return await createOrderAction(req, res);
       case 'status':        return await statusAction(req, res);
       case 'webhook':       return await webhookAction(req, res);
+      case 'pay-link':      return await payLinkAction(req, res);
       case 'mark-pending':  return await markPendingAction(req, res);
       case 'cancel-pending':return await cancelPendingAction(req, res);
       case 'start-trial':   return await startTrialAction(req, res);
