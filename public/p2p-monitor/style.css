@@ -880,3 +880,51 @@ input:focus {
 .buy-ob-wrap { flex: 1 1 100%; background: var(--surf-2); border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
 .ob-side-title.buyads { background: linear-gradient(90deg,rgba(29,158,117,.1),transparent); color: var(--green); }
 .ob-row.best-buy-asc { background: linear-gradient(90deg,rgba(240,185,11,.07),transparent); }
+
+/* ── Panel de suscripcion ───────────────────────────── */
+/* El gris de ayuda del resto de la app (--text-3, #484f58) queda en ~3:1 sobre
+   --surf-1: ilegible para leer parrafos. Aca se usa --text-2 (~6.5:1). */
+.sub-card {
+  background: var(--surf-1); border: 1px solid var(--border-2); border-radius: var(--r);
+  padding: 22px; text-align: center; max-width: 380px; width: 100%;
+  box-shadow: 0 12px 40px rgba(0,0,0,.7);
+  max-height: 88vh; overflow-y: auto;
+}
+.sub-help { font-size: 12.5px; color: var(--text-2); line-height: 1.45; margin-top: 6px; }
+.sub-sec-title {
+  font-size: 11px; font-weight: 700; color: var(--text-2); letter-spacing: .08em;
+  text-transform: uppercase; text-align: left; margin-bottom: 8px;
+}
+.sub-list {
+  list-style: none; margin: 0 0 18px; padding: 0; text-align: left;
+  font-size: 13.5px; color: var(--text); line-height: 1.45;
+}
+.sub-list li { position: relative; padding: 4px 0 4px 22px; }
+.sub-list li::before {
+  content: '✓'; position: absolute; left: 0; top: 4px;
+  color: var(--green); font-weight: 700;
+}
+
+.plan-btn { flex: 1; padding: 9px 6px; font-size: 14px; font-weight: 600; position: relative; }
+.plan-save {
+  display: block; font-size: 10px; font-weight: 700; color: var(--green);
+  letter-spacing: .02em; margin-top: 2px;
+}
+.plan-btn.btn-gold .plan-save { color: #0b0e11; }
+
+.sub-price { font-size: 26px; font-weight: 800; color: var(--text); margin-bottom: 16px; }
+.sub-per { font-size: 13px; font-weight: 500; color: var(--text-2); margin-left: 5px; }
+
+.sub-step {
+  display: flex; gap: 11px; text-align: left;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.sub-step-n {
+  flex: 0 0 22px; height: 22px; border-radius: 50%;
+  background: var(--gold-d); border: 1px solid var(--gold-b); color: var(--gold);
+  font-size: 12px; font-weight: 700; line-height: 20px; text-align: center;
+}
+.sub-step-body { flex: 1; min-width: 0; }
+.sub-step-t { font-size: 14px; font-weight: 600; color: var(--text); }
+.sub-inp { font-size: 15px; padding: 11px 12px; margin-top: 8px; }
+.sub-inp::placeholder { color: var(--text-2); opacity: .75; }

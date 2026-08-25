@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=25">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=26">
 </head>
 <body>
 
@@ -70,37 +70,77 @@
 
 <!-- Suscripcion -->
 <div id="sub-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;align-items:center;justify-content:center;padding:16px">
-  <div style="background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:22px;text-align:center;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7)">
-    <div style="font-size:19px;font-weight:700;color:var(--gold);margin-bottom:4px">Suscripción</div>
-    <div id="sub-status-line" style="color:var(--text-2);font-size:14px;margin-bottom:16px">—</div>
+  <div class="sub-card">
+    <div style="font-size:20px;font-weight:700;color:var(--gold);margin-bottom:4px">Suscripción</div>
+    <div id="sub-status-line" style="color:var(--text);font-size:14px;margin-bottom:14px">—</div>
+
+    <!-- Que incluye: se muestra mientras no haya suscripcion vigente, que es
+         cuando el usuario esta decidiendo si vale la pena. -->
+    <div id="sub-value" style="display:none">
+      <div class="sub-sec-title">Todo lo que incluye</div>
+      <ul class="sub-list">
+        <li>Libro de Binance P2P en vivo: mayoristas, recompra y sección de compra</li>
+        <li>Spread neto con tu comisión ya descontada</li>
+        <li>Gráfico histórico del mercado, de 24 horas a meses</li>
+        <li>Alertas por Telegram con la app cerrada, 24/7</li>
+        <li>Silencio nocturno y resumen diario a la hora que elijas</li>
+        <li>Bot de reprecio automático de tu anuncio</li>
+        <li>Aviso instantáneo de órdenes nuevas</li>
+        <li>P&amp;L y rotación de tu capital</li>
+        <li>Todas las mejoras que salgan, sin pagar más</li>
+      </ul>
+    </div>
 
     <div id="sub-start-block" style="display:none">
-      <div style="font-size:13px;color:var(--text-3);margin-bottom:14px">Prueba el producto 7 días sin costo. La cuenta regresiva empieza recién cuando la actives.</div>
-      <button class="btn btn-gold" id="sub-start-btn" onclick="startTrialClick()" style="width:100%;padding:11px;font-size:15px;font-weight:700">Comenzar prueba gratis</button>
+      <div class="sub-help" style="margin-bottom:12px">Pruébalo 7 días sin costo. La cuenta regresiva empieza cuando la actives, no antes.</div>
+      <button class="btn btn-gold" id="sub-start-btn" onclick="startTrialClick()" style="width:100%;padding:12px;font-size:15px;font-weight:700">Comenzar prueba gratis</button>
     </div>
 
     <div id="sub-rejected-note" style="display:none;font-size:13px;color:var(--red);margin-bottom:12px">No pudimos verificar tu pago anterior. Revisa el monto exacto e inténtalo de nuevo.</div>
 
     <div id="sub-pay-block" style="display:none">
-      <div style="display:flex;gap:6px;margin-bottom:10px">
-        <button type="button" class="btn btn-sm" id="sub-plan-monthly" onclick="selectSubPlan('monthly')" style="flex:1">Mensual</button>
-        <button type="button" class="btn btn-sm" id="sub-plan-annual" onclick="selectSubPlan('annual')" style="flex:1">Anual</button>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button type="button" class="btn plan-btn" id="sub-plan-monthly" onclick="selectSubPlan('monthly')">Mensual</button>
+        <button type="button" class="btn plan-btn" id="sub-plan-annual" onclick="selectSubPlan('annual')">
+          Anual<span class="plan-save" id="sub-save-badge"></span>
+        </button>
       </div>
-      <div style="font-size:13px;color:var(--text-3);margin-bottom:10px"><span id="sub-price">—</span> · Binance Pay</div>
-      <a id="sub-pay-link" href="#" target="_blank" rel="noopener" class="btn btn-gold" onclick="return onSubPayLinkClick(event)" style="display:block;width:100%;padding:11px;font-size:15px;font-weight:700;box-sizing:border-box">Abrir link de pago</a>
-      <div style="font-size:12px;color:var(--text-3);margin:8px 0">Paga el monto exacto y luego confirma abajo</div>
-      <input class="auth-inp" type="text" id="sub-nick" placeholder="Tu nombre en Binance" maxlength="64" style="margin-bottom:8px">
-      <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">Tal como aparece en tu cuenta: es lo que identifica tu pago</div>
-      <button class="btn" id="sub-paid-btn" onclick="markSubPaid()" style="width:100%;display:none">Ya pagué</button>
+      <div class="sub-price"><span id="sub-price">—</span><span class="sub-per" id="sub-period"></span></div>
+
+      <div class="sub-step">
+        <span class="sub-step-n">1</span>
+        <div class="sub-step-body">
+          <div class="sub-step-t">Paga con Binance Pay</div>
+          <a id="sub-pay-link" href="#" target="_blank" rel="noopener" class="btn btn-gold" onclick="return onSubPayLinkClick(event)" style="display:block;width:100%;padding:11px;font-size:15px;font-weight:700;box-sizing:border-box;margin-top:8px">Abrir link de pago</a>
+        </div>
+      </div>
+
+      <div class="sub-step">
+        <span class="sub-step-n">2</span>
+        <div class="sub-step-body">
+          <div class="sub-step-t">Tu nombre en Binance</div>
+          <input class="auth-inp sub-inp" type="text" id="sub-nick" placeholder="Ej: Efrén M" maxlength="64" oninput="renderPaidBtn()">
+          <div class="sub-help">Tal como aparece en tu cuenta. Es lo que nos permite reconocer tu pago entre los demás.</div>
+        </div>
+      </div>
+
+      <div class="sub-step" style="border-bottom:none;padding-bottom:0">
+        <span class="sub-step-n">3</span>
+        <div class="sub-step-body">
+          <div class="sub-step-t">Avísanos</div>
+          <button class="btn btn-gold" id="sub-paid-btn" onclick="markSubPaid()" style="width:100%;padding:11px;font-size:15px;font-weight:700;margin-top:8px">Ya pagué</button>
+          <div class="sub-help" id="sub-paid-help">Se activa sola en menos de un minuto.</div>
+        </div>
+      </div>
     </div>
 
     <div id="sub-pending-block" style="display:none">
-      <div style="font-size:13px;color:var(--text-3);margin-bottom:10px">Pago en revisión — te confirmamos en breve (normalmente unos minutos)</div>
-      <div style="font-size:12px;color:var(--text-3);margin-bottom:14px">¿Te equivocaste o no llegaste a pagar? Cancela el aviso e inténtalo de nuevo.</div>
+      <div style="font-size:14px;color:var(--text);margin-bottom:8px">Comprobando tu pago…</div>
+      <div class="sub-help" style="margin-bottom:14px">Normalmente tarda menos de un minuto. Si el monto no coincide, lo revisamos a mano y te avisamos.</div>
       <button class="btn btn-sm" onclick="cancelSubPending()">Cancelar aviso</button>
     </div>
 
-    <div style="margin-top:16px"><button class="btn btn-sm" onclick="closeSubModal()">Cerrar</button></div>
+    <div style="margin-top:18px"><button class="btn btn-sm" onclick="closeSubModal()">Cerrar</button></div>
   </div>
 </div>
 
@@ -462,7 +502,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=74"></script>
+<script src="/p2p-monitor/main.js?v=75"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

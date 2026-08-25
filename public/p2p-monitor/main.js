@@ -385,7 +385,7 @@ function enterApp() {
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
-var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly', linkClicked: false };
+var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly' };
 var _subPollT = null;
 
 function daysLeft(iso) {
@@ -427,7 +427,6 @@ async function requireSub() {
 
 function selectSubPlan(plan) {
   SUB.selectedPlan = plan;
-  SUB.linkClicked = false; // cambio de plan = link distinto, hay que abrirlo de nuevo
   renderSubModal();
 }
 
@@ -443,9 +442,38 @@ function onSubPayLinkClick(e) {
     alert('El link de pago del plan ' + (plan === 'annual' ? 'anual' : 'mensual') + ' todavía no está configurado.');
     return false;
   }
-  SUB.linkClicked = true;
-  renderSubModal(); // recien ahora aparece "Ya pagué" — no antes de haber ido al link
   return true;
+}
+
+// El boton de avisar el pago esta siempre visible, pero desactivado hasta que haya
+// nombre: antes dependia de haber tocado el link en esa misma sesion, asi que al
+// volver de Binance con la app recargada no habia forma de avisar.
+function renderPaidBtn() {
+  var btn = document.getElementById('sub-paid-btn');
+  var help = document.getElementById('sub-paid-help');
+  var nickEl = document.getElementById('sub-nick');
+  if (!btn) return;
+  var hasNick = !!(nickEl && nickEl.value.trim());
+  btn.disabled = !hasNick;
+  btn.style.opacity = hasNick ? '' : '.45';
+  btn.style.cursor = hasNick ? '' : 'not-allowed';
+  if (help) {
+    help.textContent = hasNick
+      ? 'Se activa sola en menos de un minuto.'
+      : 'Escribe tu nombre arriba para poder avisar.';
+  }
+}
+
+// Cuantos meses de regalo trae el plan anual, calculado de los precios reales para
+// que no mienta si cambian.
+function renderSaveBadge() {
+  var el = document.getElementById('sub-save-badge');
+  if (!el || !SUB.plans) return;
+  var m = Number(SUB.plans.monthly && SUB.plans.monthly.price);
+  var a = Number(SUB.plans.annual && SUB.plans.annual.price);
+  if (!m || !a) { el.textContent = ''; return; }
+  var free = Math.round(12 - a / m);
+  el.textContent = free > 0 ? (free === 1 ? '1 mes gratis' : free + ' meses gratis') : '';
 }
 
 function renderSubModal() {
@@ -472,6 +500,8 @@ function renderSubModal() {
   // Nada que mostrar hasta saber en que estado esta: evita el parpadeo del bloque
   // de pago mientras carga.
   if (!s) {
+    var vb = document.getElementById('sub-value');
+    if (vb) vb.style.display = 'none';
     if (startBlock) startBlock.style.display = 'none';
     if (payBlock) payBlock.style.display = 'none';
     if (pendBlock) pendBlock.style.display = 'none';
@@ -480,6 +510,8 @@ function renderSubModal() {
   var plan = SUB.selectedPlan || 'monthly';
   var info = (SUB.plans && SUB.plans[plan]) || {};
   if (priceEl) priceEl.textContent = (info.price || '—') + ' ' + (info.currency || 'USDT');
+  var perEl = document.getElementById('sub-period');
+  if (perEl) perEl.textContent = plan === 'annual' ? '/ año' : '/ mes';
   if (linkEl) linkEl.href = info.link || '#';
   // Solo se rellena si esta vacio: renderSubModal corre en cada poll y no debe
   // pisar lo que el usuario esta escribiendo.
@@ -487,7 +519,8 @@ function renderSubModal() {
   if (nickEl && !nickEl.value && s && s.binance_nick) nickEl.value = s.binance_nick;
   if (mBtn) mBtn.classList.toggle('btn-gold', plan === 'monthly');
   if (aBtn) aBtn.classList.toggle('btn-gold', plan === 'annual');
-  if (paidBtn) paidBtn.style.display = SUB.linkClicked ? '' : 'none';
+  renderPaidBtn();
+  renderSaveBadge();
 
   var notStarted = s && s.status === 'not_started';
   var reviewing = inv && inv.status === 'pending_review';
@@ -495,6 +528,10 @@ function renderSubModal() {
   var rejected = inv && inv.status === 'rejected';
   var rejEl = document.getElementById('sub-rejected-note');
   if (rejEl) rejEl.style.display = rejected ? '' : 'none';
+  // El "que incluye" se muestra justo cuando el usuario esta decidiendo: sin
+  // empezar la prueba, o con la prueba vencida y el pago por delante.
+  var valueBox = document.getElementById('sub-value');
+  if (valueBox) valueBox.style.display = subActive() && !notStarted ? 'none' : '';
   if (startBlock) startBlock.style.display = notStarted ? '' : 'none';
   if (payBlock) payBlock.style.display = (!notStarted && !reviewing && !justPaid) ? '' : 'none';
   if (pendBlock) pendBlock.style.display = (!notStarted && reviewing) ? '' : 'none';
@@ -725,7 +762,6 @@ async function cancelSubPending() {
     await apiPost('/api/payments/cancel-pending', {}, true);
   } catch (e) {}
   SUB.invoice = null;
-  SUB.linkClicked = false;
   stopPoll();
   renderSubModal();
 }
