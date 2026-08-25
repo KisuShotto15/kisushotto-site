@@ -227,7 +227,7 @@ async function tickMonitor(row, now) {
   const histLong = pushHistLongPay(h.hist_long, pay, now, mayBestTrue);
 
   let log = h.log;
-  const { token, chatId } = await resolveTelegram(row.user_id, cfg);
+  const { token, chatId } = await resolveTelegram(row.user_id);
 
   if (!silent && out.alerts.length) {
     for (const a of out.alerts) {
@@ -278,7 +278,7 @@ function pickAd(ads, adNo) {
 
 // Aviso por Telegram (si esta configurado) + push. Best-effort, no rompe el tick.
 async function botNotify(cfg, userId, tgMsg, pushTitle, pushBody) {
-  const { token, chatId } = await resolveTelegram(userId, cfg);
+  const { token, chatId } = await resolveTelegram(userId);
   if (token && chatId) { try { await sendTelegram(token, chatId, tgMsg); } catch (e) {} }
   if (pushTitle) sendPush(userId, pushTitle, pushBody || '').catch(() => {});
 }
@@ -448,7 +448,7 @@ async function maybeCheckOrders(row, now, notify = true) {
   const fresh = orders.filter(o => !knownSet.has(String(o.orderNumber)));
   const newKnown = Array.from(new Set([...ids, ...prev])).slice(0, 50);
   if (fresh.length && notify) {
-    const { token, chatId } = await resolveTelegram(row.user_id, cfg);
+    const { token, chatId } = await resolveTelegram(row.user_id);
     const f = fresh[0];
     // El historial de ordenes trae unitPrice (no price); si falta, derivar de total/cantidad.
     const amt = parseFloat(f.amount || 0);

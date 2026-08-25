@@ -2112,10 +2112,6 @@ function saveBotConfig() {
   BOT_CFG.minLimit       = parseFloat(document.getElementById('cfg-bot-minlimit').value) || 0;
   BOT_CFG.payMethods     = readBotPayChecks();
   localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
-  // Save Telegram from popup inputs
-  TG.token  = document.getElementById('cfg-tg-token').value.trim();
-  TG.chatId = document.getElementById('cfg-tg-chat').value.trim();
-  localStorage.setItem('p2p_tg', JSON.stringify(TG));
   botUpdateCeiling();
   // Si el bot ya corre en el servidor, empujar la config en caliente (limite, spread, etc.).
   if (BOT.running) botCallWorker('/bot-config', { config: botServerConfig() }).catch(function(){});
@@ -2125,8 +2121,6 @@ function saveBotConfig() {
   clearTimeout(st._t);
   // La fila se oculta junto con el destello: dejarla antes se lleva el "✓ Guardado".
   st._t = setTimeout(function(){ st.textContent = ''; BOT_DIRTY = false; renderSaveRow(); }, 1800);
-  var tgSt = document.getElementById('tg-st');
-  if (tgSt) { tgSt.textContent = (TG.token && TG.chatId) ? '✓' : ''; }
   saveUserSettings();
 }
 
@@ -2574,8 +2568,7 @@ function botServerConfig() {
     myNick: BOT_CFG.myNick || BOT.myNick || '',
     commission: CFG.commission || 0,
     verifiedOnly: CFG.verifiedOnly !== false,
-    payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [PAY_SEL.VES],
-    tg: { token: TG.token, chatId: TG.chatId }
+    payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [PAY_SEL.VES]
   };
 }
 
@@ -2635,7 +2628,7 @@ async function botToggle() {
       }
     }
     botSetStatus('Detenido', '#555');
-    if (TG.token && TG.chatId) sendTelegram('🔴 <b>Bot apagado</b>');
+    if (TGLINK.linked) sendTelegram('🔴 <b>Bot apagado</b>');
 
   } else {
     // ── START ────────────────────────────────────────────
@@ -2730,7 +2723,7 @@ async function botToggle() {
     BOT.startingSeq = 0;
     renderBotToggle(); // el boton pudo quedar desincronizado durante el arranque
     botSetStatus('✓ Bot activo', '#1D9E75');
-    if (TG.token && TG.chatId) sendTelegram('🟢 <b>Bot encendido</b>');
+    if (TGLINK.linked) sendTelegram('🟢 <b>Bot encendido</b>');
     startBotPoller();
     startActivityWatcher();
     // Las notificaciones de ordenes nuevas las maneja el servidor (24/7, app cerrada).
@@ -2788,7 +2781,7 @@ function renderBotState(d) {
       if (e && e.ts > BOT_POLL.lastLogTs) {
         botLog(e.msg, BOT_LOG_COLORS[e.level] || '#8b949e');
         // Solo errores a Telegram. Los reprices (up/down) son demasiado frecuentes (spam).
-        if (TG.token && TG.chatId && e.level === 'error') sendTelegram('🤖 ' + e.msg);
+        if (TGLINK.linked && e.level === 'error') sendTelegram('🤖 ' + e.msg);
       }
     });
     var maxTs = d.log.reduce(function(m, e){ return e && e.ts > m ? e.ts : m; }, BOT_POLL.lastLogTs);
@@ -2872,12 +2865,15 @@ async function tgRefreshLink() {
   }
   if (!TGLINK.available) { block.style.display = 'none'; return; }
   block.style.display = '';
+  var testBtn = document.getElementById('tg-test-btn');
   if (TGLINK.linked) {
     if (st) st.textContent = '✓ Telegram conectado';
     if (btn) { btn.textContent = 'Desconectar'; btn.onclick = tgDisconnect; }
+    if (testBtn) testBtn.style.display = '';
   } else {
     if (st) st.textContent = 'Recibe las alertas en Telegram, sin configurar nada.';
     if (btn) { btn.textContent = 'Conectar Telegram'; btn.onclick = tgConnect; }
+    if (testBtn) testBtn.style.display = 'none';
   }
 }
 
@@ -2909,6 +2905,23 @@ async function tgConnect() {
   }
 }
 
+async function tgTest() {
+  var btn = document.getElementById('tg-test-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    await apiPost('/api/telegram/notify', { text: '🔔 <b>Prueba</b>\nSi ves esto, tus alertas de P2P Monitor llegan bien.' }, true);
+    if (btn) btn.textContent = '✓ Enviado';
+  } catch (e) {
+    alert('Error: ' + e.message);
+    if (btn) btn.textContent = 'Enviar alerta de prueba';
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      setTimeout(function () { if (btn) btn.textContent = 'Enviar alerta de prueba'; }, 2500);
+    }
+  }
+}
+
 async function tgDisconnect() {
   if (!window.confirm('¿Dejar de recibir alertas en Telegram?')) return;
   try {
@@ -2919,30 +2932,11 @@ async function tgDisconnect() {
   tgRefreshLink();
 }
 
-var TG = { token: '', chatId: '' };
-
 async function sendTelegram(msg) {
-  if (!TG.token || !TG.chatId) return;
-  try {
-    var r = await fetch('https://api.telegram.org/bot' + TG.token + '/sendMessage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: TG.chatId, text: msg, parse_mode: 'HTML' })
-    });
-    return r.ok;
-  } catch(e) { return false; }
-}
-
-function loadTgConfig() {
-  try {
-    var s = localStorage.getItem('p2p_tg');
-    if (!s) return;
-    Object.assign(TG, JSON.parse(s));
-    var tokenEl = document.getElementById('cfg-tg-token');
-    var chatEl  = document.getElementById('cfg-tg-chat');
-    if (tokenEl) tokenEl.value = TG.token;
-    if (chatEl)  chatEl.value  = TG.chatId;
-  } catch(e) {}
+  // El token del bot compartido NUNCA baja al navegador: el envio lo hace el servidor
+  // contra el chat vinculado de este usuario.
+  if (!TGLINK.linked || !SESSION.token) return;
+  try { await apiPost('/api/telegram/notify', { text: msg }, true); } catch (e) {}
 }
 
 // ── Monitor 24/7 (server-side) ────────────────────────
@@ -3711,8 +3705,7 @@ function monitorServerConfig() {
     buyAmount: CFG.buyAmount,
     shortMode: CFG.shortMode !== false,
     verifiedOnly: CFG.verifiedOnly !== false,
-    payTypes: [ACTIVE_PAY],
-    tg: { token: TG.token, chatId: TG.chatId }
+    payTypes: [ACTIVE_PAY]
   };
 }
 
@@ -3721,7 +3714,7 @@ async function monitorServerEnable() {
   // El 24/7 del servidor es solo VES; en USD no tocar su config (vista local).
   if (ACTIVE_FIAT !== 'VES') { renderMon24('USD: solo vista local (24/7 sigue en VES)'); return; }
   if (!SESSION.token) { renderMon24(); return; }
-  if (!TG.token || !TG.chatId) { MON24.enabled = false; renderMon24('Sin Telegram — solo vista local'); return; }
+  if (!TGLINK.linked) { MON24.enabled = false; renderMon24('Conecta Telegram para el 24/7'); return; }
   try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; MON24.lastHb = Date.now(); botCallWorker('/monitor-heartbeat').catch(function(){}); renderMon24('Corriendo en el servidor'); }
   catch(e) { MON24.enabled = false; renderMon24('Error 24/7: ' + e.message); }
 }
@@ -3897,7 +3890,7 @@ function initBuySection() {
   setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
 }
 
-loadConfig(); syncFilterInputs(); loadTgConfig(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState();
+loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState();
 initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });

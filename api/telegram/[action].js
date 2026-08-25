@@ -112,6 +112,27 @@ async function webhookAction(req, res) {
   return res.status(200).json({ ok: true });
 }
 
+// Manda un mensaje al chat vinculado del propio usuario. Lo usa el boton de prueba
+// y los avisos que antes salian del navegador con el token personal.
+async function notifyAction(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  const raw = await readRawBody(req).catch(() => '');
+  let body = {};
+  try { body = JSON.parse(raw || '{}'); } catch (e) {}
+  const text = String(body.text || '').slice(0, 3500);
+  if (!text) return res.status(400).json({ error: 'text requerido' });
+
+  await ensureSchema();
+  await ensureTelegramLinks();
+  const rows = await sql`SELECT chat_id FROM telegram_links WHERE user_id = ${user.uid}`;
+  const chatId = rows[0] && rows[0].chat_id;
+  if (!chatId) return res.status(409).json({ error: 'Telegram no conectado' });
+  const sent = await sendTelegram(process.env.TELEGRAM_BOT_TOKEN, chatId, text);
+  return res.status(sent ? 200 : 502).json({ ok: sent });
+}
+
 // Registra el webhook en Telegram (una vez, tras configurar las env vars).
 // Restringido al admin para no exponer el token del bot.
 async function setupAction(req, res) {
@@ -151,6 +172,7 @@ export default async function handler(req, res) {
       case 'link':    return await linkAction(req, res);
       case 'status':  return await statusAction(req, res);
       case 'unlink':  return await unlinkAction(req, res);
+      case 'notify':  return await notifyAction(req, res);
       case 'webhook': return await webhookAction(req, res);
       case 'setup':   return await setupAction(req, res);
       default:        return res.status(404).json({ error: 'Accion desconocida' });
