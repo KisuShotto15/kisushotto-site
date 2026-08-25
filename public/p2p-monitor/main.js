@@ -385,7 +385,7 @@ function enterApp() {
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
-var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly', linkClicked: false, payLinks: {} };
+var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly', linkClicked: false, payLinks: {}, payQr: {} };
 var _subPollT = null;
 
 function daysLeft(iso) {
@@ -452,6 +452,7 @@ async function ensurePayLink(plan) {
   try {
     var d = await apiPost('/api/payments/pay-link', { plan: plan }, true);
     SUB.payLinks[plan] = (d && d.url) || '';
+    SUB.payQr[plan] = (d && d.qr) || '';
     renderSubModal();
   } catch (e) {
     SUB.payLinks[plan] = '';
@@ -503,6 +504,15 @@ function renderSubModal() {
   var info = (SUB.plans && SUB.plans[plan]) || {};
   if (priceEl) priceEl.textContent = (info.price || '—') + ' ' + (info.currency || 'USDT');
   if (linkEl) linkEl.href = currentPayLink(plan) || '#';
+  // El link de cobro es un QR: tocarlo abre la app en la pantalla equivocada, hay
+  // que escanearlo. Se muestra la imagen cuando Binance la devuelve.
+  var qrBox = document.getElementById('sub-pay-qr-box');
+  var qrImg = document.getElementById('sub-pay-qr');
+  var qrUrl = SUB.payQr[plan];
+  if (qrBox && qrImg) {
+    if (qrUrl) { qrImg.src = qrUrl; qrBox.style.display = ''; }
+    else qrBox.style.display = 'none';
+  }
   if (mBtn) mBtn.classList.toggle('btn-gold', plan === 'monthly');
   if (aBtn) aBtn.classList.toggle('btn-gold', plan === 'annual');
   if (paidBtn) paidBtn.style.display = SUB.linkClicked ? '' : 'none';
@@ -595,6 +605,7 @@ async function renderPayLinkState() {
       var monto = d.amount ? (d.amount + ' ' + (d.currency || '')) :
         '<span style="color:var(--red)">sin monto (link generico)</span>';
       return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:#1D9E75">✓ Agent Pay</span> · ' + monto +
+        ' · QR: ' + (d.qr ? 'sí' : '<span style="color:var(--red)">no</span>') +
         '<div style="font-size:11px;color:var(--text-3);word-break:break-all">' + (d.url || '') + '</div></div>';
     }
     var why = d.detail ? (d.detail + (d.code ? ' (' + d.code + ')' : '')) : 'sin claves configuradas';
