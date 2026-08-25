@@ -72,6 +72,17 @@ async function statusAction(req, res) {
   let user;
   try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   await readRawBody(req).catch(() => {});
+
+  // El admin (dueño del producto) no paga su propia suscripcion: se le devuelve
+  // siempre activa, sin tocar payment_invoices ni disparar el prompt de trial.
+  const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (adminEmail && user.email === adminEmail) {
+    return res.status(200).json({
+      subscription: { status: 'active', current_period_end: '2099-12-31T00:00:00.000Z' },
+      invoice: null, plans: planInfo(), currency: SUB_CURRENCY,
+    });
+  }
+
   await ensureSchema();
   await ensurePlanColumn();
   await ensureSubscription(user.uid);
