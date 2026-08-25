@@ -171,7 +171,10 @@ function updateBotPayBadge() {
 
 // ── Config ────────────────────────────────────────────
 var CFG = {
-  interval: 30,
+  // 15s por defecto: a 10s la vista abierta gastaba ~50% mas invocaciones de Vercel
+  // (cada refresh pasa por /api/p2p-search) sin diferencia practica. El minimo sigue
+  // siendo 10s para quien lo quiera bajar a mano.
+  interval: 15,
   spreadThr: 0.5,
   overboughtThr: 1.0,
   weaknessThr: 0.5,
@@ -3748,7 +3751,7 @@ async function hydrateMon24(isRetry) {
 
 // ── Config ────────────────────────────────────────────
 function saveConfig() {
-  CFG.interval      = Math.max(10, parseInt(document.getElementById('cfg-int').value) || 30);
+  CFG.interval      = Math.max(10, parseInt(document.getElementById('cfg-int').value) || 15);
   CFG.spreadThr     = parseFloat(document.getElementById('cfg-spr').value) || 0.5;
   CFG.overboughtThr = parseFloat(document.getElementById('cfg-ob').value)  || 1.0;
   CFG.weaknessThr   = parseFloat(document.getElementById('cfg-wk').value)  || 0.5;
@@ -3780,6 +3783,13 @@ function loadConfig() {
     var s = localStorage.getItem('p2p_cfg2');
     if (!s) return;
     Object.assign(CFG, JSON.parse(s));
+    // Migracion unica al nuevo default: quien venia de 10s pasa a 15s. Sigue siendo
+    // editable a mano hasta el minimo de 10s.
+    if (!CFG.intervalMigrated) {
+      if (CFG.interval < 15) CFG.interval = 15;
+      CFG.intervalMigrated = true;
+      try { localStorage.setItem('p2p_cfg2', JSON.stringify(CFG)); } catch (e) {}
+    }
     document.getElementById('cfg-int').value      = CFG.interval;
     document.getElementById('cfg-spr').value      = CFG.spreadThr;
     document.getElementById('cfg-ob').value       = CFG.overboughtThr;

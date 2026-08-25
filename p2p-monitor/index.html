@@ -234,7 +234,7 @@
       <div id="ob-gear-popup" style="display:none;position:absolute;top:44px;right:11px;width:300px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.8);z-index:50">
         <div class="ptitle" style="margin-bottom:8px">Configuración</div>
         <div class="cfg-row"><span title="ON (por defecto): igual que ahora — Mayoristas y Recompra arriba, Verde plegado en Sección Compra. OFF: Verde y Mayoristas arriba (Recompra se oculta) y el spread se calcula Verde vs Mayorista — útil si tu ciclo es comprar/vender efectivo en vez de recomprar en el libro.">Modo Short</span><input type="checkbox" id="cfg-shortmode" checked onchange="toggleShortMode()" style="width:18px;height:18px;accent-color:var(--gold);cursor:pointer"></div>
-        <div class="cfg-row"><span title="Cada cuánto se refresca el monitor mientras la app está abierta">Intervalo (seg)</span><input type="number" id="cfg-int" value="30" min="10" max="300"></div>
+        <div class="cfg-row"><span title="Cada cuánto se refresca el monitor mientras la app está abierta">Intervalo (seg)</span><input type="number" id="cfg-int" value="15" min="10" max="300"></div>
         <div class="cfg-row"><span title="La comisión que Binance cobra al comprar USDT (0.175% es lo usual). Se descuenta en el spread neto y en el P&amp;L">Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
         <div class="cfg-row" style="border-bottom:none"><span style="font-size:11px;color:var(--text-3)">Los umbrales de alerta y el push están en la 🔔 campana</span></div>
         <details style="margin-top:6px">
@@ -447,7 +447,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=60"></script>
+<script src="/p2p-monitor/main.js?v=61"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
