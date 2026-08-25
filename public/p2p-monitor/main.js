@@ -475,7 +475,68 @@ async function checkAdminPending() {
     btn.style.display = 'none';
   }
 }
-function goAdminPending() { window.location.href = '/p2p-monitor/admin.html'; }
+// Modal dentro de la app (no una pagina aparte): el host devuelve el index del
+// monitor para rutas que no existen, asi que un .html suelto nunca cargaria.
+function goAdminPending() {
+  var m = document.getElementById('admin-pay-modal');
+  if (m) m.style.display = 'flex';
+  renderAdminPending();
+}
+function closeAdminPayModal() {
+  var m = document.getElementById('admin-pay-modal');
+  if (m) m.style.display = 'none';
+}
+
+async function renderAdminPending() {
+  var box = document.getElementById('admin-pay-list');
+  if (!box) return;
+  box.textContent = 'Cargando…';
+  var d;
+  try {
+    d = await apiPost('/api/payments/admin-pending', {}, true);
+  } catch (e) {
+    box.textContent = 'Error: ' + e.message;
+    return;
+  }
+  var invoices = d.invoices || [];
+  if (!invoices.length) { box.textContent = 'No hay pagos pendientes.'; return; }
+  box.innerHTML = '';
+  invoices.forEach(function (inv) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);text-align:left';
+    var when = new Date(inv.created_at).toLocaleString('es-VE');
+    var info = document.createElement('div');
+    info.innerHTML = '<div style="font-weight:600">' + inv.email + '</div>' +
+      '<div style="font-size:12px;color:var(--text-3)">' + inv.plan + ' · ' + when + '</div>';
+    var right = document.createElement('div');
+    right.style.cssText = 'display:flex;align-items:center;gap:10px;flex-shrink:0';
+    var amt = document.createElement('span');
+    amt.style.cssText = 'font-weight:600;color:var(--gold)';
+    amt.textContent = inv.amount + ' ' + inv.currency;
+    var btn = document.createElement('button');
+    btn.className = 'btn btn-sm';
+    btn.textContent = 'Confirmar';
+    btn.onclick = function () { confirmAdminPayment(inv.id, btn); };
+    right.appendChild(amt); right.appendChild(btn);
+    row.appendChild(info); row.appendChild(right);
+    box.appendChild(row);
+  });
+}
+
+async function confirmAdminPayment(invoiceId, btn) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    await apiPost('/api/payments/admin-confirm', { invoiceId: invoiceId }, true);
+    await renderAdminPending();
+    checkAdminPending();
+  } catch (e) {
+    alert('Error: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Confirmar';
+  }
+}
+
 setInterval(checkAdminPending, 60000);
 
 function openSubModal() {

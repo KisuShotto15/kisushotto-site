@@ -95,6 +95,15 @@
   </div>
 </div>
 
+<!-- Pagos pendientes (solo admin) -->
+<div id="admin-pay-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:22px;max-width:460px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7)">
+    <div style="font-size:19px;font-weight:700;color:var(--gold);margin-bottom:14px;text-align:center">Pagos pendientes</div>
+    <div id="admin-pay-list" style="max-height:60vh;overflow-y:auto;color:var(--text-2);font-size:14px;text-align:center">Cargando…</div>
+    <div style="margin-top:16px;text-align:center"><button class="btn btn-sm" onclick="closeAdminPayModal()">Cerrar</button></div>
+  </div>
+</div>
+
 <!-- Presence check modal -->
 <div id="presence-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--surf-1);border:2px solid var(--gold);border-radius:var(--r);padding:24px;text-align:center;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7)">
@@ -432,7 +441,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=53"></script>
+<script src="/p2p-monitor/main.js?v=54"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
