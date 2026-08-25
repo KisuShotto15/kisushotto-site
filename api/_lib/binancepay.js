@@ -54,16 +54,6 @@ export async function createOrder(apiKey, secretKey, { merchantTradeNo, amount, 
   return call(apiKey, secretKey, '/binancepay/openapi/v3/order', body);
 }
 
-// Link de cobro de cuenta PERSONAL (Agent Pay): no necesita cuenta Merchant, las
-// claves salen de la app de Binance (Perfil > API Management, permiso de pagos).
-// Devuelve shareLink + qrImageUrl. No tiene merchantTradeNo ni webhook: sirve para
-// generar el link con monto y nota exactos, pero la confirmacion sigue siendo manual.
-export async function createReceiveLink(apiKey, secretKey, { amount, currency, description }) {
-  const body = { currency: currency || 'USDT', amount: String(amount) };
-  if (description) body.description = description;
-  return call(apiKey, secretKey, '/binancepay/openapi/user/c2c/createReceive', body);
-}
-
 export async function queryOrder(apiKey, secretKey, merchantTradeNo) {
   return call(apiKey, secretKey, '/binancepay/openapi/v2/order/query', { merchantTradeNo });
 }

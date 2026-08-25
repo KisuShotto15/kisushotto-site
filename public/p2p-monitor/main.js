@@ -385,7 +385,7 @@ function enterApp() {
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
-var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly', linkClicked: false, payLinks: {}, payQr: {} };
+var SUB = { subscription: null, invoice: null, plans: null, selectedPlan: 'monthly', linkClicked: false };
 var _subPollT = null;
 
 function daysLeft(iso) {
@@ -435,33 +435,10 @@ function selectSubPlan(plan) {
 // configurado, avisa en vez de mandar al usuario de vuelta a la app (que es
 // exactamente lo que pasaba: el <a href="#"> recargaba la SPA y parecia que
 // "no hacia nada"/volvia al monitor).
-// Pide al backend el link de cobro del plan (uno por monto, con nota que identifica
-// al usuario). Se pide una sola vez por plan y por sesion del modal; si no hay
-// claves de Agent Pay, el backend devuelve el link fijo.
-function currentPayLink(plan) {
-  var dyn = SUB.payLinks[plan];
-  if (dyn && dyn !== 'pending') return dyn;
-  var info = SUB.plans && SUB.plans[plan];
-  return (info && info.link) || '';
-}
-
-async function ensurePayLink(plan) {
-  // undefined = nunca se pidio. '' = se pidio y no hay (no reintentar en cada render).
-  if (SUB.payLinks[plan] !== undefined) return;
-  SUB.payLinks[plan] = 'pending';
-  try {
-    var d = await apiPost('/api/payments/pay-link', { plan: plan }, true);
-    SUB.payLinks[plan] = (d && d.url) || '';
-    SUB.payQr[plan] = (d && d.qr) || '';
-    renderSubModal();
-  } catch (e) {
-    SUB.payLinks[plan] = '';
-  }
-}
-
 function onSubPayLinkClick(e) {
   var plan = SUB.selectedPlan || 'monthly';
-  if (!currentPayLink(plan)) {
+  var info = SUB.plans && SUB.plans[plan];
+  if (!info || !info.link) {
     e.preventDefault();
     alert('El link de pago del plan ' + (plan === 'annual' ? 'anual' : 'mensual') + ' todavía no está configurado.');
     return false;
@@ -503,16 +480,7 @@ function renderSubModal() {
   var plan = SUB.selectedPlan || 'monthly';
   var info = (SUB.plans && SUB.plans[plan]) || {};
   if (priceEl) priceEl.textContent = (info.price || '—') + ' ' + (info.currency || 'USDT');
-  if (linkEl) linkEl.href = currentPayLink(plan) || '#';
-  // El link de cobro es un QR: tocarlo abre la app en la pantalla equivocada, hay
-  // que escanearlo. Se muestra la imagen cuando Binance la devuelve.
-  var qrBox = document.getElementById('sub-pay-qr-box');
-  var qrImg = document.getElementById('sub-pay-qr');
-  var qrUrl = SUB.payQr[plan];
-  if (qrBox && qrImg) {
-    if (qrUrl) { qrImg.src = qrUrl; qrBox.style.display = ''; }
-    else qrBox.style.display = 'none';
-  }
+  if (linkEl) linkEl.href = info.link || '#';
   if (mBtn) mBtn.classList.toggle('btn-gold', plan === 'monthly');
   if (aBtn) aBtn.classList.toggle('btn-gold', plan === 'annual');
   if (paidBtn) paidBtn.style.display = SUB.linkClicked ? '' : 'none';
@@ -524,9 +492,7 @@ function renderSubModal() {
   var rejEl = document.getElementById('sub-rejected-note');
   if (rejEl) rejEl.style.display = rejected ? '' : 'none';
   if (startBlock) startBlock.style.display = notStarted ? '' : 'none';
-  var showPay = !notStarted && !reviewing && !justPaid;
-  if (payBlock) payBlock.style.display = showPay ? '' : 'none';
-  if (showPay) ensurePayLink(plan);
+  if (payBlock) payBlock.style.display = (!notStarted && !reviewing && !justPaid) ? '' : 'none';
   if (pendBlock) pendBlock.style.display = (!notStarted && reviewing) ? '' : 'none';
 }
 
@@ -583,36 +549,6 @@ function goAdminPending() {
   var m = document.getElementById('admin-pay-modal');
   if (m) m.style.display = 'flex';
   renderAdminPending();
-  renderPayLinkState();
-}
-
-// Diagnostico visible solo para el admin: dice si el link de cobro lo genera la API
-// de Agent Pay o si se esta cayendo al link fijo, y con que error de Binance.
-async function renderPayLinkState() {
-  var el = document.getElementById('admin-paylink-state');
-  if (!el) return;
-  el.textContent = 'Comprobando…';
-  // Los dos planes por separado: el anual (700) puede pasar topes que el mensual no.
-  var out = await Promise.all(['monthly', 'annual'].map(async function (plan) {
-    var label = plan === 'annual' ? 'Anual' : 'Mensual';
-    var d;
-    try {
-      d = await apiPost('/api/payments/pay-link', { plan: plan }, true);
-    } catch (e) {
-      return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:var(--red)">' + e.message + '</span></div>';
-    }
-    if (d.source === 'agent_pay') {
-      var monto = d.amount ? (d.amount + ' ' + (d.currency || '')) :
-        '<span style="color:var(--red)">sin monto (link generico)</span>';
-      return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:#1D9E75">✓ Agent Pay</span> · ' + monto +
-        ' · QR: ' + (d.qr ? 'sí' : '<span style="color:var(--red)">no</span>') +
-        '<div style="font-size:11px;color:var(--text-3);word-break:break-all">' + (d.url || '') + '</div></div>';
-    }
-    var why = d.detail ? (d.detail + (d.code ? ' (' + d.code + ')' : '')) : 'sin claves configuradas';
-    return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:var(--gold)">link fijo</span>' +
-      '<div style="font-size:11px;color:var(--text-3)">' + why + '</div></div>';
-  }));
-  el.innerHTML = out.join('');
 }
 
 function closeAdminPayModal() {
