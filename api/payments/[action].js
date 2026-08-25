@@ -161,7 +161,13 @@ async function payLinkAction(req, res) {
       detail: (data && data.errorMessage) || null,
     });
   }
-  return res.status(200).json({ url: d.shareLink, qr: d.qrImageUrl || null, source: 'agent_pay' });
+  // amount/currency son lo que Binance dice haber registrado: si vuelven vacios, el
+  // link es generico (el pagador elige el monto) aunque la llamada haya salido bien.
+  return res.status(200).json({
+    url: d.shareLink, qr: d.qrImageUrl || null, source: 'agent_pay',
+    amount: d.amount != null ? String(d.amount) : null,
+    currency: d.currency || null,
+  });
 }
 
 // El usuario paga por el Payment Link compartido (cuenta personal de Binance Pay,

@@ -404,6 +404,27 @@ function renderSubBadge() {
   else { b.textContent = '!'; b.style.color = 'var(--red)'; }
 }
 
+// Vigente = prueba sin vencer o periodo pagado sin vencer. El estado solo no basta:
+// una prueba que caduco se queda en 'trialing' con trial_end pasado.
+function subActive() {
+  var s = SUB.subscription;
+  if (!s) return false;
+  var now = Date.now();
+  if (s.status === 'trialing') return !!s.trial_end && new Date(s.trial_end).getTime() > now;
+  if (s.status === 'active') return !!s.current_period_end && new Date(s.current_period_end).getTime() > now;
+  return false;
+}
+
+// Puerta de entrada al monitor y al bot. Si todavia no se sabe el estado, lo pide
+// antes de decidir (el cold start de /status tardaba y dejaba pasar a cualquiera).
+async function requireSub() {
+  if (subActive()) return true;
+  if (!SUB.subscription) { try { await loadSubscription(); } catch (e) {} }
+  if (subActive()) return true;
+  openSubModal();
+  return false;
+}
+
 function selectSubPlan(plan) {
   SUB.selectedPlan = plan;
   SUB.linkClicked = false; // cambio de plan = link distinto, hay que abrirlo de nuevo
@@ -515,6 +536,10 @@ async function loadSubscription() {
     var d = await apiPost('/api/payments/status' + (subTestMode() ? '?test=1' : ''), {}, true);
     SUB.subscription = d.subscription; SUB.invoice = d.invoice; SUB.plans = d.plans;
     renderSubBadge(); renderSubModal();
+    // Punto de cierre unico: el monitor puede haber arrancado antes de conocer el
+    // estado (arranque optimista desde cache, hidratacion del 24/7). Si no hay
+    // suscripcion vigente, se apaga aca.
+    if (!subActive() && ST.running) { stopMonitorView(); monitorServerDisable(); }
     if (d.invoice && d.invoice.status === 'pending_review') schedulePoll(); else stopPoll();
     if (!window._trialPromptShown && d.subscription && d.subscription.status === 'not_started') {
       window._trialPromptShown = true;
@@ -567,7 +592,9 @@ async function renderPayLinkState() {
       return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:var(--red)">' + e.message + '</span></div>';
     }
     if (d.source === 'agent_pay') {
-      return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:#1D9E75">✓ Agent Pay</span>' +
+      var monto = d.amount ? (d.amount + ' ' + (d.currency || '')) :
+        '<span style="color:var(--red)">sin monto (link generico)</span>';
+      return '<div style="margin-bottom:6px"><b>' + label + ':</b> <span style="color:#1D9E75">✓ Agent Pay</span> · ' + monto +
         '<div style="font-size:11px;color:var(--text-3);word-break:break-all">' + (d.url || '') + '</div></div>';
     }
     var why = d.detail ? (d.detail + (d.code ? ' (' + d.code + ')' : '')) : 'sin claves configuradas';
@@ -1340,16 +1367,17 @@ function stopMonitorView() {
 }
 
 // Un solo boton: arranca/detiene la vista (tablas) Y el monitor 24/7 server-side.
-function toggleMonitor() {
+async function toggleMonitor() {
   ST.fromCache = false; // decision explicita del usuario: no la pise hydrateMon24
   if (ST.running) {
     stopMonitorView();
     monitorServerDisable();
-  } else {
-    saveConfig();
-    startMonitorView();
-    monitorServerEnable();
+    return;
   }
+  if (!(await requireSub())) return;
+  saveConfig();
+  startMonitorView();
+  monitorServerEnable();
 }
 
 // Pestana oculta: pausa el fetch visual (sin apagar el monitor). Deja de latir → a los ~70s
@@ -2744,6 +2772,7 @@ async function botToggle() {
     // ── START ────────────────────────────────────────────
     saveBotConfig();
     if (!SESSION.token) { toast('Inicia sesión primero'); return; }
+    if (!(await requireSub())) return;
     var falta = botMissingFields();
     if (falta.length) {
       toast('Falta configurar: ' + falta.join(', '));

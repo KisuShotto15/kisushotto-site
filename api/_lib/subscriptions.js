@@ -62,6 +62,23 @@ export async function markPaid(invoiceId, userId, txId) {
   return true;
 }
 
+// Id del admin, resuelto desde ADMIN_EMAIL. Memoizado: se usa en cada tick del bot
+// para no dejar al dueño fuera de su propio producto (su fila de subscriptions
+// puede estar en 'not_started' porque /status le devuelve la exencion sin tocarla).
+let adminIdCache = null;
+export async function adminUserId() {
+  if (adminIdCache !== null) return adminIdCache;
+  const email = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!email) { adminIdCache = 0; return 0; }
+  try {
+    const rows = await sql`SELECT id FROM users WHERE lower(email) = ${email}`;
+    adminIdCache = (rows[0] && rows[0].id) || 0;
+  } catch (e) {
+    adminIdCache = 0;
+  }
+  return adminIdCache;
+}
+
 export function planInfo() {
   return {
     monthly: { price: PLANS.monthly.price, currency: SUB_CURRENCY, link: PLANS.monthly.link() },

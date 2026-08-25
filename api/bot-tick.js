@@ -7,6 +7,7 @@ import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
 import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged, bestOf } from './_lib/monitor.js';
 import { sendTelegram, resolveTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
+import { adminUserId } from './_lib/subscriptions.js';
 
 export const config = { maxDuration: 60 };
 
@@ -483,6 +484,11 @@ export default async function handler(req, res) {
     // monitor encendido. Best-effort, nunca debe tumbar el tick del bot.
     try { await tickGlobalHist(); } catch (e) {}
 
+    // Solo se tickea a quien tiene prueba vigente o periodo pagado (el admin queda
+    // exento). Sin esto cualquiera cerraba el popup de suscripcion y el bot y el
+    // monitor 24/7 le corrian igual, a costa nuestra.
+    const adminId = await adminUserId();
+
     // Sin ensureSchema(): el schema ya existe (lo crean los endpoints de auth/app).
     // Correr ~25 DDLs por cold start cada 18s era costo inutil.
     const rows = await sql`
@@ -491,7 +497,11 @@ export default async function handler(req, res) {
              c.enc_key, c.iv_key, c.tag_key, c.enc_secret, c.iv_secret, c.tag_secret
       FROM bot_state b
       JOIN binance_creds c ON c.user_id = b.user_id
+      LEFT JOIN subscriptions s ON s.user_id = b.user_id
       WHERE b.enabled = true
+        AND (b.user_id = ${adminId}
+          OR (s.status = 'trialing' AND s.trial_end > now())
+          OR (s.status = 'active' AND s.current_period_end > now()))
       LIMIT ${MAX_USERS}`;
 
     let ticked = 0;
@@ -567,7 +577,11 @@ export default async function handler(req, res) {
       FROM bot_state b
       JOIN binance_creds c ON c.user_id = b.user_id
       JOIN monitor_state m ON m.user_id = b.user_id AND m.enabled = true
+      LEFT JOIN subscriptions s ON s.user_id = b.user_id
       WHERE b.enabled = false
+        AND (b.user_id = ${adminId}
+          OR (s.status = 'trialing' AND s.trial_end > now())
+          OR (s.status = 'active' AND s.current_period_end > now()))
       LIMIT ${MAX_USERS}`;
     for (const row of qrows) {
       try {
@@ -583,8 +597,14 @@ export default async function handler(req, res) {
     // Monitor server-side (alertas Telegram 24/7 con silencio nocturno).
     // SELECT liviano: las columnas pesadas se leen dentro de tickMonitor solo si toca refrescar.
     const mrows = await sql`
-      SELECT user_id, config, last_tick, client_seen, last_mkt
-      FROM monitor_state WHERE enabled = true LIMIT ${MAX_USERS}`;
+      SELECT m.user_id, m.config, m.last_tick, m.client_seen, m.last_mkt
+      FROM monitor_state m
+      LEFT JOIN subscriptions s ON s.user_id = m.user_id
+      WHERE m.enabled = true
+        AND (m.user_id = ${adminId}
+          OR (s.status = 'trialing' AND s.trial_end > now())
+          OR (s.status = 'active' AND s.current_period_end > now()))
+      LIMIT ${MAX_USERS}`;
     let monitored = 0;
     // ms hasta el proximo trabajo real: el scheduler espacia su alarma con esto.
     // Con bots activos siempre hay trabajo en el proximo tick.
