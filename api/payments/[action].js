@@ -9,7 +9,7 @@ import { sql, ensureSchema, ensurePlanColumn } from '../_lib/db.js';
 import { createOrder, queryOrder, verifyWebhookSignature } from '../_lib/binancepay.js';
 import { sendPush } from '../_lib/push.js';
 import { ensureSubscription, startTrial, markPaid, planInfo, PLANS, SUB_CURRENCY } from '../_lib/subscriptions.js';
-import { checkPaymentEmails } from '../_lib/mail-poll.js';
+import { checkPayPayments, probePayTransactions } from '../_lib/pay-poll.js';
 
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -113,12 +113,11 @@ async function statusAction(req, res) {
     }
   }
 
-  // Igual de respaldo, pero para el pago por Payment Link (mail-poll.js): mientras el
-  // cliente hace polling de /status con una factura en revision, cada poll intenta un
-  // chequeo de correo (con su propio throttle corto interno, no cuesta nada de mas
-  // si no hay nada pendiente).
+  // Respaldo para el pago por Payment Link: mientras el cliente hace polling de
+  // /status con una factura en revision, cada poll consulta el historial de Binance
+  // Pay (con su propio throttle interno, no cuesta nada si no hay nada pendiente).
   if (invoice && invoice.status === 'pending_review') {
-    try { await checkPaymentEmails(); } catch (e) {}
+    try { await checkPayPayments(); } catch (e) {}
     invoice = (await sql`SELECT * FROM payment_invoices WHERE id = ${invoice.id}`)[0];
   }
 
@@ -152,10 +151,9 @@ async function markPendingAction(req, res) {
     INSERT INTO payment_invoices (id, user_id, provider, amount, currency, status, plan)
     VALUES (${invoiceId}, ${user.uid}, 'binance_pay_link', ${price}, ${SUB_CURRENCY}, 'pending_review', ${plan})`;
 
-  // Chequeo forzado (sin esperar el throttle): si el correo de Binance ya llego antes
-  // de que el usuario tocara el boton, confirma en el momento — sin esto habria que
-  // esperar a la primera vuelta del polling de /status.
-  try { await checkPaymentEmails(true); } catch (e) {}
+  // Chequeo forzado (sin esperar el throttle): lo normal es que el pago ya este
+  // hecho cuando el usuario toca el boton, asi que muchas veces confirma en el acto.
+  try { await checkPayPayments(true); } catch (e) {}
   const after = await sql`SELECT status FROM payment_invoices WHERE id = ${invoiceId}`;
   const finalStatus = (after[0] && after[0].status) || 'pending_review';
 
@@ -197,7 +195,7 @@ async function startTrialAction(req, res) {
 }
 
 // Nick de Binance Pay del usuario: es la unica forma de distinguir pagos simultaneos
-// del mismo monto fijo cuando el poller de correo (mail-poll.js) intente matchearlos.
+// del mismo monto fijo cuando el poller de Binance Pay intente matchearlos.
 async function setNickAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
@@ -285,6 +283,18 @@ async function adminResetSubsAction(req, res) {
 }
 
 // Lista de facturas en revision para el admin (dashboard minimo: solo lectura).
+// Comprobacion del historial de Binance Pay: dice si las claves del dueño sirven y
+// que se ve, sin tocar facturas. Es la unica forma de saber si la reconciliacion
+// automatica va a funcionar antes de que alguien pague de verdad.
+async function payProbeAction(req, res) {
+  let user;
+  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
+  await readRawBody(req).catch(() => {});
+  return res.status(200).json(await probePayTransactions());
+}
+
 async function adminPendingAction(req, res) {
   let user;
   try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
@@ -354,6 +364,7 @@ export default async function handler(req, res) {
       case 'admin-reject':  return await adminRejectAction(req, res);
       case 'admin-reset-subs': return await adminResetSubsAction(req, res);
       case 'admin-pending': return await adminPendingAction(req, res);
+      case 'pay-probe':     return await payProbeAction(req, res);
       default:              return res.status(404).json({ error: 'Accion desconocida' });
     }
   } catch (e) {

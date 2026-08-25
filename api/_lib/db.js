@@ -123,6 +123,16 @@ export async function ensurePlanColumn() {
 // Vinculo con el bot de Telegram compartido. Una fila por usuario: el codigo es
 // de un solo uso (lo consume el /start del deep link) y chat_id es el destino
 // privado de ese usuario — cada quien recibe solo sus propias alertas.
+// Marca de tiempo del ultimo sondeo al historial de Binance Pay. Va en la tabla de
+// estado que ya existia (no vale ampliarla en ensureSchema: ese arranque esta
+// cortocircuitado por la sonda sobre esta misma tabla).
+let payStateReady = false;
+export async function ensurePayState() {
+  if (payStateReady) return;
+  await sql`ALTER TABLE email_payment_state ADD COLUMN IF NOT EXISTS pay_checked_at TIMESTAMPTZ`;
+  payStateReady = true;
+}
+
 let tgLinksReady = false;
 export async function ensureTelegramLinks() {
   if (tgLinksReady) return;

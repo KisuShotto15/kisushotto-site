@@ -549,6 +549,36 @@ function goAdminPending() {
   var m = document.getElementById('admin-pay-modal');
   if (m) m.style.display = 'flex';
   renderAdminPending();
+  renderPayProbe();
+}
+
+// Dice si el historial de Binance Pay es accesible con las claves del dueño, que es
+// de lo que depende que los pagos se confirmen solos.
+async function renderPayProbe() {
+  var el = document.getElementById('admin-pay-probe');
+  if (!el) return;
+  el.textContent = 'Comprobando…';
+  var d;
+  try {
+    d = await apiPost('/api/payments/pay-probe', {}, true);
+  } catch (e) {
+    el.innerHTML = '<span style="color:var(--red)">Error: ' + e.message + '</span>';
+    return;
+  }
+  if (!d.ok) {
+    el.innerHTML = '<span style="color:var(--red)">No disponible</span>' +
+      '<div style="font-size:11px;color:var(--text-3);margin-top:4px">' +
+      (d.reason || '') + (d.code ? ' (' + d.code + ')' : '') + '</div>';
+    return;
+  }
+  var det = d.last && d.last.length
+    ? d.last.map(function (t) {
+        return t.amount + ' ' + t.currency + ' · ' + new Date(t.when).toLocaleString('es-VE');
+      }).join('<br>')
+    : 'sin movimientos en 24h';
+  el.innerHTML = '<span style="color:#1D9E75">✓ Historial accesible</span> · ' +
+    d.total + ' en 24h (' + d.incoming + ' entrantes)' +
+    '<div style="font-size:11px;color:var(--text-3);margin-top:4px">' + det + '</div>';
 }
 
 function closeAdminPayModal() {
