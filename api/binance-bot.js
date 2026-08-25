@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema, ensureMarketHist } from './_lib/db.js';
+import { histMap } from './_lib/monitor.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
 import { fifoMatch, fifoShort, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows, SAMPLE_MIN } from './_lib/pnl.js';
@@ -47,6 +48,59 @@ export default async function handler(req, res) {
   try { user = requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
 
   const { path, params } = req.body || {};
+
+  // Diagnostico + siembra manual de la serie global del grafico (solo admin).
+  // La siembra automatica del tick es best-effort y se traga los errores; esto
+  // reporta exactamente que encontro y deja forzarla.
+  if (path === '/seed-hist') {
+    const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
+    try {
+      await ensureMarketHist();
+      const src = await sql`
+        SELECT m.hist24, m.hist_long FROM monitor_state m
+        JOIN users u ON u.id = m.user_id
+        WHERE lower(u.email) = ${adminEmail}`;
+      const cur = await sql`SELECT hist24, hist_long, seeded FROM market_hist WHERE pay = 'BancoDeVenezuela'`;
+      const keysOf = h => Object.keys(histMap(h) || {});
+      const countOf = h => { const m = histMap(h); const o = {}; for (const k of Object.keys(m)) o[k] = (m[k] || []).length; return o; };
+      const info = {
+        adminRowFound: src.length > 0,
+        adminHist24: src.length ? countOf(src[0].hist24) : null,
+        adminHistLong: src.length ? countOf(src[0].hist_long) : null,
+        adminKeys: src.length ? { h24: keysOf(src[0].hist24), hl: keysOf(src[0].hist_long) } : null,
+        globalSeeded: cur.length ? cur[0].seeded : null,
+        globalHist24: cur.length ? countOf(cur[0].hist24) : null,
+        globalHistLong: cur.length ? countOf(cur[0].hist_long) : null,
+      };
+      if (!(params && params.apply) || !src.length) return res.status(200).json(info);
+
+      // Fusiona TODAS las claves de metodo de pago del admin en la serie global:
+      // si su historial quedo guardado bajo otra clave, igual se aprovecha.
+      const flatten = h => {
+        const m = histMap(h); const all = [];
+        for (const k of Object.keys(m)) for (const p of (m[k] || [])) if (p && p.ts) all.push(p);
+        return all;
+      };
+      const mergeAll = (a, b) => {
+        const m = new Map();
+        b.forEach(p => m.set(p.ts, p));
+        a.forEach(p => m.set(p.ts, p));
+        return [...m.values()].sort((x, y) => x.ts - y.ts);
+      };
+      const h24 = mergeAll(flatten(src[0].hist24), cur.length ? flatten(cur[0].hist24) : []);
+      const hl = mergeAll(flatten(src[0].hist_long), cur.length ? flatten(cur[0].hist_long) : []);
+      await sql`
+        INSERT INTO market_hist (pay, hist24, hist_long, seeded, updated_at)
+        VALUES ('BancoDeVenezuela', ${JSON.stringify({ BancoDeVenezuela: h24 })}::jsonb,
+                ${JSON.stringify({ BancoDeVenezuela: hl })}::jsonb, true, now())
+        ON CONFLICT (pay) DO UPDATE SET hist24 = excluded.hist24,
+          hist_long = excluded.hist_long, seeded = true`;
+      return res.status(200).json({ ...info, applied: { hist24: h24.length, histLong: hl.length } });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
 
   // Preferencias del usuario (sync entre dispositivos). No requiere creds Binance.
   if (path === '/settings-get' || path === '/settings-save') {

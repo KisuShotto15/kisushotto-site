@@ -544,6 +544,22 @@ async function renderAdminPending() {
   });
 }
 
+// Diagnostico/siembra de la serie global del grafico. Muestra el conteo real de
+// puntos de cada lado antes de tocar nada.
+async function seedGlobalChart(apply) {
+  var out = document.getElementById('admin-seed-out');
+  if (out) out.textContent = 'Consultando…';
+  try {
+    var d = await botCallWorker('/seed-hist', apply ? { apply: true } : {});
+    if (out) out.textContent = JSON.stringify(d, null, 1);
+    if (apply && d.applied) {
+      try { await hxLoad(); } catch (e) {}
+    }
+  } catch (e) {
+    if (out) out.textContent = 'Error: ' + e.message;
+  }
+}
+
 async function resolveAdminPayment(action, invoiceId, btn) {
   var label = btn.textContent;
   btn.disabled = true;
