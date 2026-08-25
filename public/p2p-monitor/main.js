@@ -614,7 +614,10 @@ async function renderPayProbe() {
   }
   var det = d.last && d.last.length
     ? d.last.map(function (t) {
-        return t.amount + ' ' + t.currency + ' · ' + new Date(t.when).toLocaleString('es-VE');
+        var quien = t.payer
+          ? ' — ' + (t.payerFields || []).map(function (k) { return k + ': ' + t.payer[k]; }).join(', ')
+          : ' — sin payerInfo';
+        return t.amount + ' ' + t.currency + ' · ' + new Date(t.when).toLocaleString('es-VE') + quien;
       }).join('<br>')
     : 'sin movimientos en 24h';
   el.innerHTML = '<span style="color:#1D9E75">✓ Historial accesible</span> · ' +

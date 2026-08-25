@@ -136,9 +136,14 @@ export async function probePayTransactions() {
       ok: true,
       total: txs.length,
       incoming: txs.filter(isIncoming).length,
+      // payerInfo tal cual lo manda Binance: es la unica forma de saber que nombre
+      // hay que escribir en el panel (¿el de la cuenta? ¿el del anuncio de P2P?)
+      // sin adivinarlo desde la documentacion.
       last: txs.slice(0, 3).map(t => ({
         amount: t.amount, currency: t.currency,
         when: t.transactionTime ? new Date(t.transactionTime).toISOString() : null,
+        payer: t.payerInfo || null,
+        payerFields: t.payerInfo ? Object.keys(t.payerInfo) : [],
       })),
     };
   } catch (e) {
