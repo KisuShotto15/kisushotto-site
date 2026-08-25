@@ -460,7 +460,7 @@ function renderPaidBtn() {
   if (help) {
     help.textContent = hasNick
       ? 'Se activa sola en menos de un minuto.'
-      : 'Pega el Order ID arriba para poder avisar.';
+      : 'Escribe tu usuario arriba para poder avisar.';
   }
 }
 
@@ -617,13 +617,22 @@ async function renderPayProbe() {
         var quien = t.payer
           ? ' — ' + (t.payerFields || []).map(function (k) { return k + ': ' + t.payer[k]; }).join(', ')
           : ' — sin payerInfo';
-        var id = t.txId ? '<br><span style="color:var(--gold)">Order ID: ' + t.txId + '</span>' : '';
+        var id = t.txId ? '<br><span style="color:var(--gold)">API txId: ' + t.txId + '</span>' : '';
         return t.amount + ' ' + t.currency + ' · ' + new Date(t.when).toLocaleString('es-VE') + quien + id;
       }).join('<br>')
     : 'sin movimientos en 24h';
+  // Volcado crudo de la ultima transaccion: sirve para cazar el campo donde viene
+  // el Order ID que ve el pagador, que no es el transactionId.
+  var raw = '';
+  if (d.raw) {
+    raw = '<details style="margin-top:6px;text-align:left"><summary style="cursor:pointer;font-size:11px;color:var(--text-2)">Campos crudos de la última</summary>' +
+      '<div style="font-size:10px;color:var(--text-2);word-break:break-all;margin-top:4px">' +
+      Object.keys(d.raw).map(function (k) { return k + ': ' + d.raw[k]; }).join('<br>') +
+      '</div></details>';
+  }
   el.innerHTML = '<span style="color:#1D9E75">✓ Historial accesible</span> · ' +
     d.total + ' en 24h (' + d.incoming + ' entrantes)' +
-    '<div style="font-size:11px;color:var(--text-3);margin-top:4px">' + det + '</div>';
+    '<div style="font-size:11px;color:var(--text-2);margin-top:4px">' + det + '</div>' + raw;
 }
 
 function closeAdminPayModal() {
@@ -742,7 +751,7 @@ async function markSubPaid() {
   // Sin nombre no se puede confirmar el pago solo: el monto no distingue esta
   // suscripcion de cualquier otro cobro de USDT que entre a la vez.
   if (!nick) {
-    alert('Pega el Order ID del pago (o tu nickname de Binance) para poder identificarlo.');
+    alert('Escribe tu usuario de Binance para poder identificar tu pago.');
     if (nickEl) nickEl.focus();
     return;
   }
