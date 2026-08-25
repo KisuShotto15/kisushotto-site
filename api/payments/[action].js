@@ -155,7 +155,11 @@ async function payLinkAction(req, res) {
   // Cualquier fallo (claves mal, limites sin configurar, API caida) degrada al link
   // fijo en vez de dejar al usuario sin poder pagar.
   if (!ok || !d.shareLink) {
-    return res.status(200).json({ url: fallback, source: 'static', detail: (data && data.errorMessage) || null });
+    return res.status(200).json({
+      url: fallback, source: 'static',
+      code: (data && data.code) || null,
+      detail: (data && data.errorMessage) || null,
+    });
   }
   return res.status(200).json({ url: d.shareLink, qr: d.qrImageUrl || null, source: 'agent_pay' });
 }

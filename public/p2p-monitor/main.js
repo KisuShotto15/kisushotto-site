@@ -548,7 +548,32 @@ function goAdminPending() {
   var m = document.getElementById('admin-pay-modal');
   if (m) m.style.display = 'flex';
   renderAdminPending();
+  renderPayLinkState();
 }
+
+// Diagnostico visible solo para el admin: dice si el link de cobro lo genera la API
+// de Agent Pay o si se esta cayendo al link fijo, y con que error de Binance.
+async function renderPayLinkState() {
+  var el = document.getElementById('admin-paylink-state');
+  if (!el) return;
+  el.textContent = 'Comprobando…';
+  var d;
+  try {
+    d = await apiPost('/api/payments/pay-link', { plan: 'monthly' }, true);
+  } catch (e) {
+    el.innerHTML = '<span style="color:var(--red)">Error: ' + e.message + '</span>';
+    return;
+  }
+  if (d.source === 'agent_pay') {
+    el.innerHTML = '<span style="color:var(--green,#1D9E75)">✓ Agent Pay activo</span>' +
+      '<div style="font-size:11px;color:var(--text-3);word-break:break-all;margin-top:4px">' + (d.url || '') + '</div>';
+    return;
+  }
+  var why = d.detail ? (d.detail + (d.code ? ' (' + d.code + ')' : '')) : 'sin claves configuradas';
+  el.innerHTML = '<span style="color:var(--gold)">Link fijo</span>' +
+    '<div style="font-size:11px;color:var(--text-3);margin-top:4px">' + why + '</div>';
+}
+
 function closeAdminPayModal() {
   var m = document.getElementById('admin-pay-modal');
   if (m) m.style.display = 'none';
