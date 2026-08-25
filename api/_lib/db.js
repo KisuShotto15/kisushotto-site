@@ -120,6 +120,22 @@ export async function ensurePlanColumn() {
   planColReady = true;
 }
 
+// Vinculo con el bot de Telegram compartido. Una fila por usuario: el codigo es
+// de un solo uso (lo consume el /start del deep link) y chat_id es el destino
+// privado de ese usuario — cada quien recibe solo sus propias alertas.
+let tgLinksReady = false;
+export async function ensureTelegramLinks() {
+  if (tgLinksReady) return;
+  await sql`CREATE TABLE IF NOT EXISTS telegram_links (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    chat_id TEXT,
+    code TEXT UNIQUE,
+    code_expires TIMESTAMPTZ,
+    linked_at TIMESTAMPTZ
+  )`;
+  tgLinksReady = true;
+}
+
 let marketHistReady = false;
 export async function ensureMarketHist() {
   if (marketHistReady) return;

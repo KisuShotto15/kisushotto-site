@@ -362,7 +362,7 @@ function authLogout() {
 function enterApp() {
   var g = document.getElementById('login-gate');
   if (g) g.style.display = 'none';
-  if (!window._appBooted) { window._appBooted = true; try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} try { checkAdminPending(); } catch(e) {} }
+  if (!window._appBooted) { window._appBooted = true; try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} try { checkAdminPending(); } catch(e) {} try { tgRefreshLink(); } catch(e) {} }
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
@@ -2854,6 +2854,71 @@ async function hydrateBotState() {
 }
 
 // ── Telegram ──────────────────────────────────────────
+// ── Bot de Telegram compartido (vinculacion por deep link) ─────
+// El usuario no ve ningun token ni tiene que buscar su chat ID: toca Conectar,
+// Telegram abre el chat con el bot y al pulsar Iniciar el webhook guarda su chat.
+var TGLINK = { linked: false, available: false };
+
+async function tgRefreshLink() {
+  var st = document.getElementById('tg-link-state');
+  var btn = document.getElementById('tg-link-btn');
+  var block = document.getElementById('tg-link-block');
+  if (!block) return;
+  try {
+    var d = await apiPost('/api/telegram/status', {}, true);
+    TGLINK = d;
+  } catch (e) {
+    TGLINK = { linked: false, available: false };
+  }
+  if (!TGLINK.available) { block.style.display = 'none'; return; }
+  block.style.display = '';
+  if (TGLINK.linked) {
+    if (st) st.textContent = '✓ Telegram conectado';
+    if (btn) { btn.textContent = 'Desconectar'; btn.onclick = tgDisconnect; }
+  } else {
+    if (st) st.textContent = 'Recibe las alertas en Telegram, sin configurar nada.';
+    if (btn) { btn.textContent = 'Conectar Telegram'; btn.onclick = tgConnect; }
+  }
+}
+
+async function tgConnect() {
+  var btn = document.getElementById('tg-link-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Abriendo…'; }
+  try {
+    var d = await apiPost('/api/telegram/link', {}, true);
+    window.open(d.url, '_blank', 'noopener');
+    var st = document.getElementById('tg-link-state');
+    if (st) st.textContent = 'Pulsa "Iniciar" en Telegram y vuelve aquí.';
+    if (btn) { btn.disabled = false; btn.textContent = 'Esperando…'; }
+    // El vinculo lo confirma el webhook, no esta pestania: se consulta un rato.
+    // tgRefreshLink repinta el bloque, asi que solo se llama cuando ya hay novedad
+    // (si no, borraria el "Pulsa Iniciar" en la primera vuelta).
+    var tries = 0;
+    var t = setInterval(async function () {
+      tries++;
+      try {
+        var d = await apiPost('/api/telegram/status', {}, true);
+        if (d.linked) { clearInterval(t); TGLINK = d; tgRefreshLink(); return; }
+      } catch (e) {}
+      if (tries > 20) { clearInterval(t); tgRefreshLink(); }
+    }, 3000);
+  } catch (e) {
+    alert('Error: ' + e.message);
+    if (btn) btn.disabled = false;
+    tgRefreshLink();
+  }
+}
+
+async function tgDisconnect() {
+  if (!window.confirm('¿Dejar de recibir alertas en Telegram?')) return;
+  try {
+    await apiPost('/api/telegram/unlink', {}, true);
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+  tgRefreshLink();
+}
+
 var TG = { token: '', chatId: '' };
 
 async function sendTelegram(msg) {

@@ -5,7 +5,7 @@ import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
 import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged, bestOf } from './_lib/monitor.js';
-import { sendTelegram } from './_lib/telegram.js';
+import { sendTelegram, resolveTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
 
 export const config = { maxDuration: 60 };
@@ -227,9 +227,7 @@ async function tickMonitor(row, now) {
   const histLong = pushHistLongPay(h.hist_long, pay, now, mayBestTrue);
 
   let log = h.log;
-  let token = '';
-  try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
-  const chatId = cfg.tg && cfg.tg.chatId;
+  const { token, chatId } = await resolveTelegram(row.user_id, cfg);
 
   if (!silent && out.alerts.length) {
     for (const a of out.alerts) {
@@ -280,9 +278,7 @@ function pickAd(ads, adNo) {
 
 // Aviso por Telegram (si esta configurado) + push. Best-effort, no rompe el tick.
 async function botNotify(cfg, userId, tgMsg, pushTitle, pushBody) {
-  let token = '';
-  try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
-  const chatId = cfg.tg && cfg.tg.chatId;
+  const { token, chatId } = await resolveTelegram(userId, cfg);
   if (token && chatId) { try { await sendTelegram(token, chatId, tgMsg); } catch (e) {} }
   if (pushTitle) sendPush(userId, pushTitle, pushBody || '').catch(() => {});
 }
@@ -452,9 +448,7 @@ async function maybeCheckOrders(row, now, notify = true) {
   const fresh = orders.filter(o => !knownSet.has(String(o.orderNumber)));
   const newKnown = Array.from(new Set([...ids, ...prev])).slice(0, 50);
   if (fresh.length && notify) {
-    let token = '';
-    try { token = (cfg.tg && cfg.tg.token_enc) ? decrypt(cfg.tg.token_enc) : ''; } catch (e) {}
-    const chatId = cfg.tg && cfg.tg.chatId;
+    const { token, chatId } = await resolveTelegram(row.user_id, cfg);
     const f = fresh[0];
     // El historial de ordenes trae unitPrice (no price); si falta, derivar de total/cantidad.
     const amt = parseFloat(f.amount || 0);
