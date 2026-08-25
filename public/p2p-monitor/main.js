@@ -192,6 +192,11 @@ var CFG = {
 
 // Unico punto donde vive el origen del backend: el resto se deriva de aqui.
 var API_BASE = 'https://kisushotto-site.vercel.app';
+
+// Diagnostico del primer arranque: separa "la app tardo en pedir" de "el servidor
+// tardo en responder". Se muestra una sola vez, junto a la hora de actualizacion.
+var BOOT = { t0: (window.performance && performance.now()) || 0, asked: null, got: null, shown: false };
+function bootMark(k) { if (BOOT[k] === null) BOOT[k] = Math.round(performance.now() - BOOT.t0); }
 var PROXY = API_BASE + '/api/p2p-search';
 var BOT_API = API_BASE + '/api/binance-bot';
 
@@ -997,6 +1002,7 @@ async function fetchRetry(url, opts, ms, retries) {
 }
 
 async function searchBatch(bodies, ms) {
+  bootMark('asked');
   var r = await fetchRetry(PROXY, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (SESSION.token || '') },
@@ -1238,9 +1244,16 @@ async function fetchOnce(fast) {
     recordMarketSnapshot();
     updateDecision();
     var emptyNote =(!ST.mayoristas.length && !ST.smallAds.length) ? ' — sin anuncios en rango' : '';
+    bootMark('got');
+    var bootNote = '';
+    if (!BOOT.shown) {
+      BOOT.shown = true;
+      bootNote = ' · arranque ' + (BOOT.asked / 1000).toFixed(1) + 's + red ' +
+                 ((BOOT.got - BOOT.asked) / 1000).toFixed(1) + 's';
+    }
     var lu = document.getElementById('last-update');
     lu.style.color = '';
-    lu.textContent = 'Actualizado ' + ST.lastFetch.toLocaleTimeString('es-VE') + emptyNote;
+    lu.textContent = 'Actualizado ' + ST.lastFetch.toLocaleTimeString('es-VE') + emptyNote + bootNote;
   } catch(e) {
     ST.consecFails++;
     var lu2 = document.getElementById('last-update');
