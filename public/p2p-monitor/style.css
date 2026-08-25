@@ -150,6 +150,17 @@ body {
   .tab-btn.is-on .tab-dot { background: #0b0e11; }
   .layout > .col { display: none; }
   .layout > .col.is-on { display: flex; }
+  /* Deslizamiento al cambiar de tab (swipe o botones). Solo entra la columna
+     nueva: animar tambien la saliente obliga a mantener las dos en el DOM
+     visibles a la vez y en movil eso salta. */
+  .layout > .col.slide-l { animation: tab-in-l .18s ease-out; }
+  .layout > .col.slide-r { animation: tab-in-r .18s ease-out; }
+  @keyframes tab-in-l { from { opacity: .4; transform: translateX(22%); } to { opacity: 1; transform: none; } }
+  @keyframes tab-in-r { from { opacity: .4; transform: translateX(-22%); } to { opacity: 1; transform: none; } }
+  /* Respeta a quien pidio menos movimiento en el sistema. */
+  @media (prefers-reduced-motion: reduce) {
+    .layout > .col.slide-l, .layout > .col.slide-r { animation: none; }
+  }
 }
 .hero-wrap { max-width: none; padding: 14px 14px 0; }
 .col { display: flex; flex-direction: column; gap: 12px; }

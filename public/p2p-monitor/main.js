@@ -3068,14 +3068,24 @@ function marketLabels() {
 // ── Tabs Mercado/Bot (solo movil) ─────────────────────────────────────
 var TABS = ['mercado', 'bot'];
 
-function showTab(name) {
+// dir: 'l' (la nueva entra desde la derecha) o 'r'. Sin dir no se anima — asi el
+// arranque de la app no pega un deslizamiento de la nada.
+function showTab(name, dir) {
   if (TABS.indexOf(name) < 0) name = 'mercado';
   for (var i = 0; i < TABS.length; i++) {
     var on = TABS[i] === name;
     var btn = document.getElementById('tab-' + TABS[i]);
     var col = document.getElementById('col-' + TABS[i]);
     if (btn) btn.classList.toggle('is-on', on);
-    if (col) col.classList.toggle('is-on', on);
+    if (!col) continue;
+    col.classList.remove('slide-l', 'slide-r');
+    col.classList.toggle('is-on', on);
+    if (on && dir) {
+      // Reflow forzado: sin esto, re-agregar la clase en el mismo frame no
+      // reinicia la animacion y un swipe rapido de ida y vuelta no se ve.
+      void col.offsetWidth;
+      col.classList.add(dir === 'l' ? 'slide-l' : 'slide-r');
+    }
   }
   try { localStorage.setItem('p2p-tab', name); } catch (e) {}
 }
@@ -3122,7 +3132,7 @@ function initTabSwipe() {
     if (cur < 0) return;
     var next = dx < 0 ? cur + 1 : cur - 1; // arrastrar a la izquierda = avanzar
     if (next < 0 || next >= TABS.length) return;
-    showTab(TABS[next]);
+    showTab(TABS[next], dx < 0 ? 'l' : 'r');
   }, { passive: true });
 }
 
