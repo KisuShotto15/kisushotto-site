@@ -3233,14 +3233,14 @@ function renderSparkline() {
   if (pts.length < 2) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
   // viewBox 1:1 con el ancho real → sin distorsion (la barra es full-width).
-  var H = 96, padX = 2, padT = 12, padB = 12;
+  var H = 96, padX = 2, padT = 4, padB = 4;
   var W = Math.max(120, Math.round(svg.clientWidth || 600));
   svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
   var t0 = pts[0].ts, dt = (pts[pts.length - 1].ts - t0) || 1;
   var min = pts[0], max = pts[0];
   for (var i = 0; i < pts.length; i++) { if (pts[i].price < min.price) min = pts[i]; if (pts[i].price > max.price) max = pts[i]; }
   // Holgura vertical para que picos/valles no queden pegados al borde.
-  var span = (max.price - min.price) || 1, lo = min.price - span * 0.1, hi = max.price + span * 0.1, dp = hi - lo;
+  var span = (max.price - min.price) || 1, lo = min.price - span * 0.03, hi = max.price + span * 0.03, dp = hi - lo;
   function X(ts) { return padX + (ts - t0) / dt * (W - 2 * padX); }
   function Y(p)  { return padT + (1 - (p - lo) / dp) * (H - padT - padB); }
   var line = '';
