@@ -11,7 +11,12 @@
 <link rel="manifest" href="/manifests/p2p-monitor.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Carga no bloqueante: como <link rel=stylesheet> normal, esta hoja frena la
+     ejecucion de main.js hasta que responde el CDN (en movil con red lenta eran
+     segundos antes de pedir el libro). media=print la saca del camino critico y
+     onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
 <link rel="stylesheet" href="/p2p-monitor/style.css?v=25">
 </head>
 <body>
