@@ -59,6 +59,7 @@
   <button class="btn btn-sm" onclick="fetchOnce()" title="Actualizar">&#8635;</button>
   <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
   <button class="btn btn-sm" id="btn-sub" onclick="openSubModal()" title="Suscripción">💳<span id="sub-badge" style="display:none;margin-left:4px"></span></button>
+  <button class="btn btn-sm" id="btn-admin-pay" onclick="goAdminPending()" style="display:none;position:relative" title="Pagos pendientes de confirmar">🧾<span id="admin-pay-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
   </div>
 </div>
 
@@ -431,7 +432,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=52"></script>
+<script src="/p2p-monitor/main.js?v=53"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

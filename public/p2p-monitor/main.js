@@ -362,7 +362,7 @@ function authLogout() {
 function enterApp() {
   var g = document.getElementById('login-gate');
   if (g) g.style.display = 'none';
-  if (!window._appBooted) { window._appBooted = true; try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} }
+  if (!window._appBooted) { window._appBooted = true; try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} try { checkAdminPending(); } catch(e) {} }
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
@@ -458,6 +458,25 @@ async function loadSubscription() {
 
 function schedulePoll() { if (!_subPollT) _subPollT = setInterval(loadSubscription, 8000); }
 function stopPoll() { if (_subPollT) { clearInterval(_subPollT); _subPollT = null; } }
+
+// El boton solo se muestra si /admin-pending responde 200 (o sea, si el usuario es
+// ADMIN_EMAIL) — asi no hay que conocer ese email del lado del cliente.
+async function checkAdminPending() {
+  if (!SESSION.token) return;
+  var btn = document.getElementById('btn-admin-pay');
+  var badge = document.getElementById('admin-pay-badge');
+  if (!btn) return;
+  try {
+    var d = await apiPost('/api/payments/admin-pending', {}, true);
+    var n = (d.invoices || []).length;
+    btn.style.display = '';
+    if (badge) { badge.textContent = n; badge.style.display = n > 0 ? '' : 'none'; }
+  } catch (e) {
+    btn.style.display = 'none';
+  }
+}
+function goAdminPending() { window.location.href = '/p2p-monitor/admin.html'; }
+setInterval(checkAdminPending, 60000);
 
 function openSubModal() {
   var m = document.getElementById('sub-modal');
