@@ -365,7 +365,18 @@ function authLogout() {
 function enterApp() {
   var g = document.getElementById('login-gate');
   if (g) g.style.display = 'none';
-  if (!window._appBooted) { window._appBooted = true; try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} try { checkAdminPending(); } catch(e) {} try { tgRefreshLink(); } catch(e) {} }
+  if (!window._appBooted) {
+    window._appBooted = true;
+    // Primero que nada: si el 24/7 estaba encendido la ultima vez, pedir el libro YA.
+    // Antes el primer fetch esperaba a /monitor-state, encadenando dos cold starts de
+    // Vercel antes de pintar un solo merchant (~10s en el primer arranque).
+    try {
+      if (localStorage.getItem('p2p_mon24') === '1' && !ST.running) {
+        ST.fromCache = true;
+        startMonitorView();
+      }
+    } catch(e) {}
+    try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} try { checkAdminPending(); } catch(e) {} try { tgRefreshLink(); } catch(e) {} }
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
@@ -1265,6 +1276,7 @@ function stopMonitorView() {
 
 // Un solo boton: arranca/detiene la vista (tablas) Y el monitor 24/7 server-side.
 function toggleMonitor() {
+  ST.fromCache = false; // decision explicita del usuario: no la pise hydrateMon24
   if (ST.running) {
     stopMonitorView();
     monitorServerDisable();
@@ -3805,14 +3817,14 @@ async function monitorServerEnable() {
   // El 24/7 del servidor es solo VES; en USD no tocar su config (vista local).
   if (ACTIVE_FIAT !== 'VES') { renderMon24('USD: solo vista local (24/7 sigue en VES)'); return; }
   if (!SESSION.token) { renderMon24(); return; }
-  if (!TGLINK.linked) { MON24.enabled = false; renderMon24('Conecta Telegram para el 24/7'); return; }
-  try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; MON24.lastHb = Date.now(); botCallWorker('/monitor-heartbeat').catch(function(){}); renderMon24('Corriendo en el servidor'); }
-  catch(e) { MON24.enabled = false; renderMon24('Error 24/7: ' + e.message); }
+  if (!TGLINK.linked) { MON24.enabled = false; rememberMon24(false); renderMon24('Conecta Telegram para el 24/7'); return; }
+  try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; MON24.lastHb = Date.now(); rememberMon24(true); botCallWorker('/monitor-heartbeat').catch(function(){}); renderMon24('Corriendo en el servidor'); }
+  catch(e) { MON24.enabled = false; rememberMon24(false); renderMon24('Error 24/7: ' + e.message); }
 }
 
 async function monitorServerDisable() {
   try { await botCallWorker('/monitor-disable'); } catch(e) {}
-  MON24.enabled = false; renderMon24();
+  MON24.enabled = false; rememberMon24(false); renderMon24();
 }
 
 function renderMon24(statusText) {
@@ -3820,16 +3832,27 @@ function renderMon24(statusText) {
   if (st) st.textContent = MON24.enabled ? (statusText || 'Corriendo en el servidor') : (statusText || '');
 }
 
+// Ultimo estado conocido del 24/7: lo lee enterApp para pedir el libro sin esperar
+// la respuesta del servidor.
+function rememberMon24(on) {
+  try { localStorage.setItem('p2p_mon24', on ? '1' : '0'); } catch (e) {}
+}
+
 async function hydrateMon24(isRetry) {
   if (!SESSION.token) return;
   try {
     var d = await botCallWorker('/monitor-state');
     MON24.enabled = !!(d && d.enabled);
+    rememberMon24(MON24.enabled);
     if (d && d.hist24) { HIST24 = d.hist24; MON24.lastHist = Date.now(); renderSparkline(); }
     renderMon24(d && d.status);
     surfaceMonitorErrors(d); // siembra lastLogTs sin avisar errores viejos
     // Si el monitor 24/7 quedo activo, arranca la vista (tablas a CFG.interval) sin pulsar Iniciar.
     if (MON24.enabled && !ST.running) startMonitorView();
+    // El arranque optimista de enterApp pudo equivocarse (se apago desde otro
+    // dispositivo): corregir, pero solo si lo encendio el cache, nunca el usuario.
+    else if (!MON24.enabled && ST.running && ST.fromCache) stopMonitorView();
+    ST.fromCache = false; // ya confirmado contra el servidor
   } catch(e) {
     // Fallo transitorio al abrir la app (cold start): si se traga el error, la UI
     // muestra el monitor "apagado" aunque siga corriendo en el servidor. Reintentar una vez.
