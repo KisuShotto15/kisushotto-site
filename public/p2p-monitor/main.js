@@ -2654,7 +2654,7 @@ async function manualSetQty() {
   if (!qty || qty <= 0) { st.textContent = 'Ingresa una cantidad válida'; st.style.color = 'var(--red)'; return false; }
   var adNo = BOT.adNumber || BOT_CFG.adNo;
   if (!adNo) { st.textContent = 'Configura el Ad Number primero'; st.style.color = 'var(--red)'; return false; }
-  st.textContent = 'Aplicando cantidad...'; st.style.color = 'var(--text-3)';
+  st.textContent = 'Aplicando cantidad...'; st.style.color = 'var(--text-2)';
   try {
     var data = await botCallWorker('/update-quantity', { advNo: adNo, totalAmount: qty });
     if (data.code && data.code !== '000000') throw new Error(data.msgDetail || data.msg || data.message || 'código ' + data.code);
@@ -2667,6 +2667,15 @@ async function manualSetQty() {
     st.textContent = '✗ ' + e.message; st.style.color = 'var(--red)';
     return false;
   }
+}
+
+// Aplica la cantidad al anuncio por su cuenta, sin pasar por el boton Guardar.
+// Ese boton solo aparece con el bot CORRIENDO, asi que con el bot apagado no habia
+// forma de cargarle cantidad al anuncio — justo el caso en que hace falta: el bot
+// se detiene solo por fondos bajos y para volver a arrancarlo hay que recargarlo.
+async function manualApplyQty() {
+  var inp = document.getElementById('manual-qty');
+  if (await manualSetQty()) { if (inp) inp.value = ''; updateManualTotal(); }
 }
 
 // Boton Guardar del panel del bot: guarda la config y, SOLO si hay cantidad escrita,

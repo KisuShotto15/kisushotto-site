@@ -338,8 +338,9 @@ async function tickUser(row) {
     const off = await setAdStatus(key, secret, adNo, 3).catch(() => ({ ok: false }));
     log = pushLog(log, off.ok ? '🛑 Fondos insuficientes (<100 USDT) — anuncio pausado y bot detenido'
                               : '🛑 Fondos insuficientes — bot detenido (no se pudo pausar el anuncio)', 'error');
-    await botNotify(cfg, row.user_id, '🔴 <b>Bot detenido: fondos bajos</b>\nMenos de 100 USDT disponibles. Anuncio pausado.',
-      '🔴 Bot detenido: fondos bajos', 'Menos de 100 USDT disponibles');
+    await botNotify(cfg, row.user_id,
+      '🔴 <b>Bot detenido: fondos bajos</b>\nMenos de 100 USDT disponibles. Anuncio pausado.\n\nRecarga la cantidad del anuncio desde la app (Bot → Cantidad del anuncio → Aplicar ahora) y vuelve a iniciarlo.',
+      '🔴 Bot detenido: fondos bajos', 'Menos de 100 USDT disponibles. Recarga la cantidad del anuncio y vuelve a iniciarlo.');
     return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: adNo, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
   }
 

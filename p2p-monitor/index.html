@@ -586,7 +586,8 @@
           <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Cantidad del anuncio</div>
           <div class="cfg-row"><span title="Cuánto poner en el anuncio. Déjalo vacío para no tocar la cantidad actual">Cantidad</span><div class="num-stepper qty-stepper"><button class="stp-btn" onclick="stepInput('manual-qty',-1)">−</button><input type="number" id="manual-qty" placeholder="opcional" min="1" step="100" oninput="updateManualTotal()"><button type="button" class="stp-unit stp-unit-btn" id="manual-qty-unit" onclick="toggleQtyUnit()" title="Cambiar entre USDT y Bs">↻ USDT</button><button class="stp-btn" onclick="stepInput('manual-qty',1)">+</button></div></div>
           <div class="cfg-row" style="border-bottom:none"><span style="color:var(--text-3)">Total <span id="manual-balance" style="margin-left:4px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span></span><span id="manual-total" style="font-size:16px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span></div>
-          <div id="manual-st" style="font-size:13px;color:var(--text-3);min-height:16px;padding-bottom:6px"></div>
+          <button class="btn btn-sm" type="button" onclick="manualApplyQty()" style="margin-top:6px">Aplicar ahora</button>
+          <div id="manual-st" style="font-size:13px;color:var(--text-2);min-height:16px;padding:6px 0"></div>
         </div>
       </details>
       <!-- Con el bot detenido, los cambios se guardan solos al pulsar "Iniciar Bot":
@@ -626,7 +627,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=85"></script>
+<script src="/p2p-monitor/main.js?v=86"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
