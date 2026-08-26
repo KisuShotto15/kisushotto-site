@@ -2397,6 +2397,13 @@ function stepEl(el, dir, mult) {
   // #bot-panel; sin esto, los botones −/+ del stepper no marcaban el panel "sucio".
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
+// Boton (?) junto a la etiqueta de un cfg-row: muestra/oculta su .cfg-help.
+function toggleCfgHelp(btn) {
+  var row = btn.closest('.cfg-row');
+  var help = row && row.querySelector('.cfg-help');
+  if (!help) return;
+  help.style.display = (help.style.display === 'block') ? 'none' : 'block';
+}
 // Con Shift presionado, medio step (micro-ajuste). Aplica al clic de los botones -/+.
 function stepInput(id, dir) {
   var mult = (typeof window !== 'undefined' && window.event && window.event.shiftKey) ? 0.5 : 1;
