@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=31">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=32">
 </head>
 <body>
 
@@ -346,7 +346,6 @@
         <div class="sh-label">Spread neto<span id="sh-mode-note" style="color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0"></span></div>
         <div class="sh-pct" id="hero-pct">—</div>
         <div id="hero-pill" class="sh-pill opp-no">Sin datos</div>
-        <div class="sh-stretch" id="hero-stretch"></div>
         <div class="hero-sublabel" id="hero-label"></div>
       </div>
       <div class="hero-metrics" id="hero-metrics">
@@ -500,7 +499,7 @@
     <!-- Motor de decision de venta: lee el libro vivo, no hace requests propias -->
     <div class="panel" id="decision-wrap">
       <div class="ptitle" style="margin-bottom:8px">¿Vendo ahora?</div>
-      <div id="decision-panel"><span style="color:var(--text-3);font-size:13px">Inicia el monitor para evaluar el libro</span></div>
+      <div id="decision-panel"></div>
       <div id="decision-stats"></div>
     </div>
 
@@ -657,7 +656,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=96"></script>
+<script src="/p2p-monitor/main.js?v=97"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

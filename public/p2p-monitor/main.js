@@ -1605,6 +1605,7 @@ function startMonitorView() {
   document.getElementById('btn-start').textContent = '⏹ Detener';
   setBadge(true);
   renderOnboard();
+  renderDecisionIdle();
 }
 
 function stopMonitorView() {
@@ -1613,6 +1614,7 @@ function stopMonitorView() {
   document.getElementById('btn-start').textContent = '▶ Iniciar';
   setBadge(false);
   renderOnboard();
+  renderDecisionIdle();
 }
 
 // Un solo boton: arranca/detiene la vista (tablas) Y el monitor 24/7 server-side.
@@ -1767,19 +1769,19 @@ function stretchPct(v) { // percentil (0-100) del valor actual; null si poca his
   var below = 0; for (var i = 0; i < buf.length; i++) if (buf[i].v <= v) below++;
   return below / buf.length * 100;
 }
-function setStretchBadge(pct, spreadNet) {
-  var el = document.getElementById('hero-stretch');
-  if (!el) return;
-  if (pct != null && pct >= 90 && spreadNet > 0) {
-    el.style.display = 'block';
-    el.textContent = '🔥 Spread estirado — top ' + Math.max(1, Math.round(100 - pct)) + '% de 24h · buena ventana para vender';
-  } else {
-    el.style.display = 'none';
-  }
+// Aviso de spread estirado. Ya no es una linea propia que aparece y desaparece: eso
+// crecia la tarjeta del hero y empujaba toda la pagina cada vez que entraba o salia
+// la señal. Ahora viaja en la pildora de veredicto, que ocupa su sitio siempre, asi
+// que el alto no cambia. Devuelve el texto (o null) en vez de pintar.
+function stretchNote(pct, spreadNet) {
+  if (pct == null || pct < 90 || !(spreadNet > 0)) return null;
+  // Corto a proposito: mas largo que esto envuelve a dos lineas en pantallas de
+  // 320px y la pildora crece, que es justo el salto que se quiso quitar.
+  return '🔥 Estirado — top ' + Math.max(1, Math.round(100 - pct)) + '% de 24h';
 }
 
 function renderSpreadHero() {
-  setStretchBadge(null); // oculto por defecto; se re-activa abajo si aplica
+  var stretch = null; // se calcula abajo, solo aplica a BDV con Modo Short ON
   // Mismo filtro de credibilidad (>=2000 USDT) que gráfico/alertas.
   var cMayH = marketPrimary(), cSmallH = marketSecondary();
   var bestMay   = cMayH   ? cMayH.price   : null;
@@ -1816,7 +1818,7 @@ function renderSpreadHero() {
   // contra Mayoristas/Recompra; mezclar el spread de Verde lo haria inservible.
   if (ACTIVE_PAY === 'BancoDeVenezuela' && !isShortOff()) {
     stretchPush(spreadNet);
-    setStretchBadge(stretchPct(spreadNet), spreadNet);
+    stretch = stretchNote(stretchPct(spreadNet), spreadNet);
   }
 
   var pct  = document.getElementById('hero-pct');
@@ -1841,6 +1843,14 @@ function renderSpreadHero() {
     document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + fiatSuf() + '/USDT' + commNote;
     pill.className = 'sh-pill opp-no';
     pill.textContent = 'Neto por debajo del umbral';
+  }
+
+  // El estirado pisa al veredicto de umbral: es la señal mas accionable de las dos
+  // (el umbral es fijo, el percentil dice como esta HOY el spread contra su 24h).
+  // No pisa a "neto negativo": ahi no hay ventana que valga.
+  if (stretch && spreadNet > 0) {
+    pill.className = 'sh-pill opp-yes';
+    pill.textContent = stretch;
   }
 }
 
@@ -3668,6 +3678,19 @@ var DEC_LABELS = {
   'HIGH RISK':    'RIESGO ALTO'
 };
 
+// Que mostrar mientras no hay veredicto. El panel vive en la pestaña Bot pero lo
+// alimenta el MONITOR de mercado (el ▶ de la barra), no el bot: con el bot
+// corriendo y el monitor parado el mensaje viejo ("Inicia el monitor") parecia que
+// el panel estuviera roto. Ahora dice cual de los dos falta y trae el boton.
+function renderDecisionIdle() {
+  var el = document.getElementById('decision-panel');
+  if (!el || DEC.last) return; // ya hay veredicto: no lo pises
+  el.innerHTML = ST.running
+    ? '<span class="dec-idle">Analizando el libro…</span>'
+    : '<span class="dec-idle">Necesita el monitor de mercado encendido.</span>' +
+      '<button class="btn btn-sm" type="button" onclick="toggleMonitor()" style="margin-top:8px">▶ Iniciar monitor</button>';
+}
+
 function renderDecision(d, F) {
   var el = document.getElementById('decision-panel');
   if (!el || !d) return;
@@ -4403,7 +4426,7 @@ function initBuySection() {
   setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
 }
 
-loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState();
+loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle();
 initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });
