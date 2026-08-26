@@ -54,7 +54,7 @@
       <li>Te avisa por Telegram de cada orden nueva, con la app cerrada</li>
       <li>Spread neto con tu comisión ya descontada</li>
       <li>Histórico del mercado, de 24 horas a meses</li>
-      <li>P&amp;L y rotación de tu capital</li>
+      <li>Silencio nocturno y resumen diario a la hora que elijas</li>
     </ul>
     <div style="text-align:center;font-size:13px;color:var(--text-2);line-height:1.5">
       7 días gratis, sin tarjeta. Después <b style="color:var(--text)" id="gate-price">70 USDT</b> al mes, pagados por Binance Pay.
@@ -229,7 +229,6 @@
         <li>Silencio nocturno y resumen diario a la hora que elijas</li>
         <li>Bot de reprecio automático de tu anuncio</li>
         <li>Aviso instantáneo de órdenes nuevas</li>
-        <li>P&amp;L y rotación de tu capital</li>
         <li>Todas las mejoras que salgan, sin pagar más</li>
       </ul>
     </div>
@@ -618,18 +617,18 @@
           <div id="manual-st" style="font-size:13px;color:var(--text-2);min-height:16px;padding:6px 0"></div>
         </div>
       </details>
-      <!-- Con el bot detenido, los cambios se guardan solos al pulsar "Iniciar Bot":
-           esta fila solo hace falta con el bot YA corriendo, donde aplicar un ajuste
-           a medias importa y conviene poder descartarlo. -->
+      <!-- Aparece en cuanto se toca cualquier ajuste, con el bot corriendo o no. -->
       <div id="bot-save-row" style="margin-top:10px;display:none;gap:6px;align-items:center">
         <button class="btn" style="flex:1" onclick="discardBotConfig()">Descartar</button>
         <button class="btn btn-gold" style="flex:1" onclick="saveBotConfigAndApply()">Guardar</button>
-        <span id="bot-cfg-st" style="font-size:14px;color:#555"></span>
+        <span id="bot-cfg-st" style="font-size:14px;color:var(--text-2)"></span>
       </div>
 
-      <!-- Log -->
-      <!-- Metricas de rotacion (tabla orders, la alimenta el bot server-side) -->
-      <details class="bot-details">
+      <!-- Metricas de rotacion (tabla orders, la alimenta el bot server-side) y log
+           de reprecio. Los dos arrancan ocultos y solo se los muestra al admin
+           (renderAdminOnly): las metricas todavia no dan numeros de fiar y el log es
+           ruido de diagnostico para quien no escribio el bot. -->
+      <details class="bot-details admin-only" style="display:none">
         <summary>Métricas<span id="pnl-summary" class="sum-note"></span><span id="rot-summary" class="sum-note"></span>
           <button class="btn btn-sm" type="button" onclick="event.preventDefault();event.stopPropagation();loadOrderStats()" title="Actualizar" style="padding:0 7px;font-size:12px;margin-left:auto;margin-right:8px">↻</button>
         </summary>
@@ -639,7 +638,7 @@
         <div id="spread-stats" style="font-size:13px;color:var(--text-2);line-height:1.6;padding:0 0 6px"></div>
       </details>
 
-      <details class="bot-details">
+      <details class="bot-details admin-only" style="display:none">
         <summary>Log de reprecio</summary>
         <div id="bot-log" style="font-size:14px;color:var(--text-2);max-height:120px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px">
           <span style="color:var(--text-3)">Sin actividad</span>
@@ -655,7 +654,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=88"></script>
+<script src="/p2p-monitor/main.js?v=89"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

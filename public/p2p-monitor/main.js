@@ -602,6 +602,17 @@ function stopPoll() { if (_subPollT) { clearInterval(_subPollT); _subPollT = nul
 
 // El boton solo se muestra si /admin-pending responde 200 (o sea, si el usuario es
 // ADMIN_EMAIL) — asi no hay que conocer ese email del lado del cliente.
+// admin-pending responde 403 a quien no es el dueño, asi que el propio resultado
+// dice si estamos ante el admin. Es lo que decide que partes del panel se ven.
+var IS_ADMIN = false;
+
+// Secciones que solo tienen sentido para el dueño (metricas a medio cocinar, log
+// de diagnostico). Nunca al reves: si no se sabe, no se muestran.
+function renderAdminOnly() {
+  var els = document.querySelectorAll('.admin-only');
+  for (var i = 0; i < els.length; i++) els[i].style.display = IS_ADMIN ? '' : 'none';
+}
+
 async function checkAdminPending() {
   if (!SESSION.token) return;
   var btn = document.getElementById('btn-admin-pay');
@@ -610,11 +621,14 @@ async function checkAdminPending() {
   try {
     var d = await apiPost('/api/payments/admin-pending', {}, true);
     var n = (d.invoices || []).length;
+    IS_ADMIN = true;
     btn.style.display = '';
     if (badge) { badge.textContent = n; badge.style.display = n > 0 ? '' : 'none'; }
   } catch (e) {
+    IS_ADMIN = false;
     btn.style.display = 'none';
   }
+  renderAdminOnly();
 }
 // Modal dentro de la app (no una pagina aparte): el host devuelve el index del
 // monitor para rutas que no existen, asi que un .html suelto nunca cargaria.
@@ -2405,9 +2419,13 @@ function botMissingFields() {
 // importa (puede estar comprando activamente), asi que se pide confirmar.
 var BOT_DIRTY = false;
 
+// Con el bot apagado la fila tambien aparece: guardar deja la config lista para el
+// proximo arranque (saveBotConfig persiste siempre, y solo empuja al servidor si el
+// bot corre). Antes solo salia con el bot corriendo y no habia forma de dejar los
+// ajustes preparados de antemano.
 function renderSaveRow() {
   var row = document.getElementById('bot-save-row');
-  if (row) row.style.display = (BOT_DIRTY && BOT.running) ? 'flex' : 'none';
+  if (row) row.style.display = BOT_DIRTY ? 'flex' : 'none';
 }
 
 function markBotDirty() {
