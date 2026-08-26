@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    paths: ['api/**', 'tests/**', 'package.json']
+    paths: ['api/**', 'tests/**', 'package.json', 'package-lock.json', '.github/workflows/test.yml']
   pull_request:
-    paths: ['api/**', 'tests/**', 'package.json']
+    paths: ['api/**', 'tests/**', 'package.json', 'package-lock.json', '.github/workflows/test.yml']
 
 jobs:
   test:
