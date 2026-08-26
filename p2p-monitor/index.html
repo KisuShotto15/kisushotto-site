@@ -21,9 +21,11 @@
 </head>
 <body>
 
-<!-- Muro de acceso: la app no se muestra hasta iniciar sesion -->
-<div id="login-gate" style="position:fixed;inset:0;z-index:3000;background:var(--bg,#0b0e11);display:flex;align-items:center;justify-content:center;padding:20px">
-  <div style="width:100%;max-width:330px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:14px;padding:26px 22px;box-shadow:0 12px 48px rgba(0,0,0,.6)">
+<!-- Muro de acceso. Es tambien la unica pagina publica del producto: quien llega
+     sin cuenta tiene que poder ver que hace y cuanto cuesta antes de registrarse.
+     De ahi el bloque de valor debajo del formulario. -->
+<div id="login-gate" style="position:fixed;inset:0;z-index:3000;background:var(--bg,#0b0e11);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;overflow-y:auto">
+  <div style="flex:0 0 auto;width:100%;max-width:330px;margin-top:auto;background:var(--surf-1);border:1px solid var(--border-2);border-radius:14px;padding:26px 22px;box-shadow:0 12px 48px rgba(0,0,0,.6)">
     <div style="text-align:center;margin-bottom:18px">
       <div style="font-size:21px;font-weight:700;color:var(--gold);letter-spacing:-.01em">P2P Monitor</div>
       <div style="font-size:13px;color:var(--text-2);margin-top:4px">Monitor y bot para Binance P2P</div>
@@ -43,6 +45,25 @@
       <span id="reset-st" style="display:block;text-align:center;font-size:13px;color:#555;margin-top:12px;min-height:16px"></span>
     </form>
     <div style="text-align:center;font-size:12px;color:var(--text-2);margin-top:14px">Crea tu cuenta y prueba 7 días gratis</div>
+  </div>
+
+  <div style="flex:0 0 auto;width:100%;max-width:330px;margin:26px 0 auto;text-align:left">
+    <div class="sub-sec-title" style="text-align:center">Qué hace</div>
+    <ul class="sub-list" style="margin-bottom:14px">
+      <li>Reprecia tu anuncio de Binance P2P solo, según el libro en vivo</li>
+      <li>Te avisa por Telegram de cada orden nueva, con la app cerrada</li>
+      <li>Spread neto con tu comisión ya descontada</li>
+      <li>Histórico del mercado, de 24 horas a meses</li>
+      <li>P&amp;L y rotación de tu capital</li>
+    </ul>
+    <div style="text-align:center;font-size:13px;color:var(--text-2);line-height:1.5">
+      7 días gratis, sin tarjeta. Después <b style="color:var(--text)" id="gate-price">70 USDT</b> al mes, pagados por Binance Pay.
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--text-2);margin-top:16px;line-height:1.9">
+      <a href="#" onclick="openLegalModal();return false" style="color:var(--text-2)">Términos y privacidad</a>
+      &nbsp;·&nbsp;
+      <a href="#" onclick="openSupport();return false" style="color:var(--text-2)">Soporte</a>
+    </div>
   </div>
 </div>
 
@@ -69,6 +90,34 @@
 </div>
 
 <!-- Suscripcion -->
+<!-- Terminos y privacidad. Estamos custodiando llaves de un exchange ajeno y
+     cobrando dinero: el cliente tiene derecho a leer las reglas antes de entrar. -->
+<div id="legal-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3100;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeLegalModal()">
+  <div class="sub-card" style="max-width:420px">
+    <div style="font-size:20px;font-weight:700;color:var(--gold);margin-bottom:14px">Términos y privacidad</div>
+
+    <div class="sub-sec-title">Qué es este servicio</div>
+    <div class="sub-help" style="text-align:left;margin-bottom:16px">P2P Monitor es una herramienta que observa el libro de Binance P2P y reprecia tus anuncios según las reglas que tú configuras. No es asesoría financiera ni una recomendación de operar. Las decisiones y sus resultados son tuyos.</div>
+
+    <div class="sub-sec-title">Tus llaves de Binance</div>
+    <div class="sub-help" style="text-align:left;margin-bottom:16px">Se guardan cifradas con AES-256-GCM y la clave de cifrado vive fuera de la base de datos. Solo se descifran para operar en tu nombre sobre tus anuncios de P2P. Nunca te pedimos una llave con permiso de retiro y el servicio no mueve fondos de tu cuenta. Puedes revocarlas desde Binance en cualquier momento.</div>
+
+    <div class="sub-sec-title">Límites de responsabilidad</div>
+    <div class="sub-help" style="text-align:left;margin-bottom:16px">El bot ejecuta la configuración que tú defines. No garantizamos ganancias, ni precios, ni que el servicio esté disponible sin interrupciones: depende de Binance y de terceros que no controlamos. No respondemos por pérdidas de mercado, órdenes no atendidas, caídas de Binance ni por una configuración mal puesta.</div>
+
+    <div class="sub-sec-title">Pago y cancelación</div>
+    <div class="sub-help" style="text-align:left;margin-bottom:16px">La suscripción se cobra por adelantado en USDT vía Binance Pay y no se renueva sola: si no pagas el siguiente periodo, el acceso se detiene. La prueba de 7 días existe para que evalúes el servicio antes de pagar, así que el periodo ya iniciado no se reembolsa. Puedes dejar de usarlo cuando quieras, sin permanencia.</div>
+
+    <div class="sub-sec-title">Qué datos guardamos</div>
+    <div class="sub-help" style="text-align:left;margin-bottom:16px">Tu email, la configuración de tu monitor y de tu bot, el historial de tus anuncios y órdenes para calcular tus métricas, y tus llaves cifradas. No vendemos ni cedemos nada de esto a terceros. Si quieres que borremos tu cuenta y todo lo asociado, escríbenos y lo hacemos.</div>
+
+    <div class="sub-sec-title">Contacto</div>
+    <div class="sub-help" style="text-align:left;margin-bottom:18px">Para soporte, bajas o cualquier duda: <b id="legal-contact">—</b></div>
+
+    <button class="btn btn-gold" onclick="closeLegalModal()" style="width:100%;padding:11px;font-size:15px;font-weight:700">Cerrar</button>
+  </div>
+</div>
+
 <!-- Guia de las API keys. Entregarle llaves de un exchange a un desconocido es el
      paso que mas miedo da del producto: sin explicarlo, el cliente se queda en el
      monitor y nunca activa el bot. -->
@@ -478,7 +527,12 @@
         </details>
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
           <button class="btn btn-gold" style="flex:1" onclick="saveBotConfig()">Guardar</button>
-          <span id="tg-st" style="font-size:13px;color:#555"></span>
+          <span id="tg-st" style="font-size:13px;color:var(--text-2)"></span>
+        </div>
+        <div style="text-align:center;font-size:12px;color:var(--text-2);margin-top:10px">
+          <a href="#" onclick="openSupport();return false" style="color:var(--text-2)">Soporte</a>
+          &nbsp;·&nbsp;
+          <a href="#" onclick="openLegalModal();return false" style="color:var(--text-2)">Términos</a>
         </div>
       </div>
 
@@ -572,7 +626,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=84"></script>
+<script src="/p2p-monitor/main.js?v=85"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

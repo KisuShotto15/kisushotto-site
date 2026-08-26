@@ -753,6 +753,39 @@ function closeSubModal() {
   if (m) m.style.display = 'none';
 }
 
+// Unico lugar donde vive el contacto de soporte: sale en el muro de acceso y en
+// los terminos. Cambiar aca y ya.
+var SOPORTE = { label: 'Telegram @KisuShotto15', url: 'https://t.me/KisuShotto15' };
+
+function renderSoporte() {
+  var el = document.getElementById('legal-contact');
+  if (!el) return;
+  if (SOPORTE.url) {
+    var a = document.createElement('a');
+    a.href = SOPORTE.url; a.target = '_blank'; a.rel = 'noopener';
+    a.style.color = 'var(--gold)';
+    a.textContent = SOPORTE.label;
+    el.textContent = '';
+    el.appendChild(a);
+  } else {
+    el.textContent = SOPORTE.label || 'escríbenos desde la app';
+  }
+}
+function openSupport() {
+  if (SOPORTE.url) window.open(SOPORTE.url, '_blank', 'noopener');
+  else openLegalModal();
+}
+
+function openLegalModal() {
+  renderSoporte();
+  var m = document.getElementById('legal-modal');
+  if (m) m.style.display = 'flex';
+}
+function closeLegalModal() {
+  var m = document.getElementById('legal-modal');
+  if (m) m.style.display = 'none';
+}
+
 function openApiKeyModal() {
   var m = document.getElementById('apikey-modal');
   if (m) m.style.display = 'flex';
