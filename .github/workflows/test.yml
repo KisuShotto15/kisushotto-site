@@ -15,4 +15,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+      # Sin dependencias, cualquier test que arrastre api/_lib/db.js muere con
+      # "Cannot find package 'postgres'". --omit=dev salta sharp y vite, que no
+      # los usa ningun test.
+      - run: npm ci --omit=dev
       - run: node --test tests/*.test.js
