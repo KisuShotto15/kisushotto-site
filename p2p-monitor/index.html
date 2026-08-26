@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=29">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=30">
 </head>
 <body>
 
@@ -570,7 +570,7 @@
       </div>
 
       <!-- Info en vivo -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px" id="bot-live">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;margin-bottom:10px" id="bot-live">
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
           <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px" title="El precio de tu anuncio ahora mismo, el que el bot está repreciando">Precio actual</div>
           <div id="bot-cur-price" style="font-size:20px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums">—</div>
@@ -622,11 +622,10 @@
         <span id="bot-cfg-st" style="font-size:14px;color:var(--text-2)"></span>
       </div>
 
-      <!-- Metricas de rotacion (tabla orders, la alimenta el bot server-side) y log
-           de reprecio. Los dos arrancan ocultos y solo se los muestra al admin
-           (renderAdminOnly): las metricas todavia no dan numeros de fiar y el log es
-           ruido de diagnostico para quien no escribio el bot. -->
-      <details class="bot-details admin-only" style="display:none">
+      <!-- Metricas de rotacion (tabla orders, la alimenta el bot server-side): los
+           numeros todavia no son de fiar, asi que queda oculta para todos, admin
+           incluido, no solo detras de renderAdminOnly como el Log de abajo. -->
+      <details class="bot-details" style="display:none">
         <summary>Métricas<span id="pnl-summary" class="sum-note"></span><span id="rot-summary" class="sum-note"></span>
           <button class="btn btn-sm" type="button" onclick="event.preventDefault();event.stopPropagation();loadOrderStats()" title="Actualizar" style="padding:0 7px;font-size:12px;margin-left:auto;margin-right:8px">↻</button>
         </summary>
@@ -636,6 +635,8 @@
         <div id="spread-stats" style="font-size:13px;color:var(--text-2);line-height:1.6;padding:0 0 6px"></div>
       </details>
 
+      <!-- Log de reprecio: ruido de diagnostico para quien no escribio el bot, solo
+           al admin (renderAdminOnly). -->
       <details class="bot-details admin-only" style="display:none">
         <summary>Log de reprecio</summary>
         <div id="bot-log" style="font-size:14px;color:var(--text-2);max-height:120px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px">

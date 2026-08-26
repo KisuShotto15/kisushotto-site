@@ -136,7 +136,11 @@ body {
    en movil evitan el scroll eterno de un panel encima del otro. */
 .tabs { display: none; }
 @media(max-width:900px){
-  .layout { grid-template-columns: 1fr; }
+  /* minmax(0,...) y no un 1fr suelto: sin el piso en 0, cualquier hijo con un
+     ancho minimo no partible (un numero largo, lo que sea) empuja TODO el layout
+     mas ancho que la pantalla y el resto queda cortado por el overflow-x:hidden
+     del body en vez de encogerse. */
+  .layout { grid-template-columns: minmax(0, 1fr); }
   .tabs { display: flex; gap: 6px; padding: 10px 14px 0; }
   .tab-btn {
     flex: 1; padding: 11px 8px; font: inherit; font-size: 14px; font-weight: 700;
@@ -217,7 +221,7 @@ body {
 .ob-more { width: 100%; margin-top: 6px; padding: 6px; background: transparent; border: 1px dashed var(--border-2); border-radius: var(--r-sm); color: var(--text-3); font-size: 12px; font-weight: 600; cursor: pointer; transition: color .12s, border-color .12s; }
 .ob-more:hover { color: var(--gold); border-color: var(--gold-b); }
 /* Metricas de rotacion */
-.rot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
+.rot-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 7px; margin-bottom: 9px; }
 .rot-tile { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
 .rot-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); font-weight: 600; }
 .rot-val { font-size: 18px; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; line-height: 1.15; }
@@ -418,7 +422,7 @@ body {
 .hero-metrics {
   flex: 1;
   display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 1.5fr repeat(4, minmax(0, 1fr));
   gap: 1px;
   background: var(--border-2);
   border: 1px solid var(--border-2);
@@ -428,7 +432,7 @@ body {
 /* Modo Short apagado: Máx/Mín 24h se ocultan (esa serie persistida sigue siendo
    la de Mayoristas, mostrarla junto a un spread Verde confundiria); 3 columnas
    en vez de 5 para no dejar hueco vacio a la derecha. */
-.hero-metrics.hm-3 { grid-template-columns: 1.5fr 1fr 1fr; }
+.hero-metrics.hm-3 { grid-template-columns: 1.5fr repeat(2, minmax(0, 1fr)); }
 .hero-metric {
   background: var(--bg);
   padding: 12px 15px;
@@ -457,8 +461,8 @@ body {
   .spread-hero-full { flex-direction: column; gap: 14px; padding: 14px 16px; }
   .hero-lead { min-width: 0; }
   .hero-lead .sh-pct { font-size: 40px; }
-  .hero-metrics { grid-template-columns: 1fr 1fr; }
-  .hero-metrics.hm-3 { grid-template-columns: 1fr 1fr; }
+  .hero-metrics { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .hero-metrics.hm-3 { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
   .hero-metric.span { grid-column: 1 / -1; }
 }
 .opp-yes  { background: var(--gold-d);  border: 1px solid var(--gold-b);  color: var(--gold);  }
@@ -468,7 +472,7 @@ body {
 /* ── Session card ───────────────────────────────────── */
 .session-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
   gap: 8px;
 }
 .sess-item {
@@ -479,8 +483,8 @@ body {
 }
 
 /* ── Stats cards ────────────────────────────────────── */
-.stats { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; }
-@media(max-width:600px){ .stats { grid-template-columns: repeat(2,1fr); } }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+@media(max-width:600px){ .stats { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 .sc {
   background: var(--bg);
   border: 1px solid var(--border);
