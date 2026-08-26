@@ -635,6 +635,7 @@ async function checkAdminPending() {
 function goAdminPending() {
   var m = document.getElementById('admin-pay-modal');
   if (m) m.style.display = 'flex';
+  modalOpened('admin-pay-modal');
   renderAdminPending();
   renderPayProbe();
 }
@@ -675,6 +676,7 @@ async function renderPayProbe() {
 function closeAdminPayModal() {
   var m = document.getElementById('admin-pay-modal');
   if (m) m.style.display = 'none';
+  modalClosed('admin-pay-modal');
 }
 
 async function renderAdminPending() {
@@ -757,14 +759,47 @@ async function resolveAdminPayment(action, invoiceId, btn) {
 
 setInterval(checkAdminPending, 60000);
 
+// ── Boton atras de Android ───────────────────────────────
+// Instalada como app, con un modal abierto el boton atras cerraba la aplicacion
+// entera. Cada modal abierto empuja una entrada al historial, y atras la consume
+// cerrando ese modal en vez de salir.
+var MODAL_STACK = [];
+var _modalSelfBack = 0;
+
+function modalOpened(id) {
+  if (MODAL_STACK.indexOf(id) !== -1) return;
+  MODAL_STACK.push(id);
+  try { history.pushState({ p2pModal: id }, ''); } catch (e) {}
+}
+
+// Cierre pedido desde la app (boton Cerrar, click fuera): deshace su entrada del
+// historial. El popstate que eso dispara no debe cerrar nada mas, de ahi el contador.
+function modalClosed(id) {
+  var i = MODAL_STACK.indexOf(id);
+  if (i === -1) return;
+  MODAL_STACK.splice(i, 1);
+  _modalSelfBack++;
+  try { history.back(); } catch (e) { _modalSelfBack--; }
+}
+
+window.addEventListener('popstate', function() {
+  if (_modalSelfBack > 0) { _modalSelfBack--; return; }
+  var id = MODAL_STACK.pop();
+  if (!id) return;
+  var m = document.getElementById(id);
+  if (m) m.style.display = 'none';
+});
+
 function openSubModal() {
   var m = document.getElementById('sub-modal');
   if (m) m.style.display = 'flex';
+  modalOpened('sub-modal');
   loadSubscription();
 }
 function closeSubModal() {
   var m = document.getElementById('sub-modal');
   if (m) m.style.display = 'none';
+  modalClosed('sub-modal');
 }
 
 // ── Primeros pasos ──────────────────────────────────────
@@ -805,6 +840,7 @@ function renderOnboard() {
 function openOnboard() {
   var m = document.getElementById('onboard-modal');
   if (m) m.style.display = 'flex';
+  modalOpened('onboard-modal');
   renderOnboard();
   // Estado fresco: pudo conectar cualquiera de las dos cosas en otro momento.
   try { tgRefreshLink(); } catch (e) {}
@@ -813,6 +849,7 @@ function openOnboard() {
 function closeOnboard() {
   var m = document.getElementById('onboard-modal');
   if (m) m.style.display = 'none';
+  modalClosed('onboard-modal');
 }
 
 function onboardGoBinance() {
@@ -865,19 +902,23 @@ function openLegalModal() {
   renderSoporte();
   var m = document.getElementById('legal-modal');
   if (m) m.style.display = 'flex';
+  modalOpened('legal-modal');
 }
 function closeLegalModal() {
   var m = document.getElementById('legal-modal');
   if (m) m.style.display = 'none';
+  modalClosed('legal-modal');
 }
 
 function openApiKeyModal() {
   var m = document.getElementById('apikey-modal');
   if (m) m.style.display = 'flex';
+  modalOpened('apikey-modal');
 }
 function closeApiKeyModal() {
   var m = document.getElementById('apikey-modal');
   if (m) m.style.display = 'none';
+  modalClosed('apikey-modal');
 }
 
 async function startTrialClick() {

@@ -306,13 +306,18 @@ body {
 #bot-panel .stp-unit { width: 30px; }
 /* Sugerir precio: vive DENTRO del stepper, pegado al borde derecho. Plano como
    los -/+; junto a la etiqueta no cabia y partia la fila en dos lineas. */
+/* Sugerir precio: boton propio, fuera de la caja del input y pegado a su izquierda.
+   Dentro del stepper se leia como un tercer hermano de los -/+ y no se entendia
+   que hacia otra cosa. margin-left:auto lo lleva junto al stepper en vez de
+   dejarlo suelto en medio de la fila (la fila es space-between). */
 .sug-btn {
-  flex-shrink: 0; padding: 0 6px; height: 100%;
-  background: transparent; border: none;
-  font-size: 13px; line-height: 1; cursor: pointer; opacity: .75;
+  flex-shrink: 0; margin-left: auto; width: 34px; height: 32px; padding: 0;
+  background: var(--surf-2); border: 1px solid var(--border-2); border-radius: var(--r-sm);
+  font-size: 15px; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s;
 }
-.sug-btn:hover, .sug-btn:active { opacity: 1; }
+.sug-btn:hover, .sug-btn:active { border-color: var(--gold); }
 #bot-panel .stp-btn { height: 30px; }
 #bot-panel input[type=number] { padding: 3px 8px; font-variant-numeric: tabular-nums; }
 /* Dentro del stepper el ancho util es el que manda: sin padding lateral (el id de
