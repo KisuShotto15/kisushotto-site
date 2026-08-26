@@ -6,6 +6,8 @@ import { hashPassword, verifyPassword, signJWT, randomToken } from '../_lib/cryp
 import { rateLimit, clientIp } from '../_lib/ratelimit.js';
 import { isAllowed } from '../_lib/allowlist.js';
 import { sendEmail, appUrl, verifyEmailHtml, resetEmailHtml } from '../_lib/mail.js';
+import { adminUserId } from '../_lib/subscriptions.js';
+import { resolveTelegram, sendTelegram } from '../_lib/telegram.js';
 
 export default async function handler(req, res) {
   cors(res);
@@ -31,6 +33,18 @@ export default async function handler(req, res) {
 
 function tokenExp(ms) { return new Date(Date.now() + ms).toISOString(); }
 
+// Aviso al admin por Telegram de cada registro nuevo. No se espera (no debe frenar
+// ni fallar el registro) y queda muda si el admin no vinculo su Telegram.
+async function notifyAdminNewRegister(mail) {
+  try {
+    const adminId = await adminUserId();
+    if (!adminId) return;
+    const { token, chatId } = await resolveTelegram(adminId);
+    if (!token) return;
+    await sendTelegram(token, chatId, '🆕 Nuevo registro: ' + mail);
+  } catch (e) {}
+}
+
 async function register(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { email, password } = req.body || {};
@@ -47,6 +61,10 @@ async function register(req, res) {
   const existing = await sql`SELECT id FROM users WHERE email = ${mail}`;
   if (existing.length) return res.status(409).json({ error: 'Email ya registrado' });
   await sql`INSERT INTO users (email, pass_hash, verified) VALUES (${mail}, ${hashPassword(password)}, false)`;
+  // Esperado (no en paralelo suelto): en serverless una promesa sin await puede
+  // quedar cortada a mitad si la funcion termina antes de que el fetch a Telegram
+  // resuelva. Ya esta atrapada adentro, asi que no puede tirar el registro.
+  await notifyAdminNewRegister(mail);
 
   const token = randomToken();
   await sql`INSERT INTO auth_tokens (token, email, kind, expires_at) VALUES (${token}, ${mail}, 'verify', ${tokenExp(24 * 3600 * 1000)})`;
