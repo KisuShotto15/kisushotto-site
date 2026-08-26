@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=30">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=31">
 </head>
 <body>
 
@@ -71,17 +71,19 @@
   <a href="https://kisushotto.com" class="hub-back" title="Volver al Hub"><svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;border-radius:7px"><rect width="100" height="100" rx="22" fill="#0d0f14"/><line x1="50" y1="12" x2="50" y2="30" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="83" y1="31" x2="67" y2="40" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="83" y1="69" x2="67" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="50" y1="88" x2="50" y2="70" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="17" y1="69" x2="33" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="17" y1="31" x2="33" y2="40" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="50" y1="30" x2="50" y2="70" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="67" y1="40" x2="33" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><line x1="33" y1="40" x2="67" y2="60" stroke="#f0b90b" stroke-width="2.2" stroke-linecap="round"/><polygon points="50,30 67,40 67,60 50,70 33,60 33,40" fill="rgba(240,185,11,0.07)" stroke="#f0b90b" stroke-width="2" stroke-linejoin="round"/><polygon points="50,12 83,31 83,69 50,88 17,69 17,31" fill="none" stroke="#f0b90b" stroke-width="2.5" stroke-linejoin="round"/><circle cx="50" cy="50" r="7" fill="none" stroke="#f0b90b" stroke-width="2.2"/><circle cx="50" cy="50" r="3" fill="#f0b90b"/><circle cx="50" cy="12" r="3.5" fill="#f0b90b"/><circle cx="83" cy="31" r="3.5" fill="#f0b90b"/><circle cx="83" cy="69" r="3.5" fill="#f0b90b"/><circle cx="50" cy="88" r="3.5" fill="#f0b90b"/><circle cx="17" cy="69" r="3.5" fill="#f0b90b"/><circle cx="17" cy="31" r="3.5" fill="#f0b90b"/></svg></a>
   <h1>P2P Monitor</h1>
   <span class="nav-pair" id="nav-pair" style="font-size:16px;color:var(--text-3);font-weight:500">VES/USDT</span>
+  <!-- El estado va junto al titulo, no dentro de los filtros: en movil los filtros
+       ocupan una fila entera y el badge quedaba solo en una fila para el. -->
+  <span class="badge badge-off" id="live-badge"><span class="dot dot-off" id="live-dot"></span><span id="live-label">Detenido</span></span>
   <div class="top-controls">
   <select id="fiat-select" class="tag-bank" onchange="setFiat(this.value)" title="Moneda fiat" style="font-family:inherit;cursor:pointer;outline:none"></select>
   <select id="pay-method-select" class="tag-bank" onchange="setPayMethod(this.value)" style="font-family:inherit;cursor:pointer;outline:none"></select>
   <span class="tag-ver" id="ver-toggle" onclick="toggleVerified()" title="Filtrar solo comerciantes verificados"><span class="ver-sw"></span><span class="ver-lbl">Verificados</span></span>
-  <span class="badge badge-off" id="live-badge"><span class="dot dot-off" id="live-dot"></span><span id="live-label">Detenido</span></span>
   </div>
   <span style="font-size:15px;color:var(--text-3)" id="last-update"></span>
   <div class="spacer"></div>
   <div class="top-actions">
-  <button class="btn btn-sm" id="btn-activity" onclick="toggleActivityGuard()" title="Alertas de actividad / apagado por inactividad">🛡️</button>
   <button class="btn btn-gold" id="btn-start" onclick="toggleMonitor()">▶ Iniciar</button>
+  <button class="btn btn-sm" id="btn-activity" onclick="toggleActivityGuard()" title="Alertas de actividad / apagado por inactividad">🛡️</button>
   <button class="btn btn-sm" onclick="fetchOnce()" title="Actualizar">&#8635;</button>
   <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
   <button class="btn btn-sm" id="btn-sub" onclick="openSubModal()" title="Suscripción">💳<span id="sub-badge" style="display:none;margin-left:4px"></span></button>
@@ -655,7 +657,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=94"></script>
+<script src="/p2p-monitor/main.js?v=95"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

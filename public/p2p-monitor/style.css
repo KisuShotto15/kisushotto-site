@@ -48,9 +48,13 @@ body {
 .top {
   display: flex;
   align-items: center;
+  /* Envuelve tambien en escritorio: entre 640 y ~1090px no entraba todo en una
+     linea y la barra se salia de la pantalla (los iconos quedaban cortados en
+     tablet y en ventanas de portatil a medio ancho). */
+  flex-wrap: wrap;
   gap: 8px 10px;
   padding: 0 14px;
-  height: 56px;
+  min-height: 56px;
   background: rgba(13,17,23,.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -404,6 +408,9 @@ body {
   line-height: .92;
   letter-spacing: -.03em;
   color: var(--gold);
+  /* Halo tenue: el numero es el protagonista del panel y sin esto compite de igual
+     a igual con las cifras de las celdas. */
+  text-shadow: 0 0 30px rgba(240,185,11,.22);
 }
 .sh-pill {
   display: flex;
@@ -420,41 +427,49 @@ body {
   line-height: 1.25;
 }
 .hero-sublabel { font-size: 12px; color: var(--text-3); }
+/* Panel de metricas: las celdas van semitransparentes (no var(--bg), que es mas
+   oscuro que la tarjeta) para que se lean como un panel hundido dentro del hero y
+   no como una tabla negra pegada encima. Las lineas son el fondo asomando por el
+   gap de 1px: asi no hay que pensar bordes por celda cuando cambia el numero de
+   columnas en movil. */
 .hero-metrics {
   flex: 1;
   display: grid;
-  grid-template-columns: 1.5fr repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1.8fr repeat(4, minmax(0, 1fr));
   gap: 1px;
-  background: var(--border-2);
-  border: 1px solid var(--border-2);
+  background: var(--border);
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
   overflow: hidden;
 }
 /* Modo Short apagado: Máx/Mín 24h se ocultan (esa serie persistida sigue siendo
    la de Mayoristas, mostrarla junto a un spread Verde confundiria); 3 columnas
    en vez de 5 para no dejar hueco vacio a la derecha. */
-.hero-metrics.hm-3 { grid-template-columns: 1.5fr repeat(2, minmax(0, 1fr)); }
+.hero-metrics.hm-3 { grid-template-columns: 1.8fr repeat(2, minmax(0, 1fr)); }
 .hero-metric {
-  background: var(--bg);
-  padding: 12px 15px;
+  background: rgba(255,255,255,.022);
+  padding: 13px 14px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   text-align: center;
-  gap: 6px;
+  gap: 5px;
 }
+/* La celda de Precios es el dato que se mira primero: un pelo mas clara que las
+   de al lado para que gane sin cambiarle el tamano a nada. */
+.hero-metric.span { background: rgba(255,255,255,.04); }
 .hm-label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   color: var(--text-3);
-  letter-spacing: .06em;
+  letter-spacing: .08em;
   text-transform: uppercase;
 }
 .hm-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gold); }
 /* Max/Min 24h: alto/bajo no son bueno/malo -> estilo black+dorado como las tiles */
 #sess-max, #sess-min { color: var(--gold) !important; }
-.hm-prices { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 4px 8px; font-size: 16px; }
+.hm-prices { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 4px 9px; font-size: 17px; }
 .sh-sell { color: var(--green); font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-buy  { color: var(--blue);  font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-arrow { color: var(--text-3); }
@@ -844,10 +859,23 @@ input:focus {
 @media (max-width: 640px) {
   body { font-size: 16px; }
 
+  /* Tres filas con un proposito cada una en vez de que todo flote y se acomode
+     solo: identidad+estado / filtros / acciones. Antes salian cuatro filas
+     irregulares (el badge se quedaba solo en una) y 137px de barra. */
   .top { height: auto; min-height: 48px; padding: 7px 10px; gap: 6px; flex-wrap: wrap; }
   .top h1 { font-size: 15px; }
-  .top-controls, .top-actions { flex-wrap: wrap; gap: 5px; min-width: 0; max-width: 100%; }
-  .top-actions { margin-left: auto; }
+  .top-controls, .top-actions { flex: 1 0 100%; flex-wrap: nowrap; gap: 5px; min-width: 0; max-width: 100%; }
+  /* Los filtros se reparten el ancho; el metodo de pago cede primero porque es el
+     unico cuyo texto varia de largo. */
+  #fiat-select, #ver-toggle { flex: 0 0 auto; }
+  #pay-method-select { flex: 1 1 auto; min-width: 0; }
+  /* Iniciar/Detener estirado: es la accion principal y de paso empuja los iconos
+     a la derecha sin margin-left:auto. */
+  #btn-start { flex: 1 1 auto; }
+  .top-actions > .btn-sm { flex: 0 0 auto; }
+  #live-badge { margin-left: auto; }
+  /* Iconos un punto mas chicos: con el 🧾 de admin visible se pasaban 4px a 320px. */
+  .top-actions .btn-sm { font-size: 15px; padding: 4px 8px; }
   .spacer { display: none; }
   #last-update, .nav-pair { display: none; }
   #pay-method-select { font-size: 13px; max-width: 130px; }
