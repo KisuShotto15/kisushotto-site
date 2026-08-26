@@ -643,10 +643,15 @@ body {
 /* La etiqueta se encoge; el stepper nunca (si no, el boton + queda cortado). */
 .cfg-row > span { min-width: 0; }
 /* Ayuda por campo: boton (?) junto a la etiqueta que despliega un renglon propio
-   debajo. Antes el texto quedaba siempre visible y ocupaba media pantalla en
-   movil; ahora solo aparece si se pide. */
-.cfg-row { flex-wrap: wrap; }
+   debajo. El wrap solo se activa mientras esa ayuda esta abierta (clase puesta por
+   toggleCfgHelp): en reposo la fila queda como siempre, etiqueta a la izquierda e
+   input a la derecha en la misma linea, tambien en movil. */
+.cfg-row.help-open { flex-wrap: wrap; }
 .cfg-label { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+/* Sin esto la etiqueta de dos palabras (Precio venta, Margen minimo...) se parte
+   sola en dos lineas al apretarla el boton (?): con overflow:hidden se recorta con
+   "..." en vez de crecer la fila. */
+.cfg-label > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .help-ico {
   flex-shrink: 0; width: 16px; height: 16px; padding: 0;
   border: 1px solid var(--border-2); border-radius: 50%; background: none;
