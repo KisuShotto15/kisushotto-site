@@ -10,7 +10,7 @@ const DAY_MS = 24 * 3600 * 1000;
 // Cortesia despues de vencer. El pago es manual y la gente se despista: cortarle el
 // bot a alguien por unas horas de retraso pierde al cliente por nada. Solo aplica a
 // suscripciones pagas — la prueba gratis termina cuando termina.
-export const GRACE_DAYS = 2;
+export const GRACE_DAYS = 1;
 export const GRACE_MS = GRACE_DAYS * DAY_MS;
 
 // Cada plan tiene su propio Payment Link (monto fijo en Binance Pay: un solo link

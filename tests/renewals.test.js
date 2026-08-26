@@ -12,7 +12,7 @@ test('avisa los dias que faltan y singulariza el ultimo', () => {
 });
 
 test('vencida pero dentro de la cortesia: dice que todo sigue andando', () => {
-  const m = renewalMessage('active', -DAY, URL);
+  const m = renewalMessage('active', -GRACE_MS / 2, URL);
   assert.match(m.title, /vencio/);
   assert.match(m.tg, /cortesia/);
   assert.match(m.tg, /1 dia/);
@@ -32,7 +32,7 @@ test('la prueba no tiene cortesia: al vencer queda en pausa', () => {
 });
 
 test('todos los avisos llevan el enlace a la app', () => {
-  for (const ms of [3 * DAY, -DAY, -GRACE_MS - 1000]) {
+  for (const ms of [3 * DAY, -GRACE_MS / 2, -GRACE_MS - 1000]) {
     assert.ok(renewalMessage('active', ms, URL).tg.includes(URL));
     assert.ok(renewalMessage('trialing', ms, URL).tg.includes(URL));
   }

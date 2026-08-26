@@ -414,7 +414,7 @@ function renderSubBadge() {
 
 // Debe coincidir con GRACE_DAYS del backend (api/_lib/subscriptions.js): si el
 // cliente corta antes que el servidor, apaga el monitor de alguien que si tiene paso.
-var GRACE_MS = 2 * 24 * 3600 * 1000;
+var GRACE_MS = 1 * 24 * 3600 * 1000;
 
 // Vigente = prueba sin vencer, o periodo pagado sin vencer (mas la cortesia). El
 // estado solo no basta: una prueba que caduco se queda en 'trialing' con trial_end pasado.
