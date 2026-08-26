@@ -3778,6 +3778,37 @@ function histByPay(h, pay) {
   if (Array.isArray(h)) return pay === LEGACY_PAY ? h : [];
   return (h && h[pay]) || [];
 }
+
+// Cache local de la serie de 24h. Al abrir la app HIST24 esta vacio hasta que
+// contesta /monitor-state, y el sparkline se dibujaba con los dos o tres puntos
+// que llevaba el cliente: una raya plana durante unos segundos en cada recarga.
+// Con esto arranca pintando lo ultimo que se sabia y el servidor lo reemplaza.
+var HIST24_KEY = 'p2p_hist24';
+function saveHist24() {
+  try {
+    var cut = Date.now() - 24 * 3600 * 1000;
+    var out = {};
+    for (var pay in HIST24) {
+      var serie = histByPay(HIST24, pay).filter(function(p) { return p && p.ts >= cut; });
+      if (serie.length) out[pay] = serie;
+    }
+    localStorage.setItem(HIST24_KEY, JSON.stringify(out));
+  } catch (e) {} // cuota llena: el cache es un lujo, no rompe nada
+}
+function loadHist24() {
+  try {
+    var raw = localStorage.getItem(HIST24_KEY);
+    if (!raw) return;
+    var cached = JSON.parse(raw) || {};
+    var cut = Date.now() - 24 * 3600 * 1000;
+    var any = false;
+    for (var pay in cached) {
+      var serie = (cached[pay] || []).filter(function(p) { return p && p.ts >= cut && p.price; });
+      if (serie.length) { HIST24[pay] = serie; any = true; }
+    }
+    if (any) renderSparkline();
+  } catch (e) {}
+}
 function sparkSeries() {
   var s = histByPay(HIST24, ACTIVE_PAY).slice();
   var lastTs = s.length ? s[s.length - 1].ts : 0;
@@ -3791,7 +3822,13 @@ function renderSparkline() {
   var svg  = document.getElementById('spark');
   if (!wrap || !svg) return;
   var pts = sparkSeries();
-  if (pts.length < 2) { wrap.style.display = 'none'; return; }
+  // Dos puntos separados por segundos dan una raya plana que no dice nada y parece
+  // un grafico roto. Sin al menos 10 minutos de recorrido, mejor no mostrar nada
+  // hasta que llegue la serie del servidor (o la del cache).
+  if (pts.length < 2 || (pts[pts.length - 1].ts - pts[0].ts) < 10 * 60000) {
+    wrap.style.display = 'none';
+    return;
+  }
   wrap.style.display = '';
   // viewBox 1:1 con el ancho real → sin distorsion (la barra es full-width).
   var H = 96, padX = 2, padT = 4, padB = 4;
@@ -4184,7 +4221,7 @@ function refreshHist24() {
   if (now - MON24.lastHist < 5 * 60000) return;
   MON24.lastHist = now;
   botCallWorker('/monitor-state').then(function(d) {
-    if (d && d.hist24) { HIST24 = d.hist24; renderSparkline(); }
+    if (d && d.hist24) { HIST24 = d.hist24; saveHist24(); renderSparkline(); }
     surfaceMonitorErrors(d);
   }).catch(function(){});
 }
@@ -4259,7 +4296,7 @@ async function hydrateMon24(isRetry) {
     var d = await botCallWorker('/monitor-state');
     MON24.enabled = !!(d && d.enabled);
     rememberMon24(MON24.enabled);
-    if (d && d.hist24) { HIST24 = d.hist24; MON24.lastHist = Date.now(); renderSparkline(); }
+    if (d && d.hist24) { HIST24 = d.hist24; MON24.lastHist = Date.now(); saveHist24(); renderSparkline(); }
     renderMon24(d && d.status);
     surfaceMonitorErrors(d); // siembra lastLogTs sin avisar errores viejos
     // Si el monitor 24/7 quedo activo, arranca la vista (tablas a CFG.interval) sin pulsar Iniciar.
@@ -4426,7 +4463,7 @@ function initBuySection() {
   setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
 }
 
-loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle();
+loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
 initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });

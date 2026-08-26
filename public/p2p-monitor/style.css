@@ -371,10 +371,12 @@ body {
   position: relative;
   overflow: hidden;
   display: flex;
-  align-items: stretch;
-  gap: 20px;
+  flex-direction: column;
+  gap: 14px;
   box-shadow: var(--shadow);
 }
+/* Fila de arriba: veredicto a la izquierda, cifras a la derecha. */
+.hero-main { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
 .spread-hero-full::before {
   content: '';
   position: absolute;
@@ -473,7 +475,8 @@ body {
 .sh-buy  { color: var(--blue);  font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-arrow { color: var(--text-3); }
 @media (max-width: 760px) {
-  .spread-hero-full { flex-direction: column; gap: 14px; padding: 14px 16px; }
+  .spread-hero-full { padding: 14px 16px; }
+  .hero-main { flex-direction: column; gap: 14px; }
   .hero-lead { min-width: 0; }
   .hero-lead .sh-pct { font-size: 40px; }
   .hero-metrics { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
