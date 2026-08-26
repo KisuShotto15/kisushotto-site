@@ -90,6 +90,45 @@
 </div>
 
 <!-- Suscripcion -->
+<!-- Primeros pasos. Al activar la prueba el usuario caia en la app sin Binance,
+     sin Telegram y sin nada que le dijera por donde empezar. -->
+<div id="onboard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3050;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeOnboard()">
+  <div class="sub-card">
+    <div style="font-size:20px;font-weight:700;color:var(--gold);margin-bottom:4px">Primeros pasos</div>
+    <div class="sub-help" id="onboard-sub" style="margin-bottom:16px">Tres cosas y queda trabajando solo.</div>
+
+    <div class="sub-step">
+      <div class="sub-step-n" id="ob-n-1">1</div>
+      <div class="sub-step-body">
+        <div class="sub-step-t">Conecta tu Binance</div>
+        <div class="sub-help">El bot necesita una API key con permiso de P2P y sin retiros para gestionar tu anuncio. El monitor funciona sin esto.</div>
+        <button class="btn btn-sm" type="button" id="ob-btn-1" onclick="onboardGoBinance()" style="margin-top:8px">Conectar Binance</button>
+      </div>
+    </div>
+
+    <div class="sub-step" id="ob-step-2">
+      <div class="sub-step-n" id="ob-n-2">2</div>
+      <div class="sub-step-body">
+        <div class="sub-step-t">Recibe las alertas en Telegram</div>
+        <div class="sub-help">Órdenes nuevas, movimientos del mercado y el aviso de renovación, con la app cerrada.</div>
+        <button class="btn btn-sm" type="button" id="ob-btn-2" onclick="onboardGoTelegram()" style="margin-top:8px">Conectar Telegram</button>
+      </div>
+    </div>
+
+    <div class="sub-step" style="border-bottom:none">
+      <div class="sub-step-n" id="ob-n-3">3</div>
+      <div class="sub-step-body">
+        <div class="sub-step-t">Enciende el monitor</div>
+        <div class="sub-help">El libro en vivo, el spread neto con tu comisión y el histórico del mercado.</div>
+        <button class="btn btn-sm" type="button" id="ob-btn-3" onclick="onboardGoMonitor()" style="margin-top:8px">Ver el mercado</button>
+      </div>
+    </div>
+
+    <div class="sub-help" style="margin:14px 0 12px">Puedes volver aquí cuando quieras desde <b>⚙ → Primeros pasos</b>.</div>
+    <button class="btn btn-gold" onclick="closeOnboard()" style="width:100%;padding:11px;font-size:15px;font-weight:700">Listo</button>
+  </div>
+</div>
+
 <!-- Terminos y privacidad. Estamos custodiando llaves de un exchange ajeno y
      cobrando dinero: el cliente tiene derecho a leer las reglas antes de entrar. -->
 <div id="legal-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3100;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeLegalModal()">
@@ -530,6 +569,8 @@
           <span id="tg-st" style="font-size:13px;color:var(--text-2)"></span>
         </div>
         <div style="text-align:center;font-size:12px;color:var(--text-2);margin-top:10px">
+          <a href="#" onclick="openOnboard();return false" style="color:var(--gold)">Primeros pasos</a>
+          &nbsp;·&nbsp;
           <a href="#" onclick="openSupport();return false" style="color:var(--text-2)">Soporte</a>
           &nbsp;·&nbsp;
           <a href="#" onclick="openLegalModal();return false" style="color:var(--text-2)">Términos</a>
@@ -627,7 +668,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=86"></script>
+<script src="/p2p-monitor/main.js?v=87"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

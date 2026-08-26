@@ -753,6 +753,77 @@ function closeSubModal() {
   if (m) m.style.display = 'none';
 }
 
+// ── Primeros pasos ──────────────────────────────────────
+// Activar la prueba dejaba al usuario dentro de la app sin Binance, sin Telegram y
+// sin nada que le dijera por donde seguir. Esta lista se abre al empezar la prueba
+// y queda a mano en el engranaje.
+
+// Si hay llaves de Binance guardadas. Lo mantienen refreshAuthUI y binanceConnect.
+var BNC = { connected: false };
+
+function renderOnboard() {
+  // Sin bot de Telegram configurado en el servidor no tiene sentido pedirlo, y el
+  // paso desaparece — por eso los numeros se asignan sobre los pasos visibles, para
+  // no dejar un hueco (1, 3) que parece un error.
+  var st2 = document.getElementById('ob-step-2');
+  if (st2) st2.style.display = TGLINK.available ? '' : 'none';
+
+  var pasos = [
+    ['ob-n-1', 'ob-btn-1', !!BNC.connected, true],
+    ['ob-n-2', 'ob-btn-2', !!TGLINK.linked, !!TGLINK.available],
+    ['ob-n-3', 'ob-btn-3', !!ST.running, true],
+  ].filter(function(p) { return p[3]; });
+
+  pasos.forEach(function(p, i) {
+    var n = document.getElementById(p[0]);
+    var b = document.getElementById(p[1]);
+    if (n) { n.classList.toggle('done', p[2]); n.textContent = p[2] ? '✓' : String(i + 1); }
+    if (b) b.style.display = p[2] ? 'none' : '';
+  });
+  var sub = document.getElementById('onboard-sub');
+  if (sub) {
+    var faltan = pasos.filter(function(p){ return !p[2]; }).length;
+    sub.textContent = !faltan ? 'Ya tienes todo conectado.'
+      : (pasos.length === 3 ? 'Tres cosas y queda trabajando solo.' : 'Un par de cosas y queda trabajando solo.');
+  }
+}
+
+function openOnboard() {
+  var m = document.getElementById('onboard-modal');
+  if (m) m.style.display = 'flex';
+  renderOnboard();
+  // Estado fresco: pudo conectar cualquiera de las dos cosas en otro momento.
+  try { tgRefreshLink(); } catch (e) {}
+  try { refreshAuthUI(); } catch (e) {}
+}
+function closeOnboard() {
+  var m = document.getElementById('onboard-modal');
+  if (m) m.style.display = 'none';
+}
+
+function onboardGoBinance() {
+  closeOnboard();
+  try { showTab('bot', 'l'); } catch (e) {}
+  var p = document.getElementById('bot-gear-popup');
+  if (p) p.style.display = 'block';
+  openApiKeyModal();
+}
+function onboardGoTelegram() {
+  // No cierra la lista: tgConnect abre Telegram aparte y al volver se ve el tilde.
+  var b = document.getElementById('ob-btn-2');
+  if (b) { b.disabled = true; b.textContent = 'Abriendo Telegram…'; }
+  try { tgConnect(); } catch (e) {}
+  setTimeout(function() {
+    if (b && !TGLINK.linked) { b.disabled = false; b.textContent = 'Conectar Telegram'; }
+  }, 8000);
+}
+async function onboardGoMonitor() {
+  closeOnboard();
+  try { showTab('mercado', 'r'); } catch (e) {}
+  if (!ST.running) await toggleMonitor();
+  renderOnboard();
+}
+
 // Unico lugar donde vive el contacto de soporte: sale en el muro de acceso y en
 // los terminos. Cambiar aca y ya.
 var SOPORTE = { label: 'Telegram @KisuShotto15', url: 'https://t.me/KisuShotto15' };
@@ -802,6 +873,9 @@ async function startTrialClick() {
     var d = await apiPost('/api/payments/start-trial', {}, true);
     SUB.subscription = d.subscription;
     renderSubBadge(); renderSubModal();
+    // Momento exacto en que el usuario queda dentro sin nada configurado.
+    closeSubModal();
+    openOnboard();
   } catch (e) {
     alert('No se pudo activar la prueba: ' + e.message);
   } finally {
@@ -867,7 +941,9 @@ async function binanceConnect() {
     st.textContent = '✓ Conectado'; st.style.color = '#1D9E75';
     document.getElementById('cfg-bnc-key').value = '';
     document.getElementById('cfg-bnc-secret').value = '';
+    BNC.connected = true;
     bncSetConnected(true);
+    renderOnboard();
     loadMyAds();
   } catch(e) { st.textContent = '⚠ ' + e.message; st.style.color = 'var(--red)'; }
 }
@@ -1103,7 +1179,9 @@ async function refreshAuthUI() {
       if (r.status === 401) { authLogout(); return; }
       var d = await r.json().catch(function(){ return {}; });
       var bnc = document.getElementById('bnc-st');
+      BNC.connected = !!d.connected;
       if (d.connected) { bnc.textContent = '✓ Conectado'; bnc.style.color = '#1D9E75'; bncSetConnected(true); loadMyAds(); }
+      renderOnboard();
     } catch(e) {}
   }
 }
@@ -1471,6 +1549,7 @@ function startMonitorView() {
   ST.timer = setInterval(fetchOnce, CFG.interval * 1000);
   document.getElementById('btn-start').textContent = '⏹ Detener';
   setBadge(true);
+  renderOnboard();
 }
 
 function stopMonitorView() {
@@ -1478,6 +1557,7 @@ function stopMonitorView() {
   clearInterval(ST.timer); ST.timer = null;
   document.getElementById('btn-start').textContent = '▶ Iniciar';
   setBadge(false);
+  renderOnboard();
 }
 
 // Un solo boton: arranca/detiene la vista (tablas) Y el monitor 24/7 server-side.
@@ -3125,6 +3205,7 @@ async function tgRefreshLink() {
   } catch (e) {
     TGLINK = { linked: false, available: false };
   }
+  renderOnboard();
   if (!TGLINK.available) { block.style.display = 'none'; return; }
   block.style.display = '';
   var testBtn = document.getElementById('tg-test-btn');

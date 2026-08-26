@@ -924,6 +924,10 @@ input:focus {
   background: var(--gold-d); border: 1px solid var(--gold-b); color: var(--gold);
   font-size: 12px; font-weight: 700; line-height: 20px; text-align: center;
 }
+/* Paso ya cumplido en "Primeros pasos": el numero se vuelve un tilde verde. */
+.sub-step-n.done {
+  background: var(--green-d); border-color: var(--green-b); color: var(--green);
+}
 .sub-step-body { flex: 1; min-width: 0; }
 .sub-step-t { font-size: 14px; font-weight: 600; color: var(--text); }
 .sub-inp { font-size: 15px; padding: 11px 12px; margin-top: 8px; }
