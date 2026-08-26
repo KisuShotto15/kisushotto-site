@@ -625,6 +625,16 @@ body {
 .cfg-row:last-child { border-bottom: none; }
 /* La etiqueta se encoge; el stepper nunca (si no, el boton + queda cortado). */
 .cfg-row > span { min-width: 0; }
+/* Ayuda por campo: renglon propio debajo de la etiqueta y el stepper. Antes toda
+   la explicacion vivia en un title=, invisible en movil, que es justamente donde
+   se configura el bot. */
+.cfg-row { flex-wrap: wrap; }
+.cfg-help {
+  flex: 0 0 100%;
+  font-size: 12.5px; line-height: 1.4;
+  color: var(--text-2);
+  margin: 1px 0 3px;
+}
 input[type=number],
 input[type=password],
 input[type=text] {

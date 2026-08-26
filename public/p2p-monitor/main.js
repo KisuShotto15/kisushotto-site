@@ -2329,7 +2329,7 @@ var BOT_CFG = {
   limitThreshold: 10000,
   sellPrice: 0,
   minSpread: 0.5,
-  minLimit: 0,
+  minLimit: 50000,
   myNick: '',
   payMethods: [] // ids elegidos para el anuncio (vacio = no tocar sus metodos)
 };
@@ -2522,26 +2522,37 @@ async function botApplyMethods(silent, skipIfSame) {
   }
 }
 
+// Vuelca BOT_CFG a los inputs. Se llama tambien SIN config guardada: un usuario
+// nuevo se encontraba los seis campos en blanco (el early return de abajo nunca
+// llegaba aca) y tenia que adivinar seis numeros para arrancar. Los defaults de
+// BOT_CFG ya eran razonables, solo que no llegaban a la pantalla.
+function fillBotInputs() {
+  var sel = document.getElementById('cfg-bot-adsel');
+  if (BOT_CFG.adNo && !Array.prototype.some.call(sel.options, function(o){ return o.value === BOT_CFG.adNo; })) {
+    var o = document.createElement('option'); o.value = BOT_CFG.adNo; o.textContent = 'Ad ' + BOT_CFG.adNo; sel.appendChild(o);
+  }
+  sel.value = BOT_CFG.adNo || '';
+  document.getElementById('cfg-bot-nick').value     = BOT_CFG.myNick || '';
+  document.getElementById('cfg-bot-inc').value      = BOT_CFG.increment;
+  document.getElementById('cfg-bot-gap').value      = BOT_CFG.maxGap;
+  document.getElementById('cfg-bot-thr').value      = BOT_CFG.limitThreshold;
+  // El precio de venta es el unico que no se puede suponer: depende del mercado
+  // de hoy. Queda vacio y el boton ✨ lo sugiere.
+  document.getElementById('cfg-bot-sell').value     = BOT_CFG.sellPrice || '';
+  document.getElementById('cfg-bot-spread').value   = BOT_CFG.minSpread;
+  document.getElementById('cfg-bot-minlimit').value = BOT_CFG.minLimit || '';
+  renderBotPayChecks();
+  botUpdateCeiling();
+}
+
 function loadBotConfig() {
   try {
     var s = localStorage.getItem('p2p_bot_cfg');
-    if (!s) { renderBotPayChecks(); return; }
-    Object.assign(BOT_CFG, JSON.parse(s));
-    BOT_CFG.url = BOT_API; // fija (interna): ignora la url que hubiera en localStorage
-    var _sel = document.getElementById('cfg-bot-adsel');
-    if (BOT_CFG.adNo && !Array.prototype.some.call(_sel.options, function(o){ return o.value === BOT_CFG.adNo; })) {
-      var _o = document.createElement('option'); _o.value = BOT_CFG.adNo; _o.textContent = 'Ad ' + BOT_CFG.adNo; _sel.appendChild(_o);
+    if (s) {
+      Object.assign(BOT_CFG, JSON.parse(s));
+      BOT_CFG.url = BOT_API; // fija (interna): ignora la url que hubiera en localStorage
     }
-    _sel.value = BOT_CFG.adNo || '';
-    document.getElementById('cfg-bot-nick').value     = BOT_CFG.myNick || '';
-    document.getElementById('cfg-bot-inc').value      = BOT_CFG.increment;
-    document.getElementById('cfg-bot-gap').value      = BOT_CFG.maxGap;
-    document.getElementById('cfg-bot-thr').value      = BOT_CFG.limitThreshold;
-    document.getElementById('cfg-bot-sell').value     = BOT_CFG.sellPrice || '';
-    document.getElementById('cfg-bot-spread').value   = BOT_CFG.minSpread;
-    document.getElementById('cfg-bot-minlimit').value = BOT_CFG.minLimit || '';
-    renderBotPayChecks();
-    botUpdateCeiling();
+    fillBotInputs();
   } catch(e) {}
 }
 
