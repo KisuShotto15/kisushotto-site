@@ -753,6 +753,15 @@ function closeSubModal() {
   if (m) m.style.display = 'none';
 }
 
+function openApiKeyModal() {
+  var m = document.getElementById('apikey-modal');
+  if (m) m.style.display = 'flex';
+}
+function closeApiKeyModal() {
+  var m = document.getElementById('apikey-modal');
+  if (m) m.style.display = 'none';
+}
+
 async function startTrialClick() {
   var btn = document.getElementById('sub-start-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Activando...'; }
@@ -819,7 +828,7 @@ async function binanceConnect() {
   var st = document.getElementById('bnc-st');
   var apiKey = document.getElementById('cfg-bnc-key').value.trim();
   var apiSecret = document.getElementById('cfg-bnc-secret').value.trim();
-  st.textContent = 'Validando con Binance...'; st.style.color = 'var(--text-3)';
+  st.textContent = 'Validando con Binance...'; st.style.color = 'var(--text-2)';
   try {
     var d = await apiPost('/api/binance-connect', { apiKey: apiKey, apiSecret: apiSecret }, true);
     st.textContent = '✓ Conectado'; st.style.color = '#1D9E75';

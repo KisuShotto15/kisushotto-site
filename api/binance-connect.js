@@ -31,7 +31,10 @@ export default async function handler(req, res) {
     });
     data = await r.json().catch(() => ({}));
     if (!r.ok || (data.code && data.code !== '000000')) {
-      return res.status(400).json({ error: 'Llaves invalidas o sin permiso C2C', detail: data.msg || data.code || r.status });
+      return res.status(400).json({
+        error: 'Binance rechazo las llaves. Revisa que las copiaste completas y que la API key tiene permiso de P2P sin restriccion por IP',
+        detail: data.msg || data.code || r.status,
+      });
     }
   } catch (e) {
     return res.status(502).json({ error: 'No se pudo validar con Binance: ' + e.message });

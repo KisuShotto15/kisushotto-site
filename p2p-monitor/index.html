@@ -26,15 +26,15 @@
   <div style="width:100%;max-width:330px;background:var(--surf-1);border:1px solid var(--border-2);border-radius:14px;padding:26px 22px;box-shadow:0 12px 48px rgba(0,0,0,.6)">
     <div style="text-align:center;margin-bottom:18px">
       <div style="font-size:21px;font-weight:700;color:var(--gold);letter-spacing:-.01em">P2P Monitor</div>
-      <div style="font-size:13px;color:var(--text-3);margin-top:4px">Acceso privado</div>
+      <div style="font-size:13px;color:var(--text-2);margin-top:4px">Monitor y bot para Binance P2P</div>
     </div>
     <form id="gate-form" autocomplete="on" onsubmit="authLogin();return false">
       <input class="auth-inp" type="email" id="gate-email" name="email" autocomplete="username" placeholder="Email" required>
       <input class="auth-inp" type="password" id="gate-pass" name="password" autocomplete="current-password" placeholder="Contraseña" minlength="8" required>
       <button class="btn btn-gold" type="submit" style="width:100%;margin-top:12px;padding:10px;font-size:15px;font-weight:700">Entrar</button>
       <button class="btn" type="button" style="width:100%;margin-top:7px" onclick="authRegister()">Crear cuenta</button>
-      <span id="gate-st" style="display:block;text-align:center;font-size:13px;color:#555;margin-top:12px;min-height:16px"></span>
-      <div style="text-align:center;margin-top:6px"><a href="#" onclick="authForgot();return false" style="font-size:12px;color:var(--text-3);text-decoration:none">¿Olvidaste tu contraseña?</a></div>
+      <span id="gate-st" style="display:block;text-align:center;font-size:13px;color:var(--text-2);margin-top:12px;min-height:16px"></span>
+      <div style="text-align:center;margin-top:6px"><a href="#" onclick="authForgot();return false" style="font-size:12px;color:var(--text-2);text-decoration:none">¿Olvidaste tu contraseña?</a></div>
     </form>
     <form id="gate-reset" autocomplete="on" style="display:none" onsubmit="authResetPassword();return false">
       <div style="font-size:13px;color:var(--text-2);text-align:center;margin-bottom:10px">Elige una nueva contraseña</div>
@@ -42,7 +42,7 @@
       <button class="btn btn-gold" type="submit" style="width:100%;margin-top:12px;padding:10px;font-size:15px;font-weight:700">Cambiar contraseña</button>
       <span id="reset-st" style="display:block;text-align:center;font-size:13px;color:#555;margin-top:12px;min-height:16px"></span>
     </form>
-    <div style="text-align:center;font-size:11px;color:var(--text-3);margin-top:14px">Solo emails autorizados</div>
+    <div style="text-align:center;font-size:12px;color:var(--text-2);margin-top:14px">Crea tu cuenta y prueba 7 días gratis</div>
   </div>
 </div>
 
@@ -69,6 +69,74 @@
 </div>
 
 <!-- Suscripcion -->
+<!-- Guia de las API keys. Entregarle llaves de un exchange a un desconocido es el
+     paso que mas miedo da del producto: sin explicarlo, el cliente se queda en el
+     monitor y nunca activa el bot. -->
+<div id="apikey-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1001;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeApiKeyModal()">
+  <div class="sub-card">
+    <div style="font-size:20px;font-weight:700;color:var(--gold);margin-bottom:4px">Conectar tu Binance</div>
+    <div class="sub-help" style="margin-bottom:16px">El bot necesita una API key para leer y repreciar <b>tu</b> anuncio de P2P. Se crea en dos minutos y la revocas cuando quieras.</div>
+
+    <div style="text-align:left;font-size:13px;color:var(--text);line-height:1.5;background:var(--red-d);border:1px solid var(--red-b);border-radius:var(--r-sm);padding:11px 12px;margin-bottom:18px">
+      <b style="color:var(--red)">Nunca habilites retiros.</b> Una API key sin ese permiso no puede sacar fondos de tu cuenta — ni nosotros, ni nadie que llegara a robarla. Deja esa casilla apagada y tu dinero no se mueve de Binance.
+    </div>
+
+    <div class="sub-sec-title">Paso a paso</div>
+    <div class="sub-step">
+      <div class="sub-step-n">1</div>
+      <div class="sub-step-body">
+        <div class="sub-step-t">Abre Gestión de API</div>
+        <div class="sub-help">Entra a Binance desde la web, pulsa el icono de tu perfil (arriba a la derecha) y elige <b>Gestión de API</b>.</div>
+      </div>
+    </div>
+    <div class="sub-step">
+      <div class="sub-step-n">2</div>
+      <div class="sub-step-body">
+        <div class="sub-step-t">Crea la API key</div>
+        <div class="sub-help">Pulsa <b>Crear API</b> y elige la opción generada por el sistema. Ponle un nombre que reconozcas, por ejemplo <b>p2p-monitor</b>.</div>
+      </div>
+    </div>
+    <div class="sub-step">
+      <div class="sub-step-n">3</div>
+      <div class="sub-step-body">
+        <div class="sub-step-t">Copia la clave secreta ahora</div>
+        <div class="sub-help">Tras confirmar con tu 2FA, Binance muestra la <b>API Key</b> y la <b>Secret Key</b>. La secreta se ve <b>una sola vez</b>: cópiala antes de cerrar esa pantalla.</div>
+      </div>
+    </div>
+    <div class="sub-step">
+      <div class="sub-step-n">4</div>
+      <div class="sub-step-body">
+        <div class="sub-step-t">Ajusta los permisos</div>
+        <div class="sub-help">En <b>Editar restricciones</b>, deja activada la lectura y el permiso de P2P. Apaga <b>Habilitar retiros</b>.</div>
+      </div>
+    </div>
+    <div class="sub-step">
+      <div class="sub-step-n">5</div>
+      <div class="sub-step-body">
+        <div class="sub-step-t">No la restrinjas por IP</div>
+        <div class="sub-help">El bot corre en servidores con dirección variable. Si limitas la key a unas IP concretas, dejará de funcionar.</div>
+      </div>
+    </div>
+    <div class="sub-step" style="border-bottom:none">
+      <div class="sub-step-n">6</div>
+      <div class="sub-step-body">
+        <div class="sub-step-t">Pega las dos llaves aquí</div>
+        <div class="sub-help">Al pulsar <b>Conectar Binance</b> las validamos contra Binance en el momento. Si falta un permiso, te lo decimos ahí mismo.</div>
+      </div>
+    </div>
+
+    <div class="sub-sec-title" style="margin-top:18px">Cómo las guardamos</div>
+    <ul class="sub-list">
+      <li>Se cifran con AES-256-GCM antes de tocar la base de datos</li>
+      <li>La clave de cifrado vive fuera de la base: quien viera la base no vería tus llaves</li>
+      <li>Solo se descifran para hablar con Binance en tu nombre</li>
+      <li>Las revocas desde Binance cuando quieras y el bot deja de operar</li>
+    </ul>
+
+    <button class="btn btn-gold" onclick="closeApiKeyModal()" style="width:100%;padding:11px;font-size:15px;font-weight:700">Entendido</button>
+  </div>
+</div>
+
 <div id="sub-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;align-items:center;justify-content:center;padding:16px">
   <div class="sub-card">
     <div style="font-size:20px;font-weight:700;color:var(--gold);margin-bottom:4px">Suscripción</div>
@@ -390,8 +458,8 @@
             <input class="auth-inp" type="password" id="cfg-bnc-key" autocomplete="off" data-bwignore data-1p-ignore placeholder="API Key">
             <input class="auth-inp" type="password" id="cfg-bnc-secret" autocomplete="off" data-bwignore data-1p-ignore placeholder="API Secret">
             <button class="btn btn-gold btn-sm" style="width:100%;margin-top:8px" onclick="binanceConnect()">Conectar Binance</button>
-            <span id="bnc-st" style="display:block;font-size:13px;color:#555;margin-top:6px"></span>
-            <div style="font-size:11px;color:var(--text-3);margin-top:6px">Usa una API key con permiso C2C, sin retiros.</div>
+            <span id="bnc-st" style="display:block;font-size:13px;color:var(--text-2);margin-top:6px"></span>
+            <div style="font-size:12px;color:var(--text-2);margin-top:7px;line-height:1.45">Sin permiso de retiro: tus fondos no se pueden mover. <a href="#" onclick="openApiKeyModal();return false" style="color:var(--gold);text-decoration:underline">Cómo crear la API key</a></div>
           </div>
         </div>
         <div class="cfg-row" style="margin-top:8px"><span>Anuncio</span><div style="display:flex;gap:4px;align-items:center"><select id="cfg-bot-adsel" onchange="onAdSelect()" style="font-size:13px;max-width:160px"><option value="">Auto-detectar</option></select><button class="btn btn-sm" type="button" onclick="loadMyAds()" title="Cargar mis anuncios">↻</button></div></div>
@@ -504,7 +572,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=83"></script>
+<script src="/p2p-monitor/main.js?v=84"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
