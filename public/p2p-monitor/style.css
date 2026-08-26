@@ -200,8 +200,20 @@ body {
   border-radius: 8px; padding: 6px 10px; text-align: center; letter-spacing: .01em; }
 /* Nota gris junto al titulo de un bloque plegado (ej. "Metricas · hoy 819 USDT") */
 .sum-note { font-size: 11px; font-weight: 600; color: var(--text-2); letter-spacing: 0; text-transform: none; margin-left: 6px; }
-.pay-chk { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none; }
-.pay-chk input { accent-color: var(--gold); cursor: pointer; }
+/* Metodos de pago del anuncio: antes una lista suelta de checkboxes en linea,
+   dificil de escanear. Ahora tarjetas en grid que se iluminan en dorado al
+   marcarse, igual que el resto de los estados "activo" de la app. */
+#bot-paymethods { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; padding: 2px 0 6px; }
+.pay-chk {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-2); border-radius: var(--r-sm);
+  font-size: 13px; font-weight: 600; color: var(--text-2);
+  cursor: pointer; user-select: none;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.pay-chk.on { border-color: var(--gold-b); background: var(--gold-d); color: var(--gold); }
+.pay-chk input { accent-color: var(--gold); cursor: pointer; flex-shrink: 0; }
 .ob-more { width: 100%; margin-top: 6px; padding: 6px; background: transparent; border: 1px dashed var(--border-2); border-radius: var(--r-sm); color: var(--text-3); font-size: 12px; font-weight: 600; cursor: pointer; transition: color .12s, border-color .12s; }
 .ob-more:hover { color: var(--gold); border-color: var(--gold-b); }
 /* Metricas de rotacion */

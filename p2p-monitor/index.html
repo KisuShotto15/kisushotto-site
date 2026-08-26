@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=27">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=28">
 </head>
 <body>
 
@@ -606,14 +606,12 @@
         <div class="cfg-row"><span class="cfg-label"><span title="Máxima distancia en Bs para perseguir a un competidor arriba tuyo. Si está más lejos que esto, el bot no lo sigue y queda en espera">Gap máx.</span><button class="help-ico" type="button" onclick="toggleCfgHelp(this)" aria-label="Ayuda">?</button></span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',-1)">−</button><input type="number" id="cfg-bot-gap" placeholder="1.0" min="0.5" step="0.5"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-gap',1)">+</button></div><div class="cfg-help">Si el de arriba está muy lejos, el bot no lo persigue y espera, para no pegar saltos de precio.</div></div>
         <div style="margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--border)">
           <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Métodos de pago del anuncio</div>
-          <div id="bot-paymethods" style="display:flex;flex-wrap:wrap;gap:6px 12px;padding:2px 0 6px"></div>
-          <button class="btn btn-sm" type="button" onclick="botApplyMethods(false)">Aplicar ahora</button>
+          <div id="bot-paymethods"></div>
         </div>
         <div style="margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--border)">
           <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Cantidad del anuncio</div>
           <div class="cfg-row"><span title="Cuánto poner en el anuncio. Déjalo vacío para no tocar la cantidad actual">Cantidad</span><div class="num-stepper qty-stepper"><button class="stp-btn" onclick="stepInput('manual-qty',-1)">−</button><input type="number" id="manual-qty" placeholder="opcional" min="1" step="100" oninput="updateManualTotal()"><button type="button" class="stp-unit stp-unit-btn" id="manual-qty-unit" onclick="toggleQtyUnit()" title="Cambiar entre USDT y Bs">↻ USDT</button><button class="stp-btn" onclick="stepInput('manual-qty',1)">+</button></div></div>
           <div class="cfg-row" style="border-bottom:none"><span style="color:var(--text-3)">Total <span id="manual-balance" style="margin-left:4px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span></span><span id="manual-total" style="font-size:16px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span></div>
-          <button class="btn btn-sm" type="button" onclick="manualApplyQty()" style="margin-top:6px">Aplicar ahora</button>
           <div id="manual-st" style="font-size:13px;color:var(--text-2);min-height:16px;padding:6px 0"></div>
         </div>
       </details>
@@ -654,7 +652,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=92"></script>
+<script src="/p2p-monitor/main.js?v=93"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

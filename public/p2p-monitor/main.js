@@ -2484,6 +2484,10 @@ function markBotDirty() {
 
 function discardBotConfig() {
   loadBotConfig(); // repuebla los inputs desde el ultimo BOT_CFG guardado
+  // La cantidad del anuncio no vive en BOT_CFG (es de una sola vez): loadBotConfig
+  // no la toca, hay que limpiarla aparte.
+  var q = document.getElementById('manual-qty');
+  if (q) { q.value = ''; updateManualTotal(); }
   botMissingFields(); // limpia marcas .inp-missing de valores descartados
   BOT_DIRTY = false;
   renderSaveRow();
@@ -2528,8 +2532,9 @@ function renderBotPayChecks() {
   if (!box) return;
   var sel = BOT_CFG.payMethods || [];
   box.innerHTML = PAY_METHODS_BY_FIAT.VES.map(function (m) {
-    var on = sel.indexOf(m.id) !== -1 ? ' checked' : '';
-    return '<label class="pay-chk"><input type="checkbox" value="' + m.id + '"' + on + '>' + m.label + '</label>';
+    var checked = sel.indexOf(m.id) !== -1;
+    return '<label class="pay-chk' + (checked ? ' on' : '') + '"><input type="checkbox" value="' + m.id + '"' + (checked ? ' checked' : '') +
+      ' onchange="this.closest(\'label\').classList.toggle(\'on\',this.checked)">' + m.label + '</label>';
   }).join('');
 }
 function readBotPayChecks() {
@@ -2826,21 +2831,17 @@ async function manualSetQty() {
   }
 }
 
-// Aplica la cantidad al anuncio por su cuenta, sin pasar por el boton Guardar.
-// Ese boton solo aparece con el bot CORRIENDO, asi que con el bot apagado no habia
-// forma de cargarle cantidad al anuncio — justo el caso en que hace falta: el bot
-// se detiene solo por fondos bajos y para volver a arrancarlo hay que recargarlo.
-async function manualApplyQty() {
-  var inp = document.getElementById('manual-qty');
-  if (await manualSetQty()) { if (inp) inp.value = ''; updateManualTotal(); }
-}
-
-// Boton Guardar del panel del bot: guarda la config y, SOLO si hay cantidad escrita,
-// la aplica al anuncio y limpia el campo (para no reaplicarla sin querer al volver a
-// guardar). Va aparte de saveBotConfig() a proposito: esa tambien la llama "Iniciar
-// Bot", y arrancar el bot no debe tocar la cantidad del anuncio.
+// Boton Guardar del panel del bot: guarda la config y aplica al anuncio real lo que
+// haya cambiado — metodos de pago y, si hay cantidad escrita, la cantidad (y limpia
+// el campo para no reaplicarla sin querer al volver a guardar). Antes Metodos y
+// Cantidad tenian su propio "Aplicar ahora" aparte de Guardar/Descartar; quedaba un
+// tercer boton haciendo lo mismo que ya hace Guardar en todo lo demas.
 async function saveBotConfigAndApply() {
   saveBotConfig();
+  var adNo = BOT.adNumber || BOT_CFG.adNo;
+  if (adNo && (BOT_CFG.payMethods || []).length) {
+    try { await botApplyMethods(true, true); } catch(e) {}
+  }
   var inp = document.getElementById('manual-qty');
   if (!inp || !(parseFloat(inp.value) > 0)) return;
   if (await manualSetQty()) { inp.value = ''; updateManualTotal(); }
