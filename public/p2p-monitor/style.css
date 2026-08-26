@@ -371,12 +371,10 @@ body {
   position: relative;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
-  gap: 14px;
+  align-items: stretch;
+  gap: 20px;
   box-shadow: var(--shadow);
 }
-/* Fila de arriba: veredicto a la izquierda, cifras a la derecha. */
-.hero-main { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
 .spread-hero-full::before {
   content: '';
   position: absolute;
@@ -409,9 +407,6 @@ body {
   line-height: .92;
   letter-spacing: -.03em;
   color: var(--gold);
-  /* Halo tenue: el numero es el protagonista del panel y sin esto compite de igual
-     a igual con las cifras de las celdas. */
-  text-shadow: 0 0 30px rgba(240,185,11,.22);
 }
 .sh-pill {
   display: flex;
@@ -438,8 +433,8 @@ body {
   display: grid;
   grid-template-columns: 1.8fr repeat(4, minmax(0, 1fr));
   gap: 1px;
-  background: var(--border);
-  border: 1px solid var(--border);
+  background: var(--border-2);
+  border: 1px solid var(--border-2);
   border-radius: var(--r-sm);
   overflow: hidden;
 }
@@ -447,36 +442,39 @@ body {
    la de Mayoristas, mostrarla junto a un spread Verde confundiria); 3 columnas
    en vez de 5 para no dejar hueco vacio a la derecha. */
 .hero-metrics.hm-3 { grid-template-columns: 1.8fr repeat(2, minmax(0, 1fr)); }
+/* Celdas compactas y cifra grande: antes eran cajas altas con el numero pequeno
+   perdido en el medio, mucho aire y poca lectura. El dato manda sobre la etiqueta. */
 .hero-metric {
-  background: rgba(255,255,255,.022);
-  padding: 13px 14px;
+  background: var(--bg);
+  padding: 9px 12px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   text-align: center;
-  gap: 5px;
+  gap: 2px;
 }
-/* La celda de Precios es el dato que se mira primero: un pelo mas clara que las
-   de al lado para que gane sin cambiarle el tamano a nada. */
-.hero-metric.span { background: rgba(255,255,255,.04); }
 .hm-label {
   font-size: 10.5px;
   font-weight: 700;
   color: var(--text-3);
-  letter-spacing: .08em;
+  letter-spacing: .07em;
   text-transform: uppercase;
+}
+/* Las cifras de las celdas: un solo sitio donde tocar el tamano. */
+.hero-metric .sc-v {
+  font-size: 23px !important; font-weight: 700; line-height: 1.1; letter-spacing: -.02em;
+  white-space: nowrap; /* "957,51 Bs" partido en dos renglones alarga la caja */
 }
 .hm-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gold); }
 /* Max/Min 24h: alto/bajo no son bueno/malo -> estilo black+dorado como las tiles */
 #sess-max, #sess-min { color: var(--gold) !important; }
-.hm-prices { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 4px 9px; font-size: 17px; }
+.hm-prices { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 3px 7px; font-size: 19px; line-height: 1.15; }
 .sh-sell { color: var(--green); font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-buy  { color: var(--blue);  font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-arrow { color: var(--text-3); }
 @media (max-width: 760px) {
-  .spread-hero-full { padding: 14px 16px; }
-  .hero-main { flex-direction: column; gap: 14px; }
+  .spread-hero-full { flex-direction: column; gap: 14px; padding: 14px 16px; }
   .hero-lead { min-width: 0; }
   .hero-lead .sh-pct { font-size: 40px; }
   .hero-metrics { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
@@ -903,7 +901,10 @@ input:focus {
   .hm-label { font-size: 10px; letter-spacing: .04em; }
   .sh-pct { font-size: 32px !important; }
   #hero-net { font-size: 28px !important; }
-  #st-diff, #st-delta { font-size: 18px !important; }
+  /* En telefono las celdas van a dos columnas: hay menos ancho, pero la cifra
+     sigue siendo lo que se lee de un vistazo. */
+  .hero-metric .sc-v { font-size: 22px !important; }
+  .hm-prices { font-size: 18px; }
 
   .ob-head, .ob-row { grid-template-columns: 1fr 80px 70px; padding: 8px 8px; }
   .ob-head span:nth-child(1), .ob-row > span:nth-child(1),
