@@ -163,62 +163,49 @@
 <div id="apikey-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1001;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeApiKeyModal()">
   <div class="sub-card">
     <div style="font-size:20px;font-weight:700;color:var(--gold);margin-bottom:4px">Conectar tu Binance</div>
-    <div class="sub-help" style="margin-bottom:16px">El bot necesita una API key para leer y repreciar <b>tu</b> anuncio de P2P. Se crea en dos minutos y la revocas cuando quieras.</div>
+    <div class="sub-help" style="margin-bottom:14px">El bot necesita una API key para repreciar <b>tu</b> anuncio de P2P. Dos minutos.</div>
 
     <div style="text-align:left;font-size:13px;color:var(--text);line-height:1.5;background:var(--red-d);border:1px solid var(--red-b);border-radius:var(--r-sm);padding:11px 12px;margin-bottom:18px">
-      <b style="color:var(--red)">Nunca habilites retiros.</b> Una API key sin ese permiso no puede sacar fondos de tu cuenta — ni nosotros, ni nadie que llegara a robarla. Deja esa casilla apagada y tu dinero no se mueve de Binance.
+      <b style="color:var(--red)">Nunca habilites retiros.</b> Sin ese permiso, la key no puede sacar fondos de tu cuenta — ni nosotros, ni nadie que llegara a robarla.
     </div>
 
-    <div class="sub-sec-title">Paso a paso</div>
+    <a class="btn btn-sm" href="https://www.binance.com/es-LA/my/settings/api-management" target="_blank" rel="noopener"
+       style="display:block;width:100%;margin-bottom:14px;padding:9px;text-align:center;text-decoration:none">Abrir Gestión de API ↗</a>
+
     <div class="sub-step">
       <div class="sub-step-n">1</div>
       <div class="sub-step-body">
-        <div class="sub-step-t">Abre Gestión de API</div>
-        <div class="sub-help">Entra a Binance desde la web, pulsa el icono de tu perfil (arriba a la derecha) y elige <b>Gestión de API</b>.</div>
+        <div class="sub-step-t">Crear API → Generada por el sistema</div>
+        <div class="sub-help">Ponle una etiqueta (<b>p2p-monitor</b>) y confirma con tu 2FA.</div>
       </div>
     </div>
     <div class="sub-step">
       <div class="sub-step-n">2</div>
       <div class="sub-step-body">
-        <div class="sub-step-t">Crea la API key</div>
-        <div class="sub-help">Pulsa <b>Crear API</b> y elige la opción generada por el sistema. Ponle un nombre que reconozcas, por ejemplo <b>p2p-monitor</b>.</div>
+        <div class="sub-step-t">Copia la clave secreta</div>
+        <div class="sub-help">Se muestra <b>una sola vez</b>. Si cierras esa pantalla, toca crear otra.</div>
       </div>
     </div>
     <div class="sub-step">
       <div class="sub-step-n">3</div>
       <div class="sub-step-body">
-        <div class="sub-step-t">Copia la clave secreta ahora</div>
-        <div class="sub-help">Tras confirmar con tu 2FA, Binance muestra la <b>API Key</b> y la <b>Secret Key</b>. La secreta se ve <b>una sola vez</b>: cópiala antes de cerrar esa pantalla.</div>
-      </div>
-    </div>
-    <div class="sub-step">
-      <div class="sub-step-n">4</div>
-      <div class="sub-step-body">
-        <div class="sub-step-t">Ajusta los permisos</div>
-        <div class="sub-help">En <b>Editar restricciones</b>, deja activada la lectura y el permiso de P2P. Apaga <b>Habilitar retiros</b>.</div>
-      </div>
-    </div>
-    <div class="sub-step">
-      <div class="sub-step-n">5</div>
-      <div class="sub-step-body">
-        <div class="sub-step-t">No la restrinjas por IP</div>
-        <div class="sub-help">El bot corre en servidores con dirección variable. Si limitas la key a unas IP concretas, dejará de funcionar.</div>
+        <div class="sub-step-t">Editar restricciones</div>
+        <div class="sub-help">Deja la lectura y el permiso de P2P. Apaga <b>Habilitar retiros</b> y no la limites por IP: el bot corre con dirección variable.</div>
       </div>
     </div>
     <div class="sub-step" style="border-bottom:none">
-      <div class="sub-step-n">6</div>
+      <div class="sub-step-n">4</div>
       <div class="sub-step-body">
         <div class="sub-step-t">Pega las dos llaves aquí</div>
-        <div class="sub-help">Al pulsar <b>Conectar Binance</b> las validamos contra Binance en el momento. Si falta un permiso, te lo decimos ahí mismo.</div>
+        <div class="sub-help">Las validamos al instante. Si falta un permiso, te lo decimos.</div>
       </div>
     </div>
 
     <div class="sub-sec-title" style="margin-top:18px">Cómo las guardamos</div>
     <ul class="sub-list">
-      <li>Se cifran con AES-256-GCM antes de tocar la base de datos</li>
-      <li>La clave de cifrado vive fuera de la base: quien viera la base no vería tus llaves</li>
+      <li>Cifradas con AES-256-GCM, y la clave de cifrado vive fuera de la base</li>
       <li>Solo se descifran para hablar con Binance en tu nombre</li>
-      <li>Las revocas desde Binance cuando quieras y el bot deja de operar</li>
+      <li>Las revocas desde Binance cuando quieras</li>
     </ul>
 
     <button class="btn btn-gold" onclick="closeApiKeyModal()" style="width:100%;padding:11px;font-size:15px;font-weight:700">Entendido</button>
@@ -668,7 +655,7 @@
 
 <script src="/p2p-monitor/decision-engine.js?v=2"></script>
 <script src="/p2p-monitor/decision-journal.js?v=1"></script>
-<script src="/p2p-monitor/main.js?v=87"></script>
+<script src="/p2p-monitor/main.js?v=88"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

@@ -8,7 +8,7 @@ import { requireUser } from '../_lib/auth.js';
 import { sql, ensureSchema, ensurePlanColumn, ensureNickColumn } from '../_lib/db.js';
 import { createOrder, queryOrder, verifyWebhookSignature } from '../_lib/binancepay.js';
 import { sendPush } from '../_lib/push.js';
-import { ensureSubscription, startTrial, markPaid, planInfo, PLANS, SUB_CURRENCY } from '../_lib/subscriptions.js';
+import { ensureSubscription, startTrial, markPaid, planInfo, adminUserId, PLANS, SUB_CURRENCY } from '../_lib/subscriptions.js';
 import { checkPayPayments, probePayTransactions } from '../_lib/pay-poll.js';
 
 function readRawBody(req) {
@@ -158,7 +158,10 @@ async function markPendingAction(req, res) {
   const finalStatus = (after[0] && after[0].status) || 'pending_review';
 
   if (finalStatus !== 'paid') {
-    const adminId = Number(process.env.ADMIN_USER_ID || 0);
+    // Resuelto desde ADMIN_EMAIL, no de una env aparte: ADMIN_USER_ID pedia el id
+    // numerico de una fila de la base, que no se ve por ningun lado. Mal puesta (o
+    // sin poner) el aviso no llegaba y el cliente se quedaba esperando en silencio.
+    const adminId = await adminUserId();
     if (adminId) {
       sendPush(adminId, '💳 Pago por confirmar',
         'Usuario #' + user.uid + ' (' + user.email + ') dice haber pagado ' + price + ' ' + SUB_CURRENCY + ' (' + plan + ')'
