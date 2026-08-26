@@ -1876,12 +1876,19 @@ var MY_NICK = 'キスショット';
 
 // Si la fila idx es mia, indica si me estan "pisando": alguien mejor posicionado
 // (arriba) con limite minimo <= al mio y disponibilidad real (>=150). rojo = pisado, verde = libre.
+// Verde/rojo en los limites de tu propio anuncio. Usa el MISMO criterio de
+// competidor que el bot (ver botTick: minVES < miMinimo + tolerancia), no un
+// "minVES <= el mio" pelado. Sin la tolerancia, alguien arriba con un minimo unos
+// cientos de bolivares por encima del tuyo no contaba y la fila salia verde
+// mientras el bot repreciaba contra el — y de paso los dos minimos se ven iguales
+// en pantalla, porque la columna redondea a "80k".
 function pisadoCls(ads, idx) {
   var me = ads[idx];
   if (!me || me.merchant !== MY_NICK) return '';
+  var tope = me.minVES + (BOT_CFG.limitThreshold || 0);
   for (var j = 0; j < idx; j++) {
     var c = ads[j];
-    if (c && c.avail >= 150 && c.minVES <= me.minVES) return ' pisado';
+    if (c && c.avail >= 150 && c.minVES < tope) return ' pisado';
   }
   return ' libre';
 }
@@ -2647,12 +2654,18 @@ function botUpdateCeiling() {
 // USDT, y no como % del precio (a diferencia del techo, que si la mete en el precio).
 function botPnl() {
   var sell = parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
-  var cur  = BOT.currentPrice;
-  var qty  = BOT.adAmount;
+  // Con el bot apagado no hay precio actual: se proyecta contra el techo, que es lo
+  // maximo que llegaria a pagar con ese precio de venta y ese margen. Es el peor
+  // caso, asi que el numero real nunca sale por debajo del estimado.
+  var cur  = BOT.currentPrice || BOT.ceiling;
+  var est  = !BOT.currentPrice;
+  // La cantidad escrita manda sobre la del anuncio: es la que el usuario esta a
+  // punto de aplicar, y con el bot apagado la del anuncio puede ser de otra corrida.
+  var qty  = manualQtyUsdt() || BOT.adAmount;
   if (!sell || !cur || !qty) return null;
   var gross = qty * (sell - cur) / cur;
   var fee   = qty * (CFG.commission || 0) / 100;
-  return { gross: gross, fee: fee, net: gross - fee };
+  return { gross: gross, fee: fee, net: gross - fee, est: est, qty: qty, price: cur };
 }
 
 function updateBotPnl() {
@@ -2660,9 +2673,11 @@ function updateBotPnl() {
   if (!el) return;
   var p = botPnl();
   if (!p) { el.textContent = '—'; el.style.color = ''; el.title = ''; return; }
-  el.textContent = (p.net >= 0 ? '+' : '') + fmt(p.net) + ' USDT';
+  // "~" delante cuando es proyeccion (bot apagado, calculada sobre el techo).
+  el.textContent = (p.est ? '~' : '') + (p.net >= 0 ? '+' : '') + fmt(p.net) + ' USDT';
   el.style.color = p.net >= 0 ? 'var(--green)' : 'var(--red)';
-  el.title = 'Bruto: ' + (p.gross >= 0 ? '+' : '') + fmt(p.gross) + ' USDT · Comisión: −' + fmt(p.fee) + ' USDT';
+  el.title = (p.est ? 'Estimado con el bot apagado: ' + fmt(p.qty) + ' USDT al precio máximo (' + p.price.toFixed(3) + ' Bs).\n' : '') +
+    'Bruto: ' + (p.gross >= 0 ? '+' : '') + fmt(p.gross) + ' USDT · Comisión: −' + fmt(p.fee) + ' USDT';
 }
 
 async function botCallWorker(path, body) {
@@ -2791,6 +2806,7 @@ function updateManualTotal() {
   } else {
     el.textContent = (qty && price) ? fmt(price * qty) + ' Bs' : '—';
   }
+  updateBotPnl(); // la cantidad escrita entra en el P&L proyectado
 }
 
 function updateManualBalance() {
