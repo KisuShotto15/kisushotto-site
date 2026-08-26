@@ -178,6 +178,7 @@ body {
   margin-top: 8px;
 }
 .bot-group-h {
+  display: flex; align-items: center; gap: 5px;
   font-size: 11px;
   font-weight: 700;
   color: var(--text-3);
@@ -312,7 +313,7 @@ body {
 /* Compactar el panel Auto-Repricing */
 .bot-details { margin-top: 8px; }
 .bot-details > summary { padding: 8px 0; }
-#bot-panel .cfg-row { padding: 4px 0; }
+#bot-panel .cfg-row { padding: 4px 0; gap: 5px; }
 /* Etiqueta secundaria frente al valor: jerarquia y, de paso, cabe en una linea. */
 #bot-panel .cfg-row > span { font-size: 15px; }
 /* Mismo ancho para todos los steppers del panel: las cajas forman columna en vez
@@ -327,7 +328,7 @@ body {
    que hacia otra cosa. margin-left:auto lo lleva junto al stepper en vez de
    dejarlo suelto en medio de la fila (la fila es space-between). */
 .sug-btn {
-  flex-shrink: 0; margin-left: auto; width: 34px; height: 32px; padding: 0;
+  flex-shrink: 0; margin-left: auto; width: 28px; height: 32px; padding: 0;
   background: var(--surf-2); border: 1px solid var(--border-2); border-radius: var(--r-sm);
   font-size: 15px; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -646,16 +647,9 @@ body {
 .cfg-row:last-child { border-bottom: none; }
 /* La etiqueta se encoge; el stepper nunca (si no, el boton + queda cortado). */
 .cfg-row > span { min-width: 0; }
-/* Ayuda por campo: boton (?) junto a la etiqueta que despliega un renglon propio
-   debajo. El wrap solo se activa mientras esa ayuda esta abierta (clase puesta por
-   toggleCfgHelp): en reposo la fila queda como siempre, etiqueta a la izquierda e
-   input a la derecha en la misma linea, tambien en movil. */
-.cfg-row.help-open { flex-wrap: wrap; }
-.cfg-label { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-/* Sin esto la etiqueta de dos palabras (Precio venta, Margen minimo...) se parte
-   sola en dos lineas al apretarla el boton (?): con overflow:hidden se recorta con
-   "..." en vez de crecer la fila. */
-.cfg-label > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Ayuda: un solo boton (?) por grupo (junto al titulo "Configuracion" o "Ajustes
+   avanzados"), no uno por fila — con uno por fila no quedaba ancho para leer la
+   etiqueta completa en movil. Despliega un bloque con los 2-3 campos del grupo. */
 .help-ico {
   flex-shrink: 0; width: 16px; height: 16px; padding: 0;
   border: 1px solid var(--border-2); border-radius: 50%; background: none;
@@ -665,11 +659,11 @@ body {
 .help-ico:hover, .help-ico:active { border-color: var(--gold); color: var(--gold); }
 .cfg-help {
   display: none;
-  flex: 0 0 100%;
-  font-size: 12.5px; line-height: 1.4;
+  font-size: 12.5px; line-height: 1.6;
   color: var(--text-2);
-  margin: 1px 0 3px;
+  margin: 0 0 8px;
 }
+.cfg-help b { color: var(--text); }
 input[type=number],
 input[type=password],
 input[type=text] {

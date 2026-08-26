@@ -2397,16 +2397,12 @@ function stepEl(el, dir, mult) {
   // #bot-panel; sin esto, los botones −/+ del stepper no marcaban el panel "sucio".
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
-// Boton (?) junto a la etiqueta de un cfg-row: muestra/oculta su .cfg-help. La
-// fila solo pasa a flex-wrap mientras esta abierta (clase help-open): en reposo
-// se ve como cualquier otra fila, etiqueta a la izquierda e input a la derecha.
-function toggleCfgHelp(btn) {
-  var row = btn.closest('.cfg-row');
-  var help = row && row.querySelector('.cfg-help');
-  if (!help) return;
-  var show = help.style.display !== 'block';
-  help.style.display = show ? 'block' : 'none';
-  row.classList.toggle('help-open', show);
+// Boton (?) junto al titulo de un grupo (Configuracion / Ajustes avanzados):
+// muestra/oculta el bloque de ayuda con los campos de ese grupo.
+function toggleHelpBlock(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = (el.style.display === 'block') ? 'none' : 'block';
 }
 // Con Shift presionado, medio step (micro-ajuste). Aplica al clic de los botones -/+.
 function stepInput(id, dir) {
