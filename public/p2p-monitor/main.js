@@ -4087,7 +4087,9 @@ async function botToggle() {
 }
 
 // ── Poller de estado del bot server-side ──────────────
-var BOT_POLL = { timer: null, lastLogTs: 0 };
+// lastCycle: firma del ultimo ciclo del bot que ya vimos (precio + limite). Cambia
+// = el bot toco el anuncio y el monitor debe refrescarse. null = aun sin leer.
+var BOT_POLL = { timer: null, lastLogTs: 0, lastCycle: null };
 var BOT_LOG_COLORS = { up: '#1D9E75', down: '#5dade2', warn: '#F0B90B', error: '#E24B4A', info: '#8b949e' };
 
 function startBotPoller() {
@@ -4130,21 +4132,22 @@ function renderBotState(d) {
     if (qEl) qEl.textContent = fmt(BOT.adAmount) + ' USDT';
   }
   if (d.ad_hidden != null) renderAdHidden(d.ad_hidden === true);
-  // El bot cambio el limite minimo del anuncio en Binance. El libro que hay en
-  // pantalla se busco con el limite viejo, asi que lo que se ve no es la posicion
-  // real: pedir datos frescos para que el libro y el pisado/libre correspondan al
-  // limite nuevo. Solo al cambiar, no en cada poll.
   if (d.ad_min_limit != null) {
     var lim = parseFloat(d.ad_min_limit);
-    if (lim > 0 && lim !== BOT.myMinLimit) {
-      var primera = BOT.myMinLimit == null; // al cargar la pagina no hay nada que refrescar
-      BOT.myMinLimit = lim;
-      // Repintar YA con el limite nuevo: el pisado/libre queda correcto al instante,
-      // sin esperar a que vuelva la red. El fetch ademas actualiza los numeros del
-      // libro (mi fila sigue mostrando el limite viejo hasta que Binance lo propaga).
-      syncMonitorWithBot();
-      if (!primera && ST.running) fetchOnce();
-    }
+    if (lim > 0) BOT.myMinLimit = lim;
+  }
+  // El bot acaba de cerrar un ciclo tocando el anuncio (precio o limite minimo). El
+  // libro en pantalla es de ANTES de ese cambio, asi que no muestra la posicion real:
+  // repintar ya con lo que sabemos y pedir datos frescos para ver el cambio en cuanto
+  // ocurre, sin esperar al refresco normal del monitor. La firma junta las dos cosas
+  // que mueve el bot; en la primera lectura solo se anota (no hay nada que refrescar).
+  var firma = String(d.last_reprice || '') + '|' + String(d.ad_min_limit != null ? d.ad_min_limit : '');
+  if (BOT_POLL.lastCycle == null) {
+    BOT_POLL.lastCycle = firma;
+  } else if (firma !== BOT_POLL.lastCycle) {
+    BOT_POLL.lastCycle = firma;
+    syncMonitorWithBot();
+    if (ST.running) fetchOnce();
   }
   updateBotPnl();
   // Pintar entradas nuevas del log del servidor
