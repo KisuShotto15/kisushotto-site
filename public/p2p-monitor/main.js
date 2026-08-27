@@ -4474,7 +4474,12 @@ async function syncJournalFromOrders() {
     var imported = 0, noVerdict = 0;
     for (var j = 0; j < cycles.length; j++) {
       var c = cycles[j];
-      if (!c.sellId || seen[c.sellId] || c.sellAt == null) continue;
+      // Una venta recomprada en varias compras parciales genera varios ciclos con
+      // el mismo sellId (uno por cada compra que la fue llenando): identificar el
+      // ciclo solo por sellId perdia todos menos el primero. sellId+buyId es unico
+      // por ciclo porque fifoShort empareja cada par venta-compra una sola vez.
+      var srcKey = c.sellId + '_' + c.buyId;
+      if (!c.sellId || !c.buyId || seen[srcKey] || c.sellAt == null) continue;
       var dec = lastDecisionBefore(decs, c.sellAt);
       // Sin veredicto grabado no hay nada que calificar: el motor solo corre con
       // la app abierta, asi que las ventas a ciegas quedan fuera a proposito.
@@ -4485,7 +4490,7 @@ async function syncJournalFromOrders() {
       // tiempos son historicos. Se escribe el desenlace con las fechas reales.
       var success = c.netPct >= DJ.SUCCESS_NET ? 'win' : (c.netPct >= 0 ? 'neutral' : 'loss');
       await DJ.updateTrade(id, {
-        ts: c.sellAt, src: c.sellId, status: 'closed',
+        ts: c.sellAt, src: srcKey, status: 'closed',
         rebuy: {
           price: c.buyPrice, ts: c.buyAt,
           minutesElapsed: c.minutes != null ? Math.round(c.minutes * 10) / 10 : null,

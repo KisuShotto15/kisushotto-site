@@ -109,7 +109,7 @@ export function fifoShort(orders, commission = 0) {
       cycles.push({
         qty: take,
         sellId: s.id, sellPrice: s.p, sellAt: s.t,
-        buyPrice: p, buyAt: t,
+        buyId: o.order_no, buyPrice: p, buyAt: t,
         minutes: (s.t && t) ? (t - s.t) / 60000 : null,
         grossPct,
         netPct: grossPct - commission / 100,
