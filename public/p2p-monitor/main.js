@@ -2580,6 +2580,16 @@ function fmtAmount(n) {
   return n.toString();
 }
 
+// Repinta solo lo del monitor que depende de la config del bot (pisado/libre por
+// tolerancia, y el resaltado de mis filas por nick). No pide datos: usa los que ya
+// hay en ST, asi que es seguro llamarlo aunque el monitor este parado.
+function syncMonitorWithBot() {
+  if (!ST.mayoristas) return;
+  renderOB('ob-may',   ST.mayoristas, 'best');
+  renderOB('ob-small', ST.smallAds || [], 'best-buy');
+  renderBuySection(ST.buyAds || []);
+}
+
 function renderAll() {
   renderSpreadHero();
   renderStats();
@@ -2762,7 +2772,12 @@ function renderStats() {
   } else { el.textContent = '—'; }
 }
 
-var MY_NICK = 'キスショット';
+// Nick propio para resaltar mis filas en el libro. Sale de la config del bot
+// (se autodetecta al cargar los anuncios de Binance), asi que el resaltado
+// funciona para cualquier usuario. El valor fijo queda solo de respaldo para
+// cuando todavia no hay config cargada.
+var MY_NICK_FALLBACK = 'キスショット';
+function myNick() { return (BOT_CFG && BOT_CFG.myNick) || BOT.myNick || MY_NICK_FALLBACK; }
 
 // Si la fila idx es mia, indica si me estan "pisando": alguien mejor posicionado
 // (arriba) con limite minimo <= al mio y disponibilidad real (>=150). rojo = pisado, verde = libre.
@@ -2774,7 +2789,7 @@ var MY_NICK = 'キスショット';
 // en pantalla, porque la columna redondea a "80k".
 function pisadoCls(ads, idx) {
   var me = ads[idx];
-  if (!me || me.merchant !== MY_NICK) return '';
+  if (!me || me.merchant !== myNick()) return '';
   var tope = me.minVES + (BOT_CFG.limitThreshold || 0);
   for (var j = 0; j < idx; j++) {
     var c = ads[j];
@@ -2809,7 +2824,7 @@ function renderOB(id, ads, bestCls) {
       var disp = ST.availDisp && ST.availDisp[id];
       var arrowHtml = availArrowHtml(disp && disp[ad.advNo]);
       var popupHtml = availPopupHtml(disp && disp[ad.advNo]);
-      var meCls = ad.merchant === MY_NICK ? ' me' : '';
+      var meCls = ad.merchant === myNick() ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
@@ -2874,7 +2889,7 @@ function renderBuySection(ads) {
       var disp = ST.availDisp && ST.availDisp['ob-buy'];
       var arrowHtml = availArrowHtml(disp && disp[ad.advNo]);
       var popupHtml = availPopupHtml(disp && disp[ad.advNo]);
-      var meCls = ad.merchant === MY_NICK ? ' me' : '';
+      var meCls = ad.merchant === myNick() ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
@@ -3404,7 +3419,12 @@ function saveBotConfig() {
   BOT_CFG.myNick         = document.getElementById('cfg-bot-nick').value.trim();
   BOT_CFG.increment      = parseFloat(document.getElementById('cfg-bot-inc').value)     || 0.001;
   BOT_CFG.maxGap         = parseFloat(document.getElementById('cfg-bot-gap').value)     || 1.0;
-  BOT_CFG.limitThreshold = parseFloat(document.getElementById('cfg-bot-thr').value)     || 10000;
+  // Tolerancia 0 es un ajuste valido (contar solo a quien tenga el limite minimo
+  // estrictamente por debajo del mio). Con `|| 10000` el 0 se colaba como falsy y
+  // se guardaba 10000 sin avisar: se ponia 0 y el bot seguia usando la tolerancia
+  // por defecto. Vacio si cae al defecto.
+  var _thr = parseFloat(document.getElementById('cfg-bot-thr').value);
+  BOT_CFG.limitThreshold = isNaN(_thr) ? 10000 : _thr;
   BOT_CFG.sellPrice      = parseFloat(document.getElementById('cfg-bot-sell').value)    || 0;
   var _spr = parseFloat(document.getElementById('cfg-bot-spread').value);
   BOT_CFG.minSpread      = isNaN(_spr) ? 0.5 : _spr; // puede ser 0 o negativo (comprar sobre el precio de venta)
@@ -3412,6 +3432,10 @@ function saveBotConfig() {
   BOT_CFG.payMethods     = readBotPayChecks();
   localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
   botUpdateCeiling();
+  // Feedback visual inmediato: el libro pinta pisado/libre con la tolerancia y
+  // resalta mis filas con el nick, ambos de esta config. Sin esto el cambio no
+  // se veia hasta el proximo fetch del monitor (hasta ~30s).
+  syncMonitorWithBot();
   // Si el bot ya corre en el servidor, empujar la config en caliente (limite, spread, etc.).
   if (BOT.running) botCallWorker('/bot-config', { config: botServerConfig() }).catch(function(){});
   // Destello corto: el "✓ Guardado" fijo competia con los datos del panel.
@@ -3614,6 +3638,7 @@ async function loadMyAds() {
       nickEl.value = detected;
       BOT_CFG.myNick = detected;
       localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
+      syncMonitorWithBot(); // ya se sabe cual es mi fila: resaltarla sin esperar al fetch
     }
     if (st) { st.textContent = ads.length + ' anuncio(s)'; st.style.color = '#1D9E75'; }
   } catch (e) {
