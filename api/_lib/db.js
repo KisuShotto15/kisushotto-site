@@ -166,6 +166,17 @@ export async function ensureTelegramLinks() {
   tgLinksReady = true;
 }
 
+// bot-tick no corre ensureSchema() (lo crean los endpoints de auth/app), asi que una
+// columna nueva que el tick escriba no existiria hasta que algun usuario abriera la
+// app — y mientras tanto el UPDATE del tick fallaria y no repreciaria nadie. Esto la
+// asegura sola, una vez por instancia, con una sentencia idempotente.
+let adMinLimitReady = false;
+export async function ensureBotAdMinLimit() {
+  if (adMinLimitReady) return;
+  await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS ad_min_limit NUMERIC`;
+  adMinLimitReady = true;
+}
+
 let marketHistReady = false;
 export async function ensureMarketHist() {
   if (marketHistReady) return;
@@ -262,6 +273,11 @@ export async function ensureSchema() {
   // y repreciando; ad_seen_at evita falsos positivos si nunca llegamos a verlo en el libro.
   await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS ad_hidden BOOLEAN`;
   await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS ad_seen_at TIMESTAMPTZ`;
+  // Limite minimo que el anuncio tiene REALMENTE en Binance tras el ultimo tick. El
+  // cliente lo usa para saber cuando el cambio de limite ya se aplico y refrescar el
+  // monitor: el libro publico tarda en reflejarlo y hasta entonces no se sabia si lo
+  // que se veia en pantalla era la posicion nueva o la vieja.
+  await sql`ALTER TABLE bot_state ADD COLUMN IF NOT EXISTS ad_min_limit NUMERIC`;
   // Velas OHLC por hora, por metodo de pago: { pay: [{t,o,h,l,c}] }.
   // Suscripciones Web Push (varias por usuario: una por dispositivo/navegador).
   await sql`CREATE TABLE IF NOT EXISTS push_subs (

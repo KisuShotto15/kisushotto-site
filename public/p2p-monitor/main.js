@@ -2790,7 +2790,12 @@ function myNick() { return (BOT_CFG && BOT_CFG.myNick) || BOT.myNick || MY_NICK_
 function pisadoCls(ads, idx) {
   var me = ads[idx];
   if (!me || me.merchant !== myNick()) return '';
-  var tope = me.minVES + (BOT_CFG.limitThreshold || 0);
+  // Mi limite: el que el bot tiene aplicado de verdad en Binance manda sobre el del
+  // libro. El listado publico tarda en reflejar un cambio de limite, y mientras tanto
+  // me.minVES es el viejo: el pisado/libre saldria calculado contra una posicion que
+  // ya no existe. Sin bot corriendo no hay dato server-side y vale el del libro.
+  var miMin = (BOT.myMinLimit > 0) ? BOT.myMinLimit : me.minVES;
+  var tope = miMin + (BOT_CFG.limitThreshold || 0);
   for (var j = 0; j < idx; j++) {
     var c = ads[j];
     if (c && c.avail >= 150 && c.minVES < tope) return ' pisado';
@@ -4125,6 +4130,22 @@ function renderBotState(d) {
     if (qEl) qEl.textContent = fmt(BOT.adAmount) + ' USDT';
   }
   if (d.ad_hidden != null) renderAdHidden(d.ad_hidden === true);
+  // El bot cambio el limite minimo del anuncio en Binance. El libro que hay en
+  // pantalla se busco con el limite viejo, asi que lo que se ve no es la posicion
+  // real: pedir datos frescos para que el libro y el pisado/libre correspondan al
+  // limite nuevo. Solo al cambiar, no en cada poll.
+  if (d.ad_min_limit != null) {
+    var lim = parseFloat(d.ad_min_limit);
+    if (lim > 0 && lim !== BOT.myMinLimit) {
+      var primera = BOT.myMinLimit == null; // al cargar la pagina no hay nada que refrescar
+      BOT.myMinLimit = lim;
+      // Repintar YA con el limite nuevo: el pisado/libre queda correcto al instante,
+      // sin esperar a que vuelva la red. El fetch ademas actualiza los numeros del
+      // libro (mi fila sigue mostrando el limite viejo hasta que Binance lo propaga).
+      syncMonitorWithBot();
+      if (!primera && ST.running) fetchOnce();
+    }
+  }
   updateBotPnl();
   // Pintar entradas nuevas del log del servidor
   if (Array.isArray(d.log)) {

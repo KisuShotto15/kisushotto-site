@@ -1,6 +1,6 @@
 // Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~18s.
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
-import { sql, ensureMarketHist } from './_lib/db.js';
+import { sql, ensureMarketHist, ensureBotAdMinLimit } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
@@ -305,6 +305,9 @@ async function tickUser(row) {
   let adAmount = row.ad_amount;
   let adHidden = row.ad_hidden;
   let adSeenAt = row.ad_seen_at;
+  // Limite que el anuncio tiene de verdad en Binance. Arranca con el ultimo conocido
+  // para que una salida temprana (sin anuncio, sin precio de venta...) no lo borre.
+  let adMinLimit = row.ad_min_limit != null ? parseFloat(row.ad_min_limit) : null;
 
   const key = decrypt({ ct: row.enc_key, iv: row.iv_key, tag: row.tag_key });
   const secret = decrypt({ ct: row.enc_secret, iv: row.iv_secret, tag: row.tag_secret });
@@ -313,14 +316,14 @@ async function tickUser(row) {
   if (!my.ok || !my.ads.length) {
     status = 'Sin anuncios';
     log = pushLog(log, 'Sin anuncios o API sin permiso', 'warn');
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt, adMinLimit };
   }
 
   const ad = pickAd(my.ads, cfg.adNo);
   if (!ad) {
     status = 'Anuncio no encontrado';
     log = pushLog(log, 'Anuncio configurado no encontrado', 'warn');
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt, adMinLimit };
   }
 
   // Anuncio apagado en Binance por el usuario -> detener el bot (no gastar requests).
@@ -331,7 +334,7 @@ async function tickUser(row) {
     log = pushLog(log, '🛑 Anuncio apagado en Binance — bot detenido', 'warn');
     await botNotify(cfg, row.user_id, '🔴 <b>Bot detenido</b>\nApagaste el anuncio en Binance.',
       '🔴 Bot detenido', 'Apagaste el anuncio en Binance');
-    return { enabled: false, status: 'Detenido: anuncio apagado', log, adNumber: adNo, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
+    return { enabled: false, status: 'Detenido: anuncio apagado', log, adNumber: adNo, currentPrice, lastReprice, adAmount, adHidden, adSeenAt, adMinLimit };
   }
 
   const surplus = parseFloat(ad.surplusAmount || ad.tradableQuantity || ad.remainQuantity || 0);
@@ -345,17 +348,18 @@ async function tickUser(row) {
     await botNotify(cfg, row.user_id,
       '🔴 <b>Bot detenido: fondos bajos</b>\nMenos de 100 USDT disponibles. Anuncio pausado.\n\nRecarga la cantidad del anuncio desde la app (Bot → Cantidad del anuncio → Aplicar ahora) y vuelve a iniciarlo.',
       '🔴 Bot detenido: fondos bajos', 'Menos de 100 USDT disponibles. Recarga la cantidad del anuncio y vuelve a iniciarlo.');
-    return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: adNo, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
+    return { enabled: false, status: 'Detenido: fondos bajos', log, adNumber: adNo, currentPrice, lastReprice, adAmount, adHidden, adSeenAt, adMinLimit };
   }
 
   if (!cfg.sellPrice) {
     status = 'Falta precio de venta';
     log = pushLog(log, 'Configura el precio de venta', 'warn');
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt, adMinLimit };
   }
 
   adNumber = String(ad.advNo || ad.adNumber);
   const myMin = parseFloat(ad.minSingleTransAmount);
+  if (myMin > 0) adMinLimit = myMin;
   const threshold = cfg.limitThreshold || 0;
   const pays = adPayTypes(ad).length ? adPayTypes(ad) : (cfg.payTypes && cfg.payTypes.length ? cfg.payTypes : []);
 
@@ -371,6 +375,7 @@ async function tickUser(row) {
       // que el anuncio quedaba mal posicionado hasta el tick siguiente.
       myMinEff = cfg.minLimit;
       ad.minSingleTransAmount = cfg.minLimit; // lo lee computeReprice
+      adMinLimit = cfg.minLimit;              // lo lee el cliente para refrescar el monitor
     } else {
       log = pushLog(log, 'Límite [' + (u.data.code || '?') + ']: ' + (u.data.message || ''), 'warn');
     }
@@ -396,7 +401,7 @@ async function tickUser(row) {
   if (res.targetPrice === null) {
     status = res.reason;
     currentPrice = res.currentPrice;
-    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
+    return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt, adMinLimit };
   }
 
   const up = await updateAdPrice(key, secret, adNumber, Number(res.targetPrice.toFixed(3)));
@@ -413,7 +418,7 @@ async function tickUser(row) {
     status = 'Error al actualizar';
     currentPrice = res.currentPrice;
   }
-  return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt };
+  return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt, adMinLimit };
 }
 
 // Notifica por Telegram las ordenes nuevas del usuario (24/7, app cerrada). Throttle ~60s.
@@ -507,10 +512,13 @@ export default async function handler(req, res) {
     try { await sweepRenewals(); } catch (e) {}
 
     // Sin ensureSchema(): el schema ya existe (lo crean los endpoints de auth/app).
-    // Correr ~25 DDLs por cold start cada 18s era costo inutil.
+    // Correr ~25 DDLs por cold start cada 18s era costo inutil. Excepcion: la columna
+    // que este mismo tick escribe, que si no existe tumbaria el UPDATE y con el, el
+    // reprice de todos. Una sola sentencia idempotente, una vez por instancia.
+    await ensureBotAdMinLimit();
     const rows = await sql`
       SELECT b.user_id, b.enabled, b.config, b.ad_number, b.current_price, b.last_reprice, b.log,
-             b.known_orders, b.orders_checked_at, b.ad_amount, b.ad_hidden, b.ad_seen_at, b.last_sample,
+             b.known_orders, b.orders_checked_at, b.ad_amount, b.ad_hidden, b.ad_seen_at, b.ad_min_limit, b.last_sample,
              c.enc_key, c.iv_key, c.tag_key, c.enc_secret, c.iv_secret, c.tag_secret
       FROM bot_state b
       JOIN binance_creds c ON c.user_id = b.user_id
@@ -566,6 +574,7 @@ export default async function handler(req, res) {
           ad_amount = ${out.adAmount != null ? out.adAmount : null},
           ad_hidden = ${out.adHidden != null ? out.adHidden : null},
           ad_seen_at = ${out.adSeenAt || null},
+          ad_min_limit = ${out.adMinLimit != null ? out.adMinLimit : null},
           last_reprice = ${out.lastReprice || null},
           known_orders = ${knownOrders != null ? JSON.stringify(knownOrders) : null}::jsonb,
           orders_checked_at = ${ordersCheckedAt || null},
