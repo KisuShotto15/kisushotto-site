@@ -3437,10 +3437,9 @@ function saveBotConfig() {
   BOT_CFG.payMethods     = readBotPayChecks();
   localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG));
   botUpdateCeiling();
-  // Feedback visual inmediato: el libro pinta pisado/libre con la tolerancia y
-  // resalta mis filas con el nick, ambos de esta config. Sin esto el cambio no
-  // se veia hasta el proximo fetch del monitor (hasta ~30s).
-  syncMonitorWithBot();
+  // Aqui NO se repinta el libro: guardar solo deja la config lista, el anuncio en
+  // Binance sigue como estaba. El monitor se refresca cuando el bot cierra el ciclo
+  // y aplica el cambio de verdad (ver la firma de ciclo en renderBotState).
   // Si el bot ya corre en el servidor, empujar la config en caliente (limite, spread, etc.).
   if (BOT.running) botCallWorker('/bot-config', { config: botServerConfig() }).catch(function(){});
   // Destello corto: el "✓ Guardado" fijo competia con los datos del panel.
