@@ -560,6 +560,19 @@ body {
   color: var(--text-3);
   margin-right: auto;
 }
+/* Vaciado/repuesto del top 5 en los ultimos 3 min. Solo aparece si hay algo
+   llamativo (>=15%): el resto del tiempo esta vacio para no ensuciar el header. */
+.lbl-vol {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-2);
+}
+.lbl-vol.vol-hot  { color: var(--red);  border-color: rgba(246,70,93,.35); }
+.lbl-vol.vol-warm { color: var(--gold); border-color: rgba(240,185,11,.35); }
 .lbl-filter input[type=number] {
   width: 86px;
   background: var(--surf-2);

@@ -104,6 +104,28 @@
     return may;
   }
 
+  // Cuanto se vacio (absorbido) y cuanto se repuso (replenish) de un top-N previo,
+  // buscando cada comerciante en la lista actual completa. Sirve igual para
+  // mayoristas (presion de venta) que para recompra (presion de compra).
+  function absorbTop(curFullList, prevTopN) {
+    var curMap = {};
+    for (var i = 0; i < curFullList.length; i++) curMap[curFullList[i].merchant] = curFullList[i];
+    var absorbed = 0, replen = 0, prevTotal = 0;
+    for (var p = 0; p < prevTopN.length; p++) {
+      var pm = prevTopN[p];
+      prevTotal += pm.avail;
+      var cur = curMap[pm.merchant];
+      if (!cur)                      absorbed += pm.avail;
+      else if (cur.avail < pm.avail) absorbed += (pm.avail - cur.avail);
+      else                           replen   += (cur.avail - pm.avail);
+    }
+    return {
+      absRate: prevTotal > 0 ? absorbed / prevTotal : 0,
+      replenishRate: prevTotal > 0 ? replen / prevTotal : 0,
+      prevTotal: prevTotal
+    };
+  }
+
   // ── Features ────────────────────────────────────────
   function computeFeatures(ST, history, buyLimit) {
     var snap = history[history.length - 1];
@@ -161,29 +183,27 @@
     var prev = snapAt(history, ABS_WIN_MS);
     var absRate3m = 0, replenishRate = 0, prevTop5USDT = 0;
     if (prev) {
-      var prevMaj = majors(sanitize(prev.may));
-      var prevTop = prevMaj.slice(0, 5);
-      var idx = {};
-      var curMap = {};
-      for (var m = 0; m < may.length; m++) curMap[may[m].merchant] = may[m];
-      var absorbed = 0, replen = 0;
-      for (var p = 0; p < prevTop.length; p++) {
-        var pm = prevTop[p];
-        prevTop5USDT += pm.avail;
-        var cur = curMap[pm.merchant];
-        if (!cur)             absorbed += pm.avail;
-        else if (cur.avail < pm.avail) absorbed += (pm.avail - cur.avail);
-        else                  replen   += (cur.avail - pm.avail);
-      }
-      if (prevTop5USDT > 0) {
-        absRate3m     = absorbed / prevTop5USDT;
-        replenishRate = replen   / prevTop5USDT;
-      }
+      var prevTop = majors(sanitize(prev.may)).slice(0, 5);
+      var a = absorbTop(may, prevTop);
+      absRate3m = a.absRate; replenishRate = a.replenishRate; prevTop5USDT = a.prevTotal;
     }
 
-    // 6. Liquidity gaps
+    // 5b. Recompra: mismo calculo sobre "small". Un drenaje rapido de los niveles
+    // de recompra puede ser señal temprana de que a los mayoristas les queda
+    // espacio para bajar precio (se van quedando sin piso de compradores debajo).
+    // No es determinista, pero suma como otra pieza del veredicto.
+    var buyAbsRate3m = 0, buyReplenishRate = 0;
+    if (prev) {
+      var b = absorbTop(small, (prev.small || []).slice(0, 5));
+      buyAbsRate3m = b.absRate; buyReplenishRate = b.replenishRate;
+    }
+
+    // 6. Liquidity gaps. Recorre TODOS los mayoristas solidos (isMajor ya los topa
+    // en 10), no solo los primeros 6: un libro fragmentado mas abajo (el salto
+    // grande casi nunca esta en el top 3-4) es de las mejores señales de que hay
+    // poco piso real debajo del mejor precio.
     var gaps = [], gapMax = 0, gapBigCnt = 0;
-    for (var g = 0; g < Math.min(maj.length, 6) - 1; g++) {
+    for (var g = 0; g < maj.length - 1; g++) {
       var d = maj[g].price - maj[g + 1].price;
       gaps.push(d);
       if (d > gapMax) gapMax = d;
@@ -268,6 +288,7 @@
       LA: LA, LB: LB,
       HHI: HHI, topUSDT: topUSDT, majorCount: maj.length,
       absRate3m: absRate3m, replenishRate: replenishRate, prevTop5USDT: prevTop5USDT,
+      buyAbsRate3m: buyAbsRate3m, buyReplenishRate: buyReplenishRate,
       gapMaxRel: gapMaxRel, gapBigCnt: gapBigCnt,
       weakness: weakness, priceDirAdj: priceDirAdj,
       priceMom: priceMom, flowMom: flowMom, momentum: momentum,
@@ -296,7 +317,7 @@
   // ── Score ───────────────────────────────────────────
   var WEIGHTS = {
     spread: 30, liqRatio: 12, conc: 8, abs: 15,
-    mom: 10, weak: 7, gap: 5, rev: 8, tape: 5
+    mom: 10, weak: 7, gap: 10, rev: 8, tape: 5, drain: 8
   };
 
   function clamp01(x) { return Math.max(0, Math.min(1, x)); }
@@ -313,7 +334,11 @@
       weak:     (1 - clamp01(F.weakness)) * 100,
       gap:      (1 - clamp01(F.gapMaxRel / 0.003)) * 100,
       rev:      F.revProb * 100,
-      tape:     (F.events && F.events.rapidDeplete && F.events.priceDropTop) ? 100 : 0
+      tape:     (F.events && F.events.rapidDeplete && F.events.priceDropTop) ? 100 : 0,
+      // Drenaje de recompra: recompra vaciandose rapido = posible espacio para que
+      // mayoristas bajen precio pronto = mas urgencia de vender ya. Peso moderado
+      // (8, igual que "rev") porque es una senal que no siempre se cumple.
+      drain:    clamp01(F.buyAbsRate3m / 0.30) * 100
     };
 
     var W = weightsOverride || WEIGHTS;
@@ -368,6 +393,7 @@
     if (F.momentum >= 0.3)     pos.push('impulso al alza +' + F.momentum.toFixed(2));
     if (F.LA > F.LB * 1.5)     pos.push('liquidez para vender ' + (F.LA / Math.max(F.LB, 1)).toFixed(1) + 'x la de recomprar');
     if (F.events.rapidDeplete) pos.push('el primero se vació rápido');
+    if (F.buyAbsRate3m >= 0.30) pos.push('recompra se vació ' + (F.buyAbsRate3m * 100).toFixed(0) + '% en 3 min — posible espacio para que bajen precio');
 
     if (F.HHI > 0.5)           neg.push('oferta concentrada en pocos (' + F.HHI.toFixed(2) + ')');
     if (F.gapBigCnt >= 2)      neg.push(F.gapBigCnt + ' huecos grandes de precio');
@@ -4439,6 +4465,7 @@ function updateDecision() {
     var d = DE.decide(F, S);
     DEC.last = { d: d, F: F };
     renderDecision(d, F);
+    renderVolumeBadges(F);
     // Al diario solo van los cambios de veredicto: con un tick cada 30s, guardar
     // todo llenaria IndexedDB de filas identicas y ensuciaria el backtest.
     if (typeof DJ !== 'undefined' && d.label !== DEC.lastLabel) {
@@ -4570,10 +4597,30 @@ function renderDecision(d, F) {
     html += '<div class="dec-feat">' +
       'spread ' + (F.spreadNet * 100).toFixed(2) + '% · ' +
       'absorción ' + (F.absRate3m * 100).toFixed(0) + '% · ' +
+      'drenaje recompra ' + (F.buyAbsRate3m * 100).toFixed(0) + '% · ' +
       'liquidez para vender ' + intFmt(F.LA) + ' / para recomprar ' + intFmt(F.LB) +
       '</div>';
   }
   el.innerHTML = html;
+}
+
+// Badge junto al titulo de Mayoristas/Recompra: cuanto del top 5 se vacio o se
+// repuso en los ultimos 3 min. Mismo dato que ya usa el motor (absRate3m /
+// buyAbsRate3m), solo que en vivo junto al libro. Oculto si no hay nada llamativo
+// que decir (poco movimiento) para no ensuciar el header.
+function volBadge(rate, replenish) {
+  if (rate == null) return '';
+  var absorbed = rate >= replenish;
+  var pct = Math.round((absorbed ? rate : replenish) * 100);
+  if (pct < 15) return '';
+  var cls = pct >= 30 ? 'vol-hot' : 'vol-warm';
+  return '<span class="lbl-vol ' + cls + '">' + (absorbed ? '▼' : '▲') + pct + '%</span>';
+}
+function renderVolumeBadges(F) {
+  var may = document.getElementById('vol-may');
+  var small = document.getElementById('vol-small');
+  if (may)   may.innerHTML   = (F && !F.degraded) ? volBadge(F.absRate3m, F.replenishRate) : '';
+  if (small) small.innerHTML = (F && !F.degraded) ? volBadge(F.buyAbsRate3m, F.buyReplenishRate) : '';
 }
 
 // ── Grabador de mercado BDV (Paso 1 del indice de debilidad) ──────────
