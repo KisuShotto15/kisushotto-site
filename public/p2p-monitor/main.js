@@ -4504,7 +4504,9 @@ async function renderJournalStats() {
   if (!el || typeof DJ === 'undefined') return;
   try {
     var s = await DJ.stats();
-    if (!s || !s.n) { el.innerHTML = ''; return; }
+    // Con 1-2 ciclos el % de acierto es puro ruido (100% con una sola venta no dice
+    // nada) y confunde mas de lo que ayuda. Se pide una muestra minima para mostrarlo.
+    if (!s || s.n < 5) { el.innerHTML = ''; return; }
     var wr = s.winRate != null ? Math.round(s.winRate * 100) : null;
     el.innerHTML = '<div class="dec-feat" style="display:flex;gap:10px;flex-wrap:wrap">' +
       '<span>' + s.n + (s.n === 1 ? ' ciclo calificado' : ' ciclos calificados') + '</span>' +
