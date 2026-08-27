@@ -1564,11 +1564,14 @@ async function fetchOnce(fast) {
     // el servidor debe tomar el relevo (no decirle "yo cubro" sin datos).
     monitorHeartbeat();
     renderAll();
-    checkAlerts();
-    renderSparkline();
-    refreshHist24();
-    recordMarketSnapshot();
-    updateDecision();
+    // Cada paso aislado: si uno revienta (dato raro, DOM no listo) no debe tumbar
+    // a los de abajo. Antes un solo throw aqui dejaba "Analizando el libro..."
+    // pegado para siempre, porque nunca se llegaba a updateDecision().
+    try { checkAlerts(); } catch (e) { console.error('[checkAlerts]', e); }
+    try { renderSparkline(); } catch (e) { console.error('[renderSparkline]', e); }
+    try { refreshHist24(); } catch (e) { console.error('[refreshHist24]', e); }
+    try { recordMarketSnapshot(); } catch (e) { console.error('[recordMarketSnapshot]', e); }
+    try { updateDecision(); } catch (e) { console.error('[updateDecision]', e); }
     var emptyNote =(!ST.mayoristas.length && !ST.smallAds.length) ? ' — sin anuncios en rango' : '';
     bootMark('got');
     var bootNote = '';
@@ -3591,7 +3594,7 @@ function updateDecision() {
       DEC.lastLabel = d.label;
       DJ.recordDecision(d, F);
     }
-  } catch (e) {}
+  } catch (e) { console.error('[updateDecision]', e); }
 }
 
 // Puente diario ↔ ordenes: cada ciclo venta→recompra de Binance se empareja con
