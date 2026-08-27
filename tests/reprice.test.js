@@ -129,6 +129,19 @@ test('limitThreshold amplia el corte de minVES', () => {
   assert.equal(con.competitors, 1);
 });
 
+// Contrato del que depende bot-tick: al cambiar el limite minimo debe pasar el
+// anuncio YA con el valor nuevo. Si pasa el viejo, el corte de competidores queda
+// en el bracket equivocado y el anuncio se posiciona mal hasta el tick siguiente.
+test('el corte de competidores sigue al minSingleTransAmount del anuncio', () => {
+  const market = [rawAd({ price: 110.5, minVES: 8000 })];
+  const viejo = computeReprice({ ad: myAd(), marketRaw: market, cfg: baseCfg });
+  const nuevo = computeReprice({ ad: myAd({ minSingleTransAmount: 10000 }), marketRaw: market, cfg: baseCfg });
+  assert.equal(viejo.competitors, 0);  // 8000 no < 5000
+  assert.equal(nuevo.competitors, 1);  // 8000 < 10000
+  assert.equal(viejo.targetPrice, null);
+  assert.equal(nuevo.targetPrice, 110.501);
+});
+
 test('comision reduce el techo', () => {
   // techo = 115 * (1 - (2+1)/100) = 111.55
   const r = computeReprice({ ad: myAd({ price: '112.0' }), marketRaw: [], cfg: { ...baseCfg, commission: 1 } });

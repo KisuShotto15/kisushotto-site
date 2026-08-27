@@ -360,16 +360,23 @@ async function tickUser(row) {
   const pays = adPayTypes(ad).length ? adPayTypes(ad) : (cfg.payTypes && cfg.payTypes.length ? cfg.payTypes : []);
 
   // Ajustar limite minimo si cambio
+  let myMinEff = myMin; // el que rige el resto del tick (ver abajo)
   if (cfg.minLimit > 0 && cfg.minLimit !== myMin) {
     const u = await updateMinLimit(key, secret, adNumber, cfg.minLimit);
     if (u.ok && (!u.data.code || u.data.code === '000000')) {
       log = pushLog(log, '📏 Límite mínimo → ' + cfg.minLimit + ' VES', 'info');
+      // El anuncio YA quedo con el limite nuevo en Binance, pero `ad` se leyo antes
+      // del cambio. Seguir el tick con el valor viejo buscaba el bracket equivocado
+      // y filtraba competidores por el corte viejo (minVES < myMin + threshold), asi
+      // que el anuncio quedaba mal posicionado hasta el tick siguiente.
+      myMinEff = cfg.minLimit;
+      ad.minSingleTransAmount = cfg.minLimit; // lo lee computeReprice
     } else {
       log = pushLog(log, 'Límite [' + (u.data.code || '?') + ']: ' + (u.data.message || ''), 'warn');
     }
   }
 
-  const marketRaw = await publicSearch({ transAmount: myMin + threshold, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly: cfg.verifiedOnly !== false });
+  const marketRaw = await publicSearch({ transAmount: myMinEff + threshold, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly: cfg.verifiedOnly !== false });
 
   // Oculto = vivo pero fuera del listado publico (Binance lo esconde con muchas ordenes
   // y lo devuelve solo). No cambia nada del reprice: solo se refleja en el panel.
