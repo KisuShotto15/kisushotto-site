@@ -412,19 +412,39 @@ export default async function handler(req, res) {
         // un usuario nuevo). El cliente deriva las velas al vuelo (ver hxVisibleOhlc).
         await ensureMarketHist();
         const rows = await sql`SELECT hist_long, hist24 FROM market_hist WHERE pay = 'BancoDeVenezuela'`;
-        // Serie de volumen (profundidad del top 5 de cada lado). Vive aparte, en
-        // market_snapshots: no toca hist_long/hist24. Es por usuario, pero el
-        // mercado es el mismo para todos, asi que se promedia por cubo de 30 min
-        // (el mismo paso de hist_long) para que las barras alineen con las velas.
+        // Serie de volumen. Vive aparte, en market_snapshots: no toca hist_long/hist24.
+        // Es volumen ABSORBIDO, no inventario: may_avail5 es cuanto USDT hay parado en
+        // el top 5 (un stock, casi plano de un cubo a otro y por eso ilegible como
+        // barras). Lo que interesa es el flujo — cuanto se consumio entre dos muestras
+        // consecutivas — asi que se suman las bajadas de disponible (las subidas son
+        // reposicion, no operaciones). Se descartan los saltos con hueco temporal: si
+        // el muestreo se corto, la caida acumulada no ocurrio en ese cubo.
+        // Es por usuario (cada uno muestrea con su propio filtro de VES), asi que se
+        // suma dentro del usuario y se promedia entre usuarios por cubo de 30 min (el
+        // mismo paso de hist_long) para que las barras alineen con las velas.
         let vol = [];
         try {
           vol = await sql`
-            SELECT (extract(epoch FROM to_timestamp(floor(extract(epoch FROM ts) / 1800) * 1800)) * 1000)::bigint ts,
-                   avg(may_avail5)::float may, avg(rec_avail5)::float rec
-            FROM market_snapshots
-            WHERE ts > now() - interval '60 days'
-              AND (may_avail5 IS NOT NULL OR rec_avail5 IS NOT NULL)
-            GROUP BY 1 ORDER BY 1`;
+            WITH d AS (
+              SELECT user_id, ts, may_avail5, rec_avail5,
+                     LAG(ts)          OVER (PARTITION BY user_id ORDER BY ts) prev_ts,
+                     LAG(may_avail5)  OVER (PARTITION BY user_id ORDER BY ts) prev_may,
+                     LAG(rec_avail5)  OVER (PARTITION BY user_id ORDER BY ts) prev_rec
+              FROM market_snapshots
+              WHERE ts > now() - interval '60 days'
+            ), f AS (
+              SELECT user_id,
+                     floor(extract(epoch FROM ts) / 1800) * 1800 bucket,
+                     GREATEST(prev_may - may_avail5, 0) may_abs,
+                     GREATEST(prev_rec - rec_avail5, 0) rec_abs
+              FROM d
+              WHERE prev_ts IS NOT NULL AND ts - prev_ts < interval '10 minutes'
+            ), b AS (
+              SELECT user_id, bucket, sum(may_abs) may_s, sum(rec_abs) rec_s
+              FROM f GROUP BY 1, 2
+            )
+            SELECT (bucket * 1000)::bigint ts, avg(may_s)::float may, avg(rec_s)::float rec
+            FROM b GROUP BY 1 ORDER BY 1`;
         } catch (e) { vol = []; }
         return res.status(200).json({ ...(rows[0] || { hist_long: [], hist24: [] }), vol });
       }

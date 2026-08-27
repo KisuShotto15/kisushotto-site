@@ -4910,24 +4910,20 @@ function hxVisibleOhlc() {
   }
   return Object.keys(buckets).map(function(k) { return buckets[k]; }).sort(function(a, b) { return a.t - b.t; });
 }
-// Volumen (profundidad del top 5) agrupado en los mismos cubos que las velas.
+// Volumen absorbido agrupado en los mismos cubos que las velas. Se SUMA (no se
+// promedia): es un flujo, asi que una vela de 4h vale lo operado en esas 4h,
+// igual que las barras de volumen de cualquier grafico de trading.
 // Devuelve { at: {t: {may, rec}}, max } — max sirve para escalar la banda.
 function hxVolBuckets(bMs) {
-  var acc = {}, max = 0;
+  var at = {}, max = 0;
   var src = HX.vol || [];
   for (var i = 0; i < src.length; i++) {
     var v = src[i];
     if (!v || v.ts == null) continue;
     var t = Math.floor(v.ts / bMs) * bMs;
-    var a = acc[t] || (acc[t] = { may: 0, rec: 0, n: 0 });
-    a.may += (v.may || 0); a.rec += (v.rec || 0); a.n++;
-  }
-  var at = {};
-  for (var k in acc) {
-    var b = acc[k];
-    var may = b.may / b.n, rec = b.rec / b.n;
-    at[k] = { may: may, rec: rec };
-    if (may + rec > max) max = may + rec;
+    var a = at[t] || (at[t] = { may: 0, rec: 0 });
+    a.may += (v.may || 0); a.rec += (v.rec || 0);
+    if (a.may + a.rec > max) max = a.may + a.rec;
   }
   return { at: at, max: max };
 }
@@ -4983,8 +4979,8 @@ function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
     ctx.fillStyle = colq;
     ctx.fillRect(cx - cw / 2, yTop, cw, Math.max(1, yBot - yTop));
   }
-  // Banda de volumen: barra apilada por vela — mayoristas (presion de venta, rojo)
-  // sobre recompra (presion de compra, violeta), los mismos colores que el libro.
+  // Banda de volumen absorbido: barra apilada por vela — mayoristas (presion de
+  // venta, rojo) sobre recompra (presion de compra, violeta), colores del libro.
   if (volH > 0) {
     var vBase = padT + H + volH;
     for (var r = 0; r < cs.length; r++) {
@@ -4999,7 +4995,7 @@ function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
       ctx.fillRect(vx - cw / 2, vBase - hMay - hRec, cw, Math.max(1, hRec));
     }
     ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText('Volumen top 5 · mayoristas / recompra', padL + 2, padT + H + 3);
+    ctx.fillText('Volumen absorbido (USDT) · mayoristas / recompra', padL + 2, padT + H + 3);
   }
 }
 // Dibuja el frame base (grilla, ejes, area, linea) en un canvas offscreen. Se
