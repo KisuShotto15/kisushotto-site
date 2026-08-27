@@ -4,7 +4,7 @@ import { sql, ensureMarketHist } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
-import { computeAlerts, topMedianRate, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged, bestOf } from './_lib/monitor.js';
+import { computeAlerts, topMedianRate, topAvail, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged, bestOf } from './_lib/monitor.js';
 import { sendTelegram, resolveTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
 import { adminUserId, GRACE_MS } from './_lib/subscriptions.js';
@@ -212,9 +212,13 @@ async function tickMonitor(row, now) {
   // justo las que hacen falta para saber si el capital estuvo parado con razon.
   if (out.spreadNet != null &&
       (!row.last_mkt || now - new Date(row.last_mkt).getTime() >= SAMPLE_MS)) {
+    // may_avail5/rec_avail5: profundidad del top 5 de cada lado. El grabador del
+    // cliente ya las llenaba, pero solo con la app abierta; aqui quedan cubiertas
+    // 24/7 para poder dibujar volumen en el historial.
     await sql`
-      INSERT INTO market_snapshots (user_id, ts, may_best, rec_best, spread_net, commission)
-      VALUES (${row.user_id}, now(), ${out.bestMay}, ${out.bestSmall}, ${out.spreadNet}, ${cfg.commission || 0})`
+      INSERT INTO market_snapshots (user_id, ts, may_best, may_avail5, rec_best, rec_avail5, spread_net, commission)
+      VALUES (${row.user_id}, now(), ${out.bestMay}, ${topAvail(primaryRaw, 5, verifiedOnly)},
+              ${out.bestSmall}, ${topAvail(secondaryRaw, 5, verifiedOnly)}, ${out.spreadNet}, ${cfg.commission || 0})`
       .then(() => sql`UPDATE monitor_state SET last_mkt = now() WHERE user_id = ${row.user_id}`)
       .catch(() => {});
   }

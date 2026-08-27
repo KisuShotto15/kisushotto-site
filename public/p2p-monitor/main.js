@@ -4910,6 +4910,28 @@ function hxVisibleOhlc() {
   }
   return Object.keys(buckets).map(function(k) { return buckets[k]; }).sort(function(a, b) { return a.t - b.t; });
 }
+// Volumen (profundidad del top 5) agrupado en los mismos cubos que las velas.
+// Devuelve { at: {t: {may, rec}}, max } — max sirve para escalar la banda.
+function hxVolBuckets(bMs) {
+  var acc = {}, max = 0;
+  var src = HX.vol || [];
+  for (var i = 0; i < src.length; i++) {
+    var v = src[i];
+    if (!v || v.ts == null) continue;
+    var t = Math.floor(v.ts / bMs) * bMs;
+    var a = acc[t] || (acc[t] = { may: 0, rec: 0, n: 0 });
+    a.may += (v.may || 0); a.rec += (v.rec || 0); a.n++;
+  }
+  var at = {};
+  for (var k in acc) {
+    var b = acc[k];
+    var may = b.may / b.n, rec = b.rec / b.n;
+    at[k] = { may: may, rec: rec };
+    if (may + rec > max) max = may + rec;
+  }
+  return { at: at, max: max };
+}
+
 // Frame base en modo VELAS (grilla/ejes compartidos con el modo linea)
 function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
   var base = HX.base || (HX.base = document.createElement('canvas'));
@@ -4919,8 +4941,13 @@ function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
   ctx.clearRect(0, 0, cssW, cssH);
   // Escala de precio a la DERECHA (como en los graficos de trading): el ultimo precio
   // queda pegado a su eje. De ahi que padR sea el ancho y padL solo un margen.
-  var padL = 14, padR = 62, padT = 14, padB = 26, W = cssW - padL - padR, H = cssH - padT - padB;
+  var padL = 14, padR = 62, padT = 14, padB = 26, W = cssW - padL - padR;
   var bMs = HX.bucketMs || 900000;
+  // Banda de volumen abajo (solo si hay serie): le quita alto al precio en vez de
+  // superponerse, para no ensuciar la lectura de las velas.
+  var vol = hxVolBuckets(bMs);
+  var volH = vol.max > 0 ? Math.round((cssH - padT - padB) * 0.18) : 0;
+  var H = cssH - padT - padB - volH;
   var t0 = cs[0].t, t1 = cs[cs.length - 1].t + bMs, dt = (t1 - t0) || 1;
   var min = cs[0].l, max = cs[0].h;
   cs.forEach(function(k) { if (k.l < min) min = k.l; if (k.h > max) max = k.h; });
@@ -4941,7 +4968,7 @@ function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
   for (var k2 = 0; k2 <= ticks; k2++) {
     var ts = t0 + dt * k2 / ticks;
     ctx.fillStyle = '#8b93a7';
-    ctx.fillText(hxTimeLabel(ts, dt), Math.max(padL + 14, Math.min(padL + W - 14, X(ts))), padT + H + 7);
+    ctx.fillText(hxTimeLabel(ts, dt), Math.max(padL + 14, Math.min(padL + W - 14, X(ts))), padT + H + volH + 7);
   }
   // Ancho por RANURA de tiempo, no por vela dibujada: si hay huecos (buckets sin dato)
   // cs.length es menor que las ranuras del rango y las velas salian mas anchas que su
@@ -4955,6 +4982,24 @@ function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
     var yTop = Y(Math.max(c.o, c.c)), yBot = Y(Math.min(c.o, c.c));
     ctx.fillStyle = colq;
     ctx.fillRect(cx - cw / 2, yTop, cw, Math.max(1, yBot - yTop));
+  }
+  // Banda de volumen: barra apilada por vela — mayoristas (presion de venta, rojo)
+  // sobre recompra (presion de compra, violeta), los mismos colores que el libro.
+  if (volH > 0) {
+    var vBase = padT + H + volH;
+    for (var r = 0; r < cs.length; r++) {
+      var vb = vol.at[cs[r].t];
+      if (!vb) continue;
+      var vx = X(cs[r].t + bMs / 2);
+      var hMay = (vb.may / vol.max) * volH;
+      var hRec = (vb.rec / vol.max) * volH;
+      ctx.fillStyle = 'rgba(246,70,93,.45)';
+      ctx.fillRect(vx - cw / 2, vBase - hMay, cw, Math.max(1, hMay));
+      ctx.fillStyle = 'rgba(199,146,234,.45)';
+      ctx.fillRect(vx - cw / 2, vBase - hMay - hRec, cw, Math.max(1, hRec));
+    }
+    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('Volumen top 5 · mayoristas / recompra', padL + 2, padT + H + 3);
   }
 }
 // Dibuja el frame base (grilla, ejes, area, linea) en un canvas offscreen. Se
@@ -5114,6 +5159,9 @@ async function hxLoad() {
   try {
     var d = await botCallWorker('/monitor-history');
     HX.series = hxMerge(histByPay(d && d.hist_long, ACTIVE_PAY), histByPay(d && d.hist24, ACTIVE_PAY));
+    // Serie de volumen aparte (puede venir vacia: se acumula desde que se empezo
+    // a grabar, igual que paso con el precio). No afecta al dibujo del precio.
+    HX.vol = (d && d.vol) || [];
     var cov = document.getElementById('hx-coverage');
     if (cov) cov.textContent = HX.series.length
       ? '· ' + HX.series.length + ' puntos desde ' + hxFullLabel(HX.series[0].ts)

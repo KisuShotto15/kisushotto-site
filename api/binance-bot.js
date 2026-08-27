@@ -412,7 +412,21 @@ export default async function handler(req, res) {
         // un usuario nuevo). El cliente deriva las velas al vuelo (ver hxVisibleOhlc).
         await ensureMarketHist();
         const rows = await sql`SELECT hist_long, hist24 FROM market_hist WHERE pay = 'BancoDeVenezuela'`;
-        return res.status(200).json(rows[0] || { hist_long: [], hist24: [] });
+        // Serie de volumen (profundidad del top 5 de cada lado). Vive aparte, en
+        // market_snapshots: no toca hist_long/hist24. Es por usuario, pero el
+        // mercado es el mismo para todos, asi que se promedia por cubo de 30 min
+        // (el mismo paso de hist_long) para que las barras alineen con las velas.
+        let vol = [];
+        try {
+          vol = await sql`
+            SELECT (extract(epoch FROM to_timestamp(floor(extract(epoch FROM ts) / 1800) * 1800)) * 1000)::bigint ts,
+                   avg(may_avail5)::float may, avg(rec_avail5)::float rec
+            FROM market_snapshots
+            WHERE ts > now() - interval '60 days'
+              AND (may_avail5 IS NOT NULL OR rec_avail5 IS NOT NULL)
+            GROUP BY 1 ORDER BY 1`;
+        } catch (e) { vol = []; }
+        return res.status(200).json({ ...(rows[0] || { hist_long: [], hist24: [] }), vol });
       }
       await ensureMarketHist();
       const [rows, g] = await Promise.all([

@@ -115,6 +115,17 @@ export function bestOf(raw, verifiedOnly) {
   return top ? top.price : null;
 }
 
+// USDT disponibles en los primeros N anuncios creibles: la "profundidad" de ese
+// lado del libro. Misma criba que el grafico (avail >= MIN_AVAIL, verificados
+// segun cfg) para que la serie de volumen sea comparable con la de precio.
+export function topAvail(raw, n, verifiedOnly) {
+  const top = mapBest(raw, verifiedOnly).slice(0, n);
+  if (!top.length) return null;
+  let s = 0;
+  for (const a of top) s += a.avail;
+  return s;
+}
+
 export function topMedianRate(raw, n, verifiedOnly) {
   const prices = mapBest(raw, verifiedOnly).slice(0, n).map(a => a.price);
   if (!prices.length) return null;
