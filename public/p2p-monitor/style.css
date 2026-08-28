@@ -2,15 +2,23 @@
 * { -webkit-tap-highlight-color: transparent; }
 /* ── Variables ──────────────────────────────────────── */
 :root {
-  --bg:        #07090f;
-  --surf-1:    #0d1117;
-  --surf-2:    #161b22;
-  --surf-3:    #1c2128;
-  --border:    rgba(255,255,255,0.06);
-  --border-2:  rgba(255,255,255,0.10);
+  /* Fondo AMOLED: negro puro en el lienzo (en pantallas OLED el pixel queda
+     apagado) y superficies apenas levantadas para separar tarjetas del fondo. */
+  --bg:        #000000;
+  --surf-1:    #0a0c10;
+  --surf-2:    #0f1319;
+  --surf-3:    #171c23;
+  /* Bordes algo mas marcados: sobre negro puro el 0.06 se perdia y las tarjetas
+     quedaban sin recorte visible. */
+  --border:    rgba(255,255,255,0.09);
+  --border-2:  rgba(255,255,255,0.14);
   --text:      #e6edf3;
   --text-2:    #8b949e;
-  --text-3:    #484f58;
+  /* Antes #484f58: 2.3:1, muy por debajo del minimo legible. Lo usan los limites y la
+     cantidad del libro, que en movil no se leian. El libro se apoya en --surf-2 (no en
+     el panel), asi que el valor esta elegido contra ESA superficie: 5.0:1, cumple AA, y
+     sigue por debajo de --text-2 para no aplastar la jerarquia. */
+  --text-3:    #7d8590;
   --gold:      #F0B90B;
   --gold-d:    rgba(240,185,11,.12);
   --gold-b:    rgba(240,185,11,.3);
@@ -364,7 +372,7 @@ body {
 
 /* ── Spread Hero (full-width) ───────────────────────── */
 .spread-hero-full {
-  background: linear-gradient(180deg, var(--surf-1), #0a0d13);
+  background: linear-gradient(180deg, var(--surf-1), #06080b);
   border: 1px solid var(--border-2);
   border-radius: var(--r-lg);
   padding: 18px 20px;
