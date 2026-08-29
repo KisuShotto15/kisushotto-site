@@ -3692,7 +3692,7 @@ async function botGetMyAd(allowPaused) {
 
 // Unidad en la que se ESCRIBE la cantidad. El anuncio siempre se actualiza en USDT:
 // en modo VES se convierte (Bs / precio) antes de mandarlo.
-var QTY_UNIT = 'USDT';
+var QTY_UNIT = 'VES';
 
 function qtyPrice() {
   return BOT.currentPrice || parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
