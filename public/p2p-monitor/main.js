@@ -1502,8 +1502,12 @@ async function checkAdminPending() {
     btn.style.display = '';
     if (badge) { badge.textContent = n; badge.style.display = n > 0 ? '' : 'none'; }
   } catch (e) {
+    // 403 = no es el dueño. Nadie se vuelve admin a mitad de sesion, asi que el
+    // sondeo se apaga para siempre: repetirlo cada minuto solo quemaba una
+    // invocacion Vercel por usuario y por minuto para recibir el mismo 403.
     IS_ADMIN = false;
     btn.style.display = 'none';
+    stopAdminPoll();
   }
   renderAdminOnly();
 }
@@ -1634,7 +1638,20 @@ async function resolveAdminPayment(action, invoiceId, btn) {
   }
 }
 
-setInterval(checkAdminPending, 60000);
+// Cola de facturas por revisar: solo la ve el dueño, y es trabajo manual suyo — no
+// necesita cadencia de segundos. 5 min, y solo con la pestaña visible (en segundo
+// plano no hay badge que mirar). checkAdminPending lo apaga del todo si no es admin.
+var _adminPollT = null;
+function startAdminPoll() {
+  if (_adminPollT) return;
+  _adminPollT = setInterval(function () {
+    if (document.visibilityState === 'visible') checkAdminPending();
+  }, 5 * 60000);
+}
+function stopAdminPoll() {
+  if (_adminPollT) { clearInterval(_adminPollT); _adminPollT = null; }
+}
+startAdminPoll();
 
 // ── Boton atras de Android ───────────────────────────────
 // Instalada como app, con un modal abierto el boton atras cerraba la aplicacion

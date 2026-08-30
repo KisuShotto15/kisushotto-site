@@ -33,9 +33,15 @@ const GLOBAL_SAMPLE_MS = 2 * 60 * 1000; // igual que la cadencia de pushHist24
 // Siembra unica: la serie global arranca vacia, pero el historial del admin ya tiene
 // meses de mercado (es el mismo mercado). Se copia una sola vez, fusionado con lo poco
 // que la serie global haya acumulado, y queda marcada con seeded para no repetirse.
+let seededOnce = false;
 async function seedGlobalHist() {
-  const rows = await sql`SELECT hist24, hist_long, seeded FROM market_hist WHERE pay = ${GLOBAL_PAY}`;
-  if (rows.length && rows[0].seeded) return;
+  if (seededOnce) return;
+  // Primero SOLO el booleano: traer hist24 + hist_long (cientos de KB, y creciendo
+  // hasta ~4.6 MB en 2 anios) para descartarlos al instante costaba un JSON.parse
+  // completo en cada tick, ~4800 veces al dia. Ya sembrado, ni eso: se recuerda por
+  // instancia y no se vuelve a consultar.
+  const flag = await sql`SELECT seeded FROM market_hist WHERE pay = ${GLOBAL_PAY}`;
+  if (flag.length && flag[0].seeded) { seededOnce = true; return; }
   const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
   if (!adminEmail) return;
   const src = await sql`
@@ -43,6 +49,7 @@ async function seedGlobalHist() {
     JOIN users u ON u.id = m.user_id
     WHERE lower(u.email) = ${adminEmail}`;
   if (!src.length) return;
+  const rows = await sql`SELECT hist24, hist_long FROM market_hist WHERE pay = ${GLOBAL_PAY}`;
 
   // Fusion por timestamp: el punto del admin manda si hay choque, y el resultado
   // queda ordenado (las velas se derivan al vuelo asumiendo orden ascendente).
@@ -64,6 +71,7 @@ async function seedGlobalHist() {
     ON CONFLICT (pay) DO UPDATE SET hist24 = excluded.hist24,
       hist_long = excluded.hist_long, seeded = true
     WHERE market_hist.seeded = false`;
+  seededOnce = true;
 }
 
 async function tickGlobalHist() {
@@ -86,10 +94,16 @@ async function tickGlobalHist() {
 
   const cur = await sql`SELECT hist24, hist_long FROM market_hist WHERE pay = ${GLOBAL_PAY}`;
   const now = Date.now();
+  const snapLong = histPaySnapshot(cur[0] && cur[0].hist_long, GLOBAL_PAY);
   const h24 = pushHist24Pay(cur[0] && cur[0].hist24, GLOBAL_PAY, now, price);
   const hLong = pushHistLongPay(cur[0] && cur[0].hist_long, GLOBAL_PAY, now, price);
+  // hist_long solo suma un punto cada 10 min, pero este bloque corre cada 2: las 4 de
+  // cada 5 veces se re-serializaba y reescribia la serie entera sin cambio alguno.
+  // Mismo criterio que ya usa tickMonitor con las series del usuario.
+  const longChanged = histPayChanged(snapLong, hLong, GLOBAL_PAY);
   await sql`UPDATE market_hist SET hist24 = ${JSON.stringify(h24)}::jsonb,
-    hist_long = ${JSON.stringify(hLong)}::jsonb WHERE pay = ${GLOBAL_PAY}`;
+    hist_long = COALESCE(${longChanged ? JSON.stringify(hLong) : null}::jsonb, hist_long)
+    WHERE pay = ${GLOBAL_PAY}`;
 }
 
 function pushLog(log, msg, level) {
