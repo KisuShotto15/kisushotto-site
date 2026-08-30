@@ -2195,12 +2195,17 @@ async function fetchRetry(url, opts, ms, retries) {
   throw lastErr;
 }
 
-async function searchBatch(bodies, ms) {
+async function searchBatch(bodies, ms, wantBot) {
   bootMark('asked');
+  var payload = { queries: bodies };
+  // Pedir el estado del bot pegado a esta respuesta solo cuando su propio poller
+  // esta activo (bot corriendo y no en pleno arranque): asi el servidor no lee
+  // bot_state para nada.
+  if (wantBot && BOT.running && BOT_POLL.timer && !botStarting()) payload.bot = true;
   var r = await fetchRetry(PROXY, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (SESSION.token || '') },
-    body: JSON.stringify({ queries: bodies })
+    body: JSON.stringify(payload)
   }, ms);
   if (r.status === 401 || r.status === 403) { authLogout(); throw new Error('Sesión expirada'); }
   // El servidor cerro la puerta (suscripcion vencida entre refrescos): apagar el
@@ -2215,6 +2220,10 @@ async function searchBatch(bodies, ms) {
   if (!r.ok) throw new Error('HTTP ' + r.status);
   var d = await r.json();
   if (d.error) throw new Error(d.error);
+  // Llego el estado del bot montado en la respuesta del monitor: pintarlo YA, antes
+  // de procesar el libro. Si viene null (el servidor no pudo leerlo) no se toca nada
+  // y el poller propio del bot cubre el hueco a los 15s.
+  if (d.bot) botStateFromMonitor(d.bot);
   var results = d.results || [];
   // Si TODAS las queries fallaron en Binance es un problema de red, no un mercado
   // vacio: lanzar para conservar los datos previos en vez de pintar tablas vacias.
@@ -2369,7 +2378,7 @@ async function fetchOnce(fast) {
     // suele estar muerta y el fetch se cuelga hasta el timeout completo (de ahi los
     // 10-20s para ver datos). Primer intento corto: si el socket esta muerto se
     // aborta rapido y el reintento abre uno nuevo.
-    var batch = await searchBatch(bodies, fast ? 3500 : 0);
+    var batch = await searchBatch(bodies, fast ? 3500 : 0, true);
     var mayRaw   = batch.slice(0, MAY_PAGES).flatMap(function(a){ return a; });
     var smallRaw = includeSmall ? batch.slice(smallOffset, smallOffset + SMALL_PAGES).flatMap(function(a){ return a; }) : [];
     var buyRaw   = includeBuy ? (batch[buyOffset] || []) : null;
@@ -4088,7 +4097,7 @@ async function botToggle() {
 // ── Poller de estado del bot server-side ──────────────
 // lastCycle: firma del ultimo ciclo del bot que ya vimos (precio + limite). Cambia
 // = el bot toco el anuncio y el monitor debe refrescarse. null = aun sin leer.
-var BOT_POLL = { timer: null, lastLogTs: 0, lastCycle: null };
+var BOT_POLL = { timer: null, lastLogTs: 0, lastCycle: null, fromMonitor: false };
 var BOT_LOG_COLORS = { up: '#1D9E75', down: '#5dade2', warn: '#F0B90B', error: '#E24B4A', info: '#8b949e' };
 
 function startBotPoller() {
@@ -4112,6 +4121,21 @@ async function pollBotState() {
     if (botStarting()) return; // arranque en curso: no pisar la UI con estado viejo
     renderBotState(d);
   } catch(e) {}
+}
+
+// El monitor trajo el estado del bot pegado a su propia respuesta (una invocacion
+// Vercel en vez de dos). Se pinta igual que si lo hubiera traido pollBotState, y se
+// reinicia la cuenta del poller: mientras el monitor siga alimentando, este no vuelve
+// a preguntar por su cuenta; si el monitor se detiene o falla, a los 15s sin noticias
+// dispara solo, como siempre. Nada de esto mueve al bot — eso es cosa de bot-tick.
+function botStateFromMonitor(d) {
+  if (!BOT.running || botStarting()) return;
+  BOT_POLL.fromMonitor = true;
+  try { renderBotState(d); } finally { BOT_POLL.fromMonitor = false; }
+  if (BOT_POLL.timer) {
+    clearInterval(BOT_POLL.timer);
+    BOT_POLL.timer = setInterval(pollBotState, 15000);
+  }
 }
 
 function renderBotState(d) {
@@ -4146,7 +4170,10 @@ function renderBotState(d) {
   } else if (firma !== BOT_POLL.lastCycle) {
     BOT_POLL.lastCycle = firma;
     syncMonitorWithBot();
-    if (ST.running) fetchOnce();
+    // Si el estado vino pegado a la respuesta del monitor, el libro que se esta
+    // procesando en esta misma llamada se pidio junto con el: ya es posterior al
+    // cambio del bot, no hace falta otra vuelta a la red.
+    if (ST.running && !BOT_POLL.fromMonitor) fetchOnce();
   }
   updateBotPnl();
   // Pintar entradas nuevas del log del servidor

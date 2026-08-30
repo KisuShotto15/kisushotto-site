@@ -173,7 +173,11 @@ async function tickMonitor(row, now) {
   // (Antes bajaba a 1/hora para suspender la Neon vieja: eso si dejaba el grafico vacio
   // y, al terminar el silencio, sin referencias de 10/30/60 min para el momentum.)
   const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now);
-  const refreshSec = silent ? Math.max(cfg.refreshSec || 30, 300) : (cfg.refreshSec || 30);
+  // 60s por defecto, igual que el valor que el cliente guarda en su config. El
+  // fallback estaba en 30 y no coincidia: cualquier config guardada antes de que esa
+  // clave existiera hacia trabajar al monitor server-side al doble del ritmo previsto,
+  // y con el al scheduler de CF, que sigue la cadencia del monitor las 24 horas.
+  const refreshSec = silent ? Math.max(cfg.refreshSec || 60, 300) : (cfg.refreshSec || 60);
   const nextMs = refreshSec * 1000;
 
   // Respetar la cadencia (el tick base es ~18s; aqui decidimos si toca refrescar).

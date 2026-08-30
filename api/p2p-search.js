@@ -1,6 +1,7 @@
 import { requireAllowedUser } from './_lib/auth.js';
 import { rateLimit, clientIp } from './_lib/ratelimit.js';
 import { hasActiveSub } from './_lib/subscriptions.js';
+import { sql } from './_lib/db.js';
 
 // ── Rate limit configurable por env (0 / sin setear = desactivado) ──
 const RL_MAX    = parseInt(process.env.RATE_LIMIT_MAX || '0', 10);
@@ -62,22 +63,47 @@ export default async function handler(req, res) {
     return (d && Array.isArray(d.data)) ? { ...d, data: d.data.map(slimItem) } : d;
   }
 
+  // Estado del bot pegado a esta misma respuesta. Con monitor y bot encendidos eran
+  // dos invocaciones Vercel cada 15s contra el mismo servidor: una pidiendo el libro
+  // y otra una fila de bot_state. Es SOLO lectura — al bot lo mueve bot-tick, esto no
+  // lo toca. Si falla (tabla ausente, base caida) va null y el cliente vuelve a su
+  // poller propio, que nunca se apaga: se re-arma cada vez que llega este dato.
+  // Sin ensureSchema(): son ~25 DDLs y aqui no se crea nada.
+  async function botState() {
+    if (!req.body || !req.body.bot) return undefined;
+    try {
+      const rows = await sql`
+        SELECT enabled, config, ad_number, current_price, ad_amount, ad_hidden,
+               ad_min_limit, last_reprice, last_tick, status, log
+        FROM bot_state WHERE user_id = ${user.uid}`;
+      return rows[0] || { enabled: false };
+    } catch (e) {
+      return null;
+    }
+  }
+
   // Lote: { queries: [body1, body2, ...] } → fan-out a Binance, 1 sola invocacion Vercel
   const queries = req.body && req.body.queries;
   if (Array.isArray(queries)) {
     // Timeout por query: sin el, una conexion colgada con Binance retiene la
     // invocacion hasta maxDuration mucho despues de que el cliente abortara.
-    const settled = await Promise.allSettled(queries.map(q =>
-      fetch(BINANCE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(q),
-        signal: AbortSignal.timeout(7000),
-      }).then(r => r.json())
-    ));
-    return res.status(200).json({
+    // La lectura del bot va en paralelo: no debe sumar latencia al libro.
+    const [settled, bot] = await Promise.all([
+      Promise.allSettled(queries.map(q =>
+        fetch(BINANCE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(q),
+          signal: AbortSignal.timeout(7000),
+        }).then(r => r.json())
+      )),
+      botState(),
+    ]);
+    const out = {
       results: settled.map(s => s.status === 'fulfilled' ? slimResp(s.value) : { error: String(s.reason) })
-    });
+    };
+    if (bot !== undefined) out.bot = bot;
+    return res.status(200).json(out);
   }
 
   // Body unico (compat)
