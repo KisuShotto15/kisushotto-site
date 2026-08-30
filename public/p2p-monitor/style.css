@@ -71,26 +71,31 @@ body {
   top: 0;
   z-index: 100;
 }
-.top h1 { font-size:18px; font-weight: 800; color: var(--gold); letter-spacing: -.02em; white-space:nowrap; }
+.top h1 { font-size:17px; font-weight: 800; color: var(--text); letter-spacing: -.02em; white-space:nowrap; }
+.nav-pair { font-size: 13px; color: var(--text-3); font-weight: 600; font-variant-numeric: tabular-nums; }
+#last-update { font-size: 12px; color: var(--text-3); white-space: nowrap; }
 .top-controls { display:flex; align-items:center; gap:7px; flex-shrink:0; }
 .top-actions  { display:flex; align-items:center; gap:5px; flex-shrink:0; }
 /* Botones de icono de la barra: mismo tamano y peso (look limpio) */
 .top-actions .btn-sm { font-size: 16px; padding: 5px 9px; line-height: 1; }
 .hub-back { display:inline-flex; align-items:center; color:var(--text-3); text-decoration:none; transition:color .15s; flex-shrink:0; }
 .hub-back:hover { color:var(--text); }
+/* Estado sin pastilla: un punto y una palabra pesan menos que una capsula con
+   fondo y borde propios al lado del titulo. */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size:15px;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12.5px;
   font-weight: 600;
-  letter-spacing: .02em;
+  white-space: nowrap;
 }
-.badge-live { background: var(--green-d); color: var(--green); border: 1px solid var(--green-b); }
-.badge-off  { background: var(--surf-2);  color: var(--text-3); border: 1px solid var(--border); }
-.dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.badge-live { color: var(--green); }
+.badge-off  { color: var(--text-3); }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .dot-live { background: var(--green); animation: pulse 1.4s infinite; box-shadow: 0 0 6px var(--green); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 .dot-off { background: var(--text-3); }
@@ -424,18 +429,57 @@ body {
    columnas en movil. */
 .hero-metrics {
   flex: 1;
+  min-width: 0;
   display: grid;
-  grid-template-columns: 1.8fr repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--border-2);
-  border: 1px solid var(--border-2);
-  border-radius: var(--r-sm);
-  overflow: hidden;
+  grid-template-columns: 1.6fr minmax(0, 1fr);
+  gap: 10px;
+}
+/* Bloque hundido dentro del hero: negro sobre el degradado de la tarjeta. */
+.hm-block {
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hm-block-t {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-3);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.hm-now-row { display: flex; align-items: flex-end; gap: 18px; }
+.hm-now-right { margin-left: auto; display: flex; gap: 18px; }
+.hm-pair { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hm-pair.right { align-items: flex-end; }
+.hm-k { font-size: 11px; color: var(--text-2); white-space: nowrap; }
+.hm-block .sh-sell, .hm-block .sh-buy { font-size: 27px; line-height: 1; letter-spacing: -.02em; }
+.hm-block .sh-arrow { font-size: 17px; padding-bottom: 4px; }
+.hm-block .sc-v { font-size: 21px; line-height: 1.15; white-space: nowrap; }
+/* El spread en Bs ya no compite con el % dorado del hero: el dato es el numero. */
+.hm-diff { color: var(--text); }
+/* Rango 24h: max y min se leen como un rango, con la posicion del precio actual. */
+.hm-range-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hm-range-v { font-size: 20px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.hm-range-cur { font-size: 11px; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hm-range-bar { position: relative; height: 6px; border-radius: 3px; background: linear-gradient(90deg, rgba(255,255,255,.07), var(--gold-b)); }
+.hm-range-mark { position: absolute; top: -4px; width: 3px; height: 14px; border-radius: 2px; background: var(--gold); box-shadow: 0 0 8px rgba(240,185,11,.7); }
+.hm-range-leg { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-3); }
+/* Entre ~900 y 1100px el bloque "Ahora" no tiene ancho para cuatro cifras en una
+   fila: Spread y 10 min bajan a su propia linea antes de que se pisen. */
+@media (max-width: 1100px) {
+  .hm-now-row { flex-wrap: wrap; }
+  .hm-now-right { margin-left: 0; width: 100%; justify-content: flex-start; gap: 22px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .hm-pair.right { align-items: flex-start; }
 }
 /* Modo Short apagado: Máx/Mín 24h se ocultan (esa serie persistida sigue siendo
    la de Mayoristas, mostrarla junto a un spread Verde confundiria); 3 columnas
    en vez de 5 para no dejar hueco vacio a la derecha. */
-.hero-metrics.hm-3 { grid-template-columns: 1.8fr repeat(2, minmax(0, 1fr)); }
+.hero-metrics.hm-3 { grid-template-columns: minmax(0, 1fr); }
 /* Celdas compactas y cifra grande: antes eran cajas altas con el numero pequeno
    perdido en el medio, mucho aire y poca lectura. El dato manda sobre la etiqueta. */
 .hero-metric {
@@ -448,6 +492,43 @@ body {
   text-align: center;
   gap: 2px;
 }
+/* ── Barra superior: agrupada ────────────────────────── */
+/* El dorado se reserva para la accion principal (Iniciar) y para el spread del
+   hero. Titulo, par y filtros van en gris: antes competian cuatro elementos
+   dorados en la misma barra y ninguno destacaba. */
+.top-div { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+.top-break { display: none; }
+.icon-cluster {
+  display: flex; align-items: center; flex-shrink: 0;
+  background: var(--surf-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.icon-cluster .btn {
+  border: none; border-radius: 0; background: none;
+  border-right: 1px solid rgba(255,255,255,.07);
+}
+.icon-cluster .btn:last-child { border-right: none; }
+.icon-cluster .btn:hover { background: var(--surf-3); }
+/* Chip de filtros y menu ⋯: solo movil. */
+.filters-chip, .more-btn { display: none; }
+.filters-chip {
+  align-items: center; gap: 6px; min-width: 0;
+  padding: 6px 10px;
+  background: var(--surf-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  font: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.filters-chip #filters-chip-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filters-chip b { color: var(--text); font-weight: 700; }
+.filters-chip i { color: var(--green); font-style: normal; }
+.filters-chip .fc-sep { color: #2b3138; }
+.filters-chip .fc-caret { font-size: 8px; color: var(--text-3); flex-shrink: 0; }
 .hm-label {
   font-size: 10.5px;
   font-weight: 700;
@@ -455,25 +536,25 @@ body {
   letter-spacing: .07em;
   text-transform: uppercase;
 }
-/* Las cifras de las celdas: un solo sitio donde tocar el tamano. */
-.hero-metric .sc-v {
-  font-size: 23px !important; font-weight: 700; line-height: 1.1; letter-spacing: -.02em;
-  white-space: nowrap; /* "957,51 Bs" partido en dos renglones alarga la caja */
-}
 .hm-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gold); }
-/* Max/Min 24h: alto/bajo no son bueno/malo -> estilo black+dorado como las tiles */
-#sess-max, #sess-min { color: var(--gold) !important; }
 .hm-prices { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 3px 7px; font-size: 19px; line-height: 1.15; }
 .sh-sell { color: var(--green); font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-buy  { color: var(--blue);  font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-arrow { color: var(--text-3); }
 @media (max-width: 760px) {
-  .spread-hero-full { flex-direction: column; gap: 14px; padding: 14px 16px; }
+  .spread-hero-full { flex-direction: column; gap: 12px; padding: 14px 16px; }
   .hero-lead { min-width: 0; }
   .hero-lead .sh-pct { font-size: 40px; }
-  .hero-metrics { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
-  .hero-metrics.hm-3 { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
-  .hero-metric.span { grid-column: 1 / -1; }
+  .hero-metrics, .hero-metrics.hm-3 { grid-template-columns: minmax(0,1fr); }
+  .hm-block { padding: 11px 12px; gap: 9px; }
+  .hm-now-row { gap: 10px; flex-wrap: wrap; }
+  /* Spread y 10 min bajan a su propia linea: en telefono no queda ancho para
+     cuatro cifras grandes en una fila. */
+  .hm-now-right { margin-left: 0; width: 100%; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .hm-pair.right { align-items: flex-start; }
+  .hm-block .sh-sell, .hm-block .sh-buy { font-size: 23px; }
+  .hm-block .sc-v { font-size: 17px; }
+  .hm-range-v { font-size: 18px; }
 }
 .opp-yes  { background: var(--gold-d);  border: 1px solid var(--gold-b);  color: var(--gold);  }
 .opp-no   { background: var(--surf-2);  border: 1px solid var(--border);  color: var(--text-3); }
@@ -748,23 +829,23 @@ input:focus {
 .tag-bank {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size:14px;
-  font-weight: 700;
-  background: var(--gold-d);
-  color: var(--gold);
-  border: 1px solid var(--gold-b);
-  letter-spacing: .03em;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  font-size:13px;
+  font-weight: 600;
+  background: var(--surf-2);
+  color: var(--text-2);
+  border: 1px solid var(--border);
 }
 #pay-method-select {
   -webkit-appearance: none;
   appearance: none;
   background-color: var(--surf-2);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23F0B90B' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237d8590' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
-  padding: 3px 24px 3px 10px;
+  padding: 4px 24px 4px 10px;
 }
 #pay-method-select option {
   background: var(--surf-1);
@@ -799,14 +880,13 @@ input:focus {
 .tag-ver {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size:14px;
-  font-weight: 700;
-  background: var(--green-d);
+  padding: 4px 9px;
+  border-radius: 7px;
+  font-size:13px;
+  font-weight: 600;
+  background: rgba(29,158,117,.10);
   color: var(--green);
-  border: 1px solid var(--green-b);
-  letter-spacing: .03em;
+  border: 1px solid rgba(29,158,117,.25);
   cursor: pointer;
   user-select: none;
   gap: 6px;
@@ -869,27 +949,44 @@ input:focus {
 @media (max-width: 640px) {
   body { font-size: 16px; }
 
-  /* Tres filas con un proposito cada una en vez de que todo flote y se acomode
-     solo: identidad+estado / filtros / acciones. Antes salian cuatro filas
-     irregulares (el badge se quedaba solo en una) y 137px de barra. */
+  /* Barra minima: identidad + estado + 🔔 + ⋯ en la primera fila; el chip que
+     resume los tres filtros y el boton Iniciar en la segunda. Los filtros se
+     despliegan como panel al tocar el chip, y 🛡️/💳/🧾 viven en el menu ⋯:
+     antes eran tres filas fijas y cinco iconos siempre a la vista. */
   .top { height: auto; min-height: 48px; padding: 7px 10px; gap: 6px; flex-wrap: wrap; }
   .top h1 { font-size: 15px; }
-  .top-controls, .top-actions { flex: 1 0 100%; flex-wrap: nowrap; gap: 5px; min-width: 0; max-width: 100%; }
-  /* Los filtros se reparten el ancho; el metodo de pago cede primero porque es el
-     unico cuyo texto varia de largo. */
-  #fiat-select, #ver-toggle { flex: 0 0 auto; }
-  #pay-method-select { flex: 1 1 auto; min-width: 0; }
-  /* Iniciar/Detener estirado: es la accion principal y de paso empuja los iconos
-     a la derecha sin margin-left:auto. */
-  #btn-start { flex: 1 1 auto; }
-  .top-actions > .btn-sm { flex: 0 0 auto; }
-  #live-badge { margin-left: auto; }
-  /* Iconos un punto mas chicos: con el 🧾 de admin visible se pasaban 4px a 320px. */
+  /* display:contents: los hijos de .top-actions se ordenan como hijos directos
+     de la barra, asi Iniciar puede bajar a la segunda fila sin los iconos. */
+  .top-actions { display: contents; }
+  .hub-back { order: 1; }
+  .top h1 { order: 2; }
+  #live-badge { order: 3; margin-left: auto; font-size: 11.5px; }
+  #icon-cluster { order: 4; }
+  .more-btn { order: 5; display: inline-flex; }
+  .top-break { order: 6; display: block; flex: 0 0 100%; height: 0; }
+  .filters-chip { order: 7; display: inline-flex; flex: 1 1 auto; }
+  #btn-start { order: 8; flex: 0 0 auto; }
+  /* Secundarios: solo con el menu ⋯ abierto. */
+  .icon-cluster .secondary { display: none; }
+  .icon-cluster.open .secondary { display: inline-flex; }
+  /* Los filtros pasan a panel desplegable bajo la barra. */
+  .top-controls {
+    display: none;
+    position: absolute; top: 100%; left: 10px; right: 10px;
+    flex-direction: column; align-items: stretch; gap: 8px;
+    background: var(--surf-1);
+    border: 1px solid var(--border-2);
+    border-radius: var(--r);
+    box-shadow: 0 8px 32px rgba(0,0,0,.8);
+    padding: 10px;
+    z-index: 120;
+  }
+  .top-controls.open { display: flex; }
+  .top-controls > * { width: 100%; justify-content: space-between; max-width: none; }
+  #pay-method-select { font-size: 14px; background-position: right 10px center; }
   .top-actions .btn-sm { font-size: 15px; padding: 4px 8px; }
-  .spacer { display: none; }
+  .spacer, .top-div { display: none; }
   #last-update, .nav-pair { display: none; }
-  #pay-method-select { font-size: 13px; max-width: 130px; }
-  .badge { font-size: 12px; padding: 2px 7px; }
   .btn { font-size: 14px; padding: 5px 10px; }
   .btn-sm { font-size: 13px; padding: 3px 8px; }
 
@@ -907,13 +1004,9 @@ input:focus {
   /* El hero se apila en vertical en telefono: sin compactar se come la primera
      pantalla y empuja las tabs fuera de vista. */
   .spread-hero-full { padding: 12px; gap: 10px; }
-  .hero-metric { padding: 8px 10px; gap: 3px; }
   .hm-label { font-size: 10px; letter-spacing: .04em; }
   .sh-pct { font-size: 32px !important; }
   #hero-net { font-size: 28px !important; }
-  /* En telefono las celdas van a dos columnas: hay menos ancho, pero la cifra
-     sigue siendo lo que se lee de un vistazo. */
-  .hero-metric .sc-v { font-size: 22px !important; }
   .hm-prices { font-size: 18px; }
 
   .ob-head, .ob-row { grid-template-columns: 1fr 80px 70px; padding: 8px 8px; }
