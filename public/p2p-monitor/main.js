@@ -4861,7 +4861,7 @@ function openHistory() {
   HX.hoverX = null;
   var hp = document.getElementById('hx-pay');
   if (hp) hp.textContent = ' · ' + payLabel(ACTIVE_PAY);
-  document.getElementById('hx-overlay').style.display = 'block';
+  document.getElementById('hx-overlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
   // Entrada en el historial del navegador: el boton atras (movil) cierra el grafico
   // en vez de salir de la app.
@@ -4898,7 +4898,7 @@ function hxVisible() {
 }
 function hxMsg(t) {
   var m = document.getElementById('hx-msg'), c = document.getElementById('hx-chart');
-  if (t) { m.textContent = t; m.style.display = ''; c.style.display = 'none'; }
+  if (t) { m.textContent = t; m.style.display = 'flex'; c.style.display = 'none'; }
   else { m.style.display = 'none'; c.style.display = ''; }
 }
 function hxTimeLabel(ts, spanMs) {
