@@ -929,6 +929,30 @@ function renderPaySelect() {
       return '<option value="' + m.id + '"' + (m.id === ACTIVE_PAY ? ' selected' : '') + '>' + m.label + '</option>';
     }).join('');
   }
+  syncFiltersChip();
+}
+
+// Chip de filtros (movil): resume moneda, metodo de pago y verificados en una
+// linea, y despliega .top-controls como panel. En escritorio no se muestra.
+function syncFiltersChip() {
+  var el = document.getElementById('filters-chip-txt');
+  if (!el) return;
+  var pay = (PAY_METHODS.filter(function(m){ return m.id === ACTIVE_PAY; })[0] || {}).label || '';
+  var ver = CFG.verifiedOnly !== false;
+  el.innerHTML = '<b>' + ACTIVE_FIAT + '/USDT</b><span class="fc-sep"> · </span>' + pay +
+    (ver ? '<span class="fc-sep"> · </span><i>✓</i>' : '');
+}
+
+function toggleFiltersChip(ev) {
+  if (ev) ev.stopPropagation();
+  var p = document.getElementById('top-controls');
+  if (p) p.classList.toggle('open');
+}
+
+function toggleMoreActions(ev) {
+  if (ev) ev.stopPropagation();
+  var c = document.getElementById('icon-cluster');
+  if (c) c.classList.toggle('open');
 }
 
 function renderFiatSelect() {
@@ -940,6 +964,7 @@ function renderFiatSelect() {
   }
   var np = document.getElementById('nav-pair');
   if (np) np.textContent = ACTIVE_FIAT + '/USDT';
+  syncFiltersChip();
 }
 
 function loadPayMethod() {
@@ -2625,8 +2650,16 @@ function updateSessionStats() {
     if (min === null || cur < min) min = cur;
     if (max === null || cur > max) max = cur;
   }
-  document.getElementById('sess-max').textContent = max !== null ? fmt(max) + fiatSuf() : '—';
-  document.getElementById('sess-min').textContent = min !== null ? fmt(min) + fiatSuf() : '—';
+  document.getElementById('sess-max').textContent = max !== null ? fmt(max) : '—';
+  document.getElementById('sess-min').textContent = min !== null ? fmt(min) : '—';
+  // Marcador del rango 24h: donde cae el precio actual entre el minimo y el maximo.
+  var curEl = document.getElementById('sess-cur'), mark = document.getElementById('sess-mark');
+  if (curEl) curEl.textContent = cur ? 'ahora ' + fmt(cur) + fiatSuf() : '';
+  if (mark) {
+    var pos = (cur && min !== null && max !== null && max > min) ? (cur - min) / (max - min) : null;
+    mark.style.display = pos === null ? 'none' : '';
+    if (pos !== null) mark.style.left = (Math.max(0, Math.min(1, pos)) * 100).toFixed(1) + '%';
+  }
 }
 
 function updateTopbarBotPrice(price) {
@@ -4412,9 +4445,8 @@ function applyMarketMode() {
   if (note) note.textContent = off ? ' · Verde vs Mayorista' : '';
   var metrics = document.getElementById('hero-metrics');
   if (metrics) metrics.classList.toggle('hm-3', off);
-  var hmMax = document.getElementById('hm-max24'), hmMin = document.getElementById('hm-min24');
-  if (hmMax) hmMax.style.display = off ? 'none' : '';
-  if (hmMin) hmMin.style.display = off ? 'none' : '';
+  var hmRange = document.getElementById('hm-range');
+  if (hmRange) hmRange.style.display = off ? 'none' : '';
 }
 
 function credibleMay()   { return credibleBest(ST.mayoristas); }
@@ -5426,6 +5458,7 @@ function updateVerToggle() {
   var on = CFG.verifiedOnly !== false;
   el.classList.toggle('off', !on);
   el.title = on ? 'Solo verificados — clic para incluir a todos' : 'Mostrando todos — clic para solo verificados';
+  syncFiltersChip();
 }
 
 // Filtros inline (label en web) + tuerca (mobile): misma fuente CFG.
@@ -5463,6 +5496,16 @@ function fmtM(n) {
   return n.toFixed(0);
 }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+// Cierra el panel de filtros y el menu ⋯ al tocar fuera (solo movil los muestra).
+document.addEventListener('click', function(e) {
+  var p = document.getElementById('top-controls');
+  if (p && p.classList.contains('open') && !p.contains(e.target) &&
+      !(e.target.closest && e.target.closest('#filters-chip'))) p.classList.remove('open');
+  var c = document.getElementById('icon-cluster');
+  if (c && c.classList.contains('open') && !c.contains(e.target) &&
+      !(e.target.closest && e.target.closest('#more-btn'))) c.classList.remove('open');
+});
 function toast(msg) {
   var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
   document.body.appendChild(t); setTimeout(function() { t.remove(); }, 2500);

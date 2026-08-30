@@ -360,10 +360,12 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   align-items: center;
 }
 .nc-cat-tag {
+  display: inline-flex; align-items: center; gap: 4px;
   background: rgba(255,255,255,0.07);
   padding: 2px 8px;
   border-radius: 999px;
 }
+.cat-emoji { display: inline-flex; align-items: center; }
 /* Papelera: iconos redondos discretos, mismo lenguaje que .btn-icon */
 .nc-trash-actions {
   display: flex; gap: 8px; justify-content: flex-end;
@@ -917,15 +919,16 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   height: 36px; padding: 0 14px; font-size: 14px;
 }
 .cat-icon-display {
-  font-size: 18px; line-height: 1; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
 }
 
 /* Category icon picker */
 .cat-icon-btn {
-  font-size: 18px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 6px;
   border-radius: var(--r-sm);
   transition: background 0.1s;
   flex: 0 0 auto;
@@ -946,7 +949,6 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 }
 #cat-icon-popup[hidden] { display: none; }
 .cat-icon-opt {
-  font-size: 20px; line-height: 1;
   background: none; border: none;
   cursor: pointer;
   padding: 5px;
@@ -956,7 +958,6 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 }
 .cat-icon-opt:hover { background: var(--hover); }
 .sidebar-cat-icon {
-  font-size: 18px; line-height: 1;
   flex: 0 0 22px;
   display: flex; align-items: center; justify-content: center;
 }
@@ -1036,11 +1037,6 @@ body.select-mode .nc-select-wrap { display: block; }
 }
 .color-swatch:hover { opacity: 0.8; }
 
-/* Iconos de categoria monocromaticos (emoji en escala de grises, aclarados
-   para que sigan visibles sobre el fondo oscuro) */
-.sidebar-cat-icon, .cat-icon-btn, .cat-icon-display, .cat-icon-opt, .cat-emoji {
-  filter: grayscale(1) brightness(1.4);
-}
 .color-swatch.active { outline: 2px solid var(--text); outline-offset: 2px; }
 
 /* PIN modal */

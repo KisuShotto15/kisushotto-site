@@ -537,7 +537,7 @@ function renderSidebarNav() {
 
   list.innerHTML = ownCats.map(c => `
     <button class="sidebar-item${State.view === 'cat:' + c.id ? ' active' : ''}" data-view="cat:${c.id}">
-      <span class="sidebar-cat-icon">${c.icon || '🏷️'}</span>
+      <span class="sidebar-cat-icon">${catIconSvg(c.icon, 22)}</span>
       <span>${escapeHtml(c.name)}</span>
     </button>
   `).join('');
@@ -629,7 +629,49 @@ const TRASH_SVG  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" 
 const PENCIL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 014 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`;
 const RESTORE_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/></svg>`;
 const GRIP_SVG  = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>`;
-const CAT_ICONS = ['🏷️','📁','🏠','💼','📚','🎯','🍽️','💪','💰','🎨','✈️','🎮','🎵','💡','🛒','🌿','🔧','❤️','📝','🏃','🎬','📊','⭐','🔔','🎁','🇯🇵'];
+const CAT_ICON_SVGS = {
+  tag: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line>',
+  folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>',
+  home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline>',
+  briefcase: '<rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>',
+  target: '<circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>',
+  food: '<path d="M5 2v6c0 1.1.9 2 2 2s2-.9 2-2V2"></path><line x1="7" y1="2" x2="7" y2="22"></line><path d="M17 2c-1.5 1-2 3-2 5a2 2 0 0 0 2 2"></path><line x1="17" y1="2" x2="17" y2="22"></line>',
+  fitness: '<rect x="1" y="9" width="4" height="6" rx="1"></rect><rect x="19" y="9" width="4" height="6" rx="1"></rect><rect x="6" y="10.5" width="4" height="3"></rect><rect x="14" y="10.5" width="4" height="3"></rect><line x1="10" y1="12" x2="14" y2="12"></line>',
+  money: '<line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>',
+  art: '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.4c2 0 3.6-1.6 3.6-3.6C21 6.4 17 2 12 2z"></path><circle cx="6.5" cy="11.5" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="9.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="14.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="17" cy="11" r="1.2" fill="currentColor" stroke="none"></circle>',
+  travel: '<line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>',
+  game: '<rect x="2" y="7" width="20" height="11" rx="4"></rect><line x1="6" y1="11.5" x2="6" y2="14.5"></line><line x1="4.5" y1="13" x2="7.5" y2="13"></line><circle cx="15" cy="11" r="1" fill="currentColor" stroke="none"></circle><circle cx="18" cy="14" r="1" fill="currentColor" stroke="none"></circle>',
+  music: '<path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle>',
+  idea: '<path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"></path>',
+  cart: '<circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>',
+  plant: '<path d="M12 3c5 0 8 3 8 8 0 6-4 10-8 10S4 17 4 11c0-5 3-8 8-8z"></path><path d="M12 3v18"></path>',
+  tool: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>',
+  heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>',
+  note: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line>',
+  run: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>',
+  film: '<rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line>',
+  chart: '<line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line>',
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>',
+  bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path>',
+  gift: '<polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>',
+  japan: '<path d="M3 7h18"></path><path d="M2 4c3 1.5 17 1.5 20 0"></path><line x1="7" y1="7" x2="7" y2="21"></line><line x1="17" y1="7" x2="17" y2="21"></line><line x1="5" y1="13" x2="19" y2="13"></line>',
+};
+const CAT_ICONS = Object.keys(CAT_ICON_SVGS);
+
+// Compatibilidad con categorias que ya tenian guardado un emoji como icono.
+const LEGACY_EMOJI_TO_ICON = {
+  '🏷️': 'tag', '📁': 'folder', '🏠': 'home', '💼': 'briefcase', '📚': 'book',
+  '🎯': 'target', '🍽️': 'food', '💪': 'fitness', '💰': 'money', '🎨': 'art',
+  '✈️': 'travel', '🎮': 'game', '🎵': 'music', '💡': 'idea', '🛒': 'cart',
+  '🌿': 'plant', '🔧': 'tool', '❤️': 'heart', '📝': 'note', '🏃': 'run',
+  '🎬': 'film', '📊': 'chart', '⭐': 'star', '🔔': 'bell', '🎁': 'gift', '🇯🇵': 'japan',
+};
+
+function catIconSvg(icon, size = 18) {
+  const key = CAT_ICON_SVGS[icon] ? icon : (LEGACY_EMOJI_TO_ICON[icon] || 'tag');
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${CAT_ICON_SVGS[key]}</svg>`;
+}
 
 function renderDrawerCats() {
   const root = $('#drawer-cat-list');
@@ -650,7 +692,7 @@ function renderDrawerCats() {
 
     const iconBtn = document.createElement('button');
     iconBtn.className = 'cat-icon-btn';
-    iconBtn.textContent = c.icon || '🏷️';
+    iconBtn.innerHTML = catIconSvg(c.icon);
     iconBtn.title = 'Cambiar icono';
 
     const inp = document.createElement('input');
@@ -770,7 +812,7 @@ function noteCardHtml(n) {
   }
 
   const cats = (n.categories || []).map(cid => State.categories.find(c => c.id === cid)).filter(Boolean);
-  const catTags = cats.map(c => `<span class="nc-cat-tag"><span class="cat-emoji">${c.icon || '🏷️'}</span> ${escapeHtml(c.name)}</span>`).join('');
+  const catTags = cats.map(c => `<span class="nc-cat-tag"><span class="cat-emoji">${catIconSvg(c.icon, 12)}</span> ${escapeHtml(c.name)}</span>`).join('');
   const sharedBadge = isShared ? `<span class="nc-shared">📥 Compartida</span>` : '';
   const lockBadge = n.locked ? `<span class="nc-locked" style="display:inline-flex;align-items:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>` : '';
   const reminderBadge = n.reminder_at ? `<span>⏰ ${fmtDate(n.reminder_at)}</span>` : '';
@@ -2381,7 +2423,7 @@ function bindEditorActions() {
       id: crypto.randomUUID(),
       owner_email: getUserEmail(),
       name,
-      icon: '🏷️',
+      icon: 'tag',
       color: '#5B3082',
       created_at: Date.now(),
       updated_at: Date.now(),
@@ -2643,7 +2685,7 @@ function renderCategoriesPopup() {
     lbl.className = 'cats-modal-row';
     const checked = (State.editing?.categories || []).includes(c.id);
     lbl.innerHTML = `<input type="checkbox" data-id="${c.id}" ${checked ? 'checked' : ''}>
-                     <span class="cat-icon-display">${c.icon || '🏷️'}</span>
+                     <span class="cat-icon-display">${catIconSvg(c.icon)}</span>
                      <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
       EditorHistory.flush();
@@ -2686,7 +2728,7 @@ function renderSharePopup() {
 // ── icon picker popup (shared, used in drawer) ───────────────────────────────
 function openIconPicker(catId, anchorBtn) {
   const popup = $('#cat-icon-popup');
-  popup.innerHTML = CAT_ICONS.map(em => `<button class="cat-icon-opt" data-icon="${em}">${em}</button>`).join('');
+  popup.innerHTML = CAT_ICONS.map(key => `<button class="cat-icon-opt" data-icon="${key}">${catIconSvg(key)}</button>`).join('');
   popup.dataset.catId = catId;
 
   const rect = anchorBtn.getBoundingClientRect();
@@ -2705,7 +2747,7 @@ function openIconPicker(catId, anchorBtn) {
       if (cat) {
         cat.icon = btn.dataset.icon;
         cat.updated_at = Date.now();
-        anchorBtn.textContent = cat.icon;
+        anchorBtn.innerHTML = catIconSvg(cat.icon);
         await saveCategoryLocal(cat);
         renderCategoriesStrip();
       }
@@ -2776,7 +2818,7 @@ function openBulkCatsModal() {
     lbl.className = 'bulk-cat-row';
     const allHave = [...State.selected].every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id));
     lbl.innerHTML = `<input type="checkbox" ${allHave ? 'checked' : ''}>
-      <span class="cat-icon-display">${c.icon || '🏷️'}</span>
+      <span class="cat-icon-display">${catIconSvg(c.icon)}</span>
       <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
       for (const nid of State.selected) {
@@ -2832,7 +2874,7 @@ function bindDrawer() {
       id: crypto.randomUUID(),
       owner_email: getUserEmail(),
       name,
-      icon: '🏷️',
+      icon: 'tag',
       color: '#5B3082',
       created_at: Date.now(),
       updated_at: Date.now(),
