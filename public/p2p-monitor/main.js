@@ -5204,7 +5204,7 @@ function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
   function X(ts) { return padL + (ts - t0) / dt * W; }
   function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
   var up = cs.length ? cs[cs.length - 1].c >= cs[0].o : true;
-  HX.px = { padL: padL, padR: padR, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, col: up ? '#2ebd85' : '#f6465d' };
+  HX.px = { padL: padL, padR: padR, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, volH: volH, col: up ? '#2ebd85' : '#f6465d' };
   ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
   for (var i = 0; i <= 5; i++) {
     var val = lo + (hi - lo) * i / 5, y = Y(val);
@@ -5273,7 +5273,7 @@ function hxDrawBase(pts, cssW, cssH, dpr) {
   function X(ts) { return padL + (ts - t0) / dt * W; }
   function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
   var open = pts[0].price, close = pts[pts.length - 1].price, col = close >= open ? '#2ebd85' : '#f6465d';
-  HX.px = { padL: padL, padR: padR, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, col: col }; // para el crosshair
+  HX.px = { padL: padL, padR: padR, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, volH: 0, col: col }; // para el crosshair
   ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
   for (var i = 0; i <= 5; i++) {
     var val = lo + (hi - lo) * i / 5, y = Y(val);
@@ -5347,60 +5347,79 @@ function hxDraw() {
     ctx.restore();
   }
 
-  // Crosshair estilo TradingView: las lineas siguen al CURSOR (libre); el marcador
-  // y el tooltip enganchan al dato mas cercano (punto en linea, vela en velas).
-  // Si el pan cayo justo en un hueco sin dato visible, no hay a que enganchar: se
-  // deja de dibujar el tooltip (las lineas punteadas del cursor libre no dependen
-  // de esto, pero el resto si necesita al menos un punto/vela real).
-  if (HX.hoverX != null && (candles ? cs.length : pts.length) > 0) {
+  // Vela/punto de referencia para la leyenda de arriba a la izquierda: el que
+  // esta bajo el cursor si hay hover, si no el mas reciente — asi la leyenda
+  // nunca queda vacia, igual que en cualquier grafico de trading.
+  var hoverTs = (HX.hoverX != null && (candles ? cs.length : pts.length) > 0)
+    ? t0 + ((HX.hoverX - padL) / W) * dt : null;
+  var refCandle = null, refPoint = null, refCol = col, refX = null;
+  var bMs = hxTf().ms;
+  if (candles && cs.length) {
+    if (hoverTs != null) {
+      refCandle = cs[0];
+      var bd = Infinity;
+      for (var q = 0; q < cs.length; q++) { var dd = Math.abs((cs[q].t + bMs / 2) - hoverTs); if (dd < bd) { bd = dd; refCandle = cs[q]; } }
+    } else {
+      refCandle = cs[cs.length - 1];
+    }
+    refCol = refCandle.c >= refCandle.o ? '#2ebd85' : '#f6465d';
+    refX = X(refCandle.t + bMs / 2);
+  } else if (!candles && pts.length) {
+    if (hoverTs != null) {
+      refPoint = pts[0];
+      var bd2 = Infinity;
+      for (var q2 = 0; q2 < pts.length; q2++) { var dd2 = Math.abs(pts[q2].ts - hoverTs); if (dd2 < bd2) { bd2 = dd2; refPoint = pts[q2]; } }
+    } else {
+      refPoint = pts[pts.length - 1];
+    }
+    refX = X(refPoint.ts);
+  }
+  // Leyenda OHLC (o precio, en modo Linea) fija arriba a la izquierda: no sigue
+  // al cursor, se lee siempre en el mismo sitio.
+  if (refCandle || refPoint) {
+    ctx.save();
+    ctx.font = '600 12px -apple-system, sans-serif';
+    var legend = refCandle
+      ? 'A ' + fmt(refCandle.o) + '  H ' + fmt(refCandle.h) + '  L ' + fmt(refCandle.l) + '  C ' + fmt(refCandle.c)
+      : fmt(refPoint.price) + fiatSuf();
+    var lw = ctx.measureText(legend).width + 14;
+    ctx.fillStyle = 'rgba(10,13,18,.78)';
+    ctx.fillRect(padL + 4, padT + 4, lw, 20);
+    ctx.fillStyle = refCol; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(legend, padL + 11, padT + 14);
+    ctx.restore();
+  }
+
+  // Crosshair estilo TradingView: las lineas siguen al CURSOR (libre); el marcador,
+  // la etiqueta de precio (eje derecho) y la de fecha (eje inferior) enganchan al
+  // dato mas cercano (la misma referencia de la leyenda de arriba).
+  if (hoverTs != null) {
     var cx = HX.hoverX, cy = HX.hoverY;
-    var hts = t0 + ((cx - padL) / W) * dt;
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, padT + H); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(padL, cy); ctx.lineTo(padL + W, cy); ctx.stroke();
     ctx.setLineDash([]);
-    var l1, l2, l3 = null;
-    if (candles) {
-      var bMs = hxTf().ms, bc = cs[0], bd = Infinity;
-      for (var q = 0; q < cs.length; q++) { var dd = Math.abs((cs[q].t + bMs / 2) - hts); if (dd < bd) { bd = dd; bc = cs[q]; } }
-      var kcol = bc.c >= bc.o ? '#2ebd85' : '#f6465d';
-      var mx = X(bc.t + bMs / 2);
-      ctx.beginPath(); ctx.arc(mx, Y(bc.c), 4, 0, 2 * Math.PI); ctx.fillStyle = kcol; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
-      l1 = 'A ' + fmt(bc.o) + '  C ' + fmt(bc.c);
-      l2 = 'Máx ' + fmt(bc.h) + '  Mín ' + fmt(bc.l);
-      l3 = hxFullLabel(bc.t);
-      col = kcol;
-    } else {
-      var bp = pts[0], bd2 = Infinity;
-      for (var q2 = 0; q2 < pts.length; q2++) { var dd2 = Math.abs(pts[q2].ts - hts); if (dd2 < bd2) { bd2 = dd2; bp = pts[q2]; } }
-      ctx.beginPath(); ctx.arc(X(bp.ts), Y(bp.price), 4, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
-      l1 = fmt(bp.price) + fiatSuf();
-      l2 = hxFullLabel(bp.ts);
-    }
-    // Etiqueta de precio sobre el eje Y (ahora a la derecha) a la altura del cursor
+    var refTs, refY;
+    if (refCandle) { refTs = refCandle.t; refY = Y(refCandle.c); col = refCol; }
+    else { refTs = refPoint.ts; refY = Y(refPoint.price); }
+    ctx.beginPath(); ctx.arc(refX, refY, 4, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    // Etiqueta de precio sobre el eje Y (a la derecha) a la altura del cursor.
     var curPrice = lo + (1 - (cy - padT) / H) * dp;
     ctx.font = '600 11px -apple-system, sans-serif';
     ctx.fillStyle = col; ctx.fillRect(padL + W + 4, cy - 9, HX.px.padR - 4, 18);
     ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(fmt(curPrice), padL + W + 8, cy);
-    // Caja tooltip cerca del cursor
-    ctx.font = '600 12px -apple-system, sans-serif';
-    var lines = l3 != null ? [l1, l2, l3] : [l1, l2];
-    var tw = 0; lines.forEach(function(s) { tw = Math.max(tw, ctx.measureText(s).width); }); tw += 16;
-    var th = 14 * lines.length + 8, bx = cx + 12, by = cy - th - 12;
-    if (bx + tw > padL + W) bx = cx - 12 - tw;
-    if (by < padT) by = cy + 12;
-    by = Math.max(padT, Math.min(padT + H - th, by));
-    ctx.fillStyle = 'rgba(20,24,34,0.95)'; ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
-    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, tw, th, 6); ctx.fill(); ctx.stroke(); }
-    else { ctx.fillRect(bx, by, tw, th); ctx.strokeRect(bx, by, tw, th); }
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = col; ctx.fillText(lines[0], bx + 8, by + 12);
-    ctx.fillStyle = '#8b93a7'; ctx.font = '11px -apple-system, sans-serif';
-    for (var li = 1; li < lines.length; li++) ctx.fillText(lines[li], bx + 8, by + 12 + 14 * li);
+    // Etiqueta de fecha/hora sobre el eje X (abajo), pegada al dato enganchado.
+    var dateStr = hxFullLabel(refTs);
+    ctx.font = '600 11px -apple-system, sans-serif';
+    var dtw = ctx.measureText(dateStr).width + 12;
+    var axisY = padT + H + (HX.px.volH || 0);
+    var dtx = Math.max(padL, Math.min(padL + W - dtw, refX - dtw / 2));
+    ctx.fillStyle = col; ctx.fillRect(dtx, axisY + 2, dtw, 16);
+    ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(dateStr, dtx + 6, axisY + 10);
     ctx.restore();
   }
 }
