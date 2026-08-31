@@ -5083,7 +5083,11 @@ function hxClampView() {
   var totalCandles = Math.max(HX_MIN_CANDLES, Math.round((lastEdge - firstT) / bMs) + 2);
   if (HX.viewCount > totalCandles) HX.viewCount = totalCandles;
   var span = HX.viewCount * bMs;
-  var minEndT = firstT + span, maxEndT = lastEdge + bMs * 3; // un poco de aire a la derecha del ultimo dato
+  // Aire a la derecha del ultimo dato: la mitad de las velas en pantalla (minimo
+  // 15), asi que siempre hay hueco de sobra para proyectar una linea de tendencia
+  // hacia el futuro, y escala con el zoom (mas cerca = mas hueco en pantalla,
+  // pero medido en velas es proporcional siempre).
+  var minEndT = firstT + span, maxEndT = lastEdge + Math.max(HX.viewCount * 0.5, 15) * bMs;
   if (HX.viewEndT < minEndT) HX.viewEndT = minEndT;
   if (HX.viewEndT > maxEndT) HX.viewEndT = maxEndT;
 }
