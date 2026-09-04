@@ -2314,13 +2314,14 @@ function mapBuyAds(raw) {
   }).sort(function(a, b) { return a.price - b.price; });  // ascendente: más barato primero
 }
 
-// ── Acumulador de variacion de avail ──────────────────
+// ── Acumulador de variacion (avail / price) ───────────
 // Ventana deslizante: cada variacion vive ACCUM_WINDOW_MS y luego se descuenta
 // del total. El valor mostrado = suma de variaciones de los ultimos 60s.
 var ACCUM_WINDOW_MS = 60000;
-function accumAvail(section, ads, prevMap) {
-  ST.availAccum = ST.availAccum || {};
-  var acc = ST.availAccum[section] = ST.availAccum[section] || {};
+function accumDelta(section, ads, prevMap, field, minDelta) {
+  ST.deltaAccum = ST.deltaAccum || {};
+  var byField = ST.deltaAccum[field] = ST.deltaAccum[field] || {};
+  var acc = byField[section] = byField[section] || {};
   var now = Date.now();
   var present = {};
   var display = {};
@@ -2329,13 +2330,13 @@ function accumAvail(section, ads, prevMap) {
     var ev = acc[ad.advNo] || [];
     var prev = prevMap[ad.advNo];
     if (prev !== undefined) {
-      var delta = ad.avail - prev;
-      if (delta !== 0) ev.push({ ts: now, delta: delta });
+      var delta = ad[field] - prev;
+      if (Math.abs(delta) >= minDelta) ev.push({ ts: now, delta: delta });
     }
     ev = ev.filter(function(e){ return now - e.ts < ACCUM_WINDOW_MS; });
     acc[ad.advNo] = ev;
     var sum = ev.reduce(function(s, e){ return s + e.delta; }, 0);
-    if (sum !== 0) display[ad.advNo] = { value: sum };
+    if (Math.abs(sum) >= minDelta) display[ad.advNo] = { value: sum };
   });
   // limpiar merchants que ya no estan en el top
   Object.keys(acc).forEach(function(m){ if (!present[m]) delete acc[m]; });
@@ -2362,6 +2363,16 @@ function availArrowHtml(d) {
     : Math.round(av).toLocaleString('es-VE');
   if (v > 0) return '<span class="avail-arrow up" title="Recargó +' + Math.round(v) + ' USDT (últ. 60s)">+' + s + '</span>';
   return '<span class="avail-arrow down" title="Vendió ' + Math.round(v) + ' USDT (últ. 60s)">-' + s + '</span>';
+}
+
+// Variacion de precio del comerciante en los ultimos 60s, en Bs.
+function priceArrowHtml(d) {
+  if (!d || !d.value) return '';
+  var v = d.value;
+  var s = Math.abs(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+  var up = v > 0;
+  return '<span class="price-arrow ' + (up ? 'up' : 'down') + '" title="' +
+    (up ? 'Subió +' : 'Bajó -') + s + ' Bs (últ. 60s)">' + (up ? '+' : '−') + s + '</span>';
 }
 
 function availPopupHtml(d) {
@@ -2408,14 +2419,14 @@ async function fetchOnce(fast) {
     var smallRaw = includeSmall ? batch.slice(smallOffset, smallOffset + SMALL_PAGES).flatMap(function(a){ return a; }) : [];
     var buyRaw   = includeBuy ? (batch[buyOffset] || []) : null;
 
-    var prevMayAvail = {};
-    (ST.mayoristas || []).forEach(function(a){ prevMayAvail[a.advNo] = a.avail; });
+    var prevMayAvail = {}, prevMayPrice = {};
+    (ST.mayoristas || []).forEach(function(a){ prevMayAvail[a.advNo] = a.avail; prevMayPrice[a.advNo] = a.price; });
 
-    var prevSmallAvail = {};
-    (ST.smallAds || []).forEach(function(a){ prevSmallAvail[a.advNo] = a.avail; });
+    var prevSmallAvail = {}, prevSmallPrice = {};
+    (ST.smallAds || []).forEach(function(a){ prevSmallAvail[a.advNo] = a.avail; prevSmallPrice[a.advNo] = a.price; });
 
-    var prevBuyAvail = {};
-    (ST.buyAds || []).forEach(function(a){ prevBuyAvail[a.advNo] = a.avail; });
+    var prevBuyAvail = {}, prevBuyPrice = {};
+    (ST.buyAds || []).forEach(function(a){ prevBuyAvail[a.advNo] = a.avail; prevBuyPrice[a.advNo] = a.price; });
 
     ST.mayoristas = mapAds(mayRaw,   !(CFG.mayAmount   > 0));
     ST.smallAds   = mapAds(smallRaw, !(CFG.smallAmount > 0));
@@ -2456,9 +2467,14 @@ async function fetchOnce(fast) {
     if (buyRaw !== null) setExtraCount('extra-buy', ST.buyAds.length);
 
     ST.availDisp = ST.availDisp || {};
-    ST.availDisp['ob-may']   = accumAvail('ob-may',   ST.mayoristas, prevMayAvail);
-    ST.availDisp['ob-small'] = accumAvail('ob-small', ST.smallAds,   prevSmallAvail);
-    if (buyRaw !== null) ST.availDisp['ob-buy'] = accumAvail('ob-buy', ST.buyAds, prevBuyAvail);
+    ST.availDisp['ob-may']   = accumDelta('ob-may',   ST.mayoristas, prevMayAvail,   'avail', 1);
+    ST.availDisp['ob-small'] = accumDelta('ob-small', ST.smallAds,   prevSmallAvail, 'avail', 1);
+    if (buyRaw !== null) ST.availDisp['ob-buy'] = accumDelta('ob-buy', ST.buyAds, prevBuyAvail, 'avail', 1);
+
+    ST.priceDisp = ST.priceDisp || {};
+    ST.priceDisp['ob-may']   = accumDelta('ob-may',   ST.mayoristas, prevMayPrice,   'price', 0.0005);
+    ST.priceDisp['ob-small'] = accumDelta('ob-small', ST.smallAds,   prevSmallPrice, 'price', 0.0005);
+    if (buyRaw !== null) ST.priceDisp['ob-buy'] = accumDelta('ob-buy', ST.buyAds, prevBuyPrice, 'price', 0.0005);
 
     ST.allAds     = ST.mayoristas; // para compatibilidad con historial
 
@@ -2871,11 +2887,13 @@ function renderOB(id, ads, bestCls) {
       var disp = ST.availDisp && ST.availDisp[id];
       var arrowHtml = availArrowHtml(disp && disp[ad.advNo]);
       var popupHtml = availPopupHtml(disp && disp[ad.advNo]);
+      var pDisp = ST.priceDisp && ST.priceDisp[id];
+      var priceArrow = priceArrowHtml(pDisp && pDisp[ad.advNo]);
       var meCls = ad.merchant === myNick() ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
-        '<span class="price-c">' + fmtP(ad.price) + '</span>' +
+        '<span class="price-c"><span class="price-num">' + fmtP(ad.price) + priceArrow + '</span></span>' +
         '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
         popupHtml +
       '</div>';
@@ -2936,11 +2954,13 @@ function renderBuySection(ads) {
       var disp = ST.availDisp && ST.availDisp['ob-buy'];
       var arrowHtml = availArrowHtml(disp && disp[ad.advNo]);
       var popupHtml = availPopupHtml(disp && disp[ad.advNo]);
+      var pDisp = ST.priceDisp && ST.priceDisp['ob-buy'];
+      var priceArrow = priceArrowHtml(pDisp && pDisp[ad.advNo]);
       var meCls = ad.merchant === myNick() ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
-        '<span class="price-c g">' + fmtP(ad.price) + '</span>' +
+        '<span class="price-c g"><span class="price-num">' + fmtP(ad.price) + priceArrow + '</span></span>' +
         '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
         popupHtml +
       '</div>';
