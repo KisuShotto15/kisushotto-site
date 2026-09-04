@@ -2329,14 +2329,15 @@ function accumDelta(section, ads, prevMap, field, minDelta) {
     present[ad.advNo] = true;
     var ev = acc[ad.advNo] || [];
     var prev = prevMap[ad.advNo];
+    var fresh = false;
     if (prev !== undefined) {
       var delta = ad[field] - prev;
-      if (Math.abs(delta) >= minDelta) ev.push({ ts: now, delta: delta });
+      if (Math.abs(delta) >= minDelta) { ev.push({ ts: now, delta: delta }); fresh = true; }
     }
     ev = ev.filter(function(e){ return now - e.ts < ACCUM_WINDOW_MS; });
     acc[ad.advNo] = ev;
     var sum = ev.reduce(function(s, e){ return s + e.delta; }, 0);
-    if (Math.abs(sum) >= minDelta) display[ad.advNo] = { value: sum };
+    if (Math.abs(sum) >= minDelta) display[ad.advNo] = { value: sum, fresh: fresh };
   });
   // limpiar merchants que ya no estan en el top
   Object.keys(acc).forEach(function(m){ if (!present[m]) delete acc[m]; });
@@ -2372,6 +2373,24 @@ function priceChgCls(d) {
   if (!d || !d.value) return '';
   return d.value > 0 ? ' chg-up' : ' chg-down';
 }
+// Precio partido en prefijo intacto + los digitos que se movieron, para colorear
+// solo esa cola (el flash del numero entero lo hace la animacion en CSS).
+function priceSplitHtml(price, d) {
+  var cur = fmtP(price);
+  if (!d || !d.value) return cur;
+  var base = fmtP(price - d.value);
+  var i = 0;
+  while (i < cur.length && i < base.length && cur[i] === base[i]) i++;
+  if (i >= cur.length) return cur;
+  return cur.slice(0, i) + '<span class="chg-part ' + (d.value > 0 ? 'up' : 'down') + '">' + cur.slice(i) + '</span>';
+}
+// Clase de flash: solo el ciclo en que el precio se movio de verdad.
+function priceFlashCls(d) {
+  if (!d || !d.fresh) return '';
+  d.fresh = false;
+  return d.value > 0 ? ' flash-up' : ' flash-down';
+}
+
 function priceChgHtml(d) {
   if (!d || !d.value) return '';
   var v = d.value;
@@ -2895,11 +2914,12 @@ function renderOB(id, ads, bestCls) {
       var pDisp = ST.priceDisp && ST.priceDisp[id];
       var pd = pDisp && pDisp[ad.advNo];
       var chgCls = priceChgCls(pd), chgHtml = priceChgHtml(pd);
+      var flashCls = priceFlashCls(pd), priceHtml = priceSplitHtml(ad.price, pd);
       var meCls = ad.merchant === myNick() ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
-        '<span class="price-c' + chgCls + '">' + fmtP(ad.price) + '</span>' +
+        '<span class="price-c' + chgCls + flashCls + '">' + priceHtml + '</span>' +
         '<span class="chg-c' + chgCls + '">' + chgHtml + '</span>' +
         '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
         popupHtml +
@@ -2965,11 +2985,12 @@ function renderBuySection(ads) {
       var pDisp = ST.priceDisp && ST.priceDisp['ob-buy'];
       var pd = pDisp && pDisp[ad.advNo];
       var chgCls = priceChgCls(pd), chgHtml = priceChgHtml(pd);
+      var flashCls = priceFlashCls(pd), priceHtml = priceSplitHtml(ad.price, pd);
       var meCls = ad.merchant === myNick() ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
-        '<span class="price-c g' + chgCls + '">' + fmtP(ad.price) + '</span>' +
+        '<span class="price-c g' + chgCls + flashCls + '">' + priceHtml + '</span>' +
         '<span class="chg-c' + chgCls + '">' + chgHtml + '</span>' +
         '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
         popupHtml +

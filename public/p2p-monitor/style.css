@@ -713,6 +713,27 @@ body {
 .chg-c { font-size: 12px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .chg-c.chg-up { color: #22c55e; }
 .chg-c.chg-down { color: #ef4444; }
+/* Precio estilo TradingView: al moverse, flashea el numero entero y despues
+   queda coloreada solo la cola de digitos que cambio (.chg-part). El flash
+   anima el color de la celda, que solo hereda el prefijo intacto. */
+.chg-part.up { color: #22c55e; }
+.chg-part.down { color: #ef4444; }
+.price-c { border-radius: 4px; }
+.price-c.flash-up { animation: pFlashUp .9s ease-out; }
+.price-c.flash-down { animation: pFlashDown .9s ease-out; }
+@keyframes pFlashUp {
+  0%   { color: #22c55e; background: rgba(34,197,94,.22); }
+  60%  { color: #22c55e; background: rgba(34,197,94,.10); }
+  100% { color: var(--text); background: transparent; }
+}
+@keyframes pFlashDown {
+  0%   { color: #ef4444; background: rgba(239,68,68,.22); }
+  60%  { color: #ef4444; background: rgba(239,68,68,.10); }
+  100% { color: var(--text); background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .price-c.flash-up, .price-c.flash-down { animation: none; }
+}
 .auth-inp { width:100%; box-sizing:border-box; background:var(--surf-2); border:1px solid var(--border-2); border-radius:var(--r-sm); color:var(--text-1,#eaecef); padding:9px 11px; font-size:14px; margin-top:6px; outline:none; transition:border-color .15s; }
 .auth-inp:first-child { margin-top:0; }
 .auth-inp::placeholder { color:var(--text-3); }
