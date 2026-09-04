@@ -2367,8 +2367,8 @@ function availArrowHtml(d) {
 }
 
 // Variacion de precio del comerciante en los ultimos 60s, en Bs.
-// Escritorio: columna Cambio propia. Movil: no hay ancho para esa columna, se
-// tinte el precio en verde/rojo (la clase va tambien en la celda del precio).
+// Solo para la celda de la columna Cambio (oculta en movil). El precio no lleva
+// esta clase: su color sale del flash y de .chg-part, nunca del numero entero.
 function priceChgCls(d) {
   if (!d || !d.value) return '';
   return d.value > 0 ? ' chg-up' : ' chg-down';
@@ -2919,7 +2919,7 @@ function renderOB(id, ads, bestCls) {
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
-        '<span class="price-c' + chgCls + flashCls + '">' + priceHtml + '</span>' +
+        '<span class="price-c' + flashCls + '">' + priceHtml + '</span>' +
         '<span class="chg-c' + chgCls + '">' + chgHtml + '</span>' +
         '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
         popupHtml +
@@ -2990,7 +2990,7 @@ function renderBuySection(ads) {
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
-        '<span class="price-c g' + chgCls + flashCls + '">' + priceHtml + '</span>' +
+        '<span class="price-c g' + flashCls + '">' + priceHtml + '</span>' +
         '<span class="chg-c' + chgCls + '">' + chgHtml + '</span>' +
         '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
         popupHtml +
