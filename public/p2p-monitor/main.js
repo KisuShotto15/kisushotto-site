@@ -2366,13 +2366,18 @@ function availArrowHtml(d) {
 }
 
 // Variacion de precio del comerciante en los ultimos 60s, en Bs.
-function priceArrowHtml(d) {
+// Escritorio: columna Cambio propia. Movil: no hay ancho para esa columna, se
+// tinte el precio en verde/rojo (la clase va tambien en la celda del precio).
+function priceChgCls(d) {
+  if (!d || !d.value) return '';
+  return d.value > 0 ? ' chg-up' : ' chg-down';
+}
+function priceChgHtml(d) {
   if (!d || !d.value) return '';
   var v = d.value;
   var s = Math.abs(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
   var up = v > 0;
-  return '<span class="price-arrow ' + (up ? 'up' : 'down') + '" title="' +
-    (up ? 'Subió +' : 'Bajó -') + s + ' Bs (últ. 60s)">' + (up ? '+' : '−') + s + '</span>';
+  return '<span title="' + (up ? 'Subió +' : 'Bajó -') + s + ' Bs (últ. 60s)">' + (up ? '+' : '−') + s + '</span>';
 }
 
 function availPopupHtml(d) {
@@ -2888,12 +2893,14 @@ function renderOB(id, ads, bestCls) {
       var arrowHtml = availArrowHtml(disp && disp[ad.advNo]);
       var popupHtml = availPopupHtml(disp && disp[ad.advNo]);
       var pDisp = ST.priceDisp && ST.priceDisp[id];
-      var priceArrow = priceArrowHtml(pDisp && pDisp[ad.advNo]);
+      var pd = pDisp && pDisp[ad.advNo];
+      var chgCls = priceChgCls(pd), chgHtml = priceChgHtml(pd);
       var meCls = ad.merchant === myNick() ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
-        '<span class="price-c"><span class="price-num">' + fmtP(ad.price) + priceArrow + '</span></span>' +
+        '<span class="price-c' + chgCls + '">' + fmtP(ad.price) + '</span>' +
+        '<span class="chg-c' + chgCls + '">' + chgHtml + '</span>' +
         '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
         popupHtml +
       '</div>';
@@ -2903,6 +2910,7 @@ function renderOB(id, ads, bestCls) {
         '<span class="merch" style="color:var(--text-3)">—</span>' +
         '<span class="lim-c">—</span>' +
         '<span class="price-c">—</span>' +
+        '<span class="chg-c"></span>' +
         '<span class="lim-c">—</span>' +
       '</div>';
     }
@@ -2955,12 +2963,14 @@ function renderBuySection(ads) {
       var arrowHtml = availArrowHtml(disp && disp[ad.advNo]);
       var popupHtml = availPopupHtml(disp && disp[ad.advNo]);
       var pDisp = ST.priceDisp && ST.priceDisp['ob-buy'];
-      var priceArrow = priceArrowHtml(pDisp && pDisp[ad.advNo]);
+      var pd = pDisp && pDisp[ad.advNo];
+      var chgCls = priceChgCls(pd), chgHtml = priceChgHtml(pd);
       var meCls = ad.merchant === myNick() ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
-        '<span class="price-c g"><span class="price-num">' + fmtP(ad.price) + priceArrow + '</span></span>' +
+        '<span class="price-c g' + chgCls + '">' + fmtP(ad.price) + '</span>' +
+        '<span class="chg-c' + chgCls + '">' + chgHtml + '</span>' +
         '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
         popupHtml +
       '</div>';
@@ -2970,6 +2980,7 @@ function renderBuySection(ads) {
         '<span class="merch" style="color:var(--text-3)">—</span>' +
         '<span class="lim-c">—</span>' +
         '<span class="price-c">—</span>' +
+        '<span class="chg-c"></span>' +
         '<span class="lim-c">—</span>' +
       '</div>';
     }
