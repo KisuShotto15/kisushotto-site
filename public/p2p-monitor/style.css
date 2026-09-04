@@ -1040,9 +1040,8 @@ input:focus {
   .ob-head span:nth-child(1), .ob-row > span:nth-child(1),
   .ob-head span:nth-child(3), .ob-row > span:nth-child(3),
   .ob-head span:nth-child(5), .ob-row > span:nth-child(5) { display: none; }
-  /* Sin columna Cambio (no hay ancho): el precio se tinta como en TradingView. */
-  .price-c.chg-up   { color: #22c55e; }
-  .price-c.chg-down { color: #ef4444; }
+  /* Sin columna Cambio (no hay ancho). El flash y la cola de digitos coloreada
+     son los mismos de escritorio: no hace falta regla propia aca. */
   .merch { font-size: 14px; }
   .price-c { font-size: 15px; }
   .lim-c { font-size: 13px; line-height: 1.2; }
