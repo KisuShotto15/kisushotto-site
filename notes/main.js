@@ -804,11 +804,15 @@ function noteCardHtml(n) {
   }
 
   let imgs = '';
+  let audioHtml = '';
   if (n.attachments?.length) {
     const imgAtts = n.attachments.filter(a => a.type === 'image');
-    if (imgAtts.length) imgs += `<div class="nc-imgs-row">${imgAtts.map(a => `<img class="nc-image-thumb" data-att="${a.id}" alt="" loading="lazy" draggable="false">`).join('')}</div>`;
+    if (imgAtts.length) {
+      const multi = imgAtts.length > 1 ? ' nc-imgs-multi' : '';
+      imgs = `<div class="nc-imgs-row${multi}">${imgAtts.map(a => `<img class="nc-image-thumb" data-att="${a.id}" alt="" loading="lazy" draggable="false">`).join('')}</div>`;
+    }
     const audios = n.attachments.filter(a => a.type === 'audio');
-    for (const a of audios) imgs += `<audio class="nc-audio" controls preload="none" data-att="${a.id}"></audio>`;
+    for (const a of audios) audioHtml += `<audio class="nc-audio" controls preload="none" data-att="${a.id}"></audio>`;
   }
 
   const cats = (n.categories || []).map(cid => State.categories.find(c => c.id === cid)).filter(Boolean);
@@ -826,11 +830,14 @@ function noteCardHtml(n) {
       <label class="nc-select-wrap"><input type="checkbox" class="nc-select-cb" aria-label="Seleccionar nota" data-id="${n.id}" ${isSelected ? 'checked' : ''}></label>
       ${n.pinned ? '<span class="nc-pin"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></span>' : ''}
       ${archiveBadge}
-      ${n.locked && !isSessionUnlocked() ? '' : (n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : '')}
       ${n.locked && !isSessionUnlocked() ? '' : imgs}
+      <div class="nc-card-body">
+      ${n.locked && !isSessionUnlocked() ? '' : (n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : '')}
       ${body}
+      ${n.locked && !isSessionUnlocked() ? '' : audioHtml}
       <div class="nc-meta">${catTags}${sharedBadge}${lockBadge}${reminderBadge}</div>
       ${trashActions}
+      </div>
     </article>
   `;
 }
