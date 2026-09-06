@@ -3234,17 +3234,6 @@ function bindUI() {
     if (img && img.src) { e.stopPropagation(); openLightbox(img.src); }
   });
 
-  // Image clicks — note cards (delegated on grid)
-  $$('#grid-pinned, #grid-others').forEach(grid => {
-    grid.addEventListener('click', e => {
-      const img = e.target.closest('img.nc-image-thumb');
-      if (img && img.src && !img.src.endsWith('#')) {
-        e.stopPropagation();
-        openLightbox(img.src);
-      }
-    });
-  });
-
   // ── Android back button / browser back gesture ───────────────────────────
   // Check what's actually open in DOM (not history state) to avoid re-open bugs
   window.addEventListener('popstate', () => {

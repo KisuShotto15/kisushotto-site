@@ -460,7 +460,6 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 .nc-image-thumb {
   width: 100%; height: 200px;
   object-fit: cover;
-  cursor: zoom-in;
   display: block;
 }
 .nc-imgs-multi .nc-image-thumb { height: 130px; }
