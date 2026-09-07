@@ -417,6 +417,36 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 }
 .nc-shared { font-size: 11px; color: var(--accent); }
 .nc-locked { font-size: 14px; }
+
+/* Acciones rapidas al hover, estilo Google Keep: aparecen abajo de la
+   tarjeta cerrada, sin necesidad de entrar a modo seleccion. Solo en
+   dispositivos con hover real (mouse); en tactil se usa select-mode. */
+.nc-hover-actions {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 2px;
+  padding: 4px 6px;
+  background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0));
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.12s, transform 0.12s;
+  pointer-events: none;
+}
+@media (hover: hover) {
+  .note-card:hover .nc-hover-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+}
+body.select-mode .nc-hover-actions { display: none; }
+.nc-hover-btn {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+}
+.nc-hover-btn:hover { background: rgba(255,255,255,0.15); }
+.nc-hover-btn.danger:hover { color: #f87171; background: rgba(248,113,113,0.18); }
 .nc-checklist-line {
   display: flex; align-items: flex-start; gap: 6px;
   font-size: 14px; color: var(--muted2);
@@ -885,29 +915,37 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 /* Categories modal */
 .cats-modal-card {
   width: 100%;
-  max-width: 360px;
-  padding: 20px;
+  padding: 22px;
 }
 .cats-modal-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 14px;
 }
 .cats-modal-title {
-  font-size: 15px; font-weight: 600;
+  font-size: 16px; font-weight: 600;
   letter-spacing: 0.01em;
 }
 .cats-modal-list {
   display: flex; flex-direction: column; gap: 2px;
-  max-height: 260px; overflow-y: auto;
+  max-height: min(50vh, 420px); overflow-y: auto; overflow-x: hidden;
   margin-bottom: 14px;
 }
 .cats-modal-row {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 8px;
+  padding: 11px 8px;
   border-radius: var(--r-sm);
   cursor: pointer;
   font-size: 15px;
   transition: background 0.1s;
+}
+.cats-modal-row span:last-child {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* .modal--dialog caps dialogs at 340px for small confirm/PIN prompts; the
+   categories list needs more room, especially on desktop. */
+#cats-modal .modal-card {
+  width: min(92vw, 420px) !important;
+  max-width: 420px !important;
 }
 .cats-modal-row:hover { background: var(--hover); }
 .cats-modal-row input[type=checkbox] {
@@ -1504,10 +1542,13 @@ body.modal-open {
 }
 
 /* Bulk categories modal */
-.bulk-cats-card { max-width: 320px !important; }
+#bulk-cats-modal .modal-card {
+  width: min(92vw, 420px) !important;
+  max-width: 420px !important;
+}
 .bulk-cats-list {
   display: flex; flex-direction: column;
-  max-height: 280px; overflow-y: auto;
+  max-height: min(50vh, 420px); overflow-y: auto; overflow-x: hidden;
   margin: 12px 0 4px;
 }
 .bulk-cat-row {
@@ -1524,6 +1565,9 @@ body.modal-open {
   accent-color: var(--accent);
   flex: 0 0 auto;
   cursor: pointer;
+}
+.bulk-cat-row span:last-child {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* Small dialogs (confirm, PIN) — never fullscreen, always centered */

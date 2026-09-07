@@ -824,6 +824,13 @@ function noteCardHtml(n) {
     ? `<div class="nc-trash-actions"><button class="nc-trash-btn" data-restore="${n.id}" title="Restaurar" aria-label="Restaurar">${RESTORE_SVG}</button><button class="nc-trash-btn danger" data-purge="${n.id}" title="Eliminar definitivamente" aria-label="Eliminar definitivamente">${TRASH_SVG}</button></div>`
     : '';
   const archiveBadge = n.archived ? `<span class="nc-archive-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></span>` : '';
+  const hoverActions = State.view === 'trash' ? '' : `
+    <div class="nc-hover-actions">
+      <button class="nc-hover-btn" data-hact="pin" title="${n.pinned ? 'Quitar de fijadas' : 'Fijar'}" aria-label="Fijar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
+      <button class="nc-hover-btn" data-hact="cats" title="Categorías" aria-label="Categorías"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
+      <button class="nc-hover-btn" data-hact="archive" title="${n.archived ? 'Desarchivar' : 'Archivar'}" aria-label="Archivar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></button>
+      <button class="nc-hover-btn danger" data-hact="delete" title="Eliminar" aria-label="Eliminar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+    </div>`;
 
   return `
     <article class="${cls}" ${style} data-id="${n.id}" onclick="">
@@ -838,6 +845,7 @@ function noteCardHtml(n) {
       <div class="nc-meta">${catTags}${sharedBadge}${lockBadge}${reminderBadge}</div>
       ${trashActions}
       </div>
+      ${hoverActions}
     </article>
   `;
 }
@@ -1276,6 +1284,54 @@ function wireCard(card) {
 
   card.addEventListener('click', async (ev) => {
     if (_dragHappened) { _dragHappened = false; return; }
+    const hactBtn = ev.target.closest('[data-hact]');
+    if (hactBtn) {
+      ev.stopPropagation();
+      const n = State.notes.find(x => x.id === card.dataset.id);
+      if (!n) return;
+      switch (hactBtn.dataset.hact) {
+        case 'pin':
+          n.pinned = !n.pinned;
+          n.last_modified = Date.now();
+          saveNoteLocal(n);
+          render();
+          break;
+        case 'cats':
+          openBulkCatsModal([n.id]);
+          break;
+        case 'archive': {
+          const wasArchived = !!n.archived;
+          n.archived = !wasArchived;
+          n.last_modified = Date.now();
+          saveNoteLocal(n);
+          render();
+          if (!wasArchived) {
+            showUndoToast('Nota archivada', () => {
+              n.archived = false;
+              n.last_modified = Date.now();
+              saveNoteLocal(n);
+              render();
+            });
+          }
+          break;
+        }
+        case 'delete': {
+          if (!(await window.customConfirm('¿Mover a la papelera?'))) return;
+          n.trashed_at = Date.now();
+          n.last_modified = Date.now();
+          saveNoteLocal(n);
+          render();
+          showUndoToast('Nota eliminada', () => {
+            n.trashed_at = null;
+            n.last_modified = Date.now();
+            saveNoteLocal(n);
+            render();
+          });
+          break;
+        }
+      }
+      return;
+    }
     const restoreBtn = ev.target.closest('[data-restore]');
     if (restoreBtn) {
       ev.stopPropagation();
@@ -2821,7 +2877,8 @@ function showPopupAt(sel, anchor) {
   p.style.top  = `${top}px`;
   p.style.left = `${left}px`;
 }
-function openBulkCatsModal() {
+function openBulkCatsModal(ids) {
+  const targetIds = ids || [...State.selected];
   const list = $('#bulk-cats-list');
   list.innerHTML = '';
   const me = getUserEmail();
@@ -2832,12 +2889,12 @@ function openBulkCatsModal() {
   for (const c of own) {
     const lbl = document.createElement('label');
     lbl.className = 'bulk-cat-row';
-    const allHave = [...State.selected].every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id));
+    const allHave = targetIds.every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id));
     lbl.innerHTML = `<input type="checkbox" ${allHave ? 'checked' : ''}>
       <span class="cat-icon-display">${catIconSvg(c.icon)}</span>
       <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
-      for (const nid of State.selected) {
+      for (const nid of targetIds) {
         const n = State.notes.find(x => x.id === nid);
         if (!n) continue;
         n.categories = n.categories || [];
@@ -2846,6 +2903,7 @@ function openBulkCatsModal() {
         n.last_modified = Date.now();
         saveNoteLocal(n);
       }
+      render();
     });
     list.appendChild(lbl);
   }
