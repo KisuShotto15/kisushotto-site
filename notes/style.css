@@ -423,20 +423,22 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
    dispositivos con hover real (mouse); en tactil se usa select-mode. */
 .nc-hover-actions {
   position: absolute; left: 0; right: 0; bottom: 0;
-  display: flex; align-items: center; gap: 2px;
-  padding: 4px 6px;
+  display: flex; align-items: center; gap: 0;
+  padding: 3px 4px;
+  overflow-x: auto; scrollbar-width: none;
   background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0));
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 0.12s, transform 0.12s;
   pointer-events: none;
 }
+.nc-hover-actions::-webkit-scrollbar { display: none; }
 @media (hover: hover) {
   .note-card:hover .nc-hover-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
 }
 body.select-mode .nc-hover-actions { display: none; }
 .nc-hover-btn {
-  width: 30px; height: 30px;
+  width: 28px; height: 28px;
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   background: transparent;

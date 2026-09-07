@@ -826,10 +826,13 @@ function noteCardHtml(n) {
   const archiveBadge = n.archived ? `<span class="nc-archive-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></span>` : '';
   const hoverActions = State.view === 'trash' ? '' : `
     <div class="nc-hover-actions">
-      <button class="nc-hover-btn" data-hact="pin" title="${n.pinned ? 'Quitar de fijadas' : 'Fijar'}" aria-label="Fijar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
-      <button class="nc-hover-btn" data-hact="cats" title="Categorías" aria-label="Categorías"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
-      <button class="nc-hover-btn" data-hact="archive" title="${n.archived ? 'Desarchivar' : 'Archivar'}" aria-label="Archivar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></button>
-      <button class="nc-hover-btn danger" data-hact="delete" title="Eliminar" aria-label="Eliminar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+      <button class="nc-hover-btn" data-hact="color" title="Color" aria-label="Color"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg></button>
+      <button class="nc-hover-btn" data-hact="reminder" title="Recordatorio" aria-label="Recordatorio"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
+      <button class="nc-hover-btn" data-hact="pin" title="${n.pinned ? 'Quitar de fijadas' : 'Fijar'}" aria-label="Fijar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
+      <button class="nc-hover-btn" data-hact="cats" title="Categorías" aria-label="Categorías"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
+      <button class="nc-hover-btn" data-hact="archive" title="${n.archived ? 'Desarchivar' : 'Archivar'}" aria-label="Archivar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></button>
+      <button class="nc-hover-btn danger" data-hact="delete" title="Eliminar" aria-label="Eliminar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+      <button class="nc-hover-btn" data-hact="more" title="Más" aria-label="Más opciones"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
     </div>`;
 
   return `
@@ -933,6 +936,10 @@ const SWIPE_ACTIVE_COLOR = 'rgba(67,160,71,0.92)';
 let _dragState = null; // { noteId, ghost, card, offsetX, offsetY, container }
 let _dragHappened = false;
 let _dragScrollBlock = null;
+
+// Note id targeted by the color/reminder/more quick actions opened from a
+// closed note's hover bar (as opposed to the currently open editor).
+let _quickTargetId = null;
 
 function startDrag(card, x, y) {
   if (_dragState) return;
@@ -1290,6 +1297,28 @@ function wireCard(card) {
       const n = State.notes.find(x => x.id === card.dataset.id);
       if (!n) return;
       switch (hactBtn.dataset.hact) {
+        case 'color':
+          _quickTargetId = n.id;
+          showPopupAt('#popup-color', hactBtn);
+          break;
+        case 'reminder': {
+          _quickTargetId = n.id;
+          const inp = $('#popup-reminder-input');
+          if (n.reminder_at) {
+            const d = new Date(n.reminder_at);
+            const tz = d.getTimezoneOffset() * 60000;
+            inp.value = new Date(d - tz).toISOString().slice(0, 16);
+          } else {
+            inp.value = '';
+          }
+          showPopupAt('#popup-reminder', hactBtn);
+          break;
+        }
+        case 'more':
+          _quickTargetId = n.id;
+          $('#card-more-lock-label').textContent = n.locked ? 'Desproteger' : 'Proteger';
+          showPopupAt('#popup-card-more', hactBtn);
+          break;
         case 'pin':
           n.pinned = !n.pinned;
           n.last_modified = Date.now();
@@ -2307,6 +2336,35 @@ function openNew(type) {
   if (type === 'image') setTimeout(() => $('#ed-image')?.click(), 100);
 }
 
+// Copia titulo, cuerpo, checklist, color y categorias. No copia adjuntos,
+// comparticiones, recordatorio ni proteccion (quedan en su estado inicial).
+async function duplicateNote(n) {
+  const copy = {
+    id: crypto.randomUUID(),
+    owner_email: getUserEmail(),
+    title: n.title || '',
+    body: n.body || '',
+    type: n.type || 'text',
+    checklist_items: (n.checklist_items || []).map(it => ({ ...it, id: crypto.randomUUID() })),
+    color: n.color || null,
+    pinned: false,
+    archived: false,
+    trashed_at: null,
+    locked: false,
+    reminder_at: null,
+    reminder_sent: false,
+    last_modified: Date.now(),
+    created_at: Date.now(),
+    sort_order: Date.now() + 1,
+    categories: [...(n.categories || [])],
+    attachments: [],
+    shares: [],
+  };
+  State.notes.unshift(copy);
+  await saveNoteLocal(copy);
+  render();
+}
+
 // ── PIN unlock prompt ────────────────────────────────────────────────────────
 async function promptUnlock() {
   return new Promise(async (resolve) => {
@@ -2466,6 +2524,13 @@ function bindEditorActions() {
   });
   $$('#popup-color .color-swatch').forEach(s => {
     s.addEventListener('click', () => {
+      if (_quickTargetId) {
+        const n = State.notes.find(x => x.id === _quickTargetId);
+        _quickTargetId = null;
+        hidePopups();
+        if (n) { n.color = s.dataset.color || null; n.last_modified = Date.now(); saveNoteLocal(n); render(); }
+        return;
+      }
       EditorHistory.flush();
       State.editing.color = s.dataset.color || null;
       const c = State.editing.color;
@@ -2524,6 +2589,20 @@ function bindEditorActions() {
   $('#popup-reminder-save').addEventListener('click', () => {
     const v = $('#popup-reminder-input').value;
     if (!v) return;
+    if (_quickTargetId) {
+      const n = State.notes.find(x => x.id === _quickTargetId);
+      _quickTargetId = null;
+      hidePopups();
+      if (n) {
+        n.reminder_at = new Date(v).getTime();
+        n.reminder_sent = false;
+        n.last_modified = Date.now();
+        saveNoteLocal(n);
+        render();
+        ensurePushSubscription().catch(() => {});
+      }
+      return;
+    }
     EditorHistory.flush();
     State.editing.reminder_at = new Date(v).getTime();
     State.editing.reminder_sent = false;
@@ -2534,6 +2613,19 @@ function bindEditorActions() {
     ensurePushSubscription().catch(() => {});
   });
   $('#popup-reminder-clear').addEventListener('click', () => {
+    if (_quickTargetId) {
+      const n = State.notes.find(x => x.id === _quickTargetId);
+      _quickTargetId = null;
+      hidePopups();
+      if (n) {
+        n.reminder_at = null;
+        n.reminder_sent = false;
+        n.last_modified = Date.now();
+        saveNoteLocal(n);
+        render();
+      }
+      return;
+    }
     EditorHistory.flush();
     State.editing.reminder_at = null;
     State.editing.reminder_sent = false;
@@ -2561,6 +2653,33 @@ function bindEditorActions() {
     } catch (e) {
       alert(e.message);
     }
+  });
+
+  // Quick "more" menu (closed note, hover actions on the card)
+  $('#card-more-share').addEventListener('click', async () => {
+    const n = State.notes.find(x => x.id === _quickTargetId);
+    _quickTargetId = null;
+    hidePopups();
+    if (!n) return;
+    await openCard(n);
+    $('#ed-share')?.click();
+  });
+  $('#card-more-lock').addEventListener('click', () => {
+    const n = State.notes.find(x => x.id === _quickTargetId);
+    _quickTargetId = null;
+    hidePopups();
+    if (!n) return;
+    n.locked = !n.locked;
+    n.last_modified = Date.now();
+    saveNoteLocal(n);
+    render();
+  });
+  $('#card-more-dup').addEventListener('click', () => {
+    const n = State.notes.find(x => x.id === _quickTargetId);
+    _quickTargetId = null;
+    hidePopups();
+    if (!n) return;
+    duplicateNote(n);
   });
 
   // Paste handler: images get uploaded; text always stripped to plain
@@ -2851,7 +2970,8 @@ function showPopupAt(sel, anchor) {
   // verse como un parche oscuro sobre una nota coloreada (antes solo lo hacia
   // el menu de mas opciones).
   if (sel === '#popup-color' || sel === '#popup-add' || sel === '#popup-more') {
-    p.style.background = State.editing?.color || '';
+    const target = State.editing || (_quickTargetId ? State.notes.find(x => x.id === _quickTargetId) : null);
+    p.style.background = target?.color || '';
   }
   if (isMobile()) {
     // On mobile, CSS handles bottom-sheet positioning; just clear inline styles
