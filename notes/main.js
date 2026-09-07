@@ -1961,19 +1961,28 @@ function renderChecklist() {
 }
 
 function renderAttachments() {
+  const imgRoot = $('#ed-imgs');
   const root = $('#ed-attachments');
+  imgRoot.innerHTML = '';
   root.innerHTML = '';
   const e = State.editing;
   if (!e?.attachments) return;
+  const imgCount = e.attachments.filter(a => a.type === 'image').length;
+  imgRoot.classList.toggle('ed-imgs-multi', imgCount > 1);
   for (const a of e.attachments) {
     const div = document.createElement('div');
-    div.className = 'ed-att';
-    if (a.type === 'image') div.innerHTML = `<img data-att="${a.id}" alt=""><button class="ed-att-del" data-del="${a.id}">×</button>`;
-    else                    div.innerHTML = `<audio data-att="${a.id}" controls></audio><button class="ed-att-del" data-del="${a.id}">×</button>`;
-    root.appendChild(div);
+    if (a.type === 'image') {
+      div.className = 'ed-img';
+      div.innerHTML = `<img data-att="${a.id}" alt=""><button class="ed-att-del" data-del="${a.id}">×</button>`;
+      imgRoot.appendChild(div);
+    } else {
+      div.className = 'ed-att';
+      div.innerHTML = `<audio data-att="${a.id}" controls></audio><button class="ed-att-del" data-del="${a.id}">×</button>`;
+      root.appendChild(div);
+    }
   }
   // load blobs
-  const els = [...root.querySelectorAll('[data-att]')];
+  const els = [...imgRoot.querySelectorAll('[data-att]'), ...root.querySelectorAll('[data-att]')];
   let failed = 0;
   runWithLimit(els, 4, async el => {
     const id = el.dataset.att;
@@ -1986,7 +1995,7 @@ function renderAttachments() {
   }).then(() => {
     if (failed > 0) showErrorToast(`No se pudo cargar ${failed === 1 ? 'un adjunto' : failed + ' adjuntos'}.`);
   });
-  root.querySelectorAll('button[data-del]').forEach(btn => {
+  [...imgRoot.querySelectorAll('button[data-del]'), ...root.querySelectorAll('button[data-del]')].forEach(btn => {
     btn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       const id = btn.dataset.del;
@@ -3229,9 +3238,11 @@ function bindUI() {
   });
 
   // Image clicks — editor attachments (delegated)
-  $('#ed-attachments').addEventListener('click', e => {
-    const img = e.target.closest('img[data-att]');
-    if (img && img.src) { e.stopPropagation(); openLightbox(img.src); }
+  $$('#ed-imgs, #ed-attachments').forEach(root => {
+    root.addEventListener('click', e => {
+      const img = e.target.closest('img[data-att]');
+      if (img && img.src) { e.stopPropagation(); openLightbox(img.src); }
+    });
   });
 
   // ── Android back button / browser back gesture ───────────────────────────
