@@ -407,8 +407,32 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   position: absolute; top: 8px; right: 8px;
   display: flex; align-items: center; justify-content: center;
   color: #fff;
+  transition: opacity 0.12s;
 }
 .nc-pin svg { fill: #fff; }
+/* Boton de fijar interactivo: mismo lugar que el badge estatico de arriba,
+   pero solo visible al hover (para poder fijar/desfijar sin abrir la nota). */
+.nc-hover-pin {
+  position: absolute; top: 7px; right: 7px;
+  width: 27px; height: 27px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s, background 0.12s;
+}
+.nc-hover-pin:hover { background: var(--hover); }
+.note-card.colored .nc-hover-pin { color: #fff; }
+.note-card.colored .nc-hover-pin:hover { background: rgba(255,255,255,0.15); }
+@media (hover: hover) {
+  .note-card:hover .nc-hover-pin { opacity: 1; pointer-events: auto; }
+  .note-card:hover .nc-pin { opacity: 0; }
+}
+body.select-mode .nc-hover-pin { display: none; }
 .nc-archive-badge {
   position: absolute; bottom: 8px; right: 8px;
   display: flex; align-items: center; justify-content: center;
