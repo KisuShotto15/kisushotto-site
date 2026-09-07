@@ -832,7 +832,7 @@ function noteCardHtml(n) {
       <button class="nc-hover-btn" data-hact="cats" title="Categorías" aria-label="Categorías"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
       <button class="nc-hover-btn" data-hact="archive" title="${n.archived ? 'Desarchivar' : 'Archivar'}" aria-label="Archivar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></button>
       <button class="nc-hover-btn danger" data-hact="delete" title="Eliminar" aria-label="Eliminar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
-      <button class="nc-hover-btn" data-hact="more" title="Más" aria-label="Más opciones"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
+      <button class="nc-hover-btn nc-hover-more" data-hact="more" title="Más" aria-label="Más opciones"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
     </div>`;
 
   return `
@@ -847,8 +847,8 @@ function noteCardHtml(n) {
       ${n.locked && !isSessionUnlocked() ? '' : audioHtml}
       <div class="nc-meta">${catTags}${sharedBadge}${lockBadge}${reminderBadge}</div>
       ${trashActions}
-      </div>
       ${hoverActions}
+      </div>
     </article>
   `;
 }
