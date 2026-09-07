@@ -418,19 +418,24 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 .nc-shared { font-size: 11px; color: var(--accent); }
 .nc-locked { font-size: 14px; }
 
-/* Acciones rapidas al hover, estilo Google Keep: en flujo normal, colapsadas
-   a 0 por defecto, se expanden debajo del contenido (nunca lo tapan y no
-   dejan hueco vacio cuando no se esta haciendo hover). Solo en dispositivos
-   con hover real; en tactil se usa select-mode. */
+/* Acciones rapidas al hover, estilo Google Keep: la tarjeta reserva siempre
+   ese espacio abajo (padding-bottom de .nc-card-body) para que nunca haya
+   texto detras; los iconos solo se hacen visibles con el hover, sin cambiar
+   el tamano de la tarjeta (asi las notas no se mueven al pasar el mouse).
+   Solo en dispositivos con hover real; en tactil se usa select-mode. */
+@media (hover: hover) {
+  .nc-card-body { padding-bottom: 42px; }
+}
 .nc-hover-actions {
+  position: absolute; left: 0; right: 0; bottom: 0;
   display: flex; align-items: center; gap: 0;
-  max-height: 0;
+  padding: 3px 6px;
   opacity: 0;
-  overflow: hidden;
-  transition: max-height 0.15s ease, opacity 0.12s, margin-top 0.15s ease;
+  pointer-events: none;
+  transition: opacity 0.12s;
 }
 @media (hover: hover) {
-  .note-card:hover .nc-hover-actions { max-height: 34px; opacity: 1; margin-top: 6px; }
+  .note-card:hover .nc-hover-actions { opacity: 1; pointer-events: auto; }
 }
 body.select-mode .nc-hover-actions { display: none; }
 .nc-hover-btn {
