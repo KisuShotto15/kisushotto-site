@@ -1,4 +1,4 @@
-// Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~18s.
+// Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~30s.
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
 import { sql, ensureMarketHist, ensureBotAdMinLimit } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
@@ -180,7 +180,7 @@ async function tickMonitor(row, now) {
   const refreshSec = silent ? Math.max(cfg.refreshSec || 60, 300) : (cfg.refreshSec || 60);
   const nextMs = refreshSec * 1000;
 
-  // Respetar la cadencia (el tick base es ~18s; aqui decidimos si toca refrescar).
+  // Respetar la cadencia (el tick base es ~30s; aqui decidimos si toca refrescar).
   const sinceTick = row.last_tick ? now - new Date(row.last_tick).getTime() : Infinity;
   if (sinceTick < refreshSec * 1000) return refreshSec * 1000 - sinceTick;
 
@@ -194,7 +194,7 @@ async function tickMonitor(row, now) {
   if (!claim.length) return 25 * 1000;
 
   // Columna pesada (hist_long acumula hasta 2 anios) SOLO cuando toca refrescar:
-  // parsearlas en cada tick de 18s era CPU desperdiciada.
+  // parsearlas en cada tick de 30s era CPU desperdiciada.
   const hrows = await sql`
     SELECT price_hist, cooldowns, hist24, hist_long, last_summary, log
     FROM monitor_state WHERE user_id = ${row.user_id}`;
@@ -530,7 +530,7 @@ export default async function handler(req, res) {
     try { await sweepRenewals(); } catch (e) {}
 
     // Sin ensureSchema(): el schema ya existe (lo crean los endpoints de auth/app).
-    // Correr ~25 DDLs por cold start cada 18s era costo inutil. Excepcion: la columna
+    // Correr ~25 DDLs por cold start cada 30s era costo inutil. Excepcion: la columna
     // que este mismo tick escribe, que si no existe tumbaria el UPDATE y con el, el
     // reprice de todos. Una sola sentencia idempotente, una vez por instancia.
     await ensureBotAdMinLimit();
@@ -549,7 +549,7 @@ export default async function handler(req, res) {
 
     let ticked = 0;
     for (const row of rows) {
-      // Claim atomico: evita que dos ticks solapados (DO ~18s + latencia Binance)
+      // Claim atomico: evita que dos ticks solapados (DO ~30s + latencia Binance)
       // repricien al mismo usuario en paralelo.
       const claim = await sql`
         UPDATE bot_state SET last_tick = now()
@@ -680,7 +680,7 @@ export default async function handler(req, res) {
     }
 
     // bots/monitors: se los lee el scheduler de CF para adaptar la cadencia
-    // (18s con bots, 30s solo-monitor, backoff si no hay nada habilitado).
+    // (30s con bots, 30s solo-monitor, backoff si no hay nada habilitado).
     // nextSec: sin bots, cuando toca el proximo refresh de monitor. tickMonitor
     // ya devuelve cuanto falta (incluye silencio nocturno y latido del cliente).
     const nextSec = (!rows.length && mrows.length && nextMs !== Infinity)

@@ -5,7 +5,7 @@
 //
 // Cadencia ADAPTATIVA (ahorra Fluid Active CPU en Vercel): /api/bot-tick responde
 // { bots, monitors } y el DO elige el proximo intervalo:
-//   bots > 0        → TICK_MS (18s, el reprice necesita cadencia)
+//   bots > 0        → TICK_MS (30s, minimo permitido por Binance para repreciar)
 //   solo monitors   → MONITOR_TICK_MS (30s, el refresh minimo del monitor es 30s)
 //   nada habilitado → IDLE_TICK_MS (120s)
 // GET /poke re-arma la alarm a +1s: lo llama Vercel al habilitar bot/monitor para
@@ -47,7 +47,7 @@ export class BotScheduler {
   }
 
   async alarm() {
-    const tickMs = parseInt(this.env.TICK_MS || '18000', 10);
+    const tickMs = parseInt(this.env.TICK_MS || '30000', 10);
     const monMs = parseInt(this.env.MONITOR_TICK_MS || '30000', 10);
     const idleMs = parseInt(this.env.IDLE_TICK_MS || '120000', 10);
     // Red de seguridad ANTES del fetch: si el DO muere a mitad, el loop continua.

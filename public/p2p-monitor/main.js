@@ -4163,7 +4163,7 @@ async function botToggle() {
     // 4. Encender el bot en el SERVIDOR (repricia 24/7 aunque cierres la página)
     try {
       await botCallWorker('/bot-enable', { config: botServerConfig() });
-      botLog('☁ Bot corriendo en el servidor (~18s)', '#1D9E75');
+      botLog('☁ Bot corriendo en el servidor (~30s)', '#1D9E75');
     } catch(e) {
       botLog('⚠ No se pudo encender el bot en el servidor: ' + e.message, '#F6465D');
     }
@@ -4191,7 +4191,7 @@ function startBotPoller() {
   if (botStarting()) return;
   stopBotPoller();
   pollBotState();
-  // 15s: el reprice server-side es ~18s, pollear mas rapido solo gastaba invocaciones
+  // 15s: el reprice server-side es ~30s, pollear mas rapido solo gastaba invocaciones
   // Vercel sin ver nada nuevo (era el mayor consumidor con la app abierta).
   BOT_POLL.timer = setInterval(pollBotState, 15000);
 }
