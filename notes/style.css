@@ -309,10 +309,10 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   display: block;
   width: 100%;
   margin-bottom: 16px;
-  padding: 16px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
+  overflow: hidden;
   cursor: pointer;
   user-select: none; -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -321,6 +321,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   position: relative;
   will-change: transform;
 }
+.nc-card-body { padding: 16px; }
 .note-card * { cursor: inherit; }
 /* Solo con puntero real: en tactil el hover queda "pegado" tras el tap */
 @media (hover: hover) {
@@ -406,8 +407,32 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   position: absolute; top: 8px; right: 8px;
   display: flex; align-items: center; justify-content: center;
   color: #fff;
+  transition: opacity 0.12s;
 }
 .nc-pin svg { fill: #fff; }
+/* Boton de fijar interactivo: mismo lugar que el badge estatico de arriba,
+   pero solo visible al hover (para poder fijar/desfijar sin abrir la nota). */
+.nc-hover-pin {
+  position: absolute; top: 7px; right: 7px;
+  width: 27px; height: 27px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s, background 0.12s;
+}
+.nc-hover-pin:hover { background: var(--hover); }
+.note-card.colored .nc-hover-pin { color: #fff; }
+.note-card.colored .nc-hover-pin:hover { background: rgba(255,255,255,0.15); }
+@media (hover: hover) {
+  .note-card:hover .nc-hover-pin { opacity: 1; pointer-events: auto; }
+  .note-card:hover .nc-pin { opacity: 0; }
+}
+body.select-mode .nc-hover-pin { display: none; }
 .nc-archive-badge {
   position: absolute; bottom: 8px; right: 8px;
   display: flex; align-items: center; justify-content: center;
@@ -416,6 +441,43 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 }
 .nc-shared { font-size: 11px; color: var(--accent); }
 .nc-locked { font-size: 14px; }
+
+/* Acciones rapidas al hover, estilo Google Keep: la tarjeta reserva siempre
+   ese espacio abajo (padding-bottom de .nc-card-body) para que nunca haya
+   texto detras; los iconos solo se hacen visibles con el hover, sin cambiar
+   el tamano de la tarjeta (asi las notas no se mueven al pasar el mouse).
+   Solo en dispositivos con hover real; en tactil se usa select-mode. */
+@media (hover: hover) {
+  .nc-card-body { padding-bottom: 42px; }
+}
+.nc-hover-actions {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 0;
+  padding: 3px 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+@media (hover: hover) {
+  .note-card:hover .nc-hover-actions { opacity: 1; pointer-events: auto; }
+}
+body.select-mode .nc-hover-actions { display: none; }
+.nc-hover-btn {
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted2);
+  cursor: pointer;
+}
+.nc-hover-btn:hover { background: var(--hover); color: var(--text); }
+.note-card.colored .nc-hover-btn { color: rgba(255,255,255,0.75); }
+.note-card.colored .nc-hover-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+/* El menu "mas" va aparte, pegado a la esquina derecha de la barra */
+.nc-hover-more { margin-left: auto; }
+.nc-hover-btn.danger:hover { color: #f87171; background: rgba(248,113,113,0.18); }
 .nc-checklist-line {
   display: flex; align-items: flex-start; gap: 6px;
   font-size: 14px; color: var(--muted2);
@@ -453,16 +515,15 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 .note-card.colored .nc-checklist-line { color: rgba(255,255,255,0.85); }
 .note-card.colored .nc-checklist-line.done { color: rgba(255,255,255,0.45); }
 .nc-imgs-row {
-  display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;
+  display: grid; grid-template-columns: 1fr; gap: 2px;
 }
+.nc-imgs-row.nc-imgs-multi { grid-template-columns: 1fr 1fr; }
 .nc-image-thumb {
-  width: 64px; height: 64px;
-  border-radius: var(--r-sm);
+  width: 100%; height: 200px;
   object-fit: cover;
-  cursor: zoom-in;
-  flex-shrink: 0;
   display: block;
 }
+.nc-imgs-multi .nc-image-thumb { height: 130px; }
 .nc-audio { width: 100%; margin-bottom: 8px; }
 
 /* Empty */
@@ -657,7 +718,7 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 }
 .ed-att img { display: block; width: 100%; height: 120px; object-fit: cover; cursor: zoom-in; }
 .ed-att audio { width: 100%; }
-.ed-att .ed-att-del {
+.ed-att-del {
   position: absolute; top: 4px; right: 4px;
   background: rgba(0,0,0,0.6);
   border: none;
@@ -665,6 +726,19 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
   border-radius: 50%;
   color: white;
 }
+
+/* Imagen grande estilo Google Keep: ocupa todo el ancho del editor,
+   sangrando el padding de la tarjeta. */
+.ed-imgs {
+  margin: 0 -14px;
+}
+.ed-imgs:empty { display: none; }
+.ed-img { position: relative; }
+.ed-img img { display: block; width: 100%; height: auto; cursor: zoom-in; }
+.ed-imgs.ed-imgs-multi {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+}
+.ed-imgs.ed-imgs-multi .ed-img img { height: 220px; object-fit: cover; }
 
 /* Floating action button */
 .fab {
@@ -872,29 +946,37 @@ main { padding: 18px 8px 100px; max-width: 1600px; margin: 0 auto; }
 /* Categories modal */
 .cats-modal-card {
   width: 100%;
-  max-width: 360px;
-  padding: 20px;
+  padding: 22px;
 }
 .cats-modal-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 14px;
 }
 .cats-modal-title {
-  font-size: 15px; font-weight: 600;
+  font-size: 16px; font-weight: 600;
   letter-spacing: 0.01em;
 }
 .cats-modal-list {
   display: flex; flex-direction: column; gap: 2px;
-  max-height: 260px; overflow-y: auto;
+  max-height: min(50vh, 420px); overflow-y: auto; overflow-x: hidden;
   margin-bottom: 14px;
 }
 .cats-modal-row {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 8px;
+  padding: 11px 8px;
   border-radius: var(--r-sm);
   cursor: pointer;
   font-size: 15px;
   transition: background 0.1s;
+}
+.cats-modal-row span:last-child {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* .modal--dialog caps dialogs at 340px for small confirm/PIN prompts; the
+   categories list needs more room, especially on desktop. */
+#cats-modal .modal-card {
+  width: min(92vw, 420px) !important;
+  max-width: 420px !important;
 }
 .cats-modal-row:hover { background: var(--hover); }
 .cats-modal-row input[type=checkbox] {
@@ -1431,7 +1513,7 @@ body.modal-open {
 
   main { padding: 14px 12px 100px; }
   .masonry { column-width: 160px; column-gap: 10px; }
-  .note-card { padding: 12px; }
+  .nc-card-body { padding: 12px; }
 
   /* Popups → bottom sheet on mobile */
   .popup {
@@ -1491,10 +1573,13 @@ body.modal-open {
 }
 
 /* Bulk categories modal */
-.bulk-cats-card { max-width: 320px !important; }
+#bulk-cats-modal .modal-card {
+  width: min(92vw, 420px) !important;
+  max-width: 420px !important;
+}
 .bulk-cats-list {
   display: flex; flex-direction: column;
-  max-height: 280px; overflow-y: auto;
+  max-height: min(50vh, 420px); overflow-y: auto; overflow-x: hidden;
   margin: 12px 0 4px;
 }
 .bulk-cat-row {
@@ -1511,6 +1596,9 @@ body.modal-open {
   accent-color: var(--accent);
   flex: 0 0 auto;
   cursor: pointer;
+}
+.bulk-cat-row span:last-child {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* Small dialogs (confirm, PIN) — never fullscreen, always centered */

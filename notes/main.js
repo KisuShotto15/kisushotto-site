@@ -804,11 +804,15 @@ function noteCardHtml(n) {
   }
 
   let imgs = '';
+  let audioHtml = '';
   if (n.attachments?.length) {
     const imgAtts = n.attachments.filter(a => a.type === 'image');
-    if (imgAtts.length) imgs += `<div class="nc-imgs-row">${imgAtts.map(a => `<img class="nc-image-thumb" data-att="${a.id}" alt="" loading="lazy" draggable="false">`).join('')}</div>`;
+    if (imgAtts.length) {
+      const multi = imgAtts.length > 1 ? ' nc-imgs-multi' : '';
+      imgs = `<div class="nc-imgs-row${multi}">${imgAtts.map(a => `<img class="nc-image-thumb" data-att="${a.id}" alt="" loading="lazy" draggable="false">`).join('')}</div>`;
+    }
     const audios = n.attachments.filter(a => a.type === 'audio');
-    for (const a of audios) imgs += `<audio class="nc-audio" controls preload="none" data-att="${a.id}"></audio>`;
+    for (const a of audios) audioHtml += `<audio class="nc-audio" controls preload="none" data-att="${a.id}"></audio>`;
   }
 
   const cats = (n.categories || []).map(cid => State.categories.find(c => c.id === cid)).filter(Boolean);
@@ -820,17 +824,32 @@ function noteCardHtml(n) {
     ? `<div class="nc-trash-actions"><button class="nc-trash-btn" data-restore="${n.id}" title="Restaurar" aria-label="Restaurar">${RESTORE_SVG}</button><button class="nc-trash-btn danger" data-purge="${n.id}" title="Eliminar definitivamente" aria-label="Eliminar definitivamente">${TRASH_SVG}</button></div>`
     : '';
   const archiveBadge = n.archived ? `<span class="nc-archive-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></span>` : '';
+  const hoverActions = State.view === 'trash' ? '' : `
+    <button class="nc-hover-pin" data-hact="pin" title="${n.pinned ? 'Quitar de fijadas' : 'Fijar'}" aria-label="Fijar"><svg width="16" height="16" viewBox="0 0 24 24" fill="${n.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></button>
+    <div class="nc-hover-actions">
+      <button class="nc-hover-btn" data-hact="color" title="Color" aria-label="Color"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg></button>
+      <button class="nc-hover-btn" data-hact="reminder" title="Recordatorio" aria-label="Recordatorio"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
+      <button class="nc-hover-btn" data-hact="cats" title="Categorías" aria-label="Categorías"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
+      <button class="nc-hover-btn" data-hact="image" title="Imagen" aria-label="Agregar imagen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></button>
+      <button class="nc-hover-btn" data-hact="archive" title="${n.archived ? 'Desarchivar' : 'Archivar'}" aria-label="Archivar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a1 1 0 011-1h18a1 1 0 011 1v3a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg></button>
+      <button class="nc-hover-btn danger" data-hact="delete" title="Eliminar" aria-label="Eliminar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+      <button class="nc-hover-btn nc-hover-more" data-hact="more" title="Más" aria-label="Más opciones"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
+    </div>`;
 
   return `
     <article class="${cls}" ${style} data-id="${n.id}" onclick="">
       <label class="nc-select-wrap"><input type="checkbox" class="nc-select-cb" aria-label="Seleccionar nota" data-id="${n.id}" ${isSelected ? 'checked' : ''}></label>
       ${n.pinned ? '<span class="nc-pin"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg></span>' : ''}
       ${archiveBadge}
-      ${n.locked && !isSessionUnlocked() ? '' : (n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : '')}
       ${n.locked && !isSessionUnlocked() ? '' : imgs}
+      <div class="nc-card-body">
+      ${n.locked && !isSessionUnlocked() ? '' : (n.title ? `<div class="nc-title">${escapeHtml(n.title)}</div>` : '')}
       ${body}
+      ${n.locked && !isSessionUnlocked() ? '' : audioHtml}
       <div class="nc-meta">${catTags}${sharedBadge}${lockBadge}${reminderBadge}</div>
       ${trashActions}
+      ${hoverActions}
+      </div>
     </article>
   `;
 }
@@ -918,6 +937,10 @@ const SWIPE_ACTIVE_COLOR = 'rgba(67,160,71,0.92)';
 let _dragState = null; // { noteId, ghost, card, offsetX, offsetY, container }
 let _dragHappened = false;
 let _dragScrollBlock = null;
+
+// Note id targeted by the color/reminder/more quick actions opened from a
+// closed note's hover bar (as opposed to the currently open editor).
+let _quickTargetId = null;
 
 function startDrag(card, x, y) {
   if (_dragState) return;
@@ -1269,6 +1292,80 @@ function wireCard(card) {
 
   card.addEventListener('click', async (ev) => {
     if (_dragHappened) { _dragHappened = false; return; }
+    const hactBtn = ev.target.closest('[data-hact]');
+    if (hactBtn) {
+      ev.stopPropagation();
+      const n = State.notes.find(x => x.id === card.dataset.id);
+      if (!n) return;
+      switch (hactBtn.dataset.hact) {
+        case 'color':
+          _quickTargetId = n.id;
+          showPopupAt('#popup-color', hactBtn);
+          break;
+        case 'reminder': {
+          _quickTargetId = n.id;
+          const inp = $('#popup-reminder-input');
+          if (n.reminder_at) {
+            const d = new Date(n.reminder_at);
+            const tz = d.getTimezoneOffset() * 60000;
+            inp.value = new Date(d - tz).toISOString().slice(0, 16);
+          } else {
+            inp.value = '';
+          }
+          showPopupAt('#popup-reminder', hactBtn);
+          break;
+        }
+        case 'image':
+          await openCard(n);
+          $('#ed-image')?.click();
+          break;
+        case 'more':
+          _quickTargetId = n.id;
+          $('#card-more-lock-label').textContent = n.locked ? 'Desproteger' : 'Proteger';
+          showPopupAt('#popup-card-more', hactBtn);
+          break;
+        case 'pin':
+          n.pinned = !n.pinned;
+          n.last_modified = Date.now();
+          saveNoteLocal(n);
+          render();
+          break;
+        case 'cats':
+          openBulkCatsModal([n.id]);
+          break;
+        case 'archive': {
+          const wasArchived = !!n.archived;
+          n.archived = !wasArchived;
+          n.last_modified = Date.now();
+          saveNoteLocal(n);
+          render();
+          if (!wasArchived) {
+            showUndoToast('Nota archivada', () => {
+              n.archived = false;
+              n.last_modified = Date.now();
+              saveNoteLocal(n);
+              render();
+            });
+          }
+          break;
+        }
+        case 'delete': {
+          if (!(await window.customConfirm('¿Mover a la papelera?'))) return;
+          n.trashed_at = Date.now();
+          n.last_modified = Date.now();
+          saveNoteLocal(n);
+          render();
+          showUndoToast('Nota eliminada', () => {
+            n.trashed_at = null;
+            n.last_modified = Date.now();
+            saveNoteLocal(n);
+            render();
+          });
+          break;
+        }
+      }
+      return;
+    }
     const restoreBtn = ev.target.closest('[data-restore]');
     if (restoreBtn) {
       ev.stopPropagation();
@@ -1954,19 +2051,28 @@ function renderChecklist() {
 }
 
 function renderAttachments() {
+  const imgRoot = $('#ed-imgs');
   const root = $('#ed-attachments');
+  imgRoot.innerHTML = '';
   root.innerHTML = '';
   const e = State.editing;
   if (!e?.attachments) return;
+  const imgCount = e.attachments.filter(a => a.type === 'image').length;
+  imgRoot.classList.toggle('ed-imgs-multi', imgCount > 1);
   for (const a of e.attachments) {
     const div = document.createElement('div');
-    div.className = 'ed-att';
-    if (a.type === 'image') div.innerHTML = `<img data-att="${a.id}" alt=""><button class="ed-att-del" data-del="${a.id}">×</button>`;
-    else                    div.innerHTML = `<audio data-att="${a.id}" controls></audio><button class="ed-att-del" data-del="${a.id}">×</button>`;
-    root.appendChild(div);
+    if (a.type === 'image') {
+      div.className = 'ed-img';
+      div.innerHTML = `<img data-att="${a.id}" alt=""><button class="ed-att-del" data-del="${a.id}">×</button>`;
+      imgRoot.appendChild(div);
+    } else {
+      div.className = 'ed-att';
+      div.innerHTML = `<audio data-att="${a.id}" controls></audio><button class="ed-att-del" data-del="${a.id}">×</button>`;
+      root.appendChild(div);
+    }
   }
   // load blobs
-  const els = [...root.querySelectorAll('[data-att]')];
+  const els = [...imgRoot.querySelectorAll('[data-att]'), ...root.querySelectorAll('[data-att]')];
   let failed = 0;
   runWithLimit(els, 4, async el => {
     const id = el.dataset.att;
@@ -1979,7 +2085,7 @@ function renderAttachments() {
   }).then(() => {
     if (failed > 0) showErrorToast(`No se pudo cargar ${failed === 1 ? 'un adjunto' : failed + ' adjuntos'}.`);
   });
-  root.querySelectorAll('button[data-del]').forEach(btn => {
+  [...imgRoot.querySelectorAll('button[data-del]'), ...root.querySelectorAll('button[data-del]')].forEach(btn => {
     btn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       const id = btn.dataset.del;
@@ -2235,6 +2341,35 @@ function openNew(type) {
   if (type === 'image') setTimeout(() => $('#ed-image')?.click(), 100);
 }
 
+// Copia titulo, cuerpo, checklist, color y categorias. No copia adjuntos,
+// comparticiones, recordatorio ni proteccion (quedan en su estado inicial).
+async function duplicateNote(n) {
+  const copy = {
+    id: crypto.randomUUID(),
+    owner_email: getUserEmail(),
+    title: n.title || '',
+    body: n.body || '',
+    type: n.type || 'text',
+    checklist_items: (n.checklist_items || []).map(it => ({ ...it, id: crypto.randomUUID() })),
+    color: n.color || null,
+    pinned: false,
+    archived: false,
+    trashed_at: null,
+    locked: false,
+    reminder_at: null,
+    reminder_sent: false,
+    last_modified: Date.now(),
+    created_at: Date.now(),
+    sort_order: Date.now() + 1,
+    categories: [...(n.categories || [])],
+    attachments: [],
+    shares: [],
+  };
+  State.notes.unshift(copy);
+  await saveNoteLocal(copy);
+  render();
+}
+
 // ── PIN unlock prompt ────────────────────────────────────────────────────────
 async function promptUnlock() {
   return new Promise(async (resolve) => {
@@ -2394,6 +2529,13 @@ function bindEditorActions() {
   });
   $$('#popup-color .color-swatch').forEach(s => {
     s.addEventListener('click', () => {
+      if (_quickTargetId) {
+        const n = State.notes.find(x => x.id === _quickTargetId);
+        _quickTargetId = null;
+        hidePopups();
+        if (n) { n.color = s.dataset.color || null; n.last_modified = Date.now(); saveNoteLocal(n); render(); }
+        return;
+      }
       EditorHistory.flush();
       State.editing.color = s.dataset.color || null;
       const c = State.editing.color;
@@ -2452,6 +2594,20 @@ function bindEditorActions() {
   $('#popup-reminder-save').addEventListener('click', () => {
     const v = $('#popup-reminder-input').value;
     if (!v) return;
+    if (_quickTargetId) {
+      const n = State.notes.find(x => x.id === _quickTargetId);
+      _quickTargetId = null;
+      hidePopups();
+      if (n) {
+        n.reminder_at = new Date(v).getTime();
+        n.reminder_sent = false;
+        n.last_modified = Date.now();
+        saveNoteLocal(n);
+        render();
+        ensurePushSubscription().catch(() => {});
+      }
+      return;
+    }
     EditorHistory.flush();
     State.editing.reminder_at = new Date(v).getTime();
     State.editing.reminder_sent = false;
@@ -2462,6 +2618,19 @@ function bindEditorActions() {
     ensurePushSubscription().catch(() => {});
   });
   $('#popup-reminder-clear').addEventListener('click', () => {
+    if (_quickTargetId) {
+      const n = State.notes.find(x => x.id === _quickTargetId);
+      _quickTargetId = null;
+      hidePopups();
+      if (n) {
+        n.reminder_at = null;
+        n.reminder_sent = false;
+        n.last_modified = Date.now();
+        saveNoteLocal(n);
+        render();
+      }
+      return;
+    }
     EditorHistory.flush();
     State.editing.reminder_at = null;
     State.editing.reminder_sent = false;
@@ -2489,6 +2658,33 @@ function bindEditorActions() {
     } catch (e) {
       alert(e.message);
     }
+  });
+
+  // Quick "more" menu (closed note, hover actions on the card)
+  $('#card-more-share').addEventListener('click', async () => {
+    const n = State.notes.find(x => x.id === _quickTargetId);
+    _quickTargetId = null;
+    hidePopups();
+    if (!n) return;
+    await openCard(n);
+    $('#ed-share')?.click();
+  });
+  $('#card-more-lock').addEventListener('click', () => {
+    const n = State.notes.find(x => x.id === _quickTargetId);
+    _quickTargetId = null;
+    hidePopups();
+    if (!n) return;
+    n.locked = !n.locked;
+    n.last_modified = Date.now();
+    saveNoteLocal(n);
+    render();
+  });
+  $('#card-more-dup').addEventListener('click', () => {
+    const n = State.notes.find(x => x.id === _quickTargetId);
+    _quickTargetId = null;
+    hidePopups();
+    if (!n) return;
+    duplicateNote(n);
   });
 
   // Paste handler: images get uploaded; text always stripped to plain
@@ -2779,7 +2975,8 @@ function showPopupAt(sel, anchor) {
   // verse como un parche oscuro sobre una nota coloreada (antes solo lo hacia
   // el menu de mas opciones).
   if (sel === '#popup-color' || sel === '#popup-add' || sel === '#popup-more') {
-    p.style.background = State.editing?.color || '';
+    const target = State.editing || (_quickTargetId ? State.notes.find(x => x.id === _quickTargetId) : null);
+    p.style.background = target?.color || '';
   }
   if (isMobile()) {
     // On mobile, CSS handles bottom-sheet positioning; just clear inline styles
@@ -2805,7 +3002,8 @@ function showPopupAt(sel, anchor) {
   p.style.top  = `${top}px`;
   p.style.left = `${left}px`;
 }
-function openBulkCatsModal() {
+function openBulkCatsModal(ids) {
+  const targetIds = ids || [...State.selected];
   const list = $('#bulk-cats-list');
   list.innerHTML = '';
   const me = getUserEmail();
@@ -2816,12 +3014,12 @@ function openBulkCatsModal() {
   for (const c of own) {
     const lbl = document.createElement('label');
     lbl.className = 'bulk-cat-row';
-    const allHave = [...State.selected].every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id));
+    const allHave = targetIds.every(id => (State.notes.find(n => n.id === id)?.categories || []).includes(c.id));
     lbl.innerHTML = `<input type="checkbox" ${allHave ? 'checked' : ''}>
       <span class="cat-icon-display">${catIconSvg(c.icon)}</span>
       <span>${escapeHtml(c.name)}</span>`;
     lbl.querySelector('input').addEventListener('change', (e) => {
-      for (const nid of State.selected) {
+      for (const nid of targetIds) {
         const n = State.notes.find(x => x.id === nid);
         if (!n) continue;
         n.categories = n.categories || [];
@@ -2830,6 +3028,7 @@ function openBulkCatsModal() {
         n.last_modified = Date.now();
         saveNoteLocal(n);
       }
+      render();
     });
     list.appendChild(lbl);
   }
@@ -3222,19 +3421,10 @@ function bindUI() {
   });
 
   // Image clicks — editor attachments (delegated)
-  $('#ed-attachments').addEventListener('click', e => {
-    const img = e.target.closest('img[data-att]');
-    if (img && img.src) { e.stopPropagation(); openLightbox(img.src); }
-  });
-
-  // Image clicks — note cards (delegated on grid)
-  $$('#grid-pinned, #grid-others').forEach(grid => {
-    grid.addEventListener('click', e => {
-      const img = e.target.closest('img.nc-image-thumb');
-      if (img && img.src && !img.src.endsWith('#')) {
-        e.stopPropagation();
-        openLightbox(img.src);
-      }
+  $$('#ed-imgs, #ed-attachments').forEach(root => {
+    root.addEventListener('click', e => {
+      const img = e.target.closest('img[data-att]');
+      if (img && img.src) { e.stopPropagation(); openLightbox(img.src); }
     });
   });
 

@@ -121,6 +121,7 @@
       </div>
     </div>
     <div class="ed-scroll">
+      <div class="ed-imgs" id="ed-imgs"></div>
       <input class="ed-title" id="ed-title" placeholder="Título" maxlength="200">
       <div class="ed-body-wrap">
         <textarea class="ed-body" id="ed-body" placeholder="Escribe..."></textarea>
@@ -155,6 +156,15 @@
   </div>
 </div>
 
+
+<!-- Quick "more" menu for a closed note (hover actions on the card) -->
+<div class="popup" id="popup-card-more" hidden>
+  <div class="popup-menu">
+    <button class="popup-menu-item" id="card-more-share" onclick=""><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg> Compartir</button>
+    <button class="popup-menu-item" id="card-more-lock" onclick=""><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> <span id="card-more-lock-label">Proteger</span></button>
+    <button class="popup-menu-item" id="card-more-dup" onclick=""><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Duplicar</button>
+  </div>
+</div>
 
 <!-- Add options popup -->
 <div class="popup" id="popup-add" hidden>
