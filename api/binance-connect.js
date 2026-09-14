@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   let user;
-  try { user = requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
 
   const { apiKey, apiSecret, label } = req.body || {};
   if (!apiKey || !apiSecret) return res.status(400).json({ error: 'apiKey y apiSecret requeridos' });

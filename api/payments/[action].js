@@ -32,7 +32,7 @@ function payKeys() {
 async function createOrderAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const body = await readJsonBody(req);
   const plan = body.plan === 'annual' ? 'annual' : 'monthly';
   await ensureSchema();
@@ -70,7 +70,7 @@ async function createOrderAction(req, res) {
 
 async function statusAction(req, res) {
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   await readRawBody(req).catch(() => {});
 
   // El admin (dueño del producto) no paga su propia suscripcion: se le devuelve
@@ -134,7 +134,7 @@ async function statusAction(req, res) {
 async function markPendingAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const body = await readJsonBody(req);
   const plan = body.plan === 'annual' ? 'annual' : 'monthly';
   await ensureSchema();
@@ -176,7 +176,7 @@ async function markPendingAction(req, res) {
 async function cancelPendingAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   await readRawBody(req).catch(() => {});
   await ensureSchema();
   await sql`UPDATE payment_invoices SET status = 'expired' WHERE user_id = ${user.uid} AND status = 'pending_review'`;
@@ -188,7 +188,7 @@ async function cancelPendingAction(req, res) {
 async function startTrialAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   await readRawBody(req).catch(() => {});
   await ensureSchema();
   await ensureSubscription(user.uid);
@@ -202,7 +202,7 @@ async function startTrialAction(req, res) {
 async function setNickAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const body = await readJsonBody(req);
   const nick = String(body.nick || '').trim().slice(0, 64);
   if (!nick) return res.status(400).json({ error: 'nick requerido' });
@@ -218,7 +218,7 @@ async function setNickAction(req, res) {
 async function adminConfirmAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
   if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
 
@@ -243,7 +243,7 @@ async function adminConfirmAction(req, res) {
 async function adminRejectAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
   if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
 
@@ -268,7 +268,7 @@ async function adminRejectAction(req, res) {
 async function adminResetSubsAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
   if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
   await readRawBody(req).catch(() => {});
@@ -292,7 +292,7 @@ async function adminResetSubsAction(req, res) {
 // automatica va a funcionar antes de que alguien pague de verdad.
 async function payProbeAction(req, res) {
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
   if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
   await readRawBody(req).catch(() => {});
@@ -301,7 +301,7 @@ async function payProbeAction(req, res) {
 
 async function adminPendingAction(req, res) {
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
   if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
   await readRawBody(req).catch(() => {});

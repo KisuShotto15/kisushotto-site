@@ -1,6 +1,6 @@
 // Ruta dinamica: /api/auth/<action> → 1 sola funcion serverless (limite Hobby de Vercel).
 // Acciones: register, login, me, verify-email, resend-verification, forgot-password, reset-password.
-import { cors, requireAllowedUser } from '../_lib/auth.js';
+import { cors, requireAllowedUser, forgetRevocation } from '../_lib/auth.js';
 import { sql, ensureSchema, ensureAuthColumns } from '../_lib/db.js';
 import { hashPassword, verifyPassword, signJWT, randomToken } from '../_lib/crypto.js';
 import { rateLimit, clientIp } from '../_lib/ratelimit.js';
@@ -96,21 +96,13 @@ async function login(req, res) {
   return res.status(200).json({ token: signJWT({ uid: rows[0].id, email: mail }) });
 }
 
+// La comprobacion de revocacion vive ahora en requireUser, asi que aqui solo hay
+// que responder. Este endpoint sigue siendo el que consultan los workers para
+// saber si una sesion fue revocada, porque la marca solo vive en Postgres.
 async function me(req, res) {
   let user;
-  try { user = requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
-
-  // Un JWT no se puede retirar de circulacion, asi que se compara su iat contra
-  // la marca de revocacion del usuario: todo lo emitido antes queda invalidado.
-  await ensureSchema();
-  await ensureAuthColumns();
-  const rows = await sql`SELECT sessions_valid_from FROM users WHERE id = ${user.uid}`;
-  if (!rows.length) return res.status(401).json({ error: 'Usuario inexistente' });
-  const validFrom = Number(rows[0].sessions_valid_from || 0);
-  if (validFrom && Number(user.iat || 0) < validFrom) {
-    return res.status(401).json({ error: 'Sesion revocada', revoked: true });
-  }
-
+  try { user = await requireAllowedUser(req); }
+  catch (e) { return res.status(e.status || 401).json({ error: e.message, revoked: !!e.revoked }); }
   return res.status(200).json({ email: user.email });
 }
 
@@ -118,11 +110,14 @@ async function me(req, res) {
 async function revoke(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   await ensureSchema();
   await ensureAuthColumns();
   const now = Math.floor(Date.now() / 1000);
   await sql`UPDATE users SET sessions_valid_from = ${now} WHERE id = ${user.uid}`;
+  // Sin esto, esta misma instancia seguiria sirviendo el valor cacheado hasta un
+  // minuto: la revocacion que el usuario acaba de pedir no se aplicaria enseguida.
+  forgetRevocation(user.uid);
   return res.status(200).json({ ok: true, revoked_at: now });
 }
 

@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   let user;
-  try { user = requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
 
   try {
     await ensureSchema();

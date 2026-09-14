@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   }
 
   let user;
-  try { user = requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
 
   // La puerta del cliente se puede saltar llamando aca directamente: sin prueba
   // vigente ni periodo pagado no se sirve el libro.

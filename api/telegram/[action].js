@@ -34,7 +34,7 @@ function newCode() {
 async function linkAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   await readRawBody(req).catch(() => {});
   const uname = botUsername();
   if (!process.env.TELEGRAM_BOT_TOKEN || !uname) {
@@ -54,7 +54,7 @@ async function linkAction(req, res) {
 
 async function statusAction(req, res) {
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   await readRawBody(req).catch(() => {});
   await ensureSchema();
   await ensureTelegramLinks();
@@ -68,7 +68,7 @@ async function statusAction(req, res) {
 async function unlinkAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   await readRawBody(req).catch(() => {});
   await ensureSchema();
   await ensureTelegramLinks();
@@ -117,7 +117,7 @@ async function webhookAction(req, res) {
 async function notifyAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const raw = await readRawBody(req).catch(() => '');
   let body = {};
   try { body = JSON.parse(raw || '{}'); } catch (e) {}
@@ -138,7 +138,7 @@ async function notifyAction(req, res) {
 async function setupAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
-  try { user = requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { user = await requireUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
   const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
   if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
   await readRawBody(req).catch(() => {});

@@ -17,7 +17,7 @@ crons = ["* * * * *"]
 [vars]
 VAPID_SUBJECT = "mailto:efrenalejandro2010@gmail.com"
 # Quien puede entrar. VACIA = NO PASA NADIE (default seguro: es una app personal).
-ALLOWED_EMAILS = "efrenalejandro2010@gmail.com"
+ALLOWED_EMAILS = "kisushotto.btc@proton.me"
 
 # TOKEN ya no existe: la identidad sale del JWT del sitio. Estaba aqui en texto
 # plano Y en el bundle del navegador, asi que no protegia nada.

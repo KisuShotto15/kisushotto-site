@@ -21,7 +21,7 @@ crons = ["* * * * *"]
 [vars]
 VAPID_SUBJECT = "mailto:efrenalejandro2010@gmail.com"
 # Quien puede entrar. VACIA = NO PASA NADIE (default seguro: es una app personal).
-ALLOWED_EMAILS = "efrenalejandro2010@gmail.com"
+ALLOWED_EMAILS = "kisushotto.btc@proton.me"
 
 # TOKEN y SESSION_SECRET ya no se usan: la identidad es el JWT del sitio y este
 # worker no emite sesiones propias. Se pueden borrar con `wrangler secret delete`.

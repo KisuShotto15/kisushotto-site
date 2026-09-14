@@ -24,9 +24,9 @@ const MAX_STEPS = 20;
 const MAX_STEP_LEN = 200;
 
 // Devuelve la clave del rate limit, o lanza un error con .status.
-function authorize(req) {
+async function authorize(req) {
   try {
-    const user = requireUser(req);
+    const user = await requireUser(req);
     return { key: 'ai:uid:' + user.uid, max: 20 };
   } catch (_) { /* sin JWT: se prueba el secreto puente */ }
 
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   let gate;
-  try { gate = authorize(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
+  try { gate = await authorize(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
 
   const wait = rateLimit(gate.key, gate.max, 3600000);
   if (wait !== null) {

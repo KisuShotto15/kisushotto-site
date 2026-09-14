@@ -13,10 +13,10 @@ crons = ["0 4 * * *"]
 
 [vars]
 # Quien puede entrar. VACIA = NO PASA NADIE (default seguro: son apps personales).
-ALLOWED_EMAILS = "efrenalejandro2010@gmail.com"
+ALLOWED_EMAILS = "kisushotto.btc@proton.me"
 # A quien pertenecen los datos que ya existian en la clave global unica, antes de
 # que el estado pasara a ser por usuario. Se adoptan en su primera lectura.
-OWNER_EMAIL = "efrenalejandro2010@gmail.com"
+OWNER_EMAIL = "kisushotto.btc@proton.me"
 
 # JWT_SECRET va como secret, no como var (en [vars] quedaria en texto plano en el
 # repo, que es justo el problema que este cambio viene a cerrar):
