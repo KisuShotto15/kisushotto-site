@@ -8,8 +8,8 @@ import {
   apiUploadAttachment, apiDeleteAttachment, apiAttachmentBlobUrl,
   apiPurgeNote,
   apiRegWebauthn,
-  apiListPasskeys, apiRenamePasskey, apiDeletePasskey,
-  getUserEmail,
+  apiListPasskeys, apiAddPasskey, apiRenamePasskey, apiDeletePasskey,
+  getUserEmail, initAuth,
 } from './api.js';
 import { pull, flushQueue, saveNoteLocal, saveCategoryLocal, deleteCategoryLocal, onConnectionChange } from './sync.js';
 import {
@@ -191,16 +191,9 @@ const EditorHistory = {
 
 // ── init ─────────────────────────────────────────────────────────────────────
 async function init() {
-  // La identidad del backend sale SOLO del JWT de sesion firmado (notes_session).
-  // Un email cacheado (cookie CF_Authorization o notes_user) ya no alcanza: sin
-  // sesion, cada request al worker responde 401 y nada sincroniza. Forzar login
-  // de passkey para que el dispositivo obtenga el JWT.
-  if (!getUserEmail() || !cfg.session()) {
-    $('#loginScreen')?.classList.remove('hidden');
-    initLoginScreen();
-    return;
-  }
-  $('#loginScreen')?.classList.add('hidden');
+  // No resuelve hasta que hay sesion: la pantalla de login la pinta el modulo
+  // compartido, la misma cuenta y la misma pantalla que el resto del sitio.
+  await initAuth();
 
   // SW — register first so update runs even if bindUI() crashes below
   if ('serviceWorker' in navigator) {
@@ -3488,114 +3481,16 @@ async function resizeImage(file, maxDim, quality = 0.85) {
 // expose for inline handlers
 window.NotesApp = { openNew };
 
-// ── Login (called from inline handlers in #loginScreen) ──────────────────────
-// ── Login passkey helpers ─────────────────────────────────────────────────────
+// ── Passkey de desbloqueo ────────────────────────────────────────────────────
+// Ya NO es un metodo de login: el worker emitia una sesion para cualquier email
+// sin comprobar ninguna firma WebAuthn, asi que con el token publico bastaban dos
+// peticiones para entrar como cualquiera. Ahora se entra con la cuenta del sitio,
+// y la passkey solo abre las notas protegidas en este dispositivo.
 function _b64urlEncode(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf)))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function initLoginScreen() {
-  document.getElementById('btnEmailLogin')?.addEventListener('click', doEmailLogin);
-  document.getElementById('loginEmail')?.addEventListener('keydown', e => { if (e.key === 'Enter') doEmailLogin(); });
-  document.getElementById('btnPasskeyLogin')?.addEventListener('click', doPasskeyLogin);
-
-  // Passkey setup overlay — registration is mandatory, no skip
-  document.getElementById('btnSetupPasskey')?.addEventListener('click', async () => {
-    const btn = document.getElementById('btnSetupPasskey');
-    const errEl = document.getElementById('setupError');
-    btn.disabled = true;
-    btn.textContent = 'Registrando…';
-    if (errEl) errEl.textContent = '';
-    const ok = await doRegisterPasskey();
-    if (ok) {
-      document.getElementById('passkeySetup').classList.add('hidden');
-      init();
-    } else {
-      btn.disabled = false;
-      btn.textContent = 'Reintentar';
-      if (errEl) errEl.textContent = 'No se pudo registrar. Intenta de nuevo.';
-    }
-  });
-}
-
-async function doPasskeyLogin() {
-  const btn   = document.getElementById('btnPasskeyLogin');
-  const errEl = document.getElementById('loginError');
-  if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
-  if (errEl) errEl.textContent = '';
-  try {
-    const credPromise = navigator.credentials.get({
-      mediation: 'required',
-      publicKey: {
-        challenge: crypto.getRandomValues(new Uint8Array(32)),
-        timeout: 60000,
-        userVerification: 'required',
-        rpId: 'kisushotto.com',
-      },
-    });
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado. Intenta de nuevo.')), 65000));
-    const assertion = await Promise.race([credPromise, timeout]);
-    if (!assertion) throw new Error('Cancelado');
-    const credId = _b64urlEncode(assertion.rawId);
-    const res = await fetch(`${cfg.base()}/auth/passkey/authenticate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}` },
-      body: JSON.stringify({ credentialId: credId }),
-    });
-    if (!res.ok) throw new Error('Passkey no encontrada. Inicia sesion con tu email primero.');
-    const { email, session } = await res.json();
-    localStorage.setItem('notes_user', email);
-    if (session) localStorage.setItem('notes_session', session);
-    localStorage.setItem('notes_webauthn_id', credId);
-    document.getElementById('loginScreen').classList.add('hidden');
-    init();
-  } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Entrar con passkey'; }
-    if (errEl) errEl.textContent = e.message || 'Error de autenticacion';
-  }
-}
-
-async function doEmailLogin() {
-  const email = (document.getElementById('loginEmail')?.value || '').trim().toLowerCase();
-  const errEl = document.getElementById('loginError');
-  const emailBtn = document.getElementById('btnEmailLogin');
-  if (!email || !email.includes('@')) {
-    if (errEl) errEl.textContent = 'Ingresa un email valido.';
-    return;
-  }
-  if (errEl) errEl.textContent = '';
-  if (emailBtn) { emailBtn.disabled = true; emailBtn.textContent = 'Verificando…'; }
-
-  try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 8000);
-    const chk = await fetch(`${cfg.base()}/auth/passkey/check`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}` },
-      body: JSON.stringify({ email }),
-    });
-    clearTimeout(t);
-    if (chk.ok) {
-      const { hasPasskey } = await chk.json();
-      if (hasPasskey) {
-        if (emailBtn) { emailBtn.disabled = false; emailBtn.textContent = 'Continuar con email'; }
-        doPasskeyLogin();
-        return;
-      }
-    }
-  } catch {
-    // si el check falla o timeout, continuar con email
-  }
-
-  if (emailBtn) { emailBtn.disabled = false; emailBtn.textContent = 'Continuar con email'; }
-  localStorage.setItem('notes_user', email);
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('passkeySetup').classList.remove('hidden');
-}
-
-// ONE credential for both login and note-unlock
 async function doRegisterPasskey() {
   const email = getUserEmail();
   if (!email) return false;
@@ -3613,16 +3508,7 @@ async function doRegisterPasskey() {
     });
     if (!cred) return false;
     const credId = _b64urlEncode(cred.rawId);
-    // Register for app login
-    const res = await fetch(`${cfg.base()}/auth/passkey/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token()}`, 'X-User-Email': email },
-      body: JSON.stringify({ email, credentialId: credId }),
-    });
-    if (!res.ok) { console.error('passkey register failed', res.status, await res.text()); return false; }
-    const { session } = await res.json();
-    if (session) localStorage.setItem('notes_session', session);
-    // Register same credential for note unlock
+    await apiAddPasskey(credId, navigator.platform || null);
     await apiRegWebauthn(credId, null);
     localStorage.setItem('notes_webauthn_id', credId);
     return true;
@@ -3635,9 +3521,12 @@ async function doRegisterPasskey() {
 window.logout = async function() {
   // Intentar vaciar el outbox antes de limpiar (best-effort).
   try { await flushQueue(); } catch {}
+  localStorage.removeItem('notes_jwt');
+  localStorage.removeItem('notes_email');
+  localStorage.removeItem('notes_unlocked_until');
+  // Restos del login viejo por passkey, que ya no se usa.
   localStorage.removeItem('notes_user');
   localStorage.removeItem('notes_session');
-  localStorage.removeItem('notes_unlocked_until');
   // Limpiar la cache local: el proximo login (posiblemente otra cuenta) no
   // debe ver ni empujar notas del usuario anterior.
   for (const s of ['notes', 'categories', 'attachments', 'queue', 'meta']) {

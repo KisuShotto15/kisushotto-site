@@ -1,60 +1,42 @@
 // notes/api.js — fetch wrapper hitting the notes-worker.
+//
+// La identidad es el JWT del sitio. Antes viajaban tres cosas y ninguna servia:
+// un token compartido escrito en este archivo (y por tanto publico), un email en
+// una cabecera, y una sesion que el worker emitia para cualquier email sin
+// verificar ninguna firma WebAuthn.
+import { requireSession, makeAuthFetch } from '../shared/site-auth.js';
 
-const DEFAULT_BASE  = 'https://notes-worker.efrenalejandro2010.workers.dev';
-const DEFAULT_TOKEN = '151322';
+const DEFAULT_BASE = 'https://notes-worker.efrenalejandro2010.workers.dev';
+const APP = { app: 'Notas', prefix: 'notes' };
 
 export const cfg = {
-  base:    () => localStorage.getItem('notes_url')     || DEFAULT_BASE,
-  token:   () => localStorage.getItem('notes_token')   || DEFAULT_TOKEN,
-  session: () => localStorage.getItem('notes_session') || null,
+  base: () => localStorage.getItem('notes_url') || DEFAULT_BASE,
 };
 
-function authHeaders() {
-  const headers = { 'Authorization': `Bearer ${cfg.token()}` };
-  // Solo informativo — el worker deriva la identidad del JWT de sesion.
-  const email = getUserEmail();
-  if (email) headers['X-User-Email'] = email;
-  const session = cfg.session();
-  if (session) headers['X-Session-Token'] = session;
-  return headers;
+let session = null;
+let afetch = null;
+
+// Hay que llamarlo antes que nada: no resuelve hasta que hay sesion.
+export async function initAuth() {
+  session = await requireSession(APP);
+  afetch = makeAuthFetch(session, APP);
+  return session;
 }
 
 export function getUserEmail() {
-  const override = localStorage.getItem('notes_user');
-  if (override) return override;
-
-  const raw = document.cookie.split(';').map(c => c.trim())
-    .find(c => c.startsWith('CF_Authorization='));
-  if (!raw) return null;
-  try {
-    const tok = raw.split('=').slice(1).join('=');
-    const payload = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return payload.email || null;
-  } catch {
-    return null;
-  }
+  return session ? session.email() : null;
 }
 
 async function api(path, opts = {}) {
-  // La sesion JWT es la identidad real; el email cacheado es solo cosmetico.
-  if (!getUserEmail() && !cfg.session()) throw new Error('Sin identidad de usuario. Inicia sesion de nuevo.');
+  if (!afetch) throw new Error('Sin sesion. Inicia sesion de nuevo.');
   const url = cfg.base() + path;
-  const headers = {
-    ...authHeaders(),
-    ...(opts.headers || {}),
-  };
+  const headers = { ...(opts.headers || {}) };
   if (!(opts.body instanceof ArrayBuffer) && !(opts.body instanceof Blob)) {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   }
-  const res = await fetch(url, { ...opts, headers });
+  const res = await afetch(url, { ...opts, headers });
   if (!res.ok) {
     const txt = await res.text().catch(() => res.statusText);
-    // El worker rechaza la identidad (sesion ausente o JWT vencido a los 90 dias):
-    // descartar la sesion muerta y recargar para que init() exija passkey de nuevo.
-    if (res.status === 401 && cfg.session()) {
-      localStorage.removeItem('notes_session');
-      location.reload();
-    }
     throw new Error(`API ${res.status}: ${txt}`);
   }
   const ct = res.headers.get('Content-Type') || '';
@@ -67,6 +49,7 @@ export const apiVerifyPin    = (pin)              => api('/me/pin/verify',  { me
 export const apiRegWebauthn  = (cid, pk)          => api('/me/webauthn/register', { method: 'POST', body: JSON.stringify({ credentialId: cid, publicKey: pk }) });
 export const apiGetWebauthn  = ()                 => api('/me/webauthn');
 export const apiListPasskeys = ()                 => api('/auth/passkeys');
+export const apiAddPasskey   = (credId, name)     => api('/auth/passkeys', { method: 'POST', body: JSON.stringify({ credentialId: credId, deviceName: name }) });
 export const apiRenamePasskey = (credId, name)    => api(`/auth/passkey/${encodeURIComponent(credId)}`, { method: 'PATCH', body: JSON.stringify({ deviceName: name }) });
 export const apiDeletePasskey = (credId)          => api(`/auth/passkey/${encodeURIComponent(credId)}`, { method: 'DELETE' });
 export const apiSetPush      = (sub)              => api('/me/push',        { method: 'POST', body: JSON.stringify(sub) });
@@ -91,13 +74,10 @@ export const apiDeleteCat    = (id)               => api(`/categories/${id}`,{ m
 
 export async function apiUploadAttachment(noteId, blob, type = 'image') {
   const url = `${cfg.base()}/attachments/upload?note_id=${encodeURIComponent(noteId)}&type=${type}`;
-  const res = await fetch(url, {
+  const res = await afetch(url, {
     method: 'POST',
     body: blob,
-    headers: {
-      ...authHeaders(),
-      'Content-Type': blob.type || 'application/octet-stream',
-    },
+    headers: { 'Content-Type': blob.type || 'application/octet-stream' },
   });
   if (!res.ok) throw new Error(`Upload ${res.status}: ${await res.text()}`);
   return res.json();
@@ -113,7 +93,7 @@ export function apiAttachmentUrl(id) {
 }
 
 export async function apiAttachmentBlobUrl(id) {
-  const res = await fetch(apiAttachmentUrl(id), { headers: authHeaders() });
+  const res = await afetch(apiAttachmentUrl(id));
   if (!res.ok) throw new Error('Attachment fetch failed');
   const blob = await res.blob();
   return URL.createObjectURL(blob);

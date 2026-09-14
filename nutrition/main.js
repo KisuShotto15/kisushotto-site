@@ -1,4 +1,4 @@
-import { loadLocal, saveLocal, pull, push } from './sync.js';
+import { loadLocal, saveLocal, pull, push, initAuth } from './sync.js';
 import { calcBMR, calcTDEE, calcTarget, mealMacros, totalMacros, scalePortions,
          MICROS_DEF, calcRDA, totalMicros, totalFatTypes } from './calculator.js';
 import { searchFoods, getFoodDetail, getApiKey, setApiKey } from './search.js';
@@ -125,6 +125,8 @@ document.addEventListener('visibilitychange', () => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
+  // No resuelve hasta que hay sesion: sin identidad no hay con que sincronizar.
+  await initAuth();
   const local = loadLocal();
   if (local) S = migrateState(local);
 

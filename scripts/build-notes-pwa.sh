@@ -17,6 +17,12 @@ cp notes/sync.js     "$OUT/sync.js"
 cp notes/push.js     "$OUT/push.js"
 cp notes/recorder.js "$OUT/recorder.js"
 
+# Login compartido del sitio. El canonico vive en shared/, fuera de esta carpeta:
+# aqui los archivos se copian planos a la raiz, asi que se copia tambien y se
+# reescribe la ruta del import.
+cp shared/site-auth.js "$OUT/site-auth.js"
+sed -i "s|'../shared/site-auth.js'|'./site-auth.js'|g" "$OUT"/*.js
+
 # Adjust manifest path in index.html (subdominio uses /manifest.json at root)
 sed -i 's|href="/manifests/notes.json"|href="/manifest.json"|g' "$OUT/index.html"
 

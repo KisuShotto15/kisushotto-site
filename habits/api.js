@@ -1,45 +1,40 @@
 // api.js — habits worker client
+//
+// La identidad es el JWT del sitio. Antes era la cabecera X-User-Email, que
+// escribia este mismo archivo: "iniciar sesion" era teclear un email, sin
+// contrasena, y el token del worker venia escrito aqui a la vista de cualquiera.
+import { requireSession, makeAuthFetch } from '../shared/site-auth.js';
 
-const DEFAULT_BASE  = 'https://habits-worker.efrenalejandro2010.workers.dev';
-const DEFAULT_TOKEN = '151322';
+const DEFAULT_BASE = 'https://habits-worker.efrenalejandro2010.workers.dev';
+const APP = { app: 'Habit Tracker', prefix: 'habits' };
 
 export const cfg = {
-  base:  () => localStorage.getItem('habits_url')   || DEFAULT_BASE,
-  token: () => localStorage.getItem('habits_token') || DEFAULT_TOKEN,
+  base: () => localStorage.getItem('habits_url') || DEFAULT_BASE,
 };
 
-export function getUserEmail() {
-  const stored = localStorage.getItem('habits_user');
-  if (stored) return stored;
+let session = null;
+let afetch = null;
 
-  // Fallback: read from Cloudflare Access JWT (kisushotto.com/habits path)
-  const raw = document.cookie.split(';').map(c => c.trim())
-    .find(c => c.startsWith('CF_Authorization='));
-  if (!raw) return null;
-  try {
-    const token   = raw.split('=').slice(1).join('=');
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return payload.email || null;
-  } catch {
-    return null;
-  }
+// Hay que llamarlo antes que nada: no resuelve hasta que hay sesion.
+export async function initAuth() {
+  session = await requireSession(APP);
+  afetch = makeAuthFetch(session, APP);
+  return session;
+}
+
+export function getUserEmail() {
+  return session ? session.email() : null;
 }
 
 async function api(path, opts = {}) {
-  const url   = cfg.base() + path;
-  const email = getUserEmail();
-  if (!email) throw new Error('LOGIN_REQUIRED');
+  if (!afetch) throw new Error('LOGIN_REQUIRED');
+  const url = cfg.base() + path;
 
   let res;
   try {
-    res = await fetch(url, {
+    res = await afetch(url, {
       ...opts,
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${cfg.token()}`,
-        'X-User-Email':  email,
-        ...(opts.headers || {}),
-      },
+      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
     });
   } catch (e) {
     throw new Error(`No se puede conectar: ${e.message}`);

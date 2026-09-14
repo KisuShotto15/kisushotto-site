@@ -1,6 +1,20 @@
+// Sincronizacion de Body Metrics. La identidad es el JWT del sitio: antes iba un token
+// compartido ('151322') escrito aqui mismo, que el navegador descarga y cualquiera
+// podia leer para entrar a los datos de todos.
+import { requireSession, makeAuthFetch } from '../shared/site-auth.js';
+
 const DATA_URL = 'https://body-metrics-worker.efrenalejandro2010.workers.dev';
-const TOKEN    = '151322';
 const LS_KEY   = 'body_metrics_v1';
+const APP      = { app: 'Body Metrics', prefix: 'bodymetrics' };
+
+let afetch = null;
+
+// Hay que llamarlo antes de pull/push: no resuelve hasta que hay sesion.
+export async function initAuth() {
+  const session = await requireSession(APP);
+  afetch = makeAuthFetch(session, APP);
+  return session;
+}
 
 export function loadLocal() {
   try {
@@ -15,20 +29,20 @@ export function saveLocal(state) {
 
 export async function pull() {
   try {
-    const r = await fetch(DATA_URL, {
-      headers: { Authorization: `Bearer ${TOKEN}` }
-    });
+    const r = await afetch(DATA_URL);
     if (!r.ok) return null;
     const res = await r.json();
     return res.data || null;
   } catch { return null; }
 }
 
+// El worker ahora RECHAZA un estado con la forma equivocada en vez de guardarlo:
+// un fallo aqui deja intacto lo que hay en la nube, y lo local sigue en su sitio.
 export async function push(state) {
   try {
-    await fetch(DATA_URL, {
+    await afetch(DATA_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state)
     });
   } catch {}

@@ -21,6 +21,12 @@ cp public/manifests/habits.json "$OUT/manifest.json"
 # Service worker
 cp habits/push.js "$OUT/push.js"
 
+# Login compartido del sitio. El canonico vive en shared/, fuera de esta carpeta:
+# aqui los archivos se copian planos a la raiz, asi que se copia tambien y se
+# reescribe la ruta del import.
+cp shared/site-auth.js "$OUT/site-auth.js"
+sed -i "s|'../shared/site-auth.js'|'./site-auth.js'|g" "$OUT"/*.js
+
 # Service worker — habits-specific with push notification support
 cat > "$OUT/sw.js" << 'SWEOF'
 const CACHE = 'ks-habits-v20';

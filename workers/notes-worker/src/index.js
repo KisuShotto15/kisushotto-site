@@ -1,10 +1,20 @@
 // notes-worker — Cloudflare Worker + D1 + R2 + Web Push (VAPID)
 // Routes are listed at the bottom in fetch(); cron trigger handles reminders + trash purge.
+//
+// La identidad sale del JWT del sitio (el mismo de /api/auth/login). Antes habia
+// dos agujeros encadenados: el token que protegia el worker estaba publicado en el
+// bundle del navegador, y /auth/passkey/register entregaba una sesion valida para
+// CUALQUIER email sin verificar ninguna firma WebAuthn. Con esas dos cosas, dos
+// peticiones bastaban para leer las notas de cualquiera.
+//
+// El PIN y la passkey siguen existiendo, pero solo como DESBLOQUEO LOCAL de las
+// notas marcadas como protegidas, que es lo unico que nunca fueron.
+import { authEmail } from '../../_shared/site-auth.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  'https://notes.kisushotto.com',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-User-Email,X-Session-Token',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   'Access-Control-Expose-Headers': 'Content-Type',
 };
 
@@ -19,21 +29,6 @@ const now = () => Date.now();
 
 // Migrations are idempotent but cost ~10 DDL statements; run once per isolate.
 let migrated = false;
-
-function authToken(request, env) {
-  const h = request.headers.get('Authorization') || '';
-  return h === `Bearer ${env.TOKEN}`;
-}
-async function getUser(request, env) {
-  const token = request.headers.get('X-Session-Token');
-  if (token) {
-    const email = await verifySessionJwt(token, env);
-    if (email) return email;
-  }
-  // La identidad sale exclusivamente del JWT de sesion firmado (passkey login).
-  // El header X-User-Email ya no se acepta: era suplantable con solo el token.
-  return null;
-}
 
 // ── DB bootstrap (idempotent) ────────────────────────────────────────────────
 async function migrate(env) {
@@ -124,44 +119,6 @@ async function pbkdf2(password, saltB64, iters = 100000) {
 function randomSalt() {
   const b = crypto.getRandomValues(new Uint8Array(16));
   return btoa(String.fromCharCode(...b));
-}
-
-// ── Session JWT (HMAC-SHA256) ────────────────────────────────────────────────
-const SESSION_TTL_MS = 90 * 24 * 3600 * 1000;
-
-async function hmacKey(env) {
-  return crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(env.SESSION_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']
-  );
-}
-
-async function signSessionJwt(email, env) {
-  const header = { typ: 'JWT', alg: 'HS256' };
-  const payload = { email, iat: now(), exp: now() + SESSION_TTL_MS };
-  const enc = new TextEncoder();
-  const headB64 = bytesToB64url(enc.encode(JSON.stringify(header)));
-  const payB64  = bytesToB64url(enc.encode(JSON.stringify(payload)));
-  const data = enc.encode(`${headB64}.${payB64}`);
-  const sig = await crypto.subtle.sign('HMAC', await hmacKey(env), data);
-  return `${headB64}.${payB64}.${bytesToB64url(new Uint8Array(sig))}`;
-}
-
-async function verifySessionJwt(token, env) {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  const [headB64, payB64, sigB64] = parts;
-  try {
-    const enc = new TextEncoder();
-    const data = enc.encode(`${headB64}.${payB64}`);
-    const valid = await crypto.subtle.verify('HMAC', await hmacKey(env), b64urlToBytes(sigB64), data);
-    if (!valid) return null;
-    const payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(payB64)));
-    if (!payload.email || !payload.exp || payload.exp < now()) return null;
-    return payload.email;
-  } catch {
-    return null;
-  }
 }
 
 // ── Users ────────────────────────────────────────────────────────────────────
@@ -796,39 +753,22 @@ async function purgeOldTrash(env) {
   }
 }
 
-// ── Passkey login (no email header required) ─────────────────────────────────
-async function loginPasskeyRegister(request, env) {
-  const { email, credentialId, deviceName } = await request.json();
-  if (!email || !credentialId) return err('email and credentialId required');
-  const clean = email.toLowerCase().trim();
-  const now = Date.now();
+// ── Passkeys registradas para desbloquear notas protegidas ───────────────────
+// Ya NO sirven para iniciar sesion: /auth/passkey/register y /authenticate
+// emitian una sesion para cualquier email sin comprobar ninguna firma WebAuthn.
+// El login es el del sitio; esto solo lista y administra las credenciales locales.
+// Da de alta una credencial para desbloquear notas protegidas en este dispositivo.
+// El email NO viene en el cuerpo: sale del JWT, asi que no se puede registrar una
+// passkey a nombre de otra persona.
+async function loginPasskeyAdd(request, env, email) {
+  const { credentialId, deviceName } = await request.json().catch(() => ({}));
+  if (!credentialId) return err('credentialId required');
+  const t = Date.now();
   await env.DB.prepare(
     `INSERT OR REPLACE INTO login_passkeys (credential_id, email, device_name, created_at, last_used_at) VALUES (?, ?, ?, ?, ?)`
-  ).bind(credentialId, clean, deviceName || null, now, now).run();
-  await ensureUser(env, clean);
-  return json({ ok: true, session: await signSessionJwt(clean, env) });
-}
-
-async function loginPasskeyCheck(request, env) {
-  const { email } = await request.json().catch(() => ({}));
-  if (!email) return err('email required');
-  const row = await env.DB.prepare(
-    `SELECT 1 FROM login_passkeys WHERE email = ? LIMIT 1`
-  ).bind(email.toLowerCase().trim()).first();
-  return json({ hasPasskey: !!row });
-}
-
-async function loginPasskeyAuthenticate(request, env) {
-  const { credentialId } = await request.json();
-  if (!credentialId) return err('credentialId required');
-  const row = await env.DB.prepare(
-    `SELECT email FROM login_passkeys WHERE credential_id = ?`
-  ).bind(credentialId).first();
-  if (!row) return err('Passkey no encontrada', 404);
-  await env.DB.prepare(
-    `UPDATE login_passkeys SET last_used_at = ? WHERE credential_id = ?`
-  ).bind(Date.now(), credentialId).run();
-  return json({ email: row.email, session: await signSessionJwt(row.email, env) });
+  ).bind(credentialId, email, deviceName || null, t, t).run();
+  await ensureUser(env, email);
+  return json({ ok: true });
 }
 
 async function loginPasskeyList(env, email) {
@@ -855,11 +795,12 @@ async function loginPasskeyDelete(env, email, credId) {
 
 // ── Router ───────────────────────────────────────────────────────────────────
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
     }
-    if (!authToken(request, env)) return err('Unauthorized', 401);
+    const email = await authEmail(request, env, ctx);
+    if (!email) return err('Unauthorized', 401);
 
     if (!migrated) {
       try { await migrate(env); migrated = true; }
@@ -869,18 +810,11 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
     const m = request.method;
-
-    // Passkey auth endpoints — no X-User-Email required
-    if (path === '/auth/passkey/register'      && m === 'POST') return await loginPasskeyRegister(request, env);
-    if (path === '/auth/passkey/authenticate'  && m === 'POST') return await loginPasskeyAuthenticate(request, env);
-    if (path === '/auth/passkey/check'         && m === 'POST') return await loginPasskeyCheck(request, env);
-
-    const email = await getUser(request, env);
-    if (!email) return err('User identity required', 401);
     const seg = path.split('/').filter(Boolean);
 
     try {
-      if (path === '/auth/passkeys'                                           && m === 'GET')    return await loginPasskeyList(env, email);
+      if (path === '/auth/passkeys'            && m === 'GET')  return await loginPasskeyList(env, email);
+      if (path === '/auth/passkeys'            && m === 'POST') return await loginPasskeyAdd(request, env, email);
       if (seg[0] === 'auth' && seg[1] === 'passkey' && seg[2] && m === 'PATCH')  return await loginPasskeyRename(request, env, email, seg[2]);
       if (seg[0] === 'auth' && seg[1] === 'passkey' && seg[2] && m === 'DELETE') return await loginPasskeyDelete(env, email, seg[2]);
 

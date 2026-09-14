@@ -565,7 +565,7 @@ body::before {
 </div>
 
 <script type="module">
-import { loadLocal, saveLocal, pull, push } from './sync.js';
+import { loadLocal, saveLocal, pull, push, initAuth } from './sync.js';
 
 // ── State ──────────────────────────────────────────────
 // Puente hasta que el Planner tenga login propio: identifica a esta app ante
@@ -1084,6 +1084,8 @@ async function doAI(goalId) {
 
 // ── Init ────────────────────────────────────────────────────
 async function init() {
+  // No resuelve hasta que hay sesion: sin identidad no hay con que sincronizar.
+  await initAuth();
   const local = loadLocal();
   if (local) { S = local; render(); }
 

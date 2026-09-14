@@ -1,4 +1,4 @@
-import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, getUserEmail } from './api.js?v=27';
+import { getHabits, createHabit, updateHabit, deleteHabit, getCompletions, toggleComplete, setComplete, getStats, initAuth } from './api.js?v=28';
 
 // Push is optional and loaded lazily so a missing push.js never blocks page load.
 async function ensurePushSubscription() {
@@ -900,7 +900,9 @@ function backfillTz() {
 }
 
 async function init() {
-  if (!getUserEmail()) { showLogin(); return; }
+  // No resuelve hasta que hay sesion: la pantalla de login la pinta el modulo
+  // compartido, la misma en todas las apps del sitio.
+  await initAuth();
 
   const now = new Date();
   calYear      = now.getFullYear();
@@ -1016,27 +1018,12 @@ document.addEventListener('keydown', e => {
 })();
 
 // ── Login ─────────────────────────────────────────────────────────────────────
-function showLogin() {
-  $('loginScreen').classList.remove('hidden');
-}
-
-window.submitLogin = function() {
-  const email = $('loginEmail').value.trim().toLowerCase();
-  if (!email || !email.includes('@')) {
-    $('loginError').textContent = 'Ingresa un email válido.';
-    return;
-  }
-  localStorage.setItem('habits_user', email);
-  $('loginScreen').classList.add('hidden');
-  init();
-};
-
-window.handleLoginKey = function(e) {
-  if (e.key === 'Enter') window.submitLogin();
-};
-
+// La pantalla de login vive en shared/site-auth.js: es la misma cuenta y la misma
+// pantalla en todas las apps. Aqui solo queda cerrar sesion.
 window.logout = function() {
-  localStorage.removeItem('habits_user');
+  localStorage.removeItem('habits_jwt');
+  localStorage.removeItem('habits_email');
+  localStorage.removeItem('habits_user'); // resto del login viejo por email
   location.reload();
 };
 

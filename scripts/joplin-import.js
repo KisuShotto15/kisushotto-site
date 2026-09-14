@@ -5,11 +5,16 @@
  * 1. En Joplin: Archivo > Exportar todo > MD - Markdown + Front Matter
  *    Esto genera una carpeta con .md por nota y _resources/ con imágenes.
  *
- * 2. Ejecutar:
- *    node scripts/joplin-import.js <carpeta-exportacion> <email>
+ * 2. Conseguir un token de sesion (el mismo del sitio):
+ *    curl -s -X POST https://kisushotto-site.vercel.app/api/auth/login \
+ *      -H 'Content-Type: application/json' \
+ *      -d '{"email":"tu@email.com","password":"..."}'
+ *
+ * 3. Ejecutar:
+ *    NOTES_JWT=<token> node scripts/joplin-import.js <carpeta-exportacion>
  *
  *    Ejemplo:
- *    node scripts/joplin-import.js ~/Downloads/joplin-export efrenalejandro2010@gmail.com
+ *    NOTES_JWT=eyJhb... node scripts/joplin-import.js ~/Downloads/joplin-export
  */
 
 import fs from 'fs';
@@ -17,13 +22,22 @@ import path from 'path';
 import { createHash } from 'crypto';
 
 const WORKER_URL = 'https://notes-worker.efrenalejandro2010.workers.dev';
-const TOKEN = '151322';
+// El worker ya no acepta un token compartido ni la cabecera X-User-Email: la
+// identidad (y con ella el dueño de las notas importadas) sale de este JWT.
+const JWT = process.env.NOTES_JWT || '';
 const BATCH_SIZE = 10;
 
+// Lo rellena /me al arrancar: el dueño es el del token, no un argumento.
+let userEmail = '';
+
 // ── args ─────────────────────────────────────────────────────────────────────
-const [exportDir, userEmail] = process.argv.slice(2);
-if (!exportDir || !userEmail) {
-  console.error('Uso: node scripts/joplin-import.js <carpeta-export> <email>');
+const [exportDir] = process.argv.slice(2);
+if (!exportDir) {
+  console.error('Uso: NOTES_JWT=<token> node scripts/joplin-import.js <carpeta-export>');
+  process.exit(1);
+}
+if (!JWT) {
+  console.error('Falta NOTES_JWT. Consiguelo con /api/auth/login (ver cabecera de este archivo).');
   process.exit(1);
 }
 if (!fs.existsSync(exportDir)) {
@@ -34,8 +48,7 @@ if (!fs.existsSync(exportDir)) {
 // ── helpers ──────────────────────────────────────────────────────────────────
 function headers(extra = {}) {
   return {
-    'Authorization': `Bearer ${TOKEN}`,
-    'X-User-Email': userEmail,
+    'Authorization': `Bearer ${JWT}`,
     ...extra,
   };
 }
@@ -169,10 +182,11 @@ function collectMdFiles(dir, base = dir) {
 // ── main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`\nImportando desde: ${exportDir}`);
-  console.log(`Usuario: ${userEmail}\n`);
 
-  // Ensure user exists
-  await apiFetch('/me');
+  // Ensure user exists, y de paso saber de quien es el token.
+  const me = await apiFetch('/me');
+  userEmail = me.email;
+  console.log(`Usuario: ${userEmail}\n`);
 
   const resourcesDir = path.join(exportDir, '_resources');
   const mdEntries = collectMdFiles(exportDir);

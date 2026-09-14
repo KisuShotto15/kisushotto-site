@@ -1,9 +1,17 @@
 // habits-worker — Cloudflare Worker + D1
+//
+// La identidad sale del JWT del sitio (el mismo de /api/auth/login). Antes salia
+// de la cabecera X-User-Email, que escribe el propio cliente: el "login" era
+// escribir un email en un campo, sin contrasena, y el token compartido que
+// protegia el worker estaba publicado en el bundle del navegador.
+import { authEmail } from '../../_shared/site-auth.js';
 
+// Origen concreto, no '*': con el token compartido cualquier pagina podia leer
+// los habitos de cualquiera. Ya no hace falta la cabecera X-User-Email.
 const CORS = {
-  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Origin':  'https://habits.kisushotto.com',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-User-Email',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
 };
 
 function json(data, status = 200) {
@@ -17,17 +25,6 @@ function err(msg, status = 400) {
 }
 function uuid() {
   return crypto.randomUUID();
-}
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-function auth(request, env) {
-  const h = request.headers.get('Authorization') || '';
-  return h === `Bearer ${env.TOKEN}`;
-}
-
-// Extracts user email from X-User-Email header (set by frontend via CF Access JWT)
-function getUser(request) {
-  return (request.headers.get('X-User-Email') || '').toLowerCase().trim() || null;
 }
 
 // Local date + HH:MM for a given IANA timezone (reminders are stored in local time)
@@ -287,6 +284,8 @@ async function dispatchReminders(env) {
 }
 
 // ── DB bootstrap ──────────────────────────────────────────────────────────────
+// Idempotente pero cuesta 11 DDL: una vez por instancia, no una por peticion.
+let migrated = false;
 async function migrate(env) {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS habits (id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT '', name TEXT NOT NULL, description TEXT, type TEXT NOT NULL DEFAULT 'binary', target_value REAL DEFAULT 1, target_unit TEXT DEFAULT 'veces', frequency TEXT NOT NULL DEFAULT 'daily', frequency_days TEXT, frequency_every INTEGER DEFAULT 1, color TEXT NOT NULL DEFAULT 'lavender', emoji TEXT NOT NULL DEFAULT '✓', reminder_time TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)").run();
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS completions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT '', habit_id TEXT NOT NULL, date TEXT NOT NULL, value REAL NOT NULL DEFAULT 1, note TEXT, created_at INTEGER NOT NULL, UNIQUE(habit_id, date))").run();
@@ -375,7 +374,10 @@ async function updateHabit(id, request, env, uid) {
   if (!fields.length) return err('nothing to update');
   vals.push(id, uid);
   await env.DB.prepare(`UPDATE habits SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`).bind(...vals).run();
-  const row = await env.DB.prepare(`SELECT * FROM habits WHERE id = ?`).bind(id).first();
+  // Con el user_id: sin el, mandar el id de un habito ajeno no lo modificaba pero
+  // si devolvia sus datos en la respuesta.
+  const row = await env.DB.prepare(`SELECT * FROM habits WHERE id = ? AND user_id = ?`).bind(id, uid).first();
+  if (!row) return err('not found', 404);
   return json({ habit: row });
 }
 
@@ -485,19 +487,18 @@ async function getStats(request, env, uid) {
 
 // ── Router ────────────────────────────────────────────────────────────────────
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
     }
-    if (!auth(request, env)) return err('Unauthorized', 401);
+    const uid = await authEmail(request, env, ctx);
+    if (!uid) return err('Unauthorized', 401);
 
-    const uid = getUser(request);
-    if (!uid) return err('User identity required', 401);
-
-    try {
-      await migrate(env);
-    } catch (e) {
-      return err('DB init failed: ' + e.message, 500);
+    // Memorizado por instancia: son 11 sentencias de esquema y antes corrian en
+    // CADA peticion, incluido el cron de cada minuto.
+    if (!migrated) {
+      try { await migrate(env); migrated = true; }
+      catch (e) { return err('DB init failed: ' + e.message, 500); }
     }
 
     const url    = new URL(request.url);
@@ -527,7 +528,7 @@ export default {
   },
 
   async scheduled(_event, env) {
-    try { await migrate(env); } catch (_) {}
+    if (!migrated) { try { await migrate(env); migrated = true; } catch (_) {} }
     await dispatchReminders(env);
   },
 };

@@ -20,9 +20,13 @@ crons = ["* * * * *"]
 
 [vars]
 VAPID_SUBJECT = "mailto:efrenalejandro2010@gmail.com"
+# Quien puede entrar. VACIA = NO PASA NADIE (default seguro: es una app personal).
+ALLOWED_EMAILS = "efrenalejandro2010@gmail.com"
 
+# TOKEN y SESSION_SECRET ya no se usan: la identidad es el JWT del sitio y este
+# worker no emite sesiones propias. Se pueden borrar con `wrangler secret delete`.
+#
 # Set as secrets via:
-#   wrangler secret put TOKEN
-#   wrangler secret put SESSION_SECRET
+#   wrangler secret put JWT_SECRET       <- el mismo valor que en Vercel
 #   wrangler secret put VAPID_PUBLIC
 #   wrangler secret put VAPID_PRIVATE_JWK   (full JWK JSON: {"kty":"EC","crv":"P-256","d":"...","x":"...","y":"..."})
