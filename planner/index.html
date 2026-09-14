@@ -568,6 +568,12 @@ body::before {
 import { loadLocal, saveLocal, pull, push } from './sync.js';
 
 // ── State ──────────────────────────────────────────────
+// Puente hasta que el Planner tenga login propio: identifica a esta app ante
+// /api/claude-suggest, que antes estaba abierto a internet. Viaja en el bundle,
+// asi que no es un secreto de verdad — lo que acota el gasto es el limite por IP
+// del servidor. Tiene que valer lo mismo que AI_SUGGEST_SECRET en Vercel.
+const AI_SECRET = 'ks-planner-h5J0RBoYZutr';
+
 let S = { goals: [], lastModified: 0 };
 let pushTimer = null;
 let addParentId = null;   // which node is getting a new child
@@ -1055,9 +1061,11 @@ async function doAI(goalId) {
   try {
     const r = await fetch('/api/claude-suggest', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-App-Secret': AI_SECRET },
       body: JSON.stringify({ goalTitle: goal.title, existingSteps: goal.children.map(c => c.title) })
     });
+    if (r.status === 401) throw new Error('El endpoint no acepta esta app. Falta configurar AI_SUGGEST_SECRET en Vercel.');
+    if (r.status === 429) throw new Error('Demasiadas sugerencias seguidas. Prueba en un rato.');
     if (!r.ok) throw new Error('API ' + r.status);
     const data = await r.json();
     if (data.error) throw new Error(data.error);
