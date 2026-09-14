@@ -545,6 +545,11 @@ export default async function handler(req, res) {
         AND (b.user_id = ${adminId}
           OR (s.status = 'trialing' AND s.trial_end > now())
           OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))
+      -- Cola justa: primero quien lleva mas tiempo sin reprecio, y los que nunca
+      -- se han tickeado antes que nadie. Sin esto el orden lo decidia Postgres, y
+      -- si los usuarios no caben en los 60 s de la invocacion, los que quedaban
+      -- al final se quedaban sin reprecio SIEMPRE los mismos, sin error visible.
+      ORDER BY b.last_tick ASC NULLS FIRST
       LIMIT ${MAX_USERS}`;
 
     let ticked = 0;
@@ -626,6 +631,7 @@ export default async function handler(req, res) {
         AND (b.user_id = ${adminId}
           OR (s.status = 'trialing' AND s.trial_end > now())
           OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))
+      ORDER BY b.orders_checked_at ASC NULLS FIRST
       LIMIT ${MAX_USERS}`;
     for (const row of qrows) {
       try {
@@ -648,6 +654,7 @@ export default async function handler(req, res) {
         AND (m.user_id = ${adminId}
           OR (s.status = 'trialing' AND s.trial_end > now())
           OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))
+      ORDER BY m.last_tick ASC NULLS FIRST
       LIMIT ${MAX_USERS}`;
     let monitored = 0;
     // ms hasta el proximo trabajo real: el scheduler espacia su alarma con esto.
