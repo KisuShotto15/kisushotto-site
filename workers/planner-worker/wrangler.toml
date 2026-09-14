@@ -5,3 +5,8 @@ compatibility_date = "2025-04-10"
 [[kv_namespaces]]
 binding = "PLANNER_KV"
 id = "5a1338abbbda419c9a0a55a60bd065fa"
+
+# Respaldo diario del estado (04:00 UTC = medianoche en Caracas). La copia expira
+# sola a los 7 dias; GET ?backups la lista y POST ?restore=<fecha> la recupera.
+[triggers]
+crons = ["0 4 * * *"]

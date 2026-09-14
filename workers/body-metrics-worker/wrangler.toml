@@ -5,3 +5,8 @@ compatibility_date = "2025-04-10"
 [[kv_namespaces]]
 binding = "BODY_METRICS_KV"
 id = "ceb343aff5374750abf3519cc2e02f45"
+
+# Respaldo diario del estado (04:00 UTC = medianoche en Caracas). La copia expira
+# sola a los 7 dias; GET ?backups la lista y POST ?restore=<fecha> la recupera.
+[triggers]
+crons = ["0 4 * * *"]
