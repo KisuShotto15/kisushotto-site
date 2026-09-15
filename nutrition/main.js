@@ -1,4 +1,4 @@
-import { loadLocal, saveLocal, pull, push, initAuth } from './sync.js';
+import { loadLocal, saveLocal, pull, push, initAuth, onConflict } from './sync.js';
 import { calcBMR, calcTDEE, calcTarget, mealMacros, totalMacros, scalePortions,
          MICROS_DEF, calcRDA, totalMicros, totalFatTypes } from './calculator.js';
 import { searchFoods, getFoodDetail, getApiKey, setApiKey } from './search.js';
@@ -127,6 +127,17 @@ document.addEventListener('visibilitychange', () => {
 async function init() {
   // No resuelve hasta que hay sesion: sin identidad no hay con que sincronizar.
   await initAuth();
+
+  // Alguien guardo desde otro dispositivo mientras editabamos aqui. Antes se
+  // pisaba su trabajo sin avisar; ahora se adopta lo suyo y se avisa. Lo que
+  // habia sin guardar queda en localStorage bajo nutrition_v1_rescate.
+  onConflict(remote => {
+    S = migrateState(remote);
+    saveLocal(S);
+    render();
+    hydrateForm();
+    alert('Se guardaron cambios desde otro dispositivo. Se cargaron los más recientes.');
+  });
   const local = loadLocal();
   if (local) S = migrateState(local);
 

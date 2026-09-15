@@ -8,6 +8,15 @@
 //     falten las claves de la app se rechaza con 400 y NO toca lo guardado.
 //  2. Respaldo diario (cron 04:00 UTC) con expiracion automatica a 7 dias. Un
 //     borrado accidental deja de ser definitivo.
+//  3. Control de version. Cada escritura sube un contador; el cliente manda el que
+//     tenia al leer y, si no coincide, se rechaza con 409 y se le devuelve el
+//     estado vigente. Antes la ultima escritura ganaba SIEMPRE: abrir la app en el
+//     telefono, editar en el portatil y tocar algo en el telefono borraba el
+//     trabajo del portatil entero, sin aviso.
+//
+//     El contador lo lleva el SERVIDOR, no el reloj del cliente. Comparar el
+//     lastModified que manda cada dispositivo parece mas simple, pero un reloj
+//     atrasado dejaria a ese dispositivo sin poder guardar nunca mas.
 
 // La identidad sale del JWT del sitio, nunca de un token compartido ni de una
 // cabecera. El estado vive en una clave POR USUARIO: antes era una sola clave
@@ -52,6 +61,17 @@ function invalidState(body) {
 
 // Una clave por usuario. El email ya viene normalizado y verificado por el JWT.
 function stateKey(email) { return KV_KEY + ':' + email; }
+
+// La revision vive en la metadata de KV, no dentro del valor: asi lo guardado
+// sigue siendo el JSON del estado tal cual y las filas anteriores (sin metadata)
+// se leen como revision 0 sin migrar nada.
+async function readState(kv, email) {
+  const { value, metadata } = await kv.getWithMetadata(stateKey(email));
+  return { value, rev: (metadata && Number(metadata.rev)) || 0 };
+}
+async function writeState(kv, email, body, rev) {
+  await kv.put(stateKey(email), body, { metadata: { rev } });
+}
 function bakPrefix(email) { return BAK_PREFIX + email + ':'; }
 
 // Migracion de la clave global unica al esquema por usuario. Corre una sola vez,
@@ -61,7 +81,7 @@ async function adoptLegacy(kv, email, ownerEmail) {
   if (!ownerEmail || email !== String(ownerEmail).trim().toLowerCase()) return null;
   const legacy = await kv.get(KV_KEY);
   if (!legacy) return null;
-  await kv.put(stateKey(email), legacy);
+  await writeState(kv, email, legacy, 1);
   // La global se conserva a proposito: si la migracion sale mal, el original sigue.
   return legacy;
 }
@@ -73,7 +93,7 @@ function today() {
 // Copia el estado vigente a una clave con fecha. expirationTtl la borra sola a los
 // 7 dias, asi que no hace falta barrer nada.
 async function backup(kv, email) {
-  const raw = await kv.get(stateKey(email));
+  const { value: raw } = await readState(kv, email);
   if (!raw) return null;
   const day = today();
   await kv.put(bakPrefix(email) + day, raw, { expirationTtl: BAK_DAYS * 86400 });
@@ -119,10 +139,14 @@ export default {
         if (!raw) return json({ error: 'no hay respaldo de ' + day }, 404);
         return json({ data: JSON.parse(raw), backup: day });
       }
-      let raw = await kv.get(stateKey(email));
-      if (raw === null) raw = await adoptLegacy(kv, email, env.OWNER_EMAIL);
-      const data = raw ? JSON.parse(raw) : null;
-      return json({ data });
+      let { value: raw, rev } = await readState(kv, email);
+      if (raw === null) {
+        raw = await adoptLegacy(kv, email, env.OWNER_EMAIL);
+        if (raw) rev = 1;
+      }
+      // rev: el cliente lo devuelve al guardar para que se detecte si alguien mas
+      // escribio en medio.
+      return json({ data: raw ? JSON.parse(raw) : null, rev });
     }
 
     if (request.method === 'POST') {
@@ -133,16 +157,32 @@ export default {
         const raw = await kv.get(bakPrefix(email) + day);
         if (!raw) return json({ error: 'no hay respaldo de ' + day }, 404);
         await backup(kv, email);
-        await kv.put(stateKey(email), raw);
-        return json({ ok: true, restored: day });
+        const { rev } = await readState(kv, email);
+        await writeState(kv, email, raw, rev + 1);
+        return json({ ok: true, restored: day, rev: rev + 1 });
       }
 
       const body = await request.text();
       const bad = invalidState(body);
       if (bad) return json({ error: 'estado rechazado: ' + bad }, 400);
-      await kv.put(stateKey(email), body);
+
+      const { value: cur, rev } = await readState(kv, email);
+      // Sin ?rev el guardado se acepta: es un cliente anterior a este cambio, y
+      // dejarlo sin poder guardar seria peor que el riesgo que corre.
+      const sent = url.searchParams.get('rev');
+      if (sent !== null && Number(sent) !== rev) {
+        // Alguien mas escribio en medio. Se devuelve lo vigente para que el
+        // cliente lo adopte en vez de pisarlo a ciegas.
+        return json({
+          error: 'conflicto: hay cambios mas nuevos',
+          rev,
+          data: cur ? JSON.parse(cur) : null,
+        }, 409);
+      }
+
+      await writeState(kv, email, body, rev + 1);
       await rememberUser(kv, email);
-      return json({ ok: true });
+      return json({ ok: true, rev: rev + 1 });
     }
 
     return json({ error: 'Method not allowed' }, 405);

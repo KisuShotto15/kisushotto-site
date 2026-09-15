@@ -37,12 +37,21 @@ const ENV_BASE = {
 };
 const jwt = email => signJWT({ uid: 1, email });
 
+// KV con metadata, que es donde vive la revision del estado.
 function mkKv(seed = {}) {
   const store = new Map(Object.entries(seed));
+  const meta = new Map();
   return {
     store,
+    meta,
     async get(k) { return store.has(k) ? store.get(k) : null; },
-    async put(k, v) { store.set(k, v); },
+    async getWithMetadata(k) {
+      return { value: store.has(k) ? store.get(k) : null, metadata: meta.get(k) || null };
+    },
+    async put(k, v, opts) {
+      store.set(k, v);
+      if (opts && opts.metadata) meta.set(k, opts.metadata);
+    },
     async list({ prefix }) { return { keys: [...store.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name })) }; },
   };
 }
@@ -150,6 +159,85 @@ for (const app of APPS) {
       assert.equal(r.status, 400, label);
       assert.equal(kv.store.get(mine), prev, label + ': no toco lo guardado');
     }
+  });
+
+  test(`${app.name}: sin ?rev el guardado se acepta (cliente anterior al cambio)`, async () => {
+    const kv = mkKv();
+    const r = await call('POST', URLB, JSON.stringify(app.good), jwt(YO), { [app.bind]: kv });
+    assert.equal(r.status, 200);
+    assert.equal((await r.json()).rev, 1);
+  });
+
+  test(`${app.name}: con la revision correcta el guardado pasa y sube el contador`, async () => {
+    const kv = mkKv();
+    await call('POST', URLB, JSON.stringify(app.good), jwt(YO), { [app.bind]: kv });
+    const r = await call('POST', `${URLB}?rev=1`, JSON.stringify({ ...app.good, lastModified: 200 }), jwt(YO), { [app.bind]: kv });
+    assert.equal(r.status, 200);
+    assert.equal((await r.json()).rev, 2);
+  });
+
+  test(`${app.name}: dos dispositivos — el segundo NO pisa al primero`, async () => {
+    const kv = mkKv();
+    // Ambos leyeron el mismo estado: revision 1.
+    await call('POST', URLB, JSON.stringify(app.good), jwt(YO), { [app.bind]: kv });
+
+    const movil = { ...app.good, lastModified: 500, desde: 'movil' };
+    const portatil = { ...app.good, lastModified: 600, desde: 'portatil' };
+
+    const a = await call('POST', `${URLB}?rev=1`, JSON.stringify(portatil), jwt(YO), { [app.bind]: kv });
+    assert.equal(a.status, 200, 'el primero en llegar guarda');
+
+    const b = await call('POST', `${URLB}?rev=1`, JSON.stringify(movil), jwt(YO), { [app.bind]: kv });
+    assert.equal(b.status, 409, 'el segundo se rechaza en vez de pisar');
+    const d = await b.json();
+    assert.equal(d.rev, 2, 'le dice cual es la revision vigente');
+    assert.equal(d.data.desde, 'portatil', 'y le devuelve el estado que ya estaba');
+
+    assert.equal(JSON.parse(kv.store.get(mine)).desde, 'portatil', 'lo guardado no se toco');
+  });
+
+  test(`${app.name}: tras el conflicto, guardar con la revision nueva funciona`, async () => {
+    const kv = mkKv();
+    await call('POST', URLB, JSON.stringify(app.good), jwt(YO), { [app.bind]: kv });
+    await call('POST', `${URLB}?rev=1`, JSON.stringify({ ...app.good, desde: 'a' }), jwt(YO), { [app.bind]: kv });
+    const choque = await call('POST', `${URLB}?rev=1`, JSON.stringify({ ...app.good, desde: 'b' }), jwt(YO), { [app.bind]: kv });
+    const { rev } = await choque.json();
+
+    const r = await call('POST', `${URLB}?rev=${rev}`, JSON.stringify({ ...app.good, desde: 'b2' }), jwt(YO), { [app.bind]: kv });
+    assert.equal(r.status, 200, 'ya no hay bloqueo: se resuelve y se sigue');
+    assert.equal(JSON.parse(kv.store.get(mine)).desde, 'b2');
+  });
+
+  test(`${app.name}: un reloj atrasado no impide guardar`, async () => {
+    // La revision la lleva el servidor. Si se comparara el lastModified del
+    // cliente, un dispositivo con el reloj atrasado no podria guardar nunca mas.
+    const kv = mkKv();
+    await call('POST', URLB, JSON.stringify({ ...app.good, lastModified: 9e12 }), jwt(YO), { [app.bind]: kv });
+    const r = await call('POST', `${URLB}?rev=1`, JSON.stringify({ ...app.good, lastModified: 1 }), jwt(YO), { [app.bind]: kv });
+    assert.equal(r.status, 200);
+    assert.equal(JSON.parse(kv.store.get(mine)).lastModified, 1);
+  });
+
+  test(`${app.name}: el GET entrega la revision para poder guardar despues`, async () => {
+    const kv = mkKv();
+    const vacio = await (await call('GET', URLB, null, jwt(YO), { [app.bind]: kv })).json();
+    assert.equal(vacio.rev, 0, 'sin estado, revision 0');
+
+    await call('POST', URLB, JSON.stringify(app.good), jwt(YO), { [app.bind]: kv });
+    const leido = await (await call('GET', URLB, null, jwt(YO), { [app.bind]: kv })).json();
+    assert.equal(leido.rev, 1);
+  });
+
+  test(`${app.name}: restaurar un respaldo tambien sube la revision`, async () => {
+    const kv = mkKv();
+    await call('POST', URLB, JSON.stringify(app.good), jwt(YO), { [app.bind]: kv });
+    const waits = [];
+    await app.mod.scheduled({}, { ...ENV_BASE, [app.bind]: kv }, { waitUntil: p => waits.push(p) });
+    await Promise.all(waits);
+    const day = new Date().toISOString().slice(0, 10);
+
+    const r = await call('POST', `${URLB}?restore=${day}`, null, jwt(YO), { [app.bind]: kv });
+    assert.equal((await r.json()).rev, 2, 'quien tuviera rev 1 se enterara del cambio');
   });
 
   test(`${app.name}: los datos de la clave global vieja pasan al dueño, y solo a el`, async () => {

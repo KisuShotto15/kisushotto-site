@@ -309,7 +309,7 @@ select.inp{cursor:pointer}
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { loadLocal, saveLocal, pull, push, initAuth } from './sync.js';
+import { loadLocal, saveLocal, pull, push, initAuth, onConflict } from './sync.js';
 
 // ── State ──────────────────────────────────────────────────────────────────
 const DEFAULT_EXERCISES = [
@@ -337,6 +337,16 @@ function save() {
 async function init() {
   // No resuelve hasta que hay sesion: sin identidad no hay con que sincronizar.
   await initAuth();
+
+  // Alguien guardo desde otro dispositivo mientras editabamos aqui. Antes se
+  // pisaba su trabajo sin avisar; ahora se adopta lo suyo y se avisa. Lo que
+  // habia sin guardar queda en localStorage bajo body_metrics_v1_rescate.
+  onConflict(remote => {
+    S = remote;
+    saveLocal(S);
+    render();
+    alert('Se guardaron cambios desde otro dispositivo. Se cargaron los más recientes.');
+  });
   const local = loadLocal();
   if (local) { S = local; render(); }
   const remote = await pull();
