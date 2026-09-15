@@ -324,6 +324,19 @@ async function canEdit(env, noteId, email) {
   return !!(share && share.can_edit);
 }
 
+// base_lm: el last_modified canonico que este cliente tenia cuando empezo a
+// editar. Si ya no coincide con el guardado, alguien escribio en medio.
+//
+// El campo lo mandaba el cliente desde hace tiempo y el servidor no lo leia
+// NUNCA: la ultima escritura ganaba siempre y la version del otro dispositivo
+// desaparecia sin dejar rastro. En una app de notas eso es el fallo que no se
+// perdona.
+//
+// Lo delicado no es detectar el choque, es no inventarselo: un intento anterior
+// generaba "copias de conflicto" falsas. Por eso el servidor ya no toca
+// last_modified salvo cuando hay una edicion de verdad (ver deleteCategory), y
+// los sitios que si lo mueven —adjuntos, papelera— devuelven el valor nuevo para
+// que el cliente adelante su base.
 async function upsertNote(env, email, n) {
   const existing = await env.DB.prepare(`SELECT last_modified, owner_email FROM notes WHERE id = ?`).bind(n.id).first();
 
@@ -332,6 +345,11 @@ async function upsertNote(env, email, n) {
   if (existing) {
     if (!(await canEdit(env, n.id, email))) {
       return { skipped: true, reason: 'forbidden' };
+    }
+    // Sin base_lm no se comprueba: es una nota que este cliente nunca vio del
+    // servidor, o un cliente anterior a este cambio.
+    if (n.base_lm != null && Number(n.base_lm) !== Number(existing.last_modified)) {
+      return { skipped: true, reason: 'conflict', last_modified: existing.last_modified };
     }
     stmts.push(env.DB.prepare(
       `UPDATE notes SET title=?, body=?, type=?, checklist_items=?, color=?, pinned=?, archived=?, trashed_at=?, locked=?, reminder_at=?, reminder_sent=?, last_modified=? WHERE id=?`
@@ -437,7 +455,10 @@ async function trashNote(noteId, env, email) {
   const t = now();
   await env.DB.prepare(`UPDATE notes SET trashed_at = ?, last_modified = ? WHERE id = ?`)
     .bind(t, t, noteId).run();
-  return json({ ok: true });
+  // note_last_modified: mueve la marca sin que sea una edicion del contenido, asi
+  // que quien llame a esto tiene que adelantar su base_lm o se dara un falso
+  // conflicto en el siguiente push. Mismo contrato que los adjuntos.
+  return json({ ok: true, note_last_modified: t });
 }
 
 async function restoreNote(noteId, env, email) {
@@ -445,7 +466,7 @@ async function restoreNote(noteId, env, email) {
   const t = now();
   await env.DB.prepare(`UPDATE notes SET trashed_at = NULL, last_modified = ? WHERE id = ?`)
     .bind(t, noteId).run();
-  return json({ ok: true });
+  return json({ ok: true, note_last_modified: t });
 }
 
 async function purgeNote(noteId, env, email) {
@@ -517,11 +538,13 @@ async function deleteCategory(catId, env, email) {
   const cat = await env.DB.prepare(`SELECT owner_email FROM categories WHERE id = ?`).bind(catId).first();
   if (!cat) return err('not found', 404);
   if (cat.owner_email !== email) return err('forbidden', 403);
-  // Bump notes that referenced this category so other devices re-pull them and
-  // drop the now-dangling chip (their last_modified would otherwise stay stale).
-  await env.DB.prepare(
-    `UPDATE notes SET last_modified = ? WHERE id IN (SELECT note_id FROM note_categories WHERE category_id = ?)`
-  ).bind(now(), catId).run();
+  // Aqui habia un bump del last_modified de todas las notas que usaban esta
+  // categoria, para que otros dispositivos las re-descargaran y soltaran el chip
+  // huerfano. Ya no hace falta y ademas era daniino: borrar una categoria movia
+  // la marca de decenas de notas SIN que nadie las editara, y cada una de esas
+  // notas daba despues un falso conflicto al primer cliente que tuviera una
+  // edicion pendiente. El cliente ya descarta los chips cuya categoria no existe
+  // (ver el .filter(Boolean) al pintarlos), asi que el efecto visual es el mismo.
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM note_categories WHERE category_id = ?`).bind(catId),
     env.DB.prepare(`DELETE FROM categories WHERE id = ?`).bind(catId),
@@ -836,15 +859,16 @@ export default {
         if (!body.created_at) body.created_at = now();
         body.last_modified = now();
         await ensureUser(env, email);
-        await upsertNote(env, email, body);
-        return json({ id: body.id }, 201);
+        const r = await upsertNote(env, email, body);
+        return json({ id: body.id, note_last_modified: r.last_modified }, 201);
       }
       if (seg[0] === 'notes' && seg[1] && seg.length === 2 && m === 'PATCH') {
         const body = await request.json();
         body.id = seg[1];
         body.last_modified = now();
-        await upsertNote(env, email, body);
-        return json({ ok: true });
+        const r = await upsertNote(env, email, body);
+        if (r.skipped) return json({ error: r.reason, last_modified: r.last_modified }, 409);
+        return json({ ok: true, note_last_modified: r.last_modified });
       }
       if (seg[0] === 'notes' && seg[1] && seg[2] === 'restore' && m === 'POST') return await restoreNote(seg[1], env, email);
       if (seg[0] === 'notes' && seg[1] && seg[2] === 'purge'   && m === 'DELETE') return await purgeNote(seg[1], env, email);

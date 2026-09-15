@@ -11,7 +11,7 @@ import {
   apiListPasskeys, apiAddPasskey, apiRenamePasskey, apiDeletePasskey,
   getUserEmail, initAuth,
 } from './api.js';
-import { pull, flushQueue, saveNoteLocal, saveCategoryLocal, deleteCategoryLocal, onConnectionChange } from './sync.js';
+import { pull, flushQueue, saveNoteLocal, saveCategoryLocal, deleteCategoryLocal, onConnectionChange, onNoteConflict } from './sync.js';
 import {
   isSessionUnlocked, lockSession,
   setPin, verifyPin,
@@ -214,6 +214,17 @@ async function init() {
   // Online indicator
   updateNetBanner(navigator.onLine);
   onConnectionChange(updateNetBanner);
+
+  // Choque de ediciones: el servidor rechazo lo escrito aqui porque la nota ya
+  // habia cambiado en otro sitio. sync.js guarda esta version como nota aparte;
+  // aqui solo hay que repintar y avisar, porque si no el usuario veria su texto
+  // desaparecer sin explicacion.
+  onNoteConflict(async n => {
+    try { await loadFromIDB(); render(); } catch {}
+    showErrorToast(n === 1
+      ? 'Esa nota cambio en otro dispositivo. Tu version se guardo aparte.'
+      : `${n} notas cambiaron en otro dispositivo. Tus versiones se guardaron aparte.`);
+  });
 
   // Network-first with short timeout to avoid showing stale data flash
   const networkPromise = (async () => {

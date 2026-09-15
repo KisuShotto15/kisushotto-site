@@ -6,6 +6,51 @@ import { apiSyncPull, apiSyncPush, apiDeleteCat } from './api.js';
 let pushTimer = null;
 let pushing = false;
 
+// Aviso a la app cuando un choque de ediciones se resolvio creando una copia.
+let onNoteConflictCb = null;
+export function onNoteConflict(cb) { onNoteConflictCb = cb; }
+
+// Lo que cuenta como "la misma nota". Si dos dispositivos escribieron lo mismo no
+// hay nada que salvar, y crear una copia seria justo el ruido que genero el
+// intento anterior de detectar conflictos.
+function sameContent(a, b) {
+  const norm = n => JSON.stringify([
+    n.title || '', n.body || '', n.type || 'text',
+    n.checklist_items || [], n.color || null,
+    !!n.pinned, !!n.archived, n.trashed_at || null, !!n.locked, n.reminder_at || null,
+  ]);
+  return norm(a) === norm(b);
+}
+
+// Que nota de rescate hay que crear, si es que hay alguna. Separado del guardado
+// para poder probarlo: es la decision que, mal tomada, llena la app de copias.
+export function conflictCopy(local, remote) {
+  if (!local || !remote) return null;
+  if (sameContent(local, remote)) return null;
+  return {
+    ...local,
+    id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()),
+    title: (local.title || 'Nota') + ' — versión de este dispositivo',
+    created_at: Date.now(),
+    last_modified: Date.now(),
+    base_lm: null,       // nota nueva: no tiene base contra la que chocar
+    shares: [],
+    attachments: [],     // los adjuntos siguen colgando de la original
+  };
+}
+
+// El servidor rechazo el push porque alguien escribio en medio. Lo del servidor
+// manda (lo adopta el bucle de result.notes de mas abajo); lo que se habia escrito
+// aqui NO se tira: si difiere de verdad, queda como una nota nueva al lado.
+async function resolveNoteConflict(id, serverNotes) {
+  const local = await idb.getOne('notes', id);
+  const remote = (serverNotes || []).find(x => x.id === id);
+  const copia = conflictCopy(local, remote);
+  if (!copia) return false;
+  await idb.putAndEnqueue('notes', copia, 'note');
+  return true;
+}
+
 function isOnline() { return typeof navigator !== 'undefined' ? navigator.onLine !== false : true; }
 
 export async function pull() {
@@ -151,13 +196,25 @@ export async function flushQueue() {
       // error transitorio) se queda en cola para reintentar — antes se
       // descartaba y la edicion se perdia en silencio. 'forbidden' nunca va a
       // funcionar, asi que si se descarta.
+      // 'conflict' sale de la cola como 'forbidden': reintentar no arregla nada,
+      // porque el base_lm que se volveria a mandar sigue siendo el viejo. Se
+      // resuelve aparte, justo debajo.
+      const enConflicto = [];
       const confirmed = syncItems.filter(it => {
         const r = it.type === 'note' ? result.results?.notes?.[it.id] : result.results?.categories?.[it.id];
+        if (r?.reason === 'conflict') { enConflicto.push(it.id); return true; }
         if (r?.skipped && r.reason !== 'forbidden') return false;
         if (r?.skipped) console.warn('push rechazado (sin permiso), se descarta', it.type, it.id);
         return true;
       });
       await idb.dequeueIfUnchanged(confirmed);
+
+      let copias = 0;
+      for (const id of enConflicto) {
+        try { if (await resolveNoteConflict(id, result.notes)) copias++; }
+        catch (e) { console.warn('no se pudo resolver el conflicto de', id, e); }
+      }
+      if (copias && onNoteConflictCb) onNoteConflictCb(copias);
 
       // Recompute pending after dequeue: entries still queued were edited again
       // mid-flight and must not be clobbered by the now-stale server canonical.
