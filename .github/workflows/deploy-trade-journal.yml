@@ -37,5 +37,24 @@ jobs:
       - name: aplicar migraciones D1
         run: npx --yes wrangler@4 d1 migrations apply trade-journal-db --remote
 
+      # Los secretos primero: si se despliega antes, hay una ventana en la que el
+      # worker nuevo corre sin ellos. Cada uno solo se sube si existe en el repo,
+      # asi que este paso no falla por los que aun no esten configurados.
+      - name: subir secretos
+        env:
+          SITE_JWT_SECRET: ${{ secrets.SITE_JWT_SECRET }}
+          CRED_ENC_KEY: ${{ secrets.CRED_ENC_KEY }}
+        run: |
+          if [ -n "$SITE_JWT_SECRET" ]; then
+            printf '%s' "$SITE_JWT_SECRET" | npx --yes wrangler@4 secret put JWT_SECRET
+          else
+            echo "SITE_JWT_SECRET no configurado: se deja el que ya tenga el worker"
+          fi
+          if [ -n "$CRED_ENC_KEY" ]; then
+            printf '%s' "$CRED_ENC_KEY" | npx --yes wrangler@4 secret put CRED_ENC_KEY
+          else
+            echo "CRED_ENC_KEY no configurado: no se podran guardar claves de Bybit nuevas"
+          fi
+
       - name: wrangler deploy
         run: npx --yes wrangler@4 deploy

@@ -2,5 +2,9 @@ name = "p2p-proxy"
 main = "src/index.js"
 compatibility_date = "2025-04-10"
 
-[vars]
-API_SECRET = "ptk-2025-kisu"
+# API_SECRET ya NO va aqui: estaba en texto plano y versionado en git, asi que
+# cualquiera con acceso al repositorio lo tenia. Va como secret:
+#   wrangler secret put API_SECRET      <- un valor NUEVO, el viejo esta quemado
+#
+# Sin el configurado, el worker rechaza todo. Antes dejaba pasar a cualquiera
+# cuando faltaba, que es el peor momento para abrir la puerta.

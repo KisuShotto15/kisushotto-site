@@ -8,8 +8,14 @@ database_name = "trade-journal-db"
 database_id = "0d902c20-5ba7-4646-a1f6-d2dc00d982e8"
 migrations_dir = "migrations"
 
-# TOKEN va como secret (wrangler secret put TOKEN), no como var:
-# en [vars] queda en texto plano dentro del repo.
+# Secretos (wrangler secret put <NOMBRE>), nunca en [vars]: ahi quedarian en
+# texto plano dentro del repo.
+#   TOKEN          credencial de servicio para el CLI y pruebas
+#   JWT_SECRET     el mismo valor que en Vercel, para validar sesiones del sitio
+#   CRED_ENC_KEY   32 bytes en hex para cifrar las claves de Bybit en D1.
+#                  Generar con: openssl rand -hex 32
+#                  Si falta, el sync sigue con lo que haya guardado pero NO se
+#                  pueden guardar credenciales nuevas.
 
 [triggers]
 # Cada minuto: espejo de posiciones abiertas (el fetch a Bybit solo funciona

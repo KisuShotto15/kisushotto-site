@@ -1,3 +1,4 @@
+import { encryptSecret, decryptSecret, isEncrypted } from '../../_shared/secret-box.js';
 import { computeStats, groupByDimension, buildHeatmap, buildWeeklyReview, riskOf } from './analytics.js';
 import { generateInsights } from './insights.js';
 import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot, fetchBybitPositions, fetchBybitBalance, fetchBybitExecutions,
@@ -119,6 +120,31 @@ async function auth(req, env, ctx) {
 }
 
 function uid() { return crypto.randomUUID(); }
+
+// ── Credenciales de Bybit ─────────────────────────────────────────────────────
+// Estaban en texto plano en D1. Ahora se guardan cifradas (AES-256-GCM con
+// CRED_ENC_KEY), igual que las de Binance en Postgres. Este es el unico sitio que
+// las lee: devuelve null si no hay config activa, y de paso migra la fila que
+// siguiera en claro la primera vez que se usa.
+async function bybitCreds(env) {
+  const cfg = await env.DB.prepare(
+    'SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
+  if (!cfg) return null;
+
+  const apiKey = await decryptSecret(env, cfg.api_key);
+  const apiSecret = await decryptSecret(env, cfg.api_secret);
+
+  // Fila anterior al cifrado: se re-guarda cifrada. Si falla (falta la clave
+  // maestra), se sigue: el sync no debe pararse por la migracion.
+  if (!isEncrypted(cfg.api_key) || !isEncrypted(cfg.api_secret)) {
+    try {
+      await env.DB.prepare('UPDATE sync_configs SET api_key = ?, api_secret = ? WHERE id = ?')
+        .bind(await encryptSecret(env, apiKey), await encryptSecret(env, apiSecret), 'bybit').run();
+    } catch (e) { console.error('no se pudo cifrar la config de bybit:', e.message); }
+  }
+
+  return { ...cfg, apiKey, apiSecret };
+}
 
 function session(unixSec) {
   const h = new Date(unixSec * 1000).getUTCHours();
@@ -557,9 +583,9 @@ async function setConfig(request, env) {
 }
 
 async function refreshBalance(env) {
-  const cfg = await env.DB.prepare('SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
+  const cfg = await bybitCreds(env);
   if (!cfg) return null;
-  const bal = await fetchBybitBalance(cfg.api_key, cfg.api_secret);
+  const bal = await fetchBybitBalance(cfg.apiKey, cfg.apiSecret);
   if (!bal) return null;
   await env.DB.prepare(`
     INSERT INTO account_balance (id, total_equity, wallet_balance, coin, updated_at)
@@ -762,22 +788,31 @@ async function getSyncConfig(env) {
 async function setSyncConfig(request, env) {
   const { apiKey, apiSecret, enabled = 1 } = await request.json();
   if (!apiKey || !apiSecret) return json({ error: 'apiKey + apiSecret required' }, 400);
+  // Se cifran ANTES de tocar la base: si falta CRED_ENC_KEY esto lanza, y es lo
+  // correcto — mejor no guardar nada que volver a dejarlas en claro.
+  let encKey, encSecret;
+  try {
+    encKey = await encryptSecret(env, apiKey);
+    encSecret = await encryptSecret(env, apiSecret);
+  } catch (e) {
+    return json({ error: 'No se pueden guardar credenciales sin cifrado: ' + e.message }, 500);
+  }
   await env.DB.prepare(`
     INSERT INTO sync_configs (id, exchange, api_key, api_secret, enabled, updated_at)
     VALUES ('bybit', 'bybit', ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET api_key=excluded.api_key, api_secret=excluded.api_secret,
       enabled=excluded.enabled, updated_at=excluded.updated_at
-  `).bind(apiKey, apiSecret, enabled ? 1 : 0, Math.floor(Date.now() / 1000)).run();
+  `).bind(encKey, encSecret, enabled ? 1 : 0, Math.floor(Date.now() / 1000)).run();
   return json({ ok: true });
 }
 
 // Guarda el stop/TP de las posiciones abiertas. Bybit no lo devuelve una vez
 // cerradas, asi que sin esto no hay forma de calcular la R automaticamente.
 async function snapshotPositions(env) {
-  const cfg = await env.DB.prepare('SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
+  const cfg = await bybitCreds(env);
   if (!cfg) return { skipped: true };
 
-  const { positions } = await fetchBybitPositions(cfg.api_key, cfg.api_secret);
+  const { positions } = await fetchBybitPositions(cfg.apiKey, cfg.apiSecret);
   const now = Math.floor(Date.now() / 1000);
 
   if (!positions.length) {
@@ -860,7 +895,7 @@ async function attachStops(env) {
 // a 50 subpeticiones por invocacion y closed-pnl solo acepta ventanas de 7 dias,
 // asi que un anio entero no entra en una sola llamada.
 async function runSync(env, params) {
-  const cfg = await env.DB.prepare('SELECT * FROM sync_configs WHERE id = ? AND enabled = 1').bind('bybit').first();
+  const cfg = await bybitCreds(env);
   if (!cfg) return json({ skipped: true, reason: 'no config or disabled' });
 
   const from = params?.get('from') ? +params.get('from') : null;
@@ -870,8 +905,8 @@ async function runSync(env, params) {
   const since = backfill ? from : (cfg.last_sync > 0 ? cfg.last_sync * 1000 : 0);
   const opts  = { since, until: to || Date.now() };
   const [linear, inverse] = await Promise.all([
-    fetchBybitFutures(cfg.api_key, cfg.api_secret, { category: 'linear',  ...opts }),
-    fetchBybitFutures(cfg.api_key, cfg.api_secret, { category: 'inverse', ...opts }),
+    fetchBybitFutures(cfg.apiKey, cfg.apiSecret, { category: 'linear',  ...opts }),
+    fetchBybitFutures(cfg.apiKey, cfg.apiSecret, { category: 'inverse', ...opts }),
   ]);
 
   const all = [...linear, ...inverse];
@@ -880,7 +915,7 @@ async function runSync(env, params) {
   // ejecuciones. Sin esto toda la duracion salia 0m.
   let opened = 0;
   try {
-    const execs = await fetchBybitExecutions(cfg.api_key, cfg.api_secret, { category: 'linear', ...opts });
+    const execs = await fetchBybitExecutions(cfg.apiKey, cfg.apiSecret, { category: 'linear', ...opts });
     opened = attachOpenTimes(all, buildPositionWindows(execs));
   } catch (e) { console.error('exec fetch failed:', e); }
 
