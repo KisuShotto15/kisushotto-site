@@ -4,15 +4,28 @@ export function appUrl() {
   return (process.env.APP_URL || 'https://p2p.kisushotto.com').replace(/\/$/, '');
 }
 
+// Sin tope, un cuelgue de Resend retiene la invocacion entera: el registro y el
+// reset de contrasena esperan a que Vercel corte por maxDuration, y el usuario ve
+// una pantalla colgada en vez de un error. 10 s es de sobra para una API REST.
+const SEND_TIMEOUT_MS = 10000;
+
 export async function sendEmail(to, subject, html) {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.MAIL_FROM;
   if (!key || !from) throw new Error('Email no configurado (RESEND_API_KEY / MAIL_FROM)');
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to, subject, html }),
-  });
+  let r;
+  try {
+    r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject, html }),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    });
+  } catch (e) {
+    // register ya trata el fallo de envio como "cuenta creada, correo no enviado"
+    // y el usuario puede pedir el reenvio; lo que no puede es quedarse esperando.
+    throw new Error('Resend no respondio: ' + e.message);
+  }
   if (!r.ok) {
     const t = await r.text().catch(() => '');
     throw new Error('Resend ' + r.status + ': ' + t.slice(0, 200));

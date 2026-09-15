@@ -9,7 +9,7 @@
 import crypto from 'node:crypto';
 import { sql, ensurePlanColumn, ensurePayState, ensureNickColumn } from './db.js';
 import { markPaid } from './subscriptions.js';
-import { refMatches } from './payer-match.js';
+import { refMatches, payerLooksLike } from './payer-match.js';
 
 const BINANCE = 'https://api.binance.com';
 const POLL_THROTTLE_MS = 20 * 1000;
@@ -108,6 +108,11 @@ export async function checkPayPayments(force) {
     // suscripcion de cualquier otro cobro de USDT, y aca entran pagos de P2P todo
     // el dia. Esas facturas quedan para el panel manual.
     if (!inv.binance_nick) { noNick++; continue; }
+    // refMatches es SOLO el Order ID. Si el usuario puso su nombre en vez del
+    // Order ID, la factura cae al panel manual con sus candidatos — ver
+    // pendingWithCandidates. El monto sigue teniendo que cuadrar: el Order ID ya
+    // identifica la transaccion, pero un monto distinto significa que pago otra
+    // cosa, o el plan que no era.
     const hit = incoming.find(t =>
       !usedIds.has(String(t.transactionId)) &&
       String(t.currency).toUpperCase() === String(inv.currency).toUpperCase() &&
@@ -123,6 +128,60 @@ export async function checkPayPayments(force) {
 
   await sql`UPDATE email_payment_state SET pay_checked_at = now() WHERE id = 1`;
   return { pending: pend.length, seen: txs.length, incoming: incoming.length, matched, noNick };
+}
+
+// Para el panel de revision: por cada factura pendiente, que transacciones
+// entrantes podrian ser la suya. Ya no se confirma nada por nombre, asi que sin
+// esto el admin tendria que ir a buscar cada pago a mano en Binance.
+//
+// Candidato = cobro entrante, misma moneda, mismo monto y sin usar. Los que ademas
+// coinciden en nombre con lo que el usuario declaro van primero y marcados, que es
+// lo que antes bastaba para confirmar solo y ahora es solo una pista.
+export async function pendingWithCandidates(invoices) {
+  const { key, secret } = payKeys();
+  if (!key || !secret || !invoices.length) return {};
+
+  let txs;
+  try { txs = await getPayTransactions(key, secret, Date.now() - LOOKBACK_MS); }
+  catch (e) { return {}; }
+
+  const used = await sql`
+    SELECT transaction_id FROM payment_invoices
+    WHERE transaction_id IS NOT NULL AND paid_at > now() - interval '30 days'`;
+  const usedIds = new Set(used.map(r => r.transaction_id));
+  const incoming = txs.filter(isIncoming);
+
+  const out = {};
+  for (const inv of invoices) {
+    const cands = buildCandidates(incoming, inv, usedIds);
+    if (cands.length) out[inv.id] = cands;
+  }
+  return out;
+}
+
+// La eleccion de candidatos, aparte para poder probarla sin base ni red.
+// Candidato = cobro entrante sin usar, misma moneda y mismo monto. Los que ademas
+// coinciden en nombre van primero y marcados; dentro de cada grupo, el mas reciente.
+export const MAX_CANDIDATES = 5;
+export function buildCandidates(incoming, inv, usedIds = new Set()) {
+  return (incoming || [])
+    .filter(t =>
+      !usedIds.has(String(t.transactionId)) &&
+      String(t.currency).toUpperCase() === String(inv.currency).toUpperCase() &&
+      Math.abs(Number(t.amount) - Number(inv.amount)) <= AMOUNT_EPS)
+    .map(t => ({
+      orderId: t.orderId || null,
+      txId: t.transactionId || null,
+      amount: t.amount,
+      currency: t.currency,
+      when: t.transactionTime ? new Date(t.transactionTime).toISOString() : null,
+      payer: (t.payerInfo && (t.payerInfo.name || t.payerInfo.nickName)) || null,
+      // Coincide en nombre con lo que declaro. Pista, no prueba: por esta cuenta
+      // entran cobros del mismo monto todo el dia.
+      nameMatch: !!(inv.binance_nick && payerLooksLike(t, inv.binance_nick)),
+    }))
+    .sort((a, b) => (b.nameMatch - a.nameMatch) || String(b.when).localeCompare(String(a.when)))
+    .slice(0, MAX_CANDIDATES);
 }
 
 // Diagnostico del panel de admin: responde si las claves sirven y que se ve, sin

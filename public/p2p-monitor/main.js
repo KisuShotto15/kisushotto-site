@@ -1597,15 +1597,20 @@ async function renderAdminPending() {
     return;
   }
   var invoices = d.invoices || [];
+  var cands = d.candidates || {};
   if (!invoices.length) { box.textContent = 'No hay pagos pendientes.'; return; }
   box.innerHTML = '';
   invoices.forEach(function (inv) {
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:10px 0;border-bottom:1px solid var(--border);text-align:left';
     var row = document.createElement('div');
-    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);text-align:left';
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px';
     var when = new Date(inv.created_at).toLocaleString('es-VE');
     var info = document.createElement('div');
-    info.innerHTML = '<div style="font-weight:600">' + inv.email + '</div>' +
-      '<div style="font-size:12px;color:var(--text-3)">' + inv.plan + ' · ' + when + '</div>';
+    info.innerHTML = '<div style="font-weight:600">' + esc(inv.email) + '</div>' +
+      '<div style="font-size:12px;color:var(--text-3)">' + esc(inv.plan) + ' · ' + when +
+      (inv.ref ? ' · declaró: <span style="color:var(--text-2)">' + esc(inv.ref) + '</span>' : ' · <span style="color:var(--red)">sin referencia</span>') +
+      '</div>';
     var right = document.createElement('div');
     right.style.cssText = 'display:flex;align-items:center;gap:10px;flex-shrink:0';
     var amt = document.createElement('span');
@@ -1624,7 +1629,33 @@ async function renderAdminPending() {
     };
     right.appendChild(amt); right.appendChild(btn); right.appendChild(rej);
     row.appendChild(info); row.appendChild(right);
-    box.appendChild(row);
+    wrap.appendChild(row);
+
+    // Candidatos de Binance Pay: cobros entrantes sin usar, del mismo monto y
+    // moneda. Desde que solo el Order ID confirma sola, esto es lo que evita ir a
+    // buscar el pago a mano. La coincidencia de nombre es una PISTA, no una prueba:
+    // el monto de suscripcion es fijo y por esta cuenta entran cobros todo el dia.
+    (cands[inv.id] || []).forEach(function (c) {
+      var cr = document.createElement('div');
+      cr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px;padding:6px 10px;background:var(--bg-2);border-radius:6px;font-size:12px';
+      var cwhen = c.when ? new Date(c.when).toLocaleString('es-VE') : '—';
+      var left = document.createElement('div');
+      left.innerHTML = '<div>' + (c.payer ? esc(c.payer) : '<i>sin nombre</i>') +
+        (c.nameMatch ? ' <span style="color:var(--gold)">· coincide el nombre</span>' : '') + '</div>' +
+        '<div style="color:var(--text-3);font-family:monospace">' + esc(c.orderId || c.txId || '—') + ' · ' + cwhen + '</div>';
+      var use = document.createElement('button');
+      use.className = 'btn btn-sm';
+      use.style.flexShrink = '0';
+      use.textContent = 'Es este';
+      use.onclick = function () {
+        if (!window.confirm('¿Confirmar el pago de ' + inv.email + ' con ' + (c.orderId || c.txId) + '?\n\nComprueba en Binance que es su pago: el monto coincidir no lo demuestra.')) return;
+        resolveAdminPayment('admin-confirm', inv.id, use, c.txId);
+      };
+      cr.appendChild(left); cr.appendChild(use);
+      wrap.appendChild(cr);
+    });
+
+    box.appendChild(wrap);
   });
 }
 
@@ -1648,12 +1679,12 @@ async function resetAllSubs(btn) {
   }
 }
 
-async function resolveAdminPayment(action, invoiceId, btn) {
+async function resolveAdminPayment(action, invoiceId, btn, txId) {
   var label = btn.textContent;
   btn.disabled = true;
   btn.textContent = '…';
   try {
-    await apiPost('/api/payments/' + action, { invoiceId: invoiceId }, true);
+    await apiPost('/api/payments/' + action, { invoiceId: invoiceId, txId: txId || null }, true);
     await renderAdminPending();
     checkAdminPending();
   } catch (e) {
@@ -1864,7 +1895,7 @@ async function markSubPaid() {
   // Sin nombre no se puede confirmar el pago solo: el monto no distingue esta
   // suscripcion de cualquier otro cobro de USDT que entre a la vez.
   if (!nick) {
-    alert('Pega el Order ID del pago (o tu nickname de Binance) para poder identificarlo.');
+    alert('Pega el Order ID del pago para activar tu acceso al instante.\n\nSi ya cerraste esa pantalla, escribe tu nickname de Binance: lo revisamos a mano y te confirmamos.');
     if (nickEl) nickEl.focus();
     return;
   }

@@ -9,7 +9,7 @@ import { sql, ensureSchema, ensurePlanColumn, ensureNickColumn } from '../_lib/d
 import { createOrder, queryOrder, verifyWebhookSignature } from '../_lib/binancepay.js';
 import { sendPush } from '../_lib/push.js';
 import { ensureSubscription, startTrial, markPaid, planInfo, adminUserId, PLANS, SUB_CURRENCY } from '../_lib/subscriptions.js';
-import { checkPayPayments, probePayTransactions } from '../_lib/pay-poll.js';
+import { checkPayPayments, probePayTransactions, pendingWithCandidates } from '../_lib/pay-poll.js';
 
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -197,8 +197,9 @@ async function startTrialAction(req, res) {
   return res.status(200).json({ subscription: sub });
 }
 
-// Nick de Binance Pay del usuario: es la unica forma de distinguir pagos simultaneos
-// del mismo monto fijo cuando el poller de Binance Pay intente matchearlos.
+// Referencia del pago que declara el usuario. El Order ID confirma la factura sola;
+// cualquier otra cosa (su nickname, por ejemplo) solo sirve para que aparezca como
+// candidato en el panel de revision — ver payer-match.js.
 async function setNickAction(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   let user;
@@ -227,6 +228,7 @@ async function adminConfirmAction(req, res) {
   if (!invoiceId) return res.status(400).json({ error: 'invoiceId requerido' });
   await ensureSchema();
   await ensurePlanColumn();
+  await ensureNickColumn();
   const rows = await sql`SELECT * FROM payment_invoices WHERE id = ${invoiceId}`;
   const invoice = rows[0];
   if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
@@ -308,11 +310,19 @@ async function adminPendingAction(req, res) {
   await ensureSchema();
   await ensurePlanColumn();
   const rows = await sql`
-    SELECT i.id, i.user_id, u.email, i.amount, i.currency, i.plan, i.status, i.created_at
-    FROM payment_invoices i JOIN users u ON u.id = i.user_id
+    SELECT i.id, i.user_id, u.email, i.amount, i.currency, i.plan, i.status, i.created_at,
+           s.binance_nick AS ref
+    FROM payment_invoices i
+    JOIN users u ON u.id = i.user_id
+    LEFT JOIN subscriptions s ON s.user_id = i.user_id
     WHERE i.status IN ('pending', 'pending_review')
     ORDER BY i.created_at ASC`;
-  return res.status(200).json({ invoices: rows });
+  // Candidatos de Binance Pay por factura: desde que solo el Order ID confirma
+  // sola, esto es lo que evita tener que ir a buscar cada pago a mano.
+  // Best-effort: si las claves del dueño fallan, el panel sigue sirviendo.
+  let candidates = {};
+  try { candidates = await pendingWithCandidates(rows); } catch (e) {}
+  return res.status(200).json({ invoices: rows, candidates });
 }
 
 async function webhookAction(req, res) {
