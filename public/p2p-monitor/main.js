@@ -7,10 +7,22 @@
 
   var FEE_BUY     = 0.00175;
   var MIN_NET     = 0.003;
-  var HIST_CAP    = 30;
   var ABS_WIN_MS  = 3 * 60 * 1000;
   var MOM_WIN_MS  = 5 * 60 * 1000;
   var REV_WIN_MS  = 20 * 60 * 1000;
+  // El buffer se recorta por TIEMPO, no por numero de instantaneas.
+  //
+  // Antes el tope era 30 instantaneas. Con el refresco por defecto de 15 s eso son
+  // 7,5 minutos, asi que el filtro de REV_WIN_MS (20 min) no descartaba nunca nada:
+  // la senal "estamos cerca del maximo reciente" miraba 7,5 minutos y el codigo
+  // decia que miraba 20. Lo mismo, mas leve, con la comparacion a 6 minutos, que
+  // solo funcionaba con el buffer lleno.
+  //
+  // Ningun tope fijo de instantaneas arregla esto, porque el refresco es
+  // configurable (10 s o mas): el mismo numero cubre ventanas distintas segun como
+  // lo tenga ajustado cada quien. Recortar por tiempo lo hace independiente.
+  var HIST_KEEP_MS = REV_WIN_MS + 2 * 60 * 1000;  // holgura: snapAt busca la mas cercana
+  var HIST_CAP     = 300;  // techo duro de memoria, no de tiempo (a 10 s son 50 min)
 
   // ── Snapshot ────────────────────────────────────────
   function buildSnapshot(ST) {
@@ -61,6 +73,8 @@
 
   function pushSnapshot(history, ST) {
     history.push(buildSnapshot(ST));
+    var cutoff = Date.now() - HIST_KEEP_MS;
+    while (history.length > 1 && history[0].ts < cutoff) history.shift();
     while (history.length > HIST_CAP) history.shift();
     updateFlicker(history);
     return history[history.length - 1];
@@ -393,13 +407,18 @@
     if (F.momentum >= 0.3)     pos.push('impulso al alza +' + F.momentum.toFixed(2));
     if (F.LA > F.LB * 1.5)     pos.push('liquidez para vender ' + (F.LA / Math.max(F.LB, 1)).toFixed(1) + 'x la de recomprar');
     if (F.events.rapidDeplete) pos.push('el primero se vació rápido');
+    // Reversion probable es URGENCIA, no riesgo: la ventana se esta cerrando. Es
+    // como lo tratan los otros dos usos de revProb — suma al puntaje de venta
+    // (peso 8) y recorta la ventana estimada de recompra. Estaba en las razones
+    // EN CONTRA, asi que el panel podia decir "SELL, puntaje 71" y listar entre
+    // los argumentos negativos uno de los factores que habia subido ese 71.
+    if (F.revProb >= 0.6)      pos.push('la ventana se está cerrando (reversión probable al ' + (F.revProb * 100).toFixed(0) + '%)');
     if (F.buyAbsRate3m >= 0.30) pos.push('recompra se vació ' + (F.buyAbsRate3m * 100).toFixed(0) + '% en 3 min — posible espacio para que bajen precio');
 
     if (F.HHI > 0.5)           neg.push('oferta concentrada en pocos (' + F.HHI.toFixed(2) + ')');
     if (F.gapBigCnt >= 2)      neg.push(F.gapBigCnt + ' huecos grandes de precio');
     if (F.weakness > 0.4)      neg.push('debilidad ' + F.weakness.toFixed(2));
     if (F.momentum < -0.2)     neg.push('impulso a la baja ' + F.momentum.toFixed(2));
-    if (F.revProb >= 0.6)      neg.push('probabilidad de reversión ' + (F.revProb * 100).toFixed(0) + '%');
     if (F.LB < 20000)          neg.push('poca liquidez para recomprar (' + Math.round(F.LB) + ')');
 
     var conflicts = [];
