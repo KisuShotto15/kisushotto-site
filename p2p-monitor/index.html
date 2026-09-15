@@ -92,6 +92,7 @@
   <button class="btn btn-sm secondary" id="btn-activity" onclick="toggleActivityGuard()" title="Alertas de actividad / apagado por inactividad">🛡️</button>
   <button class="btn btn-sm secondary" id="btn-sub" onclick="openSubModal()" title="Suscripción">💳<span id="sub-badge" style="display:none;margin-left:4px"></span></button>
   <button class="btn btn-sm secondary" id="btn-admin-pay" onclick="goAdminPending()" style="display:none;position:relative" title="Pagos pendientes de confirmar">🧾<span id="admin-pay-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
+  <button class="btn btn-sm secondary admin-only" id="btn-admin-health" onclick="goAdminHealth()" style="display:none;position:relative" title="Salud del sistema">🩺<span id="admin-health-dot" style="display:none;position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;background:var(--red);pointer-events:none"></span></button>
   </div>
   <button type="button" class="btn btn-sm more-btn" id="more-btn" onclick="toggleMoreActions(event)" title="Más acciones">⋯</button>
   <span class="top-break"></span>
@@ -312,6 +313,18 @@
       <button class="btn btn-sm" onclick="resetAllSubs(this)">Resetear suscripciones (todos menos admin)</button>
     </div>
     <div style="margin-top:16px;text-align:center"><button class="btn btn-sm" onclick="closeAdminPayModal()">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- Panel de salud (solo admin) -->
+<div id="admin-health-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surf-1);border:1px solid var(--border-2);border-radius:var(--r);padding:22px;max-width:480px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7)">
+    <div style="font-size:19px;font-weight:700;color:var(--gold);margin-bottom:14px;text-align:center">Salud del sistema</div>
+    <div id="admin-health-body" style="max-height:66vh;overflow-y:auto;color:var(--text-2);font-size:14px">Cargando…</div>
+    <div style="margin-top:16px;text-align:center;display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-sm" onclick="renderAdminHealth()">Actualizar</button>
+      <button class="btn btn-sm" onclick="closeAdminHealthModal()">Cerrar</button>
+    </div>
   </div>
 </div>
 
@@ -675,7 +688,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=125"></script>
+<script src="/p2p-monitor/main.js?v=126"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

@@ -1526,6 +1526,10 @@ async function checkAdminPending() {
     IS_ADMIN = true;
     btn.style.display = '';
     if (badge) { badge.textContent = n; badge.style.display = n > 0 ? '' : 'none'; }
+    // De paso, el punto rojo del panel de salud. Monta sobre este sondeo en vez de
+    // tener el suyo: un aviso que hay que abrir para verlo no avisa de nada, pero
+    // tampoco vale quemar una invocacion mas por minuto para saberlo.
+    checkHealthDot();
   } catch (e) {
     // 403 = no es el dueño. Nadie se vuelve admin a mitad de sesion, asi que el
     // sondeo se apaga para siempre: repetirlo cada minuto solo quemaba una
@@ -1577,6 +1581,117 @@ async function renderPayProbe() {
   el.innerHTML = '<span style="color:#1D9E75">✓ Historial accesible</span> · ' +
     d.total + ' en 24h (' + d.incoming + ' entrantes)' +
     '<div style="font-size:11px;color:var(--text-2);margin-top:4px">' + det + '</div>';
+}
+
+// ── Panel de salud (solo admin) ─────────────────────────────────────────────
+// Responde la pregunta que antes solo se podia responder esperando a que un
+// cliente escribiera: sus bots, ¿se estan repreciando? El servidor ya calcula el
+// veredicto y la lista de problemas; aqui solo se pinta.
+// Solo el veredicto, para el punto rojo del boton. El detalle se pide al abrir.
+async function checkHealthDot() {
+  var dot = document.getElementById('admin-health-dot');
+  if (!dot) return;
+  try {
+    var d = await botCallWorker('/admin-health');
+    dot.style.display = d.ok ? 'none' : '';
+  } catch (e) {
+    // Si el propio panel no responde, eso tambien es un problema que mostrar.
+    dot.style.display = '';
+  }
+}
+
+function goAdminHealth() {
+  var m = document.getElementById('admin-health-modal');
+  if (m) m.style.display = 'flex';
+  modalOpened('admin-health-modal');
+  renderAdminHealth();
+}
+
+function closeAdminHealthModal() {
+  var m = document.getElementById('admin-health-modal');
+  if (m) m.style.display = 'none';
+  modalClosed('admin-health-modal');
+}
+
+function healthRow(label, value, bad) {
+  return '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0">' +
+    '<span style="color:var(--text-3)">' + label + '</span>' +
+    '<span style="color:' + (bad ? 'var(--red)' : 'var(--text-1)') + ';font-weight:600">' + value + '</span></div>';
+}
+
+function healthAge(s) {
+  if (s == null) return 'nunca';
+  if (s < 90) return s + ' s';
+  if (s < 5400) return Math.round(s / 60) + ' min';
+  return Math.round(s / 3600) + ' h';
+}
+
+async function renderAdminHealth() {
+  var box = document.getElementById('admin-health-body');
+  if (!box) return;
+  box.textContent = 'Cargando…';
+  var d;
+  try {
+    d = await botCallWorker('/admin-health');
+  } catch (e) {
+    box.innerHTML = '<span style="color:var(--red)">Error: ' + e.message + '</span>';
+    return;
+  }
+  var t = d.tick || {}, b = d.bots || {}, mo = d.monitors || {}, su = d.subs || {};
+  var h = '';
+
+  h += d.ok
+    ? '<div style="background:rgba(29,158,117,.12);border:1px solid #1D9E75;border-radius:8px;padding:10px;color:#1D9E75;text-align:center;font-weight:600;margin-bottom:14px">Todo en orden</div>'
+    : '<div style="background:rgba(226,75,74,.12);border:1px solid var(--red);border-radius:8px;padding:10px;margin-bottom:14px">' +
+      (d.problems || []).map(function(p) {
+        return '<div style="color:var(--red);font-size:13px;line-height:1.5">• ' + p + '</div>';
+      }).join('') + '</div>';
+
+  // El tick: si no aparece, no se reprecia nadie, y es lo primero que hay que mirar.
+  h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px">Tick</div>';
+  h += healthRow('Último', healthAge(t.last_age_s), t.last_age_s == null || t.last_age_s > (d.thresholds || {}).tickStaleS);
+  h += healthRow('En la última hora', (t.runs || 0) + ' ejecuciones', !t.runs);
+  h += healthRow('Duración media', t.avg_ms != null ? t.avg_ms + ' ms' : '—');
+  h += healthRow('Duración máxima', t.max_ms != null ? t.max_ms + ' ms' : '—');
+  // Hueco: mide que el scheduler de Cloudflare siga disparando. Un tick lento se
+  // ve en la duracion; uno que no llego a existir solo se ve aqui.
+  h += healthRow('Mayor hueco entre ticks', t.max_gap_s != null ? healthAge(t.max_gap_s) : '—',
+    t.max_gap_s > (d.thresholds || {}).tickStaleS);
+  h += healthRow('Errores (1 h)', t.errors || 0, !!t.errors);
+  h += healthRow('Veces en el tope de usuarios', t.capped || 0, !!t.capped);
+
+  h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px">Bots</div>';
+  h += healthRow('Deberían correr', b.eligible || 0);
+  h += healthRow('Ticados en el último minuto', (b.recent || 0) + ' de ' + (b.eligible || 0),
+    (b.eligible || 0) > (b.recent || 0));
+  h += healthRow('Sin reprecio hace rato', b.stale || 0, !!b.stale);
+  h += healthRow('En error', b.failing || 0, !!b.failing);
+
+  h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px">Monitor</div>';
+  h += healthRow('Encendidos', mo.eligible || 0);
+  h += healthRow('Refrescados en 5 min', (mo.recent || 0) + ' de ' + (mo.eligible || 0));
+
+  h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px">Suscripciones</div>';
+  h += healthRow('En prueba', su.trialing || 0);
+  h += healthRow('Al día', su.active || 0);
+  h += healthRow('En cortesía tras vencer', su.grace || 0, !!su.grace);
+  h += healthRow('Vencidas', su.expired || 0);
+  h += healthRow('Pagos por revisar', su.pendingInvoices != null ? su.pendingInvoices : '—', !!su.pendingInvoices);
+
+  // A quien avisar, con nombre: el numero solo dice que algo pasa, no a quien.
+  if ((d.late || []).length) {
+    h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px">Quiénes</div>';
+    d.late.forEach(function(r) {
+      h += '<div style="border-top:1px solid var(--border);padding:6px 0">' +
+        '<div style="color:var(--text-1);font-size:13px">' + esc(r.email) + '</div>' +
+        '<div style="color:var(--text-3);font-size:11px">sin reprecio hace ' + healthAge(r.age_s) +
+        (r.status ? ' · ' + esc(r.status) : '') + '</div></div>';
+    });
+  }
+
+  box.innerHTML = h;
+  var dot = document.getElementById('admin-health-dot');
+  if (dot) dot.style.display = d.ok ? 'none' : '';
 }
 
 function closeAdminPayModal() {

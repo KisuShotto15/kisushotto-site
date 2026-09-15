@@ -177,6 +177,31 @@ export async function ensureBotAdMinLimit() {
   adMinLimitReady = true;
 }
 
+// Una fila por invocacion del tick: cuanto tardo, a cuantos atendio de los que
+// tocaba, y si la consulta llego al tope. Sin esto no habia forma de responder la
+// pregunta que importa — "¿estan corriendo los bots de mis clientes?" — porque el
+// tick no deja rastro: si se queda sin tiempo a mitad, los que faltaban
+// simplemente no se repreciaron, sin error y sin registro.
+//
+// Se crea igual que ad_min_limit: el tick no corre ensureSchema(), asi que la
+// tabla tiene que asegurarse sola, una vez por instancia.
+let tickRunsReady = false;
+export async function ensureTickRuns() {
+  if (tickRunsReady) return;
+  await sql`CREATE TABLE IF NOT EXISTS tick_runs (
+    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ms INTEGER NOT NULL,
+    bots INTEGER NOT NULL DEFAULT 0,
+    ticked INTEGER NOT NULL DEFAULT 0,
+    monitors INTEGER NOT NULL DEFAULT 0,
+    monitored INTEGER NOT NULL DEFAULT 0,
+    errors INTEGER NOT NULL DEFAULT 0,
+    capped BOOLEAN NOT NULL DEFAULT false
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS tick_runs_ts ON tick_runs (ts DESC)`;
+  tickRunsReady = true;
+}
+
 let marketHistReady = false;
 export async function ensureMarketHist() {
   if (marketHistReady) return;

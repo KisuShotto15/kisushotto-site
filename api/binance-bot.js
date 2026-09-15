@@ -1,10 +1,12 @@
 import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
-import { sql, ensureSchema, ensureMarketHist } from './_lib/db.js';
+import { sql, ensureSchema, ensureMarketHist, ensureTickRuns } from './_lib/db.js';
 import { histMap } from './_lib/monitor.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
 import { fifoMatch, fifoShort, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows, SAMPLE_MIN } from './_lib/pnl.js';
+import { adminUserId, GRACE_MS } from './_lib/subscriptions.js';
+import { healthProblems, TICK_STALE_S, BOT_STALE_MIN } from './_lib/health.js';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -97,6 +99,122 @@ export default async function handler(req, res) {
         ON CONFLICT (pay) DO UPDATE SET hist24 = excluded.hist24,
           hist_long = excluded.hist_long, seeded = true`;
       return res.status(200).json({ ...info, applied: { hist24: h24.length, histLong: hl.length } });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // Panel de salud (solo admin): responde "¿estan corriendo los bots de mis
+  // clientes?" con datos, no con la fe de que el tick sigue vivo.
+  //
+  // Las tres preguntas que no se podian responder antes:
+  //  - Cuantos bots DEBERIAN estar corriendo frente a cuantos se ticaron de verdad.
+  //    La diferencia es el hallazgo A3 hecho visible: si el tick no llega a todos,
+  //    los que quedan fuera no dan ningun error, su bot simplemente deja de moverse.
+  //  - Cuanto tarda el tick y si esta apareciendo. Un hueco largo entre ticks
+  //    significa que el scheduler de Cloudflare dejo de disparar.
+  //  - Que bots estan en error ahora mismo.
+  if (path === '/admin-health') {
+    const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
+    try {
+      await ensureTickRuns();
+      const adminId = await adminUserId();
+      const graceFrom = new Date(Date.now() - GRACE_MS).toISOString();
+      // La condicion de elegibilidad va repetida en cada consulta a proposito: el
+      // `sql` de este proyecto es una funcion con reintento, no el objeto de
+      // postgres.js, asi que un fragmento anidado se ejecutaria como consulta
+      // suelta. Es el mismo criterio que usa el tick; si se separan, el panel
+      // mentiria justo sobre lo que mide.
+
+      // Un solo viaje: la conexion esta configurada con max: 1, asi que cada
+      // consulta suelta se encola detras de la anterior.
+      const [runs] = await sql`
+        WITH h AS (SELECT * FROM tick_runs WHERE ts > now() - interval '1 hour'),
+        gaps AS (SELECT EXTRACT(EPOCH FROM ts - lag(ts) OVER (ORDER BY ts)) AS g FROM h)
+        SELECT
+          (SELECT count(*) FROM h)::int AS runs,
+          (SELECT round(avg(ms)) FROM h)::int AS avg_ms,
+          (SELECT max(ms) FROM h)::int AS max_ms,
+          (SELECT sum(errors) FROM h)::int AS errors,
+          (SELECT count(*) FROM h WHERE capped)::int AS capped,
+          (SELECT round(max(g)) FROM gaps)::int AS max_gap_s,
+          (SELECT round(EXTRACT(EPOCH FROM now() - max(ts))) FROM tick_runs)::int AS last_age_s,
+          (SELECT ms FROM tick_runs ORDER BY ts DESC LIMIT 1)::int AS last_ms,
+          (SELECT ticked FROM tick_runs ORDER BY ts DESC LIMIT 1)::int AS last_ticked,
+          (SELECT bots FROM tick_runs ORDER BY ts DESC LIMIT 1)::int AS last_bots`;
+
+      const [bots] = await sql`
+        SELECT
+          count(*)::int AS eligible,
+          (count(*) FILTER (WHERE b.last_tick > now() - interval '1 minute'))::int AS recent,
+          (count(*) FILTER (WHERE b.last_tick IS NULL
+            OR b.last_tick < now() - ${BOT_STALE_MIN + ' minutes'}::interval))::int AS stale,
+          (count(*) FILTER (WHERE b.status LIKE 'Error:%'))::int AS failing
+        FROM bot_state b
+        LEFT JOIN subscriptions s ON s.user_id = b.user_id
+        WHERE b.enabled = true
+          AND (b.user_id = ${adminId}
+            OR (s.status = 'trialing' AND s.trial_end > now())
+            OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))`;
+
+      // Quienes son, no solo cuantos: con el email se puede avisar al cliente antes
+      // de que escriba el preguntando por que su bot no se mueve.
+      const late = await sql`
+        SELECT u.email, b.status,
+               round(EXTRACT(EPOCH FROM now() - b.last_tick))::int AS age_s
+        FROM bot_state b
+        JOIN users u ON u.id = b.user_id
+        LEFT JOIN subscriptions s ON s.user_id = b.user_id
+        WHERE b.enabled = true
+          AND (b.user_id = ${adminId}
+            OR (s.status = 'trialing' AND s.trial_end > now())
+            OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))
+          AND (b.last_tick IS NULL
+               OR b.last_tick < now() - ${BOT_STALE_MIN + ' minutes'}::interval
+               OR b.status LIKE 'Error:%')
+        ORDER BY b.last_tick ASC NULLS FIRST
+        LIMIT 20`;
+
+      const [monitors] = await sql`
+        SELECT
+          count(*)::int AS eligible,
+          (count(*) FILTER (WHERE m.last_tick > now() - interval '5 minutes'))::int AS recent
+        FROM monitor_state m
+        LEFT JOIN subscriptions s ON s.user_id = m.user_id
+        WHERE m.enabled = true
+          AND (m.user_id = ${adminId}
+            OR (s.status = 'trialing' AND s.trial_end > now())
+            OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))`;
+
+      const [subs] = await sql`
+        SELECT
+          (count(*) FILTER (WHERE status = 'trialing' AND trial_end > now()))::int AS trialing,
+          (count(*) FILTER (WHERE status = 'active' AND current_period_end > now()))::int AS active,
+          (count(*) FILTER (WHERE status = 'active' AND current_period_end <= now()
+            AND current_period_end > ${graceFrom}))::int AS grace,
+          (count(*) FILTER (WHERE status = 'active' AND current_period_end <= ${graceFrom}))::int AS expired
+        FROM subscriptions`;
+
+      const [inv] = await sql`
+        SELECT count(*)::int AS pending FROM payment_invoices
+        WHERE status IN ('pending', 'pending_review')`.catch(() => [{ pending: null }]);
+
+      // El veredicto se calcula en el servidor, no en el cliente: es la definicion
+      // de "esto esta bien" y tiene que ser la misma se mire desde donde se mire.
+      const problems = healthProblems(runs, bots);
+
+      return res.status(200).json({
+        ok: problems.length === 0,
+        problems,
+        now: new Date().toISOString(),
+        thresholds: { tickStaleS: TICK_STALE_S, botStaleMin: BOT_STALE_MIN },
+        tick: runs,
+        bots,
+        monitors,
+        late,
+        subs: { ...subs, pendingInvoices: inv ? inv.pending : null },
+      });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }

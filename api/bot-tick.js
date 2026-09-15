@@ -1,6 +1,6 @@
 // Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~30s.
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
-import { sql, ensureMarketHist, ensureBotAdMinLimit } from './_lib/db.js';
+import { sql, ensureMarketHist, ensureBotAdMinLimit, ensureTickRuns } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
@@ -14,6 +14,28 @@ export const config = { maxDuration: 60 };
 
 const MAX_USERS = 25; // tope por tick (secuencial)
 const SAMPLE_MS = 5 * 60 * 1000; // cadencia del muestreo de estado del anuncio
+const RUNS_KEEP_H = 24;  // cuanta historia de ticks se guarda para el panel de salud
+
+// Deja constancia de esta invocacion. Es lo unico que permite responder despues si
+// el tick esta llegando a todos: sin fila, un tick que se quedo sin tiempo a mitad
+// es indistinguible de uno que no tenia nada que hacer.
+//
+// Best-effort y al final del todo: un fallo escribiendo la metrica no puede tumbar
+// el reprecio de nadie. La limpieza va al azar (~2% de los ticks) en vez de en cada
+// uno: con la conexion configurada a max: 1 las consultas se encolan, y barrer una
+// tabla de ~2900 filas cada 30 segundos seria pagar latencia del tick por nada.
+async function recordRun(stats) {
+  try {
+    await ensureTickRuns();
+    await sql`
+      INSERT INTO tick_runs (ms, bots, ticked, monitors, monitored, errors, capped)
+      VALUES (${stats.ms}, ${stats.bots}, ${stats.ticked}, ${stats.monitors},
+              ${stats.monitored}, ${stats.errors}, ${stats.capped})`;
+    if (Math.random() < 0.02) {
+      await sql`DELETE FROM tick_runs WHERE ts < now() - ${RUNS_KEEP_H + ' hours'}::interval`;
+    }
+  } catch (e) { /* la salud no vale una caida del tick */ }
+}
 
 // ── Serie global del grafico ───────────────────────────
 // Es el mismo mercado para todos, asi que la curva es una sola y se mide SIEMPRE con
@@ -515,6 +537,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
+  const t0 = Date.now();
+  let errors = 0;
   try {
     // Serie global del grafico: independiente de que haya o no usuarios con el
     // monitor encendido. Best-effort, nunca debe tumbar el tick del bot.
@@ -566,6 +590,7 @@ export default async function handler(req, res) {
       try {
         out = await tickUser(row);
       } catch (e) {
+        errors++;
         // Conserva el estado del anuncio: un fallo puntual del tick no debe borrar la
         // cantidad (P&L) ni el estado de visibilidad ya conocidos.
         out = { enabled: row.enabled, status: 'Error: ' + e.message, log: pushLog(row.log, 'Error: ' + e.message, 'error'),
@@ -665,6 +690,7 @@ export default async function handler(req, res) {
       try {
         out = await tickMonitor(row, Date.now());
       } catch (e) {
+        errors++;
         // Solo status: aqui no tenemos los historiales cargados y no hay que pisarlos.
         await sql`UPDATE monitor_state SET status = ${'Error: ' + e.message}, updated_at = now()
           WHERE user_id = ${row.user_id}`.catch(() => {});
@@ -692,8 +718,17 @@ export default async function handler(req, res) {
     // ya devuelve cuanto falta (incluye silencio nocturno y latido del cliente).
     const nextSec = (!rows.length && mrows.length && nextMs !== Infinity)
       ? Math.max(Math.round(nextMs / 1000), 5) : null;
+    // capped: la consulta se llevo el LIMIT entero, asi que puede haber gente
+    // esperando detras. Es la senal de A3 — el muro de escalado — vista desde
+    // fuera, y la unica que aparece ANTES de que a alguien se le pare el bot.
+    await recordRun({
+      ms: Date.now() - t0, bots: rows.length, ticked, monitors: mrows.length,
+      monitored, errors, capped: rows.length >= MAX_USERS || mrows.length >= MAX_USERS,
+    });
     return res.status(200).json({ ok: true, ticked, monitored, bots: rows.length, monitors: mrows.length, nextSec });
   } catch (e) {
+    // Un tick que revienta entero es justo lo que hay que poder ver despues.
+    await recordRun({ ms: Date.now() - t0, bots: 0, ticked: 0, monitors: 0, monitored: 0, errors: errors + 1, capped: false });
     return res.status(500).json({ error: e.message });
   }
 }
