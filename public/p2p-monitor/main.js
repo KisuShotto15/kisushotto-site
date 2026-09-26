@@ -334,6 +334,16 @@
     mom: 10, weak: 7, gap: 10, rev: 8, tape: 5, drain: 8
   };
 
+  // Version del motor. Sube cuando cambia lo que MIDE una senal, no cuando cambia
+  // el codigo: los veredictos grabados antes del cambio describen otra cosa, y
+  // calibrar los pesos mezclandolos fijaria el error en los numeros nuevos.
+  //
+  //  1 → original.
+  //  2 → la ventana del maximo reciente pasa a cubrir de verdad los 20 minutos que
+  //      declaraba (antes eran 7,5 con el refresco por defecto), asi que revProb y
+  //      hi20 de antes NO son comparables con los de ahora.
+  var EV = 2;
+
   function clamp01(x) { return Math.max(0, Math.min(1, x)); }
 
   function score(F, weightsOverride) {
@@ -455,6 +465,8 @@
     score: score,
     decide: decide,
     WEIGHTS: WEIGHTS,
+    DEFAULT_WEIGHTS: Object.assign({}, WEIGHTS),
+    EV: EV,
     FEE_BUY: FEE_BUY,
     MIN_NET: MIN_NET
   };
@@ -521,6 +533,9 @@
     if (!decision || decision.score == null) return Promise.resolve(null);
     var row = {
       ts: Date.now(),
+      // Con que version del motor se calculo. Sin esto, un veredicto de hace un mes
+      // y uno de hoy entran al mismo promedio aunque midieran cosas distintas.
+      ev: (root.DE && root.DE.EV) || 1,
       score: decision.score,
       label: decision.label,
       reasons: decision.reasons,
@@ -589,6 +604,7 @@
       sellPrice: sellPrice,
       decisionScore: decision ? decision.score : null,
       decisionLabel: decision ? decision.label : null,
+      ev: (decision && decision.ev) || (root.DE && root.DE.EV) || 1,
       features: features ? Object.assign({}, features, { events: undefined }) : null,
       rebuy: null,             // {price, ts, minutesElapsed, netPct, success}
       promptedAt: null
@@ -684,9 +700,24 @@
   var FEATURE_KEYS = ['spreadNet', 'LA', 'LB', 'HHI', 'absRate3m',
                       'gapMaxRel', 'weakness', 'momentum', 'revProb', 'topUSDT'];
 
+  // Solo los ciclos calificados con la version del motor que corre ahora. Los
+  // anteriores no se borran —siguen en el historial— pero no entran en la
+  // calibracion: sus senales median otra cosa, y mezclarlas fijaria ese error en
+  // los pesos nuevos. Las filas viejas no tienen `ev`, asi que cuentan como 1.
+  function currentEV() { return (root.DE && root.DE.EV) || 1; }
+  function closedTrades(trades) {
+    var ev = currentEV();
+    var todos = trades.filter(function (t) { return t.status === 'closed' && t.rebuy; });
+    return {
+      usables: todos.filter(function (t) { return (t.ev || 1) === ev; }),
+      otroMotor: todos.filter(function (t) { return (t.ev || 1) !== ev; }).length
+    };
+  }
+
   function stats() {
     return listTrades(500).then(function (trades) {
-      var closed = trades.filter(function (t) { return t.status === 'closed' && t.rebuy; });
+      var part = closedTrades(trades);
+      var closed = part.usables;
       var wins  = closed.filter(function (t) { return t.rebuy.success === 'win'; });
       var loss  = closed.filter(function (t) { return t.rebuy.success === 'loss'; });
       var n = closed.length;
@@ -733,6 +764,11 @@
 
       return {
         n: n,
+        // Cuantos quedaron fuera por ser de una version anterior del motor. Se
+        // reporta en vez de esconderse: "0 ciclos" tras un cambio de motor
+        // necesita explicacion, o parece que el diario se perdio.
+        nOtherEngine: part.otroMotor,
+        ev: currentEV(),
         wins: wins.length,
         losses: loss.length,
         neutrals: n - wins.length - loss.length,
@@ -766,10 +802,12 @@
   function backtest(weightsOverride) {
     if (!root.DE) return Promise.resolve(null);
     return listTrades(500).then(function (trades) {
-      var closed = trades.filter(function (t) {
-        return t.status === 'closed' && t.rebuy && t.features && t.features.spreadNet != null;
+      var part = closedTrades(trades);
+      var otroMotor = part.otroMotor;
+      var closed = part.usables.filter(function (t) {
+        return t.features && t.features.spreadNet != null;
       });
-      if (closed.length < 5) return { n: closed.length, insufficient: true };
+      if (closed.length < 5) return { n: closed.length, nOtherEngine: otroMotor, insufficient: true };
 
       var rows = closed.map(function (t) {
         var s = root.DE.score(t.features, weightsOverride || null);
@@ -813,6 +851,7 @@
 
       return {
         n: n,
+        nOtherEngine: otroMotor,
         winRate: winRate,
         avgNetPct: avgNet,
         scoreNetPearson: pe,
@@ -856,8 +895,32 @@
       }
     });
     try {
-      localStorage.setItem('p2p-de-weights', JSON.stringify(root.DE.WEIGHTS));
+      // Con la version del motor que los produjo: unos pesos calibrados sobre
+      // senales que median otra cosa no valen para el motor nuevo.
+      localStorage.setItem('p2p-de-weights', JSON.stringify({ ev: currentEV(), w: root.DE.WEIGHTS }));
     } catch (e) {}
+  }
+
+  // Los pesos que quedarian si se aplicaran las sugerencias, SIN tocar los
+  // vigentes: es lo que permite repasar el cambio antes de hacerlo. Devuelve un
+  // objeto nuevo a proposito — si compartiera referencia con WEIGHTS, el repaso
+  // aplicaria el cambio por su cuenta.
+  function weightsWith(suggestions) {
+    var w = Object.assign({}, (root.DE && root.DE.WEIGHTS) || {});
+    (suggestions || []).forEach(function (g) {
+      if (w[g.weightKey] != null) w[g.weightKey] = g.suggested;
+    });
+    return w;
+  }
+
+  // Volver a los pesos de fabrica. Sin esto, aplicar una calibracion mala era una
+  // via de un solo sentido: no habia forma de deshacerla desde la app.
+  function resetWeights() {
+    if (!root.DE || !root.DE.DEFAULT_WEIGHTS) return;
+    Object.keys(root.DE.DEFAULT_WEIGHTS).forEach(function (k) {
+      root.DE.WEIGHTS[k] = root.DE.DEFAULT_WEIGHTS[k];
+    });
+    try { localStorage.removeItem('p2p-de-weights'); } catch (e) {}
   }
 
   function loadPersistedWeights() {
@@ -865,7 +928,11 @@
     try {
       var raw = localStorage.getItem('p2p-de-weights');
       if (!raw) return;
-      var w = JSON.parse(raw);
+      var saved = JSON.parse(raw);
+      // Formato anterior: el objeto de pesos pelado, sin version. Esos venian de
+      // una calibracion sobre el motor viejo, asi que se descartan.
+      var w = (saved && saved.w && saved.ev === currentEV()) ? saved.w : null;
+      if (!w) { localStorage.removeItem('p2p-de-weights'); return; }
       Object.keys(w).forEach(function (k) {
         if (root.DE.WEIGHTS[k] != null) root.DE.WEIGHTS[k] = w[k];
       });
@@ -887,7 +954,11 @@
     backtest: backtest,
     rebuyDistribution: rebuyDistribution,
     applySuggestions: applySuggestions,
+    weightsWith: weightsWith,
+    closedTrades: closedTrades,
+    resetWeights: resetWeights,
     loadPersistedWeights: loadPersistedWeights,
+    currentEV: currentEV,
     FEE_BUY: FEE_BUY,
     SUCCESS_NET: SUCCESS_NET
   };
@@ -4864,14 +4935,164 @@ async function renderJournalStats() {
     // nada) y confunde mas de lo que ayuda. Se pide una muestra minima para mostrarlo.
     if (!s || s.n < 5) { el.innerHTML = ''; return; }
     var wr = s.winRate != null ? Math.round(s.winRate * 100) : null;
-    el.innerHTML = '<div class="dec-feat" style="display:flex;gap:10px;flex-wrap:wrap">' +
+    el.innerHTML = '<div class="dec-feat" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">' +
       '<span>' + s.n + (s.n === 1 ? ' ciclo calificado' : ' ciclos calificados') + '</span>' +
       (wr != null ? '<span style="color:' + (wr >= 50 ? 'var(--green)' : 'var(--red)') + '">' + wr + '% acierto</span>' : '') +
       '<span>neto medio ' + (s.avgNetPct * 100).toFixed(2) + '%</span>' +
       '<span>recompra ' + s.avgMinutesToRebuy.toFixed(0) + ' min</span>' +
-      (s.suggestions.length ? '<span style="color:var(--gold)">' + s.suggestions.length + ' ajustes de peso sugeridos</span>' : '') +
+      // El conteo de sugerencias estaba aqui y no llevaba a ninguna parte: no habia
+      // forma de ver que proponia ni de aplicarlo. Ahora abre la calibracion.
+      '<button class="btn btn-sm" onclick="goCalib()" style="padding:2px 8px;font-size:11px' +
+        (s.suggestions.length ? ';color:var(--gold);border-color:var(--gold)' : '') + '">' +
+        (s.suggestions.length ? s.suggestions.length + ' ajustes sugeridos' : 'Calibración') +
+      '</button>' +
       '</div>';
   } catch (e) { el.innerHTML = ''; }
+}
+
+// ── Calibración de los pesos ────────────────────────────────────────────────
+// El diario ya guardaba cada veredicto con sus señales, ya cruzaba esos veredictos
+// contra las recompras reales de Binance, y ya calculaba correlaciones y ajustes
+// de peso sugeridos. Lo único que faltaba era poder verlos y aplicarlos: la
+// función existía y no la llamaba nadie.
+//
+// Aplicar a ciegas un ajuste porque una correlación salió alta es la forma
+// habitual de sobreajustar una muestra pequeña, así que el panel enseña primero
+// qué habría pasado con esos pesos sobre tus propios ciclos, y solo después deja
+// aplicarlos.
+function goCalib() {
+  var m = document.getElementById('calib-modal');
+  if (m) m.style.display = 'flex';
+  modalOpened('calib-modal');
+  renderCalib();
+}
+
+function closeCalibModal() {
+  var m = document.getElementById('calib-modal');
+  if (m) m.style.display = 'none';
+  modalClosed('calib-modal');
+}
+
+var CALIB_SUGS = null;
+
+function calibRow(label, value, hint) {
+  return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0">' +
+    '<span style="color:var(--text-3)">' + label + (hint ? ' <span style="opacity:.6">' + hint + '</span>' : '') + '</span>' +
+    '<span style="color:var(--text-1);font-weight:600">' + value + '</span></div>';
+}
+
+var CALIB_NOMBRES = {
+  spreadNet: 'spread neto', LA: 'liquidez para vender', LB: 'liquidez para recomprar',
+  HHI: 'concentración', absRate3m: 'absorción', gapMaxRel: 'hueco de precio',
+  weakness: 'debilidad', momentum: 'impulso', revProb: 'reversión', topUSDT: 'volumen del top',
+};
+
+async function renderCalib() {
+  var box = document.getElementById('calib-body');
+  if (!box || typeof DJ === 'undefined') return;
+  box.textContent = 'Calculando…';
+  var s, actual, propuesto;
+  try {
+    s = await DJ.stats();
+    actual = await DJ.backtest(null);
+    propuesto = (s.suggestions && s.suggestions.length)
+      ? await DJ.backtest(DJ.weightsWith(s.suggestions)) : null;
+  } catch (e) {
+    box.innerHTML = '<span style="color:var(--red)">Error: ' + e.message + '</span>';
+    return;
+  }
+  CALIB_SUGS = s.suggestions || [];
+  var h = '';
+
+  h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px">Muestra</div>';
+  h += calibRow('Ciclos calificados', s.n);
+  // Que "0 ciclos" tras un cambio de motor no parezca que el diario se perdio.
+  if (s.nOtherEngine) {
+    h += calibRow('Excluidos', s.nOtherEngine, '(motor anterior)');
+    h += '<div style="font-size:11px;color:var(--text-3);line-height:1.5;margin:4px 0 0">' +
+      'Siguen en tu historial, pero no entran en la calibración: sus señales medían otra cosa, ' +
+      'y mezclarlas fijaría ese error en los pesos nuevos.</div>';
+  }
+  if (s.n < 20) {
+    h += '<div style="background:rgba(216,167,63,.12);border:1px solid var(--gold);border-radius:8px;padding:9px;margin:10px 0;font-size:12px;color:var(--text-2);line-height:1.5">' +
+      'Hacen falta al menos 20 ciclos para proponer ajustes. Con menos, cualquier correlación ' +
+      'es ruido: no es que el motor esté mal calibrado, es que todavía no hay con qué calibrarlo.</div>';
+  }
+
+  if (s.correlations && Object.keys(s.correlations).length) {
+    h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px">Qué predijo de verdad</div>';
+    var ks = Object.keys(s.correlations).sort(function (a, b) {
+      return Math.abs(s.correlations[b]) - Math.abs(s.correlations[a]);
+    });
+    ks.forEach(function (k) {
+      var c = s.correlations[k];
+      var col = Math.abs(c) < 0.15 ? 'var(--text-3)' : (c > 0 ? 'var(--green)' : 'var(--red)');
+      h += '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0">' +
+        '<span style="color:var(--text-3)">' + (CALIB_NOMBRES[k] || k) + '</span>' +
+        '<span style="color:' + col + ';font-weight:600">' + (c >= 0 ? '+' : '') + c.toFixed(2) + '</span></div>';
+    });
+    h += '<div style="font-size:11px;color:var(--text-3);line-height:1.5;margin:4px 0 0">' +
+      'Correlación con acertar. Por debajo de 0,15 en valor absoluto no dice nada.</div>';
+  }
+
+  h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px">Sobre tus propios ciclos</div>';
+  if (!actual || actual.insufficient) {
+    h += '<div style="color:var(--text-3);font-size:13px">Hacen falta 5 ciclos para poder repasarlos.</div>';
+  } else {
+    h += calibRow('Con los pesos de ahora', fmtBacktest(actual));
+    if (propuesto && !propuesto.insufficient) {
+      h += calibRow('Con los pesos sugeridos', fmtBacktest(propuesto));
+      var mejora = propuesto.scoreNetSpearman - actual.scoreNetSpearman;
+      h += '<div style="font-size:11px;color:' + (mejora > 0.02 ? 'var(--green)' : mejora < -0.02 ? 'var(--red)' : 'var(--text-3)') +
+        ';line-height:1.5;margin:4px 0 0">' +
+        (mejora > 0.02 ? 'Los pesos sugeridos habrían ordenado mejor tus ventas.'
+         : mejora < -0.02 ? 'Los pesos sugeridos habrían ordenado PEOR tus ventas: no los apliques.'
+         : 'Prácticamente igual. No hay motivo para cambiar.') + '</div>';
+    }
+    h += '<div style="font-size:11px;color:var(--text-3);line-height:1.5;margin:6px 0 0">' +
+      'El número es la correlación entre el puntaje que dio el motor y lo que ganaste de verdad. ' +
+      '1,00 sería un motor que ordena tus ventas perfectamente de peor a mejor; 0,00, uno que no sirve.</div>';
+  }
+
+  if (CALIB_SUGS.length) {
+    h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px">Ajustes propuestos</div>';
+    CALIB_SUGS.forEach(function (g) {
+      h += calibRow(CALIB_NOMBRES[g.feature] || g.feature, g.current + ' → ' + g.suggested);
+    });
+  }
+
+  h += '<div style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px">Pesos en uso</div>';
+  var W = DE.WEIGHTS, D = DE.DEFAULT_WEIGHTS, cambiados = 0;
+  Object.keys(W).forEach(function (k) {
+    if (W[k] !== D[k]) cambiados++;
+    h += calibRow(k, W[k] + (W[k] !== D[k] ? ' <span style="color:var(--gold)">(de fábrica ' + D[k] + ')</span>' : ''));
+  });
+
+  h += '<div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">';
+  if (CALIB_SUGS.length) h += '<button class="btn btn-sm btn-gold" onclick="aplicarCalib()">Aplicar ajustes</button>';
+  if (cambiados) h += '<button class="btn btn-sm" onclick="restaurarCalib()">Volver a los de fábrica</button>';
+  h += '</div>';
+
+  box.innerHTML = h;
+}
+
+function fmtBacktest(b) {
+  return b.scoreNetSpearman.toFixed(2) +
+    '  <span style="font-weight:400;color:var(--text-3)">· mejor cuartil ' +
+    Math.round(b.topQuartileWinRate * 100) + '%</span>';
+}
+
+function aplicarCalib() {
+  if (!CALIB_SUGS || !CALIB_SUGS.length) return;
+  DJ.applySuggestions(CALIB_SUGS);
+  renderCalib();
+  renderJournalStats();
+}
+
+function restaurarCalib() {
+  DJ.resetWeights();
+  renderCalib();
+  renderJournalStats();
 }
 
 var DEC_COLORS = {
