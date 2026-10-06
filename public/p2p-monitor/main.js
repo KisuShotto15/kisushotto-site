@@ -2990,7 +2990,7 @@ function renderBuySection(ads) {
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
-        '<span class="price-c g' + flashCls + '">' + priceHtml + '</span>' +
+        '<span class="price-c' + flashCls + '">' + priceHtml + '</span>' +
         '<span class="chg-c' + chgCls + '">' + chgHtml + '</span>' +
         '<span class="lim-c' + pisadoCls(ads, i) + '">' + lims + '<span class="lim-amount">' + availStr + ' USDT</span></span>' +
         popupHtml +
