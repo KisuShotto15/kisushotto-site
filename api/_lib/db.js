@@ -193,6 +193,19 @@ export async function ensureMarketHist() {
   marketHistReady = true;
 }
 
+// Las series del monitor se agregan en Postgres (jsonb_set por metodo de pago), y eso
+// exige el formato { pay: [...] }. El legado (array plano = serie de BDV, ver histMap)
+// se convierte una vez por instancia; despues la sentencia no toca ninguna fila.
+let histMapsReady = false;
+export async function ensureHistMaps() {
+  if (histMapsReady) return;
+  await sql`UPDATE monitor_state SET
+    hist24 = CASE WHEN jsonb_typeof(hist24) = 'array' THEN jsonb_build_object('BancoDeVenezuela', hist24) ELSE hist24 END,
+    hist_long = CASE WHEN jsonb_typeof(hist_long) = 'array' THEN jsonb_build_object('BancoDeVenezuela', hist_long) ELSE hist_long END
+    WHERE jsonb_typeof(hist24) = 'array' OR jsonb_typeof(hist_long) = 'array'`;
+  histMapsReady = true;
+}
+
 export async function ensureSchema() {
   if (schemaReady) return;
   // Sonda barata (1 round trip): subscriptions es lo ULTIMO que crea este bloque; si ya

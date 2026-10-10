@@ -1,10 +1,10 @@
 // Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~15s.
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
-import { sql, ensureMarketHist, ensureBotAdMinLimit } from './_lib/db.js';
+import { sql, ensureMarketHist, ensureBotAdMinLimit, ensureHistMaps } from './_lib/db.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
-import { computeAlerts, topMedianRate, topAvail, pushHist24Pay, pushHistLongPay, histMap, histPaySnapshot, histPayChanged, bestOf } from './_lib/monitor.js';
+import { computeAlerts, topMedianRate, topAvail, histMap, bestOf, HIST24_MS, HIST24_STEP_MS, HISTLONG_MS, HISTLONG_STEP_MS } from './_lib/monitor.js';
 import { sendTelegram, resolveTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
 import { adminUserId, GRACE_MS } from './_lib/subscriptions.js';
@@ -92,18 +92,36 @@ async function tickGlobalHist() {
   const price = bestOf(raw, true);
   if (!price) return;
 
-  const cur = await sql`SELECT hist24, hist_long FROM market_hist WHERE pay = ${GLOBAL_PAY}`;
+  // Solo el ts del ultimo punto de cada serie, no las series: bajar hist24 + hist_long
+  // (cientos de KB, y crece) cada 2 min para sumarles un punto era casi todo el egress
+  // del proyecto en Supabase. El punto se agrega y la poda corre en Postgres.
   const now = Date.now();
-  const snapLong = histPaySnapshot(cur[0] && cur[0].hist_long, GLOBAL_PAY);
-  const h24 = pushHist24Pay(cur[0] && cur[0].hist24, GLOBAL_PAY, now, price);
-  const hLong = pushHistLongPay(cur[0] && cur[0].hist_long, GLOBAL_PAY, now, price);
-  // hist_long solo suma un punto cada 10 min, pero este bloque corre cada 2: las 4 de
-  // cada 5 veces se re-serializaba y reescribia la serie entera sin cambio alguno.
-  // Mismo criterio que ya usa tickMonitor con las series del usuario.
-  const longChanged = histPayChanged(snapLong, hLong, GLOBAL_PAY);
-  await sql`UPDATE market_hist SET hist24 = ${JSON.stringify(h24)}::jsonb,
-    hist_long = COALESCE(${longChanged ? JSON.stringify(hLong) : null}::jsonb, hist_long)
+  const m = await sql`SELECT (hist24 -> ${GLOBAL_PAY}::text -> -1 ->> 'ts')::bigint AS last24,
+      (hist_long -> ${GLOBAL_PAY}::text -> -1 ->> 'ts')::bigint AS last_long
+    FROM market_hist WHERE pay = ${GLOBAL_PAY}`;
+  const due = histDue(m[0], now, price);
+  if (!due.add24 && !due.addLong) return;
+  const pt = JSON.stringify([{ ts: now, price }]);
+  await sql`UPDATE market_hist SET
+    hist24 = CASE WHEN ${due.add24}::boolean THEN jsonb_set(COALESCE(hist24, '{}'::jsonb), ARRAY[${GLOBAL_PAY}::text],
+      jsonb_path_query_array(COALESCE(hist24 -> ${GLOBAL_PAY}::text, '[]'::jsonb) || ${pt}::jsonb,
+        '$[*] ? (@.ts >= $min)', jsonb_build_object('min', ${now - HIST24_MS}::bigint))) ELSE hist24 END,
+    hist_long = CASE WHEN ${due.addLong}::boolean THEN jsonb_set(COALESCE(hist_long, '{}'::jsonb), ARRAY[${GLOBAL_PAY}::text],
+      jsonb_path_query_array(COALESCE(hist_long -> ${GLOBAL_PAY}::text, '[]'::jsonb) || ${pt}::jsonb,
+        '$[*] ? (@.ts >= $min)', jsonb_build_object('min', ${now - HISTLONG_MS}::bigint))) ELSE hist_long END
     WHERE pay = ${GLOBAL_PAY}`;
+}
+
+// Mismas reglas que pushHist24/pushHistLong (monitor.js), con el ts del ultimo punto
+// en vez de la serie entera.
+export function histDue(meta, now, price) {
+  if (!price) return { add24: false, addLong: false };
+  const last24 = meta && meta.last24 != null ? Number(meta.last24) : 0;
+  const lastLong = meta && meta.last_long != null ? Number(meta.last_long) : 0;
+  return {
+    add24: !last24 || now - last24 >= HIST24_STEP_MS,
+    addLong: !lastLong || now - lastLong >= HISTLONG_STEP_MS,
+  };
 }
 
 function pushLog(log, msg, level) {
@@ -193,14 +211,19 @@ async function tickMonitor(row, now) {
     RETURNING user_id`;
   if (!claim.length) return 25 * 1000;
 
-  // Columna pesada (hist_long acumula hasta 2 anios) SOLO cuando toca refrescar:
-  // parsearlas en cada tick de 15s era CPU desperdiciada.
+  const pays = (cfg.payTypes && cfg.payTypes.length) ? cfg.payTypes : [];
+  const pay = pays[0] || 'BancoDeVenezuela';
+  // hist24/hist_long NO se bajan: solo el ts de su ultimo punto. El punto nuevo se
+  // agrega en Postgres (ver abajo). hist_long acumula hasta 2 anios y leerla en cada
+  // refresco (cada minuto, 24/7) era el grueso del egress de Supabase.
+  await ensureHistMaps();
   const hrows = await sql`
-    SELECT price_hist, cooldowns, hist24, hist_long, last_summary, log
+    SELECT price_hist, cooldowns, last_summary, log,
+      (hist24 -> ${pay}::text -> -1 ->> 'ts')::bigint AS last24,
+      (hist_long -> ${pay}::text -> -1 ->> 'ts')::bigint AS last_long
     FROM monitor_state WHERE user_id = ${row.user_id}`;
   const h = hrows[0] || {};
 
-  const pays = (cfg.payTypes && cfg.payTypes.length) ? cfg.payTypes : [];
   const verifiedOnly = cfg.verifiedOnly !== false;
   // Modo Short apagado: el par relevante es Verde (primario) vs Mayoristas (secundario),
   // Recompra no se pide. mayRaw se mantiene SIEMPRE con datos reales de Mayoristas
@@ -217,7 +240,6 @@ async function tickMonitor(row, now) {
   const labels = shortOff ? { primary: 'Verde', secondary: 'Mayorista' } : { primary: 'Mayorista', secondary: 'Compra' };
 
   const out = computeAlerts({ mayRaw: primaryRaw, smallRaw: secondaryRaw, cfg, priceHist: h.price_hist, cooldowns: h.cooldowns, now, silent, labels });
-  const pay = pays[0] || 'BancoDeVenezuela';
   // Tasa USDT/VES publica (mediana top-10 mayoristas): la consume el portfolio.
   // Best-effort: un fallo aqui no debe tumbar el tick del monitor.
   const med = topMedianRate(mayRaw, 10, verifiedOnly);
@@ -245,10 +267,18 @@ async function tickMonitor(row, now) {
   // Mayoristas real, nunca out.bestMay (que en Modo Short apagado es Verde) —
   // si no, el grafico pega un salto falso cada vez que el usuario cambia de modo.
   const mayBestTrue = shortOff ? bestOf(mayRaw, verifiedOnly) : out.bestMay;
-  const snap24 = histPaySnapshot(h.hist24, pay);
-  const snapLong = histPaySnapshot(h.hist_long, pay);
-  const hist24 = pushHist24Pay(h.hist24, pay, now, mayBestTrue);
-  const histLong = pushHistLongPay(h.hist_long, pay, now, mayBestTrue);
+  const due = histDue(h, now, mayBestTrue);
+  if (due.add24 || due.addLong) {
+    const pt = JSON.stringify([{ ts: now, price: mayBestTrue }]);
+    await sql`UPDATE monitor_state SET
+      hist24 = CASE WHEN ${due.add24}::boolean THEN jsonb_set(COALESCE(hist24, '{}'::jsonb), ARRAY[${pay}::text],
+        jsonb_path_query_array(COALESCE(hist24 -> ${pay}::text, '[]'::jsonb) || ${pt}::jsonb,
+          '$[*] ? (@.ts >= $min)', jsonb_build_object('min', ${now - HIST24_MS}::bigint))) ELSE hist24 END,
+      hist_long = CASE WHEN ${due.addLong}::boolean THEN jsonb_set(COALESCE(hist_long, '{}'::jsonb), ARRAY[${pay}::text],
+        jsonb_path_query_array(COALESCE(hist_long -> ${pay}::text, '[]'::jsonb) || ${pt}::jsonb,
+          '$[*] ? (@.ts >= $min)', jsonb_build_object('min', ${now - HISTLONG_MS}::bigint))) ELSE hist_long END
+      WHERE user_id = ${row.user_id}`;
+  }
 
   let log = h.log;
   const { token, chatId } = await resolveTelegram(row.user_id);
@@ -264,7 +294,9 @@ async function tickMonitor(row, now) {
   // Resumen diario (no depende del silencio nocturno; se manda a la hora configurada)
   let lastSummary = h.last_summary;
   if (shouldSendSummary(cfg.summaryHour, lastSummary, now)) {
-    const summary = buildSummary(histMap(hist24)[pay], now);
+    // La serie de 24h se baja solo aca, una vez al dia (ya con el punto de recien).
+    const s24 = await sql`SELECT hist24 -> ${pay}::text AS s FROM monitor_state WHERE user_id = ${row.user_id}`;
+    const summary = buildSummary((s24[0] && s24[0].s) || [], now);
     if (token && chatId) await sendTelegram(token, chatId, summary);
     await sendPush(row.user_id, '📊 Resumen P2P · últimas 24h', stripHtml(summary).split('\n').slice(1).join('\n')).catch(() => {});
     lastSummary = new Date(now).toISOString();
@@ -274,14 +306,8 @@ async function tickMonitor(row, now) {
   return {
     priceHist: out.priceHist,
     cooldowns: out.cooldowns,
-    hist24,
-    histLong,
     lastSummary,
     log,
-    // Solo re-serializar/escribir las series que realmente cambiaron (hist_long solo
-    // suma 1 punto cada 30 min; stringify de anios de datos cada 30s era CPU pura).
-    hist24Changed: histPayChanged(snap24, hist24, pay),
-    histLongChanged: histPayChanged(snapLong, histLong, pay),
     status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
     nextMs: nextMs,
   };
@@ -669,8 +695,6 @@ export default async function handler(req, res) {
         UPDATE monitor_state SET
           price_hist = ${JSON.stringify(out.priceHist || [])}::jsonb,
           cooldowns = ${JSON.stringify(out.cooldowns || {})}::jsonb,
-          hist24 = COALESCE(${out.hist24Changed ? JSON.stringify(out.hist24 || []) : null}::jsonb, hist24),
-          hist_long = COALESCE(${out.histLongChanged ? JSON.stringify(out.histLong || []) : null}::jsonb, hist_long),
           last_summary = ${out.lastSummary || null},
           log = ${JSON.stringify(out.log || [])}::jsonb,
           status = ${out.status || null},

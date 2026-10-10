@@ -3,7 +3,9 @@
 // Salida: { alerts:[{type,title,desc}], priceHist, cooldowns, bestMay }.
 const COOLDOWN_MS = 5 * 60000;
 const TREND_CD_MS = 20 * 60000;
-const HIST24_MS = 25 * 3600 * 1000;
+export const HIST24_MS = 25 * 3600 * 1000;
+export const HIST24_STEP_MS = 2 * 60000;
+export const HISTLONG_STEP_MS = 10 * 60000;
 
 // Serie comprimida de 24h (1 punto cada ~2 min) para el sparkline y las velas de 15 min.
 // La alimentan tanto el tick del servidor como el latido del cliente (app abierta), asi
@@ -13,7 +15,7 @@ export function pushHist24(hist, ts, price) {
   if (!price) return Array.isArray(hist) ? hist : [];
   const arr = Array.isArray(hist) ? hist.slice() : [];
   const last = arr[arr.length - 1];
-  if (!last || ts - last.ts >= 2 * 60000) arr.push({ ts, price });
+  if (!last || ts - last.ts >= HIST24_STEP_MS) arr.push({ ts, price });
   while (arr.length && ts - arr[0].ts > HIST24_MS) arr.shift();
   return arr;
 }
@@ -24,12 +26,12 @@ export function pushHist24(hist, ts, price) {
 // Retencion 2 anios: vive como jsonb en UNA fila, asi que cada UPDATE reescribe la serie
 // entera y sin tope el coste por escritura crece para siempre. 2 anios ≈ 105k puntos
 // (~4.6 MB); hoy, con ~1.5 meses acumulados, son ~280 KB.
-const HISTLONG_MS = 2 * 365 * 24 * 3600 * 1000;
+export const HISTLONG_MS = 2 * 365 * 24 * 3600 * 1000;
 export function pushHistLong(hist, ts, price) {
   if (!price) return Array.isArray(hist) ? hist : [];
   const arr = Array.isArray(hist) ? hist.slice() : [];
   const last = arr[arr.length - 1];
-  if (!last || ts - last.ts >= 10 * 60000) arr.push({ ts, price });
+  if (!last || ts - last.ts >= HISTLONG_STEP_MS) arr.push({ ts, price });
   while (arr.length && ts - arr[0].ts > HISTLONG_MS) arr.shift();
   return arr;
 }
