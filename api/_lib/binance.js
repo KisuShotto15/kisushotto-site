@@ -121,3 +121,36 @@ export async function publicSearch({ transAmount, pays, maxPages = 2, tradeType 
   ));
   return settled.flatMap(s => (s.status === 'fulfilled' && Array.isArray(s.value.data)) ? s.value.data : []);
 }
+
+// Metodos de pago de una moneda (endpoint publico documentado por Binance en
+// binance/binance-skills-hub: GET /bapi/c2c/v1/public/c2c/agent/trade-methods?fiat=).
+// Cambian muy poco: cache por instancia de 12h para no pedirlos en cada carga.
+const TRADE_METHODS_URL = 'https://www.binance.com/bapi/c2c/v1/public/c2c/agent/trade-methods';
+const TM_TTL_MS = 12 * 3600 * 1000;
+const tmCache = new Map();
+
+// La doc muestra un arreglo; los bapi suelen envolverlo en { code, data }: se aceptan
+// las dos formas. Devuelve [{ id, label }] sin repetidos.
+export function parseTradeMethods(j) {
+  const arr = Array.isArray(j) ? j : (j && Array.isArray(j.data) ? j.data : []);
+  const seen = new Set();
+  const out = [];
+  for (const m of arr) {
+    const id = m && typeof m.identifier === 'string' ? m.identifier.trim() : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const label = String(m.tradeMethodShortName || m.tradeMethodName || id).trim().slice(0, 40) || id;
+    out.push({ id, label });
+  }
+  return out;
+}
+
+export async function tradeMethods(fiat) {
+  const hit = tmCache.get(fiat);
+  if (hit && Date.now() - hit.ts < TM_TTL_MS) return hit.list;
+  const r = await fx(TRADE_METHODS_URL + '?fiat=' + encodeURIComponent(fiat), { method: 'GET' }, 9000);
+  const list = parseTradeMethods(await r.json().catch(() => null));
+  if (!r.ok || !list.length) throw new Error('Binance no devolvio metodos (' + r.status + ')');
+  tmCache.set(fiat, { ts: Date.now(), list });
+  return list;
+}

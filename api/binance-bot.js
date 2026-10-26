@@ -3,12 +3,13 @@ import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema, ensureMarketHist } from './_lib/db.js';
 import { histMap } from './_lib/monitor.js';
 import { DEFAULT_FIAT, safeTz, zonedMidnight } from './_lib/market.js';
-
-// La unica serie de mercado global (grafico ya poblado para cualquier usuario).
-const GLOBAL_KEY = 'BancoDeVenezuela';
+import { tradeMethods } from './_lib/binance.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
 import { fifoMatch, fifoShort, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows, SAMPLE_MIN } from './_lib/pnl.js';
+
+// La unica serie de mercado global (grafico ya poblado para cualquier usuario).
+const GLOBAL_KEY = 'BancoDeVenezuela';
 
 const BINANCE = 'https://api.binance.com';
 
@@ -479,6 +480,18 @@ export default async function handler(req, res) {
       return res.status(200).json(st);
     } catch (e) {
       return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // Metodos de pago de una moneda, segun Binance (no requiere creds Binance). El
+  // cliente los muestra debajo de su lista curada y los cachea 24h.
+  if (path === '/trade-methods') {
+    const fiat = String((params && params.fiat) || '').toUpperCase();
+    if (!/^[A-Z]{3,4}$/.test(fiat)) return res.status(400).json({ error: 'Moneda inválida' });
+    try {
+      return res.status(200).json({ fiat, methods: await tradeMethods(fiat) });
+    } catch (e) {
+      return res.status(502).json({ error: e.message });
     }
   }
 

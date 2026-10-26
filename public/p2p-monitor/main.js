@@ -920,7 +920,60 @@ var PAY_METHODS_BY_FIAT = {
 var PAY_METHODS = PAY_METHODS_BY_FIAT.VES; // lista activa (segun ACTIVE_FIAT)
 var PAY_SEL = { VES: 'BancoDeVenezuela', USD: 'Zinli' }; // ultimo metodo elegido por moneda
 var ACTIVE_PAY = 'BancoDeVenezuela';
-// Sufijo de moneda para los displays del monitor (el bot es siempre VES/Bs)
+
+// Metodos que Binance tiene para cada moneda y que no estan en la lista curada de
+// arriba (que queda primero, como favoritos, y de respaldo). Se piden al servidor
+// (/trade-methods) y se cachean 24h; sin sesion o si Binance falla, solo la curada.
+var PAY_EXTRA = {};
+var PAY_EXTRA_TTL = 24 * 3600 * 1000;
+// Lista completa de una moneda. El metodo guardado entra siempre, aunque la lista de
+// Binance todavia no haya llegado: si no, se perderia la eleccion al recargar.
+function payMethodsFor(f) {
+  var list = (PAY_METHODS_BY_FIAT[f] || []).concat(PAY_EXTRA[f] || []);
+  var cur = PAY_SEL[f];
+  if (cur && !list.some(function(m) { return m.id === cur; })) list = list.concat([{ id: cur, label: payLabel(cur) }]);
+  return list;
+}
+function setPayExtra(f, list) {
+  var known = {};
+  (PAY_METHODS_BY_FIAT[f] || []).forEach(function(m) { known[m.id] = 1; });
+  PAY_EXTRA[f] = (list || []).filter(function(m) {
+    return m && typeof m.id === 'string' && m.id && !known[PAY_ALIASES[m.id] || m.id] && GENERIC_PAY_IDS.indexOf(m.id) === -1;
+  }).map(function(m) { return { id: m.id, label: String(m.label || m.id) }; })
+    .sort(function(a, b) { return a.label.localeCompare(b.label, 'es'); });
+  if (f === ACTIVE_FIAT) {
+    PAY_METHODS = payMethodsFor(f);
+    renderPaySelect();
+    if (typeof renderOnboardMarket === 'function') try { renderOnboardMarket(); } catch (e) {}
+  }
+}
+// Solo la cache local (sincronico): se usa al arrancar, antes de validar el metodo guardado.
+function loadCachedTradeMethods(f) {
+  try {
+    var c = JSON.parse(localStorage.getItem('p2p_paymeth_' + f) || 'null');
+    if (c && Array.isArray(c.list) && Date.now() - c.ts < PAY_EXTRA_TTL) { setPayExtra(f, c.list); return true; }
+  } catch (e) {}
+  return false;
+}
+async function loadTradeMethods(f) {
+  f = f || ACTIVE_FIAT;
+  if (loadCachedTradeMethods(f) || !SESSION.token) return;
+  try {
+    var d = await botCallWorker('/trade-methods', { fiat: f });
+    if (d && Array.isArray(d.methods) && d.methods.length) {
+      try { localStorage.setItem('p2p_paymeth_' + f, JSON.stringify({ ts: Date.now(), list: d.methods })); } catch (e) {}
+      setPayExtra(f, d.methods);
+    }
+  } catch (e) {} // sin la lista de Binance queda la curada
+}
+// <option>s de una moneda: la curada primero y el resto en "Otros métodos".
+function payOptionsHtml(f, cur) {
+  var o = function(m) { return '<option value="' + esc(m.id) + '"' + (m.id === cur ? ' selected' : '') + '>' + esc(m.label) + '</option>'; };
+  var curated = PAY_METHODS_BY_FIAT[f] || [];
+  var ids = {}; curated.forEach(function(m) { ids[m.id] = 1; });
+  var rest = payMethodsFor(f).filter(function(m) { return !ids[m.id]; });
+  return curated.map(o).join('') + (rest.length ? '<optgroup label="Otros métodos">' + rest.map(o).join('') + '</optgroup>' : '');
+}
 // Clave de la serie del mercado activo. Espejo de histKey() en api/_lib/market.js:
 // VES conserva el metodo a secas (historial existente); el resto lleva la moneda.
 function histKey(fiat, pay) { return fiat && fiat !== 'VES' ? fiat + ':' + pay : pay; }
@@ -942,10 +995,13 @@ var PAY_ALIASES = {
 
 function payLabel(id) {
   var canonical = PAY_ALIASES[id] || id;
-  for (var f in PAY_METHODS_BY_FIAT) {
-    var list = PAY_METHODS_BY_FIAT[f];
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].id === canonical) return list[i].label;
+  var groups = [PAY_METHODS_BY_FIAT, PAY_EXTRA];
+  for (var g = 0; g < groups.length; g++) {
+    for (var f in groups[g]) {
+      var list = groups[g][f];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === canonical) return list[i].label;
+      }
     }
   }
   if (canonical === 'BANK') return 'Bank Transfer';
@@ -954,11 +1010,7 @@ function payLabel(id) {
 
 function renderPaySelect() {
   var sel = document.getElementById('pay-method-select');
-  if (sel) {
-    sel.innerHTML = PAY_METHODS.map(function(m){
-      return '<option value="' + m.id + '"' + (m.id === ACTIVE_PAY ? ' selected' : '') + '>' + m.label + '</option>';
-    }).join('');
-  }
+  if (sel) sel.innerHTML = payOptionsHtml(ACTIVE_FIAT, ACTIVE_PAY);
   syncFiltersChip();
 }
 
@@ -967,7 +1019,7 @@ function renderPaySelect() {
 function syncFiltersChip() {
   var el = document.getElementById('filters-chip-txt');
   if (!el) return;
-  var pay = (PAY_METHODS.filter(function(m){ return m.id === ACTIVE_PAY; })[0] || {}).label || '';
+  var pay = esc(payLabel(ACTIVE_PAY));
   var ver = CFG.verifiedOnly !== false;
   el.innerHTML = '<b>' + ACTIVE_FIAT + '/USDT</b><span class="fc-sep"> · </span>' + pay +
     (ver ? '<span class="fc-sep"> · </span><i>✓</i>' : '');
@@ -1010,7 +1062,8 @@ function loadPayMethod() {
     var f = localStorage.getItem('p2p_fiat');
     if (f && PAY_METHODS_BY_FIAT[f]) ACTIVE_FIAT = f;
   } catch(e) {}
-  PAY_METHODS = PAY_METHODS_BY_FIAT[ACTIVE_FIAT];
+  FIATS.forEach(loadCachedTradeMethods);
+  PAY_METHODS = payMethodsFor(ACTIVE_FIAT);
   var cur = PAY_SEL[ACTIVE_FIAT];
   ACTIVE_PAY = PAY_METHODS.some(function(m){ return m.id === cur; }) ? cur : PAY_METHODS[0].id;
   PAY_SEL[ACTIVE_FIAT] = ACTIVE_PAY;
@@ -1059,7 +1112,7 @@ function setFiat(id) {
   var f = CFG.fiatFilters[id] || fiatMeta(id).filters;
   CFG.mayAmount = f.may; CFG.smallAmount = f.small; CFG.buyAmount = f.buy;
   try { localStorage.setItem('p2p_cfg2', JSON.stringify(CFG)); } catch(e) {}
-  PAY_METHODS = PAY_METHODS_BY_FIAT[id];
+  PAY_METHODS = payMethodsFor(id);
   var cur = PAY_SEL[id];
   ACTIVE_PAY = PAY_METHODS.some(function(m){ return m.id === cur; }) ? cur : PAY_METHODS[0].id;
   PAY_SEL[id] = ACTIVE_PAY;
@@ -1075,6 +1128,7 @@ function setFiat(id) {
   saveUserSettings();
   syncMonitorMarket();
   refreshMarketSeries();
+  loadTradeMethods(id);
 }
 
 // Unidades, pasos y placeholders segun la moneda. El libro sigue a la vista; el bot
@@ -1361,7 +1415,7 @@ function enterApp() {
         startMonitorView();
       }
     } catch(e) {}
-    try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} try { checkAdminPending(); } catch(e) {} try { tgRefreshLink(); } catch(e) {} }
+    try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { loadTradeMethods(ACTIVE_FIAT); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} try { checkAdminPending(); } catch(e) {} try { tgRefreshLink(); } catch(e) {} }
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
@@ -1828,7 +1882,7 @@ function renderOnboardMarket() {
   var fs = document.getElementById('ob-fiat');
   if (fs) fs.innerHTML = opts(FIATS.map(function(f) { return { id: f, label: f + '/USDT' }; }), ACTIVE_FIAT);
   var ps = document.getElementById('ob-pay');
-  if (ps) ps.innerHTML = opts(PAY_METHODS, ACTIVE_PAY);
+  if (ps) ps.innerHTML = payOptionsHtml(ACTIVE_FIAT, ACTIVE_PAY);
   var role = ROLE_HELP[CFG.role] ? CFG.role : 'both';
   document.querySelectorAll('#ob-role .btn').forEach(function(b) { b.classList.toggle('is-on', b.getAttribute('data-role') === role); });
   var help = document.getElementById('ob-role-help');
@@ -3665,7 +3719,7 @@ function renderBotPayChecks() {
   var box = document.getElementById('bot-paymethods');
   if (!box) return;
   var sel = BOT_CFG.payMethods || [];
-  box.innerHTML = PAY_METHODS_BY_FIAT.VES.map(function (m) {
+  box.innerHTML = (PAY_METHODS_BY_FIAT[botFiat()] || []).map(function (m) {
     var checked = sel.indexOf(m.id) !== -1;
     return '<label class="pay-chk' + (checked ? ' on' : '') + '"><input type="checkbox" value="' + m.id + '"' + (checked ? ' checked' : '') +
       ' onchange="this.closest(\'label\').classList.toggle(\'on\',this.checked)">' + m.label + '</label>';

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { histKey, fiatUnit, safeTz, zonedMinutes, zonedDateStr, zonedHm, zonedMidnight, DEFAULT_TZ } from '../api/_lib/market.js';
-import { buildSearchBody } from '../api/_lib/binance.js';
+import { buildSearchBody, parseTradeMethods } from '../api/_lib/binance.js';
 import { computeAlerts } from '../api/_lib/monitor.js';
 
 // ── Clave de la serie ─────────────────────────────────
@@ -67,4 +67,22 @@ test('computeAlerts: los textos usan la unidad de la moneda del monitor', () => 
   const usd = computeAlerts({ ...base, cfg: { spreadThr: 0.5, fiat: 'USD' } });
   assert.match(usd.alerts[0].desc, / \$ \(/);
   assert.doesNotMatch(usd.alerts[0].desc, /Bs/);
+});
+
+// ── Metodos de pago de Binance ────────────────────────
+test('parseTradeMethods: acepta arreglo plano o envuelto en { data }', () => {
+  const items = [{ identifier: 'Banesco', tradeMethodName: 'Banesco' }, { identifier: 'Zelle', tradeMethodShortName: 'Zelle', tradeMethodName: 'Zelle (USA)' }];
+  const a = parseTradeMethods(items);
+  const b = parseTradeMethods({ code: '000000', data: items, success: true });
+  assert.deepEqual(a, [{ id: 'Banesco', label: 'Banesco' }, { id: 'Zelle', label: 'Zelle' }]);
+  assert.deepEqual(b, a);
+});
+test('parseTradeMethods: sin repetidos, sin basura y con respaldo de nombre', () => {
+  const r = parseTradeMethods([
+    { identifier: 'BANK' }, { identifier: 'BANK', tradeMethodName: 'Otra vez' },
+    { identifier: '' }, null, { tradeMethodName: 'sin id' }, { identifier: 42 },
+  ]);
+  assert.deepEqual(r, [{ id: 'BANK', label: 'BANK' }]);
+  assert.deepEqual(parseTradeMethods(null), []);
+  assert.deepEqual(parseTradeMethods({ code: '000001', message: 'error' }), []);
 });
