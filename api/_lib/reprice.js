@@ -1,5 +1,6 @@
 // Port puro (sin DOM) del algoritmo de reprice del cliente (botCycle).
 // Entrada: { ad, marketRaw, cfg } → salida: { targetPrice|null, reason, ceiling, currentPrice, myMinLimit, competitors }.
+import { fiatUnit } from './market.js';
 const GENERIC_PAY_IDS = ['OtherPayments', 'SpecificBank'];
 const EPS = 1e-9; // tolerancia float: el techo (sellPrice * factor) rara vez es exacto en binario
 
@@ -99,7 +100,7 @@ export function computeReprice({ ad, marketRaw, cfg }) {
       reason = '↑ ' + inGap[0].merchant + ' @ ' + inGap[0].price.toFixed(3);
     } else {
       above.sort((a, b) => a.price - b.price);
-      reason = 'En espera (gap > ' + maxGap + ' Bs) — ' + above[0].merchant + ' @ ' + above[0].price.toFixed(3);
+      reason = 'En espera (gap > ' + maxGap + ' ' + fiatUnit(ad.fiatUnit || ad.fiatCurrency || ad.fiat) + ') — ' + above[0].merchant + ' @ ' + above[0].price.toFixed(3);
       return { targetPrice: null, reason, ceiling, currentPrice, myMinLimit, competitors: competitors.length };
     }
   } else if (below.length > 0) {

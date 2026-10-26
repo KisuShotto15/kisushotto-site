@@ -1,6 +1,7 @@
 // Port puro (sin DOM) de checkAlerts del cliente: spread, sobrecomprado y debilidad.
 // Entrada: { mayRaw, smallRaw, cfg, priceHist, cooldowns, now, silent }.
 // Salida: { alerts:[{type,title,desc}], priceHist, cooldowns, bestMay }.
+import { fiatUnit } from './market.js';
 const COOLDOWN_MS = 5 * 60000;
 const TREND_CD_MS = 20 * 60000;
 export const HIST24_MS = 25 * 3600 * 1000;
@@ -148,6 +149,7 @@ export function topMedianRate(raw, n, verifiedOnly) {
 export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now, silent, labels, primaryAsc }) {
   now = now || Date.now();
   const L = labels || { primary: 'Mayorista', secondary: 'Recompra' };
+  const U = ' ' + fiatUnit(cfg.fiat);
   const verifiedOnly = cfg.verifiedOnly !== false;
   const may = mapBest(mayRaw, verifiedOnly, primaryAsc);
   const small = mapBest(smallRaw, verifiedOnly);
@@ -183,8 +185,8 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
         alerts.push({
           type: 'spread',
           title: '💰 Spread ' + spread.toFixed(3) + '%' + netLabel + ' — OPORTUNIDAD',
-          desc: L.primary + ': ' + bestMay.toFixed(2) + ' Bs (' + escHtml(topMay.merchant) + ') → ' + L.secondary + ': ' +
-                bestSmall.toFixed(2) + ' Bs · Dif: ' + (bestMay - bestSmall).toFixed(2) + ' Bs/USDT',
+          desc: L.primary + ': ' + bestMay.toFixed(2) + U + ' (' + escHtml(topMay.merchant) + ') → ' + L.secondary + ': ' +
+                bestSmall.toFixed(2) + U + ' · Dif: ' + (bestMay - bestSmall).toFixed(2) + U + '/USDT',
         });
       }
     }
@@ -204,14 +206,14 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
           if (!cd.ob || now - cd.ob > COOLDOWN_MS) {
             cd.ob = now;
             alerts.push({ type: 'overbought', title: '🔴 Mercado sobrecomprado',
-              desc: '+' + chg.toFixed(3) + '% en 10 min · Precio actual: ' + bestMay.toFixed(2) + ' Bs' });
+              desc: '+' + chg.toFixed(3) + '% en 10 min · Precio actual: ' + bestMay.toFixed(2) + U });
           }
         } else { cd.ob = 0; }
         if (chg < -weaknessThr) {
           if (!cd.wk || now - cd.wk > COOLDOWN_MS) {
             cd.wk = now;
             alerts.push({ type: 'weakness', title: '🔵 Debilidad en el mercado',
-              desc: chg.toFixed(3) + '% en 10 min · Precio actual: ' + bestMay.toFixed(2) + ' Bs' });
+              desc: chg.toFixed(3) + '% en 10 min · Precio actual: ' + bestMay.toFixed(2) + U });
           }
         } else { cd.wk = 0; }
       }
@@ -237,7 +239,7 @@ export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now
             alerts.push({
               type: up ? 'overbought' : 'weakness',
               title: up ? '📈 Tendencia alcista sostenida' : '📉 Tendencia bajista sostenida',
-              desc: (up ? '+' : '') + chg60.toFixed(2) + '% en 1h · Precio actual: ' + bestMay.toFixed(2) + ' Bs',
+              desc: (up ? '+' : '') + chg60.toFixed(2) + '% en 1h · Precio actual: ' + bestMay.toFixed(2) + U,
             });
           }
         } else { cd.tr = 0; }

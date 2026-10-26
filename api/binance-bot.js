@@ -2,6 +2,10 @@ import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema, ensureMarketHist } from './_lib/db.js';
 import { histMap } from './_lib/monitor.js';
+import { DEFAULT_FIAT, safeTz, zonedMidnight } from './_lib/market.js';
+
+// La unica serie de mercado global (grafico ya poblado para cualquier usuario).
+const GLOBAL_KEY = 'BancoDeVenezuela';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
 import { fifoMatch, fifoShort, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows, SAMPLE_MIN } from './_lib/pnl.js';
@@ -164,12 +168,13 @@ export default async function handler(req, res) {
   // Metricas de rotacion desde la tabla orders (la alimenta bot-tick). Solo DB.
   if (path === '/order-stats') {
     try {
+      const tz = safeTz(params && params.tz);
       const today = await sql`
         SELECT count(*)::int n, count(*) FILTER (WHERE status IN ('4', 'COMPLETED'))::int done,
                COALESCE(sum(amount) FILTER (WHERE status IN ('4', 'COMPLETED')), 0)::float usdt,
                COALESCE(sum(total) FILTER (WHERE status IN ('4', 'COMPLETED')), 0)::float ves
         FROM orders WHERE user_id = ${user.uid}
-          AND (created_at AT TIME ZONE 'America/Caracas')::date = (now() AT TIME ZONE 'America/Caracas')::date`;
+          AND (created_at AT TIME ZONE ${tz})::date = (now() AT TIME ZONE ${tz})::date`;
       const week = await sql`
         SELECT count(*)::int n, count(*) FILTER (WHERE status IN ('4', 'COMPLETED'))::int done,
                COALESCE(sum(amount) FILTER (WHERE status IN ('4', 'COMPLETED')), 0)::float usdt,
@@ -182,7 +187,7 @@ export default async function handler(req, res) {
             AND created_at > now() - interval '7 days') d
         WHERE diff > 0 AND diff < 6 * 3600`;
       const hours = await sql`
-        SELECT extract(hour FROM created_at AT TIME ZONE 'America/Caracas')::int h,
+        SELECT extract(hour FROM created_at AT TIME ZONE ${tz})::int h,
                count(*)::int n, COALESCE(sum(amount), 0)::float usdt
         FROM orders WHERE user_id = ${user.uid} AND status IN ('4', 'COMPLETED')
           AND created_at > now() - interval '30 days'
@@ -215,8 +220,7 @@ export default async function handler(req, res) {
 
       const { lots, openQty, openAvgPrice, unmatchedSell } = fifoMatch(rows, commission);
       const dayMs = 24 * 3600 * 1000, now = Date.now();
-      const CCS = -4 * 3600 * 1000; // America/Caracas, offset fijo
-      const midnight = Math.floor((now + CCS) / dayMs) * dayMs - CCS;
+      const midnight = zonedMidnight(now, params && params.tz); // "hoy" en la zona del usuario
       const buys = rows.filter(r => String(r.trade_type || '').toUpperCase().includes('BUY')).length;
       return res.status(200).json({
         today: summarize(lotsSince(lots, midnight)),
@@ -305,6 +309,7 @@ export default async function handler(req, res) {
   // servidor 5 min): contar filas crudas sobrerrepresentaria las horas con la app abierta.
   if (path === '/spread-windows') {
     try {
+      const tz = safeTz(params && params.tz);
       const days = Math.min(Math.max(parseInt(params && params.days, 10) || 14, 1), 60);
       const st = await sql`SELECT config FROM bot_state WHERE user_id = ${user.uid}`;
       const cfgB = (st[0] && st[0].config) || {};
@@ -318,7 +323,7 @@ export default async function handler(req, res) {
             AND spread_net IS NOT NULL
           GROUP BY 1
         )
-        SELECT extract(hour FROM b5.t AT TIME ZONE 'America/Caracas')::int h,
+        SELECT extract(hour FROM b5.t AT TIME ZONE ${tz})::int h,
                count(*)::int buckets,
                count(*) FILTER (WHERE b5.sn >= ${floor})::int with_spread,
                count(*) FILTER (WHERE b5.sn >= ${floor} AND o.live)::int taken
@@ -373,6 +378,8 @@ export default async function handler(req, res) {
         const prevCfg = prevM[0] && prevM[0].config;
         const prevPay = prevCfg && prevCfg.payTypes && prevCfg.payTypes[0];
         const newPay = cfg.payTypes && cfg.payTypes[0];
+        const prevFiat = prevCfg ? (prevCfg.fiat || DEFAULT_FIAT) : null;
+        const newFiat = cfg.fiat || DEFAULT_FIAT;
         const prevShort = prevCfg ? (prevCfg.shortMode !== false) : null;
         const newShort = cfg.shortMode !== false;
         const cfgStr = JSON.stringify(cfg);
@@ -380,7 +387,7 @@ export default async function handler(req, res) {
           INSERT INTO monitor_state (user_id, enabled, config, status, updated_at)
           VALUES (${user.uid}, true, ${cfgStr}::jsonb, 'Iniciando...', now())
           ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfgStr}::jsonb, status = 'Iniciando...', updated_at = now()`;
-        if ((prevPay && newPay && prevPay !== newPay) || (prevCfg && prevShort !== newShort)) {
+        if ((prevPay && newPay && prevPay !== newPay) || (prevCfg && prevShort !== newShort) || (prevCfg && prevFiat !== newFiat)) {
           await sql`UPDATE monitor_state SET price_hist = '[]'::jsonb WHERE user_id = ${user.uid}`;
         }
         await pokeScheduler();
@@ -397,7 +404,7 @@ export default async function handler(req, res) {
         // app esta abierta (con app abierta el server no busca). Best-effort.
         const median = Number((params && params.median) || 0);
         const medianN = Number((params && params.medianN) || 0) || null;
-        if (median > 0) {
+        if (median > 0 && ((params && params.fiat) || DEFAULT_FIAT) === DEFAULT_FIAT) {
           await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${median}, ${medianN}, now())
             ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});
         }
@@ -410,8 +417,17 @@ export default async function handler(req, res) {
       if (path === '/monitor-history') {
         // Serie GLOBAL: mismo mercado, mismo grafico para todos (y ya poblado para
         // un usuario nuevo). El cliente deriva las velas al vuelo (ver hxVisibleOhlc).
+        // Otros mercados (otra moneda u otro metodo) no tienen serie global: se usa la
+        // que va grabando el monitor 24/7 del propio usuario, bajo la misma clave.
+        const key = (params && params.key) || GLOBAL_KEY;
+        if (key !== GLOBAL_KEY) {
+          const own = await sql`SELECT hist_long -> ${key}::text AS l, hist24 -> ${key}::text AS d
+            FROM monitor_state WHERE user_id = ${user.uid}`;
+          const o = own[0] || {};
+          return res.status(200).json({ hist_long: { [key]: o.l || [] }, hist24: { [key]: o.d || [] }, vol: [] });
+        }
         await ensureMarketHist();
-        const rows = await sql`SELECT hist_long, hist24 FROM market_hist WHERE pay = 'BancoDeVenezuela'`;
+        const rows = await sql`SELECT hist_long, hist24 FROM market_hist WHERE pay = ${GLOBAL_KEY}`;
         // Serie de volumen. Vive aparte, en market_snapshots: no toca hist_long/hist24.
         // Es volumen ABSORBIDO, no inventario: may_avail5 es cuanto USDT hay parado en
         // el top 5 (un stock, casi plano de un cubo a otro y por eso ilegible como
@@ -449,9 +465,14 @@ export default async function handler(req, res) {
         return res.status(200).json({ ...(rows[0] || { hist_long: [], hist24: [] }), vol });
       }
       await ensureMarketHist();
+      // Sparkline: serie global para BDV, la del monitor del usuario para el resto.
+      const key = (params && params.key) || GLOBAL_KEY;
       const [rows, g] = await Promise.all([
         sql`SELECT enabled, status, last_tick, log FROM monitor_state WHERE user_id = ${user.uid}`,
-        sql`SELECT hist24 FROM market_hist WHERE pay = 'BancoDeVenezuela'`,
+        key === GLOBAL_KEY
+          ? sql`SELECT hist24 FROM market_hist WHERE pay = ${GLOBAL_KEY}`
+          : sql`SELECT jsonb_build_object(${key}::text, COALESCE(hist24 -> ${key}::text, '[]'::jsonb)) AS hist24
+                FROM monitor_state WHERE user_id = ${user.uid}`,
       ]);
       const st = rows[0] || { enabled: false };
       st.hist24 = (g[0] && g[0].hist24) || {};

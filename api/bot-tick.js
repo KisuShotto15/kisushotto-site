@@ -9,6 +9,7 @@ import { sendTelegram, resolveTelegram } from './_lib/telegram.js';
 import { sendPush, stripHtml } from './_lib/push.js';
 import { adminUserId, GRACE_MS } from './_lib/subscriptions.js';
 import { sweepRenewals } from './_lib/renewals.js';
+import { DEFAULT_FIAT, histKey, fiatUnit, zonedMinutes, zonedDateStr, zonedHm } from './_lib/market.js';
 
 export const config = { maxDuration: 60 };
 
@@ -130,36 +131,26 @@ function pushLog(log, msg, level) {
   return arr;
 }
 
-// ── Horario (America/Caracas, UTC-4 fijo) ──────────────
-function caracasMinutes(now) {
-  const d = new Date(now - 4 * 3600 * 1000);
-  return d.getUTCHours() * 60 + d.getUTCMinutes();
-}
+// ── Horario (zona del usuario: cfg.tz, por defecto America/Caracas) ──
 function hmToMin(hm) {
   const [h, m] = String(hm || '').split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
 }
-function inQuietHours(start, end, now) {
+function inQuietHours(start, end, now, tz) {
   if (!start || !end) return false;
-  const s = hmToMin(start), e = hmToMin(end), cur = caracasMinutes(now);
+  const s = hmToMin(start), e = hmToMin(end), cur = zonedMinutes(now, tz);
   if (s === e) return false;
   return s < e ? (cur >= s && cur < e) : (cur >= s || cur < e); // soporta franja nocturna
 }
-function caracasDateStr(now) {
-  return new Date(now - 4 * 3600 * 1000).toISOString().slice(0, 10);
-}
-function caracasHm(now) {
-  const d = new Date(now - 4 * 3600 * 1000);
-  return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
-}
-// Resumen una vez al dia: ya paso la hora y no se mando hoy (zona Caracas).
-function shouldSendSummary(hour, lastSummary, now) {
+// Resumen una vez al dia: ya paso la hora y no se mando hoy (zona del usuario).
+function shouldSendSummary(hour, lastSummary, now, tz) {
   if (!hour) return false;
-  if (caracasMinutes(now) < hmToMin(hour)) return false;
+  if (zonedMinutes(now, tz) < hmToMin(hour)) return false;
   if (!lastSummary) return true;
-  return caracasDateStr(new Date(lastSummary).getTime()) !== caracasDateStr(now);
+  return zonedDateStr(new Date(lastSummary).getTime(), tz) !== zonedDateStr(now, tz);
 }
-function buildSummary(hist, now) {
+function buildSummary(hist, now, tz, fiat) {
+  const U = ' ' + fiatUnit(fiat);
   const pts = (hist || []).filter(p => p && p.price && now - p.ts <= 24 * 3600 * 1000);
   if (pts.length < 2) return '<b>📊 Resumen P2P · últimas 24h</b>\nSin datos suficientes todavía.';
   let max = pts[0], min = pts[0];
@@ -167,10 +158,10 @@ function buildSummary(hist, now) {
   const open = pts[0].price, close = pts[pts.length - 1].price;
   const chg = (close - open) / open * 100;
   return '<b>📊 Resumen P2P · últimas 24h</b>\n' +
-    '🔼 Máx: ' + max.price.toFixed(2) + ' Bs (' + caracasHm(max.ts) + ')\n' +
-    '🔽 Mín: ' + min.price.toFixed(2) + ' Bs (' + caracasHm(min.ts) + ')\n' +
-    'Apertura → cierre: ' + open.toFixed(2) + ' → ' + close.toFixed(2) + ' Bs (' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%)\n' +
-    'Rango: ' + (max.price - min.price).toFixed(2) + ' Bs';
+    '🔼 Máx: ' + max.price.toFixed(2) + U + ' (' + zonedHm(max.ts, tz) + ')\n' +
+    '🔽 Mín: ' + min.price.toFixed(2) + U + ' (' + zonedHm(min.ts, tz) + ')\n' +
+    'Apertura → cierre: ' + open.toFixed(2) + ' → ' + close.toFixed(2) + U + ' (' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%)\n' +
+    'Rango: ' + (max.price - min.price).toFixed(2) + U;
 }
 
 // Devuelve un objeto con el resultado del refresh, o un numero = ms hasta que
@@ -190,7 +181,7 @@ async function tickMonitor(row, now) {
   // 3 puntos por vela de 15 min (suficiente para un O/H/L/C valido) contra los ~7 del dia.
   // (Antes bajaba a 1/hora para suspender la Neon vieja: eso si dejaba el grafico vacio
   // y, al terminar el silencio, sin referencias de 10/30/60 min para el momentum.)
-  const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now);
+  const silent = inQuietHours(cfg.quietStart, cfg.quietEnd, now, cfg.tz);
   // 60s por defecto, igual que el valor que el cliente guarda en su config. El
   // fallback estaba en 30 y no coincidia: cualquier config guardada antes de que esa
   // clave existiera hacia trabajar al monitor server-side al doble del ritmo previsto,
@@ -212,7 +203,12 @@ async function tickMonitor(row, now) {
   if (!claim.length) return 25 * 1000;
 
   const pays = (cfg.payTypes && cfg.payTypes.length) ? cfg.payTypes : [];
-  const pay = pays[0] || 'BancoDeVenezuela';
+  const fiat = cfg.fiat || DEFAULT_FIAT;
+  // Montos por defecto (en VES) solo si la config no los trae; un 0 explicito es
+  // "sin filtro de monto", igual que en el cliente. En otra moneda no hay defecto.
+  const vesDef = v => (fiat === DEFAULT_FIAT ? v : 0);
+  // Clave de la serie: moneda + metodo (VES conserva el metodo a secas, ver histKey).
+  const pay = histKey(fiat, pays[0] || GLOBAL_PAY);
   // hist24/hist_long NO se bajan: solo el ts de su ultimo punto. El punto nuevo se
   // agrega en Postgres (ver abajo). hist_long acumula hasta 2 anios y leerla en cada
   // refresco (cada minuto, 24/7) era el grueso del egress de Supabase.
@@ -230,10 +226,10 @@ async function tickMonitor(row, now) {
   // (topMedianRate/p2p_rate es la tasa publica del portfolio, ajena al modo del usuario).
   const shortOff = cfg.shortMode === false;
   const [mayRaw, otherRaw] = await Promise.all([
-    publicSearch({ transAmount: cfg.mayAmount || 2000000, pays, maxPages: 1, tradeType: 'SELL', verifiedOnly }),
+    publicSearch({ transAmount: cfg.mayAmount ?? vesDef(2000000), pays, maxPages: 1, tradeType: 'SELL', verifiedOnly, fiat }),
     shortOff
-      ? publicSearch({ transAmount: cfg.buyAmount || 2000000, pays, maxPages: 1, tradeType: 'BUY', verifiedOnly })
-      : publicSearch({ transAmount: cfg.smallAmount || 59999, pays, maxPages: 1, tradeType: 'SELL', verifiedOnly }),
+      ? publicSearch({ transAmount: cfg.buyAmount ?? vesDef(2000000), pays, maxPages: 1, tradeType: 'BUY', verifiedOnly, fiat })
+      : publicSearch({ transAmount: cfg.smallAmount ?? vesDef(59999), pays, maxPages: 1, tradeType: 'SELL', verifiedOnly, fiat }),
   ]);
   const primaryRaw   = shortOff ? otherRaw : mayRaw;
   const secondaryRaw = shortOff ? mayRaw   : otherRaw;
@@ -243,7 +239,8 @@ async function tickMonitor(row, now) {
   const out = computeAlerts({ mayRaw: primaryRaw, smallRaw: secondaryRaw, cfg, priceHist: h.price_hist, cooldowns: h.cooldowns, now, silent, labels, primaryAsc: shortOff });
   // Tasa USDT/VES publica (mediana top-10 mayoristas): la consume el portfolio.
   // Best-effort: un fallo aqui no debe tumbar el tick del monitor.
-  const med = topMedianRate(mayRaw, 10, verifiedOnly);
+  // Solo VES: el portfolio lee la tasa USDT/VES; otra moneda la pisaria.
+  const med = fiat === DEFAULT_FIAT ? topMedianRate(mayRaw, 10, verifiedOnly) : null;
   if (med) {
     await sql`INSERT INTO p2p_rate (pay, rate, n, updated_at) VALUES (${pay}, ${med.rate}, ${med.n}, now())
       ON CONFLICT (pay) DO UPDATE SET rate = excluded.rate, n = excluded.n, updated_at = now()`.catch(() => {});
@@ -294,10 +291,10 @@ async function tickMonitor(row, now) {
 
   // Resumen diario (no depende del silencio nocturno; se manda a la hora configurada)
   let lastSummary = h.last_summary;
-  if (shouldSendSummary(cfg.summaryHour, lastSummary, now)) {
+  if (shouldSendSummary(cfg.summaryHour, lastSummary, now, cfg.tz)) {
     // La serie de 24h se baja solo aca, una vez al dia (ya con el punto de recien).
     const s24 = await sql`SELECT hist24 -> ${pay}::text AS s FROM monitor_state WHERE user_id = ${row.user_id}`;
-    const summary = buildSummary((s24[0] && s24[0].s) || [], now);
+    const summary = buildSummary((s24[0] && s24[0].s) || [], now, cfg.tz, fiat);
     if (token && chatId) await sendTelegram(token, chatId, summary);
     await sendPush(row.user_id, '📊 Resumen P2P · últimas 24h', stripHtml(summary).split('\n').slice(1).join('\n')).catch(() => {});
     lastSummary = new Date(now).toISOString();
@@ -309,21 +306,27 @@ async function tickMonitor(row, now) {
     cooldowns: out.cooldowns,
     lastSummary,
     log,
-    status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' Bs' : '🟢 Vigilando'),
+    status: silent ? '🌙 Silencio nocturno' : (out.bestMay ? '🟢 Vigilando ' + out.bestMay.toFixed(2) + ' ' + fiatUnit(fiat) : '🟢 Vigilando'),
     nextMs: nextMs,
   };
 }
 
-function pickAd(ads, adNo) {
+// Moneda del anuncio (los listados de Binance la traen con distintos nombres).
+export function adFiat(a) {
+  return a.fiatUnit || a.fiatCurrency || a.fiat || null;
+}
+
+// Sin numero configurado: primer anuncio BUY USDT activo en la moneda del usuario.
+function pickAd(ads, adNo, fiat) {
   if (adNo) {
     return ads.find(a => String(a.adNumber || a.advNo) === String(adNo)) || null;
   }
+  const want = fiat || DEFAULT_FIAT;
   return ads.find(a => {
     const isBuy  = a.tradeType === 'BUY';
     const isUsdt = a.asset === 'USDT' || a.cryptoCurrency === 'USDT';
-    const isVes  = a.fiatUnit === 'VES' || a.fiatCurrency === 'VES' || a.fiat === 'VES';
     const isLive = a.advStatus === 'LIVE' || a.advStatus === 'ONLINE' || a.advStatus === 1 || a.adStatus === 1;
-    return isBuy && isUsdt && isVes && isLive;
+    return isBuy && isUsdt && adFiat(a) === want && isLive;
   }) || null;
 }
 
@@ -364,7 +367,7 @@ async function tickUser(row) {
     return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt, adMinLimit };
   }
 
-  const ad = pickAd(my.ads, cfg.adNo);
+  const ad = pickAd(my.ads, cfg.adNo, cfg.fiat);
   if (!ad) {
     status = 'Anuncio no encontrado';
     log = pushLog(log, 'Anuncio configurado no encontrado', 'warn');
@@ -403,6 +406,8 @@ async function tickUser(row) {
   }
 
   adNumber = String(ad.advNo || ad.adNumber);
+  // La competencia se busca en la moneda del anuncio, no en la de la vista.
+  const fiat = adFiat(ad) || cfg.fiat || DEFAULT_FIAT;
   const myMin = parseFloat(ad.minSingleTransAmount);
   if (myMin > 0) adMinLimit = myMin;
   const threshold = cfg.limitThreshold || 0;
@@ -413,7 +418,7 @@ async function tickUser(row) {
   if (cfg.minLimit > 0 && cfg.minLimit !== myMin) {
     const u = await updateMinLimit(key, secret, adNumber, cfg.minLimit);
     if (u.ok && (!u.data.code || u.data.code === '000000')) {
-      log = pushLog(log, '📏 Límite mínimo → ' + cfg.minLimit + ' VES', 'info');
+      log = pushLog(log, '📏 Límite mínimo → ' + cfg.minLimit + ' ' + fiat, 'info');
       // El anuncio YA quedo con el limite nuevo en Binance, pero `ad` se leyo antes
       // del cambio. Seguir el tick con el valor viejo buscaba el bracket equivocado
       // y filtraba competidores por el corte viejo (minVES < myMin + threshold), asi
@@ -426,7 +431,7 @@ async function tickUser(row) {
     }
   }
 
-  const marketRaw = await publicSearch({ transAmount: myMinEff + threshold, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly: cfg.verifiedOnly !== false });
+  const marketRaw = await publicSearch({ transAmount: myMinEff + threshold, pays, maxPages: 2, tradeType: 'SELL', verifiedOnly: cfg.verifiedOnly !== false, fiat });
 
   // Oculto = vivo pero fuera del listado publico (Binance lo esconde con muchas ordenes
   // y lo devuelve solo). No cambia nada del reprice: solo se refleja en el panel.
@@ -452,7 +457,7 @@ async function tickUser(row) {
   const up = await updateAdPrice(key, secret, adNumber, Number(res.targetPrice.toFixed(3)));
   if (up.ok && (!up.data.code || up.data.code === '000000')) {
     const isUp = res.targetPrice > res.currentPrice;
-    log = pushLog(log, (isUp ? '↑' : '↓') + ' ' + res.currentPrice.toFixed(3) + ' → ' + res.targetPrice.toFixed(3) + ' Bs | ' + res.reason, isUp ? 'up' : 'down');
+    log = pushLog(log, (isUp ? '↑' : '↓') + ' ' + res.currentPrice.toFixed(3) + ' → ' + res.targetPrice.toFixed(3) + ' ' + fiatUnit(fiat) + ' | ' + res.reason, isUp ? 'up' : 'down');
     currentPrice = res.targetPrice;
     lastReprice = new Date().toISOString();
     status = '✓ Repreciado';
@@ -518,10 +523,11 @@ async function maybeCheckOrders(row, now, notify = true) {
     const amt = parseFloat(f.amount || 0);
     const total = parseFloat(f.totalPrice || 0) || (amt * parseFloat(f.unitPrice || f.price || 0));
     const price = parseFloat(f.unitPrice || f.price || 0) || (amt > 0 && total > 0 ? total / amt : 0);
+    const U = ' ' + (f.fiatSymbol || fiatUnit(f.fiat));
     if (token && chatId) {
       let msg = '🟢 <b>Nueva orden P2P</b>\nCantidad: ' + (amt ? amt.toFixed(2) : '?') + ' USDT' +
-        '\nTotal: ' + (total ? total.toFixed(2) : '?') + ' Bs' +
-        '\nPrecio: ' + (price ? price.toFixed(3) : '?') + ' Bs';
+        '\nTotal: ' + (total ? total.toFixed(2) : '?') + U +
+        '\nPrecio: ' + (price ? price.toFixed(3) : '?') + U;
       if (fresh.length > 1) msg += '\n(+' + (fresh.length - 1) + ' más)';
       const sent = await sendTelegram(token, chatId, msg);
       log = pushLog(log, sent ? '📩 ' + fresh.length + ' orden(es) nueva(s) → Telegram'
@@ -530,7 +536,7 @@ async function maybeCheckOrders(row, now, notify = true) {
       log = pushLog(log, '⚠ ' + fresh.length + ' orden(es) nueva(s) pero el bot no tiene Telegram configurado', 'warn');
     }
     await sendPush(row.user_id, '🟢 Nueva orden P2P',
-      'Cantidad: ' + (amt ? amt.toFixed(2) : '?') + ' USDT · Total: ' + (total ? total.toFixed(2) : '?') + ' Bs · Precio: ' + (price ? price.toFixed(3) : '?') + ' Bs' +
+      'Cantidad: ' + (amt ? amt.toFixed(2) : '?') + ' USDT · Total: ' + (total ? total.toFixed(2) : '?') + U + ' · Precio: ' + (price ? price.toFixed(3) : '?') + U +
       (fresh.length > 1 ? ' (+' + (fresh.length - 1) + ' más)' : '')).catch(() => {});
   }
   return { known: newKnown, checkedAt, log };

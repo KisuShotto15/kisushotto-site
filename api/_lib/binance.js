@@ -3,6 +3,7 @@
 // solo `timestamp=...` y los params reales van en el BODY (para los updates), salvo
 // getDetailByNo que firma `adsNo=...&timestamp=...` en la query.
 import crypto from 'node:crypto';
+import { DEFAULT_FIAT } from './market.js';
 
 const BINANCE = 'https://api.binance.com';
 const PUBLIC_SEARCH = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
@@ -100,9 +101,9 @@ export async function listOrders(key, secret, sinceMs) {
 }
 
 // Body de busqueda publica (espejo de buildSearchBody del cliente).
-export function buildSearchBody({ transAmount, page, pays, tradeType, verifiedOnly }) {
+export function buildSearchBody({ transAmount, page, pays, tradeType, verifiedOnly, fiat }) {
   const body = {
-    asset: 'USDT', fiat: 'VES', merchantCheck: false,
+    asset: 'USDT', fiat: fiat || DEFAULT_FIAT, merchantCheck: false,
     page, rows: 20, tradeType: tradeType || 'SELL', payTypes: pays,
   };
   // Pre-filtrar verificados en Binance (publisherType merchant = toggle "Solo comerciantes")
@@ -112,9 +113,9 @@ export function buildSearchBody({ transAmount, page, pays, tradeType, verifiedOn
 }
 
 // Busqueda publica (Vercel SI puede; CF esta bloqueado por Binance). Devuelve items crudos {adv, advertiser}.
-export async function publicSearch({ transAmount, pays, maxPages = 2, tradeType = 'SELL', verifiedOnly = false }) {
+export async function publicSearch({ transAmount, pays, maxPages = 2, tradeType = 'SELL', verifiedOnly = false, fiat }) {
   const bodies = [];
-  for (let i = 1; i <= maxPages; i++) bodies.push(buildSearchBody({ transAmount, page: i, pays, tradeType, verifiedOnly }));
+  for (let i = 1; i <= maxPages; i++) bodies.push(buildSearchBody({ transAmount, page: i, pays, tradeType, verifiedOnly, fiat }));
   const settled = await Promise.allSettled(bodies.map(b =>
     fx(PUBLIC_SEARCH, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }, 9000).then(r => r.json())
   ));

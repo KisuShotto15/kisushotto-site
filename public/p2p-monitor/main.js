@@ -898,6 +898,13 @@ var PAY_METHODS = PAY_METHODS_BY_FIAT.VES; // lista activa (segun ACTIVE_FIAT)
 var PAY_SEL = { VES: 'BancoDeVenezuela', USD: 'Zinli' }; // ultimo metodo elegido por moneda
 var ACTIVE_PAY = 'BancoDeVenezuela';
 // Sufijo de moneda para los displays del monitor (el bot es siempre VES/Bs)
+// Clave de la serie del mercado activo. Espejo de histKey() en api/_lib/market.js:
+// VES conserva el metodo a secas (historial existente); el resto lleva la moneda.
+function histKey(fiat, pay) { return fiat && fiat !== 'VES' ? fiat + ':' + pay : pay; }
+function marketKey() { return histKey(ACTIVE_FIAT, ACTIVE_PAY); }
+// Zona horaria del usuario: el servidor la usa para el silencio nocturno, el
+// resumen diario y las estadisticas por hora (antes, America/Caracas fija).
+function userTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } }
 function fiatSuf() { return ACTIVE_FIAT === 'VES' ? ' Bs' : ' $'; }
 // Identifiers genéricos (catch-all) que NO deben usarse para filtrar competidores
 // BANK = Bank Transfer (legítimo, lo usa el usuario junto a BDV) → no se filtra
@@ -1015,6 +1022,8 @@ function setPayMethod(id) {
   persistPaySel();
   if (typeof fetchOnce === 'function') fetchOnce();
   saveUserSettings();
+  syncMonitorMarket();
+  refreshMarketSeries();
 }
 
 // Defaults de los 3 filtros de monto por moneda (USD: sin filtro, orden nativo de Binance)
@@ -1044,6 +1053,8 @@ function setFiat(id) {
   if (typeof renderSparkline === 'function') try { renderSparkline(); } catch(e) {}
   if (typeof fetchOnce === 'function') fetchOnce();
   saveUserSettings();
+  syncMonitorMarket();
+  refreshMarketSeries();
 }
 
 function updateBotPriceColor() {
@@ -1954,7 +1965,7 @@ async function loadPnlStats() {
   var el = document.getElementById('pnl-stats');
   if (!el || !SESSION.token) return;
   try {
-    var d = await botCallWorker('/order-pnl');
+    var d = await botCallWorker('/order-pnl', { tz: userTz() });
     if (d.error) throw new Error(d.error);
     if (!d.counts.sells) {
       el.innerHTML = '<div class="rot-line"><span>Ganancia realizada</span><b>sin ventas registradas</b></div>';
@@ -2001,7 +2012,7 @@ async function loadMarketWindows() {
   var el = document.getElementById('window-stats');
   if (!el || !SESSION.token) return;
   try {
-    var d = await botCallWorker('/spread-windows');
+    var d = await botCallWorker('/spread-windows', { tz: userTz() });
     if (d.error) throw new Error(d.error);
     if (!d.coveredH) { el.innerHTML = ''; return; }
     var html = '<div class="rot-head">Mercado (' + d.days + ' días, piso ' + d.floor + '%)</div>' +
@@ -2097,7 +2108,7 @@ async function loadOrderStats() {
   if (!el || !SESSION.token) return;
   el.textContent = 'Cargando...';
   try {
-    var d = await botCallWorker('/order-stats');
+    var d = await botCallWorker('/order-stats', { tz: userTz() });
     if (d.error) throw new Error(d.error);
     var perDayUsdt = d.week.usdt / 7, perDayOrd = d.week.done / 7;
     var top = (d.hours || []).slice().sort(function(a, b){ return b.usdt - a.usdt; }).slice(0, 3)
@@ -2256,13 +2267,15 @@ async function searchBatch(bodies, ms, wantBot) {
   return results.map(function(res) { return (res && res.data) || []; });
 }
 
-// Solo lo usa el bot (reprice inicial): SIEMPRE mercado VES, sin importar la vista.
+// Solo lo usa el bot (reprice inicial): mercado de la moneda de SU anuncio, sin
+// importar la vista.
+function botFiat() { return BOT.adFiat || ACTIVE_FIAT; }
 async function fetchTier(transAmount, maxPages, payTypesOverride) {
   maxPages = maxPages || 2;
-  var pays = (payTypesOverride && payTypesOverride.length) ? payTypesOverride : [PAY_SEL.VES];
+  var pays = (payTypesOverride && payTypesOverride.length) ? payTypesOverride : [PAY_SEL[botFiat()] || ACTIVE_PAY];
   var bodies = [];
   for (var i = 1; i <= maxPages; i++) {
-    bodies.push(buildSearchBody({ transAmount: transAmount, page: i, pays: pays, tradeType: 'SELL', fiat: 'VES' }));
+    bodies.push(buildSearchBody({ transAmount: transAmount, page: i, pays: pays, tradeType: 'SELL', fiat: botFiat() }));
   }
   var results = await searchBatch(bodies);
   return results.flatMap(function(arr) { return arr; });
@@ -3749,6 +3762,9 @@ function onAdSelect() {
   saveUserSettings();
 }
 
+// Moneda de un anuncio propio (Binance la nombra distinto segun el listado).
+function adFiatOf(a) { return (a && (a.fiatUnit || a.fiatCurrency || a.fiat)) || null; }
+
 async function botGetMyAd(allowPaused) {
   var data = await botCallWorker('/my-ads');
   var ads = Array.isArray(data.data) ? data.data
@@ -3772,14 +3788,13 @@ async function botGetMyAd(allowPaused) {
     if (surplusUsdt > 0 && surplusUsdt < 100) byId.__noFunds = true;
     return byId;
   }
-  // Auto-detección: primer anuncio BUY USDT/VES activo
+  // Auto-detección: primer anuncio BUY USDT activo en la moneda de la vista
   return ads.find(function(a) {
     var isBuy  = a.tradeType === 'BUY';
     var isUsdt = a.asset === 'USDT' || a.cryptoCurrency === 'USDT';
-    var isVes  = a.fiatUnit === 'VES' || a.fiatCurrency === 'VES' || a.fiat === 'VES';
     var isLive = a.advStatus === 'LIVE' || a.advStatus === 'ONLINE' || a.advStatus === 1
               || a.status === 'LIVE' || a.adStatus === 1;
-    return isBuy && isUsdt && isVes && isLive;
+    return isBuy && isUsdt && adFiatOf(a) === ACTIVE_FIAT && isLive;
   }) || null;
 }
 
@@ -3922,6 +3937,7 @@ async function botInitialCycle(allowPaused) {
     var ad = await botGetMyAd(allowPaused);
     if (!ad) { botLog('⚠ Anuncio no encontrado para reprice inicial', '#F0B90B'); return; }
     BOT.adNumber     = ad.adNumber || ad.advNo;
+    BOT.adFiat       = adFiatOf(ad);
     BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit   = parseFloat(ad.minSingleTransAmount);
     BOT.adPayTypes   = (ad.tradeMethods || []).map(function(m){ return m.identifier; })
@@ -3937,11 +3953,11 @@ async function botInitialCycle(allowPaused) {
           break;
         }
       }
-      // Auto-sync del selector solo en vista VES (el anuncio del bot es VES;
-      // si estas revisando USD no hay que tocarte la vista).
-      if (ACTIVE_FIAT === 'VES' && primary && primary !== ACTIVE_PAY) {
+      // Auto-sync del selector solo si la vista esta en la moneda del anuncio
+      // (si estas revisando otra moneda no hay que tocarte la vista).
+      if (botFiat() === ACTIVE_FIAT && primary && primary !== ACTIVE_PAY) {
         ACTIVE_PAY = primary;
-        PAY_SEL.VES = primary;
+        PAY_SEL[ACTIVE_FIAT] = primary;
         resetLocalSeries();
         persistPaySel();
         var sel = document.getElementById('pay-method-select');
@@ -4015,7 +4031,8 @@ function botServerConfig() {
     myNick: BOT_CFG.myNick || BOT.myNick || '',
     commission: CFG.commission || 0,
     verifiedOnly: CFG.verifiedOnly !== false,
-    payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [PAY_SEL.VES]
+    payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [PAY_SEL[botFiat()] || ACTIVE_PAY],
+    fiat: botFiat() // auto-deteccion del anuncio en el servidor (sin adNo)
   };
 }
 
@@ -4109,6 +4126,7 @@ async function botToggle() {
         var adPre = await botGetMyAd(true);
         if (adPre) {
           BOT.adNumber   = adPre.adNumber || adPre.advNo;
+          BOT.adFiat     = adFiatOf(adPre);
           BOT.myMinLimit = parseFloat(adPre.minSingleTransAmount);
           BOT.adPayTypes = (adPre.tradeMethods || []).map(function(m){ return m.identifier; })
                             .filter(function(id){ return id && GENERIC_PAY_IDS.indexOf(id) === -1; });
@@ -4909,7 +4927,7 @@ function loadHist24() {
   } catch (e) {}
 }
 function sparkSeries() {
-  var s = histByPay(HIST24, ACTIVE_PAY).slice();
+  var s = histByPay(HIST24, marketKey()).slice();
   var lastTs = s.length ? s[s.length - 1].ts : 0;
   for (var i = 0; i < ST.priceHist.length; i++) {
     if (ST.priceHist[i].ts > lastTs) s.push(ST.priceHist[i]);
@@ -5673,8 +5691,9 @@ async function hxLoad() {
   if (!SESSION.token) { hxMsg('Inicia sesión primero.'); return; }
   hxMsg('Cargando historial...');
   try {
-    var d = await botCallWorker('/monitor-history');
-    HX.series = hxMerge(histByPay(d && d.hist_long, ACTIVE_PAY), histByPay(d && d.hist24, ACTIVE_PAY));
+    var key = marketKey();
+    var d = await botCallWorker('/monitor-history', { key: key });
+    HX.series = hxMerge(histByPay(d && d.hist_long, key), histByPay(d && d.hist24, key));
     // Serie de volumen aparte (puede venir vacia: se acumula desde que se empezo
     // a grabar, igual que paso con el precio). No afecta al dibujo del precio.
     HX.vol = (d && d.vol) || [];
@@ -5691,13 +5710,16 @@ async function hxLoad() {
   } catch (e) { hxMsg('Error: ' + e.message); }
 }
 // Refresca la serie de 24h desde el servidor (max 1 vez cada 5 min, alineado con el latido).
+// Al cambiar de mercado: pedir ya la serie de 24h del par nuevo (el throttle de
+// 5 min es para el refresco periodico, no para esto).
+function refreshMarketSeries() { MON24.lastHist = 0; refreshHist24(); }
 function refreshHist24() {
   if (!SESSION.token) return;
   var now = Date.now();
   if (now - MON24.lastHist < 5 * 60000) return;
   MON24.lastHist = now;
-  botCallWorker('/monitor-state').then(function(d) {
-    if (d && d.hist24) { HIST24 = d.hist24; saveHist24(); renderSparkline(); }
+  botCallWorker('/monitor-state', { key: marketKey() }).then(function(d) {
+    if (d && d.hist24) { Object.assign(HIST24, d.hist24); saveHist24(); renderSparkline(); }
     surfaceMonitorErrors(d);
   }).catch(function(){});
 }
@@ -5705,9 +5727,6 @@ function refreshHist24() {
 // Latido: avisa al servidor que la app esta abierta y refrescando, para que NO duplique
 // la busqueda ni las alertas mientras tanto. Throttle ~30s.
 function monitorHeartbeat() {
-  // USD es solo vista local: sin latido, el servidor sigue vigilando VES 24/7
-  // y los precios USD no contaminan las series del servidor.
-  if (ACTIVE_FIAT !== 'VES') return;
   if (!MON24.enabled || !SESSION.token) return;
   var now = Date.now();
   // 5 min: el servidor toma el relevo a los 12 min sin latido (2 latidos perdidos
@@ -5717,7 +5736,7 @@ function monitorHeartbeat() {
   // De paso, el precio que ve la app alimenta hist24 en el servidor (sparkline sin huecos de dia).
   var p = bestCredibleMay() || 0;
   var med = medianCredibleMay();
-  botCallWorker('/monitor-heartbeat', { price: p, pay: ACTIVE_PAY, median: med.rate, medianN: med.n }).catch(function(){});
+  botCallWorker('/monitor-heartbeat', { price: p, pay: ACTIVE_PAY, fiat: ACTIVE_FIAT, median: med.rate, medianN: med.n }).catch(function(){});
 }
 
 function monitorServerConfig() {
@@ -5736,14 +5755,20 @@ function monitorServerConfig() {
     buyAmount: CFG.buyAmount,
     shortMode: CFG.shortMode !== false,
     verifiedOnly: CFG.verifiedOnly !== false,
-    payTypes: [ACTIVE_PAY]
+    payTypes: [ACTIVE_PAY],
+    fiat: ACTIVE_FIAT,
+    tz: userTz()
   };
+}
+
+// El 24/7 vigila el mercado de la vista: al cambiar moneda, metodo o un ajuste que lo
+// afecte, se le reenvia la config (el servidor reinicia el momentum si cambio el par).
+function syncMonitorMarket() {
+  if (MON24.enabled) botCallWorker('/monitor-enable', { config: monitorServerConfig() }).catch(function(){});
 }
 
 // Encender/apagar el monitor server-side (lo dispara el boton Iniciar, no un boton aparte).
 async function monitorServerEnable() {
-  // El 24/7 del servidor es solo VES; en USD no tocar su config (vista local).
-  if (ACTIVE_FIAT !== 'VES') { renderMon24('USD: solo vista local (24/7 sigue en VES)'); return; }
   if (!SESSION.token) { renderMon24(); return; }
   if (!TGLINK.linked) { MON24.enabled = false; rememberMon24(false); renderMon24('Conecta Telegram para el 24/7'); return; }
   try { await botCallWorker('/monitor-enable', { config: monitorServerConfig() }); MON24.enabled = true; MON24.lastHb = Date.now(); rememberMon24(true); botCallWorker('/monitor-heartbeat').catch(function(){}); renderMon24('Corriendo en el servidor'); }
@@ -5769,10 +5794,10 @@ function rememberMon24(on) {
 async function hydrateMon24(isRetry) {
   if (!SESSION.token) return;
   try {
-    var d = await botCallWorker('/monitor-state');
+    var d = await botCallWorker('/monitor-state', { key: marketKey() });
     MON24.enabled = !!(d && d.enabled);
     rememberMon24(MON24.enabled);
-    if (d && d.hist24) { HIST24 = d.hist24; MON24.lastHist = Date.now(); saveHist24(); renderSparkline(); }
+    if (d && d.hist24) { Object.assign(HIST24, d.hist24); MON24.lastHist = Date.now(); saveHist24(); renderSparkline(); }
     renderMon24(d && d.status);
     surfaceMonitorErrors(d); // siembra lastLogTs sin avisar errores viejos
     // Si el monitor 24/7 quedo activo, arranca la vista (tablas a CFG.interval) sin pulsar Iniciar.
@@ -5813,7 +5838,7 @@ function saveConfig() {
   botUpdateCeiling();
   fetchOnce();
   saveUserSettings();
-  if (MON24.enabled && ACTIVE_FIAT === 'VES') { botCallWorker('/monitor-enable', { config: monitorServerConfig() }).catch(function(){}); }
+  syncMonitorMarket();
   toast('Guardado');
 }
 
@@ -5861,7 +5886,7 @@ function toggleShortMode() {
   applyMarketMode();
   fetchOnce();
   saveUserSettings();
-  if (MON24.enabled && ACTIVE_FIAT === 'VES') { botCallWorker('/monitor-enable', { config: monitorServerConfig() }).catch(function(){}); }
+  syncMonitorMarket();
 }
 
 function toggleVerified() {
