@@ -467,7 +467,7 @@
         </details>
         <div class="gear-filter">
           <div class="cfg-row"><span title="Monto de referencia para buscar anuncios de compradores: filtra a comerciantes que operan ese volumen" id="lbl-cfg-may">Compradores — monto (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="0" step="100000"></div>
-          <div class="cfg-row" id="row-cfg-small"><span title="Monto de referencia para buscar anuncios en Recompra: filtra a comerciantes que operan ese volumen">Recompra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
+          <div class="cfg-row" id="row-cfg-small"><span title="Monto de referencia para buscar anuncios en Recompra: filtra a comerciantes que operan ese volumen" id="lbl-cfg-small">Recompra — filtro (VES)</span><input type="number" id="cfg-small-amount" value="59999" min="10000" step="1000"></div>
           <div class="cfg-row"><span title="Monto mínimo de transacción que debe aceptar un anuncio de vendedores para aparecer" id="lbl-cfg-buy">Vendedores — monto (VES)</span><input type="number" id="cfg-buy-amount" value="2000000" min="100000" step="100000"></div>
         </div>
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
@@ -478,13 +478,13 @@
 
       <div class="ob-grid" id="ob-grid">
         <div class="ob-side" id="ob-side-may">
-          <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-vol" id="vol-may" title="Cuanto del top 5 se vació (rojo) o repuso (verde) en los últimos 3 min"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="2000000" onchange="setFilter('may',this.value)"> VES</span></div>
+          <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-vol" id="vol-may" title="Cuanto del top 5 se vació (rojo) o repuso (verde) en los últimos 3 min"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="2000000" onchange="setFilter('may',this.value)"><span class="lbl-unit"> VES</span></span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Cambio</span><span style="text-align:center">Límites</span></div>
           <div id="ob-may"></div>
           <button class="ob-more" id="more-ob-may" onclick="toggleShowMore('ob-may')" style="display:none"></button>
         </div>
         <div class="ob-side" id="ob-side-small">
-          <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">Recompra</span><span class="lbl-extra" id="extra-small"></span><span class="lbl-vol" id="vol-small" title="Cuanto del top 5 se vació (rojo) o repuso (verde) en los últimos 3 min"></span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="20000" onchange="setFilter('small',this.value)"> VES</span></div>
+          <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">Recompra</span><span class="lbl-extra" id="extra-small"></span><span class="lbl-vol" id="vol-small" title="Cuanto del top 5 se vació (rojo) o repuso (verde) en los últimos 3 min"></span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="20000" onchange="setFilter('small',this.value)"><span class="lbl-unit"> VES</span></span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Cambio</span><span style="text-align:center">Límites</span></div>
           <div id="ob-small"></div>
           <button class="ob-more" id="more-ob-small" onclick="toggleShowMore('ob-small')" style="display:none"></button>
@@ -501,7 +501,7 @@
         <div class="buy-section-row" id="buy-section-body">
           <div class="buy-ob-wrap" id="buy-ob-wrap">
             <div class="ob-side" id="ob-side-buy">
-              <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">Verde</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"> VES</span></div>
+              <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">Verde</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"><span class="lbl-unit"> VES</span></span></div>
               <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Cambio</span><span style="text-align:center">Límites</span></div>
               <div id="ob-buy"></div>
               <button class="ob-more" id="more-ob-buy" onclick="toggleShowMore('ob-buy')" style="display:none"></button>
@@ -617,7 +617,7 @@
       <div class="bot-group">
       <div class="bot-group-h">Configuración<button class="help-ico" type="button" onclick="toggleHelpBlock('cfg-help-main')" aria-label="Ayuda">?</button></div>
       <div id="cfg-help-main" class="cfg-help"><b>Precio venta:</b> el precio al que vendes tus USDT.<br><b>Margen mínimo:</b> tu ganancia mínima por operación, ya descontada la comisión.<br><b>Límite mínimo:</b> límite mínimo configurado en el anuncio.<br><b>Cantidad:</b> cuánto USDT poner en el anuncio. Se aplica al guardar; déjalo vacío para no tocarla.</div>
-      <div class="cfg-row"><span title="El precio neto al que vendes USDT. El bot compra por debajo de esto, con al menos tu margen mínimo de ganancia">Precio venta</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="640" min="1" step="1" oninput="botUpdateCeiling()"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
+      <div class="cfg-row"><span title="El precio neto al que vendes USDT. El bot compra por debajo de esto, con al menos tu margen mínimo de ganancia">Precio venta</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="" min="0" step="1" oninput="botUpdateCeiling()"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
       <div class="cfg-row"><span title="Tu ganancia mínima exigida antes de comprar. Negativo = techo por encima del precio de venta, para comprar a pérdida sin inflar el precio">Margen mínimo</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" placeholder="0.5" min="-5" max="10" step="0.1" oninput="botUpdateCeiling()"><span class="stp-unit">%</span><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
       <div class="cfg-row"><span title="El monto mínimo de transacción que tu anuncio exige. El bot lo actualiza en Binance automáticamente si lo cambias aquí">Límite mínimo</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="10000"><span class="stp-unit">VES</span><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
       <div class="cfg-row"><span title="Cuánto poner en el anuncio. Déjalo vacío para no tocar la cantidad actual">Cantidad</span><div class="num-stepper qty-stepper"><input type="number" id="manual-qty" placeholder="opcional" min="1" step="10000" oninput="updateManualTotal()"><button type="button" class="stp-unit stp-unit-btn" id="manual-qty-unit" onclick="toggleQtyUnit()" title="Cambiar entre USDT y Bs">↻ Bs</button></div></div>
@@ -629,7 +629,7 @@
         <div id="cfg-help-adv" class="cfg-help"><b>Tolerancia:</b> margen entre tu anuncio y el competidor de arriba, para no pisarte con él ni con límites más altos.<br><b>Incremento:</b> diferencia de precio entre tu anuncio y el competidor justo debajo.<br><b>Gap máx.:</b> si el de arriba está muy lejos, el bot no lo persigue y espera, para no pegar saltos de precio.</div>
         <div class="cfg-row"><span title="Holgura sobre tu límite mínimo para decidir qué competidores cuentan">Tolerancia</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" placeholder="10000" min="5000" step="5000"><span class="stp-unit">VES</span><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
         <div class="cfg-row"><span title="Cuánto se suma al precio de un competidor al superarlo. Muy bajo = reprecia poco a poco; muy alto = puede saltarse el techo">Incremento</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',-1)">−</button><input type="number" id="cfg-bot-inc" placeholder="0.001" min="0.001" step="0.001"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-inc',1)">+</button></div></div>
-        <div class="cfg-row"><span title="Máxima distancia en Bs para perseguir a un competidor arriba tuyo. Si está más lejos que esto, el bot no lo sigue y queda en espera">Gap máx.</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',-1)">−</button><input type="number" id="cfg-bot-gap" placeholder="1.0" min="0.5" step="0.5"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-gap',1)">+</button></div></div>
+        <div class="cfg-row"><span title="Máxima distancia de precio para perseguir a un competidor arriba tuyo. Si está más lejos que esto, el bot no lo sigue y queda en espera">Gap máx.</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',-1)">−</button><input type="number" id="cfg-bot-gap" placeholder="1.0" min="0.5" step="0.5"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-gap',1)">+</button></div></div>
         <div style="margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--border)">
           <div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Métodos de pago del anuncio</div>
           <div id="bot-paymethods"></div>
@@ -675,7 +675,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=130"></script>
+<script src="/p2p-monitor/main.js?v=131"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

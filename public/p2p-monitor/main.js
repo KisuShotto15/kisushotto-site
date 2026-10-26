@@ -876,8 +876,31 @@
   loadPersistedWeights();
 })(typeof window !== 'undefined' ? window : globalThis);
 // ── Moneda fiat + métodos de pago por moneda ──────────
-var FIATS = ['VES', 'USD'];
+// Datos de cada moneda. Agregar una moneda = una entrada aqui + sus metodos en
+// PAY_METHODS_BY_FIAT (+ su unidad en api/_lib/market.js para Telegram).
+//   sym       unidad corta de precios y montos
+//   dec       decimales del precio en el libro
+//   filters   montos por defecto de los filtros (0 = sin filtro, orden de Binance)
+//   steps     paso de rueda/flechas de esos filtros
+//   priceStep paso del precio de venta del bot
+//   amtStep   paso de montos del bot (limite minimo, cantidad; tolerancia = la mitad)
+//   gapStep   paso del gap maximo del bot
+//   bot       defaults del bot para un anuncio en esta moneda
+var FIAT_META = {
+  VES: { sym: 'Bs', dec: 3,
+         filters: { may: 2000000, small: 59999, buy: 2000000 },
+         steps:   { may: 2000000, small: 20000, buy: 100000 },
+         priceStep: 1, amtStep: 10000, gapStep: 0.5,
+         bot: { minLimit: 50000, limitThreshold: 10000, maxGap: 1.0 } },
+  USD: { sym: '$', dec: 3,
+         filters: { may: 0, small: 0, buy: 0 },
+         steps:   { may: 100, small: 50, buy: 100 },
+         priceStep: 0.001, amtStep: 10, gapStep: 0.005,
+         bot: { minLimit: 50, limitThreshold: 10, maxGap: 0.01 } }
+};
+var FIATS = Object.keys(FIAT_META);
 var ACTIVE_FIAT = 'VES';
+function fiatMeta(f) { return FIAT_META[f || ACTIVE_FIAT] || FIAT_META.VES; }
 var PAY_METHODS_BY_FIAT = {
   VES: [
     { id: 'BancoDeVenezuela', label: 'BDV' },
@@ -905,7 +928,7 @@ function marketKey() { return histKey(ACTIVE_FIAT, ACTIVE_PAY); }
 // Zona horaria del usuario: el servidor la usa para el silencio nocturno, el
 // resumen diario y las estadisticas por hora (antes, America/Caracas fija).
 function userTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } }
-function fiatSuf() { return ACTIVE_FIAT === 'VES' ? ' Bs' : ' $'; }
+function fiatSuf(f) { return ' ' + fiatMeta(f).sym; }
 // Identifiers genéricos (catch-all) que NO deben usarse para filtrar competidores
 // BANK = Bank Transfer (legítimo, lo usa el usuario junto a BDV) → no se filtra
 var GENERIC_PAY_IDS = ['OtherPayments', 'SpecificBank'];
@@ -1026,19 +1049,13 @@ function setPayMethod(id) {
   refreshMarketSeries();
 }
 
-// Defaults de los 3 filtros de monto por moneda (USD: sin filtro, orden nativo de Binance)
-var FIAT_FILTER_DEFAULTS = {
-  VES: { may: 2000000, small: 59999, buy: 2000000 },
-  USD: { may: 0, small: 0, buy: 0 }
-};
-
 function setFiat(id) {
   if (id === ACTIVE_FIAT || !PAY_METHODS_BY_FIAT[id]) return;
   // Guardar los filtros de la moneda saliente y cargar los de la entrante
   CFG.fiatFilters = CFG.fiatFilters || {};
   CFG.fiatFilters[ACTIVE_FIAT] = { may: CFG.mayAmount, small: CFG.smallAmount, buy: CFG.buyAmount };
   ACTIVE_FIAT = id;
-  var f = CFG.fiatFilters[id] || FIAT_FILTER_DEFAULTS[id];
+  var f = CFG.fiatFilters[id] || fiatMeta(id).filters;
   CFG.mayAmount = f.may; CFG.smallAmount = f.small; CFG.buyAmount = f.buy;
   try { localStorage.setItem('p2p_cfg2', JSON.stringify(CFG)); } catch(e) {}
   PAY_METHODS = PAY_METHODS_BY_FIAT[id];
@@ -1050,11 +1067,59 @@ function setFiat(id) {
   resetLocalSeries();
   persistPaySel();
   syncFilterInputs();
+  applyBotDefaultsIfUnset();
+  applyFiatUnits();
   if (typeof renderSparkline === 'function') try { renderSparkline(); } catch(e) {}
   if (typeof fetchOnce === 'function') fetchOnce();
   saveUserSettings();
   syncMonitorMarket();
   refreshMarketSeries();
+}
+
+// Unidades, pasos y placeholders segun la moneda. El libro sigue a la vista; el bot
+// sigue a la moneda de SU anuncio (botFiat), que puede ser otra.
+function applyFiatUnits() {
+  var m = fiatMeta(), bm = fiatMeta(botFiat());
+  try { document.title = 'P2P Monitor — ' + ACTIVE_FIAT + '/USDT'; } catch (e) {}
+  [['flt-may', 'may'], ['flt-small', 'small'], ['flt-buy', 'buy']].forEach(function(f) {
+    var inp = document.getElementById(f[0]);
+    if (!inp) return;
+    inp.step = m.steps[f[1]];
+    var u = inp.parentNode.querySelector('.lbl-unit');
+    if (u) u.textContent = ' ' + ACTIVE_FIAT;
+  });
+  [['cfg-may-amount', 'may'], ['cfg-small-amount', 'small'], ['cfg-buy-amount', 'buy']].forEach(function(f) {
+    var inp = document.getElementById(f[0]);
+    if (inp) inp.step = m.steps[f[1]];
+  });
+  var unit = function(id, txt, step, ph) {
+    var inp = document.getElementById(id);
+    if (!inp) return;
+    var u = inp.parentNode.querySelector('.stp-unit');
+    if (u) u.textContent = txt;
+    if (step != null) inp.step = step;
+    if (ph != null) inp.placeholder = ph;
+  };
+  var bf = botFiat();
+  unit('cfg-bot-sell', bm.sym, bm.priceStep);
+  unit('cfg-bot-minlimit', bf, bm.amtStep, bm.bot.minLimit);
+  unit('cfg-bot-thr', bf, bm.amtStep / 2, bm.bot.limitThreshold);
+  unit('cfg-bot-inc', bm.sym);
+  unit('cfg-bot-gap', bm.sym, bm.gapStep, bm.bot.maxGap);
+  var q = document.getElementById('manual-qty');
+  if (q && QTY_UNIT !== 'USDT') q.step = bm.amtStep;
+  var qb = document.getElementById('manual-qty-unit');
+  if (qb) qb.textContent = '↻ ' + (QTY_UNIT === 'USDT' ? 'USDT' : bm.sym);
+  if (typeof applyMarketMode === 'function') applyMarketMode(); // etiquetas del gear con la moneda
+}
+
+// Defaults del bot en la escala de la moneda, solo para quien nunca guardo su config
+// (un gap de 1.0 es 1 Bs en VES pero un 100% en USD). Config guardada = no se toca.
+function applyBotDefaultsIfUnset() {
+  try { if (localStorage.getItem('p2p_bot_cfg')) return; } catch (e) { return; }
+  var d = fiatMeta(botFiat()).bot;
+  BOT_CFG.minLimit = d.minLimit; BOT_CFG.limitThreshold = d.limitThreshold; BOT_CFG.maxGap = d.maxGap;
+  if (typeof fillBotInputs === 'function') try { fillBotInputs(); } catch (e) {}
 }
 
 function updateBotPriceColor() {
@@ -1145,7 +1210,7 @@ async function loadUserSettings() {
     if (s.paySel) localStorage.setItem('p2p_pay_by_fiat', JSON.stringify(s.paySel));
     if (s.fiat) localStorage.setItem('p2p_fiat', s.fiat);
     // Reusar los loaders existentes para repintar inputs desde localStorage
-    loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod();
+    loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits();
     updateCommissionLabels(); updateVerToggle(); botUpdateCeiling();
     if (ST.running) fetchOnce();
   } catch(e) {}
@@ -2409,7 +2474,7 @@ function priceChgHtml(d) {
   var v = d.value;
   var s = Math.abs(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
   var up = v > 0;
-  return '<span title="' + (up ? 'Subió +' : 'Bajó -') + s + ' Bs (últ. 60s)">' + (up ? '+' : '−') + s + '</span>';
+  return '<span title="' + (up ? 'Subió +' : 'Bajó -') + s + fiatSuf() + ' (últ. 60s)">' + (up ? '+' : '−') + s + '</span>';
 }
 
 function availPopupHtml(d) {
@@ -2719,7 +2784,7 @@ function updateTopbarBotPrice(price) {
   var el = document.getElementById('topbar-bot-price');
   if (!el) return; // se quito de la top bar; el precio vive en el panel del bot
   if (price && BOT.running) {
-    el.textContent = fmt(price) + ' Bs';
+    el.textContent = fmt(price) + fiatSuf(botFiat());
     el.style.display = 'inline-flex';
   } else {
     el.style.display = 'none';
@@ -3026,9 +3091,13 @@ function renderBuySection(ads) {
 // lo unico que sobrevive de renderBuySpread() es esta sugerencia de placeholder,
 // que no tiene relacion con el modo (siempre usa el precio de Verde si existe).
 function updateSellPricePlaceholder() {
-  var sellPrice = ST.buyAds[0] ? ST.buyAds[0].price : null;
   var sellInp = document.getElementById('cfg-bot-sell');
-  if (sellInp && sellPrice) sellInp.placeholder = 'sug. ' + Math.round(sellPrice);
+  if (!sellInp) return;
+  // Solo si la vista esta en la moneda del anuncio: si no, seria un precio de otra moneda.
+  var sellPrice = (ACTIVE_FIAT === botFiat() && ST.buyAds[0]) ? ST.buyAds[0].price : null;
+  if (!sellPrice) { sellInp.placeholder = ''; return; }
+  var whole = fiatMeta(botFiat()).priceStep >= 1; // VES: entero; USD: centesimas de centavo
+  sellInp.placeholder = 'sug. ' + (whole ? Math.round(sellPrice) : sellPrice.toFixed(3));
 }
 
 // ── Alertas ───────────────────────────────────────────
@@ -3529,13 +3598,13 @@ function saveBotConfig() {
   BOT_CFG.adNo           = document.getElementById('cfg-bot-adsel').value;
   BOT_CFG.myNick         = document.getElementById('cfg-bot-nick').value.trim();
   BOT_CFG.increment      = parseFloat(document.getElementById('cfg-bot-inc').value)     || 0.001;
-  BOT_CFG.maxGap         = parseFloat(document.getElementById('cfg-bot-gap').value)     || 1.0;
+  BOT_CFG.maxGap         = parseFloat(document.getElementById('cfg-bot-gap').value)     || fiatMeta(botFiat()).bot.maxGap;
   // Tolerancia 0 es un ajuste valido (contar solo a quien tenga el limite minimo
   // estrictamente por debajo del mio). Con `|| 10000` el 0 se colaba como falsy y
   // se guardaba 10000 sin avisar: se ponia 0 y el bot seguia usando la tolerancia
   // por defecto. Vacio si cae al defecto.
   var _thr = parseFloat(document.getElementById('cfg-bot-thr').value);
-  BOT_CFG.limitThreshold = isNaN(_thr) ? 10000 : _thr;
+  BOT_CFG.limitThreshold = isNaN(_thr) ? fiatMeta(botFiat()).bot.limitThreshold : _thr;
   BOT_CFG.sellPrice      = parseFloat(document.getElementById('cfg-bot-sell').value)    || 0;
   var _spr = parseFloat(document.getElementById('cfg-bot-spread').value);
   BOT_CFG.minSpread      = isNaN(_spr) ? 0.5 : _spr; // puede ser 0 o negativo (comprar sobre el precio de venta)
@@ -3663,7 +3732,7 @@ function botUpdateCeiling() {
   if (sell > 0) {
     var ceiling = sell * (1 - (spread + (CFG.commission || 0)) / 100);
     BOT.ceiling = ceiling;
-    if (el) el.textContent = ceiling.toFixed(3) + ' Bs';
+    if (el) el.textContent = ceiling.toFixed(3) + fiatSuf(botFiat());
     updateBotPriceColor();
   } else {
     BOT.ceiling = null;
@@ -3700,7 +3769,7 @@ function updateBotPnl() {
   // "~" delante cuando es proyeccion (bot apagado, calculada sobre el techo).
   el.textContent = (p.est ? '~' : '') + (p.net >= 0 ? '+' : '') + fmt(p.net) + ' USDT';
   el.style.color = p.net >= 0 ? 'var(--green)' : 'var(--red)';
-  el.title = (p.est ? 'Estimado con el bot apagado: ' + fmt(p.qty) + ' USDT al precio máximo (' + p.price.toFixed(3) + ' Bs).\n' : '') +
+  el.title = (p.est ? 'Estimado con el bot apagado: ' + fmt(p.qty) + ' USDT al precio máximo (' + p.price.toFixed(3) + fiatSuf(botFiat()) + ').\n' : '') +
     'Bruto: ' + (p.gross >= 0 ? '+' : '') + fmt(p.gross) + ' USDT · Comisión: −' + fmt(p.fee) + ' USDT';
 }
 
@@ -3799,7 +3868,8 @@ async function botGetMyAd(allowPaused) {
 }
 
 // Unidad en la que se ESCRIBE la cantidad. El anuncio siempre se actualiza en USDT:
-// en modo VES se convierte (Bs / precio) antes de mandarlo.
+// en modo moneda se convierte (monto / precio) antes de mandarlo. 'VES' es el nombre
+// historico del modo moneda: vale para la moneda del anuncio, sea cual sea.
 var QTY_UNIT = 'VES';
 
 function qtyPrice() {
@@ -3817,9 +3887,9 @@ function manualQtyUsdt() {
 function toggleQtyUnit() {
   QTY_UNIT = QTY_UNIT === 'USDT' ? 'VES' : 'USDT';
   var b = document.getElementById('manual-qty-unit');
-  if (b) b.textContent = '↻ ' + (QTY_UNIT === 'USDT' ? 'USDT' : 'Bs');
+  if (b) b.textContent = '↻ ' + (QTY_UNIT === 'USDT' ? 'USDT' : fiatMeta(botFiat()).sym);
   var inp = document.getElementById('manual-qty');
-  if (inp) inp.step = QTY_UNIT === 'USDT' ? 100 : 10000;
+  if (inp) inp.step = QTY_UNIT === 'USDT' ? 100 : fiatMeta(botFiat()).amtStep;
   updateManualTotal();
 }
 
@@ -3831,7 +3901,7 @@ function updateManualTotal() {
     var usdt = manualQtyUsdt();
     el.textContent = usdt ? fmt(usdt) + ' USDT' : '—';
   } else {
-    el.textContent = (qty && price) ? fmt(price * qty) + ' Bs' : '—';
+    el.textContent = (qty && price) ? fmt(price * qty) + fiatSuf(botFiat()) : '—';
   }
   updateBotPnl(); // la cantidad escrita entra en el P&L proyectado
 }
@@ -3844,7 +3914,7 @@ function updateManualBalance() {
   var usdt = parseFloat(ad.surplusAmount || ad.tradableQuantity || ad.remainQuantity || 0);
   if (!usdt) { el.textContent = ''; return; }
   var price = BOT.currentPrice || parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
-  var ves = price ? '· ' + fmt(usdt * price) + ' Bs' : '';
+  var ves = price ? '· ' + fmt(usdt * price) + fiatSuf(botFiat()) : '';
   el.textContent = '(' + usdt.toFixed(2) + ' USDT ' + ves + ')';
 }
 
@@ -3853,7 +3923,7 @@ async function manualSetQty() {
   var st = document.getElementById('manual-st');
   var raw = parseFloat(document.getElementById('manual-qty').value);
   if (raw > 0 && QTY_UNIT === 'VES' && !qtyPrice()) {
-    st.textContent = 'Sin precio de venta: no puedo convertir Bs a USDT'; st.style.color = 'var(--red)'; return false;
+    st.textContent = 'Sin precio de venta: no puedo convertir' + fiatSuf(botFiat()) + ' a USDT'; st.style.color = 'var(--red)'; return false;
   }
   var qty = manualQtyUsdt();
   if (!qty || qty <= 0) { st.textContent = 'Ingresa una cantidad válida'; st.style.color = 'var(--red)'; return false; }
@@ -3938,6 +4008,7 @@ async function botInitialCycle(allowPaused) {
     if (!ad) { botLog('⚠ Anuncio no encontrado para reprice inicial', '#F0B90B'); return; }
     BOT.adNumber     = ad.adNumber || ad.advNo;
     BOT.adFiat       = adFiatOf(ad);
+    applyFiatUnits();
     BOT.currentPrice = parseFloat(ad.price);
     BOT.myMinLimit   = parseFloat(ad.minSingleTransAmount);
     BOT.adPayTypes   = (ad.tradeMethods || []).map(function(m){ return m.identifier; })
@@ -3966,8 +4037,8 @@ async function botInitialCycle(allowPaused) {
       }
     }
     BOT.ceiling = BOT_CFG.sellPrice * (1 - (BOT_CFG.minSpread + (CFG.commission || 0)) / 100);
-    document.getElementById('bot-ceiling').textContent    = BOT.ceiling.toFixed(3) + ' Bs';
-    document.getElementById('bot-cur-price').textContent  = BOT.currentPrice.toFixed(3) + ' Bs';
+    document.getElementById('bot-ceiling').textContent    = BOT.ceiling.toFixed(3) + fiatSuf(botFiat());
+    document.getElementById('bot-cur-price').textContent  = BOT.currentPrice.toFixed(3) + fiatSuf(botFiat());
     updateBotPriceColor();
 
     var market      = mapAds(await fetchTier(BOT.myMinLimit + BOT_CFG.limitThreshold, 2, BOT.adPayTypes));
@@ -4009,9 +4080,9 @@ async function botInitialCycle(allowPaused) {
 
     await botUpdatePrice(BOT.adNumber, targetPrice);
     var arrow = targetPrice > BOT.currentPrice ? '↑' : '↓';
-    botLog('⚡ Inicial: ' + arrow + ' ' + BOT.currentPrice.toFixed(3) + ' → ' + targetPrice.toFixed(3) + ' Bs', '#F0B90B');
+    botLog('⚡ Inicial: ' + arrow + ' ' + BOT.currentPrice.toFixed(3) + ' → ' + targetPrice.toFixed(3) + fiatSuf(botFiat()), '#F0B90B');
     BOT.currentPrice = targetPrice;
-    document.getElementById('bot-cur-price').textContent = targetPrice.toFixed(3) + ' Bs';
+    document.getElementById('bot-cur-price').textContent = targetPrice.toFixed(3) + fiatSuf(botFiat());
     updateBotPriceColor();
     updateTopbarBotPrice(targetPrice);
   } catch(e) {
@@ -4127,6 +4198,7 @@ async function botToggle() {
         if (adPre) {
           BOT.adNumber   = adPre.adNumber || adPre.advNo;
           BOT.adFiat     = adFiatOf(adPre);
+          applyFiatUnits();
           BOT.myMinLimit = parseFloat(adPre.minSingleTransAmount);
           BOT.adPayTypes = (adPre.tradeMethods || []).map(function(m){ return m.identifier; })
                             .filter(function(id){ return id && GENERIC_PAY_IDS.indexOf(id) === -1; });
@@ -4247,7 +4319,7 @@ function renderBotState(d) {
   if (d.current_price != null) {
     var p = parseFloat(d.current_price);
     BOT.currentPrice = p;
-    document.getElementById('bot-cur-price').textContent = p.toFixed(3) + ' Bs';
+    document.getElementById('bot-cur-price').textContent = p.toFixed(3) + fiatSuf(botFiat());
     updateBotPriceColor();
     updateTopbarBotPrice(p);
   }
@@ -4533,6 +4605,7 @@ function applyMarketMode() {
   setTxt('hero-small-k', v.secondary);
   setTxt('lbl-cfg-may', v.cfgMay);
   setTxt('lbl-cfg-buy', v.cfgBuy);
+  setTxt('lbl-cfg-small', 'Recompra — filtro (' + ACTIVE_FIAT + ')');
   setTxt('spark-lbl', v.series);
   setTxt('hx-sub-lbl', v.seriesHx);
   var rowSmall = document.getElementById('row-cfg-small');
@@ -4559,9 +4632,9 @@ function marketPrimaryPrice() { return isShortOff() ? bestCredibleBuy()  : bestC
 function marketVocab() {
   return isShortOff()
     ? { section: 'Mercado', may: 'Compradores', buy: 'Vendedores', primary: 'Vendedores', secondary: 'Compradores',
-        series: 'compradores', seriesHx: 'compradores', cfgMay: 'Compradores — monto (VES)', cfgBuy: 'Vendedores — monto (VES)' }
+        series: 'compradores', seriesHx: 'compradores', cfgMay: 'Compradores — monto (' + ACTIVE_FIAT + ')', cfgBuy: 'Vendedores — monto (' + ACTIVE_FIAT + ')' }
     : { section: 'Sección Vender', may: 'Mayoristas', buy: 'Verde', primary: 'Mayorista', secondary: 'Recompra',
-        series: 'mayorista', seriesHx: 'mayoristas', cfgMay: 'Mayoristas — filtro (VES)', cfgBuy: 'Secc. Compra — mínimo (VES)' };
+        series: 'mayorista', seriesHx: 'mayoristas', cfgMay: 'Mayoristas — filtro (' + ACTIVE_FIAT + ')', cfgBuy: 'Secc. Compra — mínimo (' + ACTIVE_FIAT + ')' };
 }
 function marketLabels() {
   var v = marketVocab();
@@ -5934,7 +6007,7 @@ function syncFilterInputs() {
 
 // ── Utils ─────────────────────────────────────────────
 function fmt(n) { return parseFloat(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function fmtP(n) { return parseFloat(n).toLocaleString('es-VE', { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
+function fmtP(n) { var d = fiatMeta().dec; return parseFloat(n).toLocaleString('es-VE', { minimumFractionDigits: d, maximumFractionDigits: d }); }
 function fmtM(n) {
   n = parseFloat(n);
   if (n >= 1000000) return (n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1) + 'M';
@@ -5979,7 +6052,7 @@ function initBuySection() {
   setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
 }
 
-loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
+loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
 initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });
