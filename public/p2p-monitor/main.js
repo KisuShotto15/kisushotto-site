@@ -2079,7 +2079,7 @@ async function binanceConnect() {
     st.textContent = '✓ Conectado'; st.style.color = '#1D9E75';
     document.getElementById('cfg-bnc-key').value = '';
     document.getElementById('cfg-bnc-secret').value = '';
-    BNC.connected = true;
+    BNC.connected = true; BNC.known = true;
     bncSetConnected(true);
     renderOnboard();
     loadMyAds();
@@ -2301,6 +2301,7 @@ async function refreshAuthUI() {
       var d = await r.json().catch(function(){ return {}; });
       var bnc = document.getElementById('bnc-st');
       BNC.connected = !!d.connected;
+      BNC.known = true;
       if (d.connected) { bnc.textContent = '✓ Conectado'; bnc.style.color = '#1D9E75'; bncSetConnected(true); loadMyAds(); }
       renderOnboard();
     } catch(e) {}
@@ -2731,7 +2732,7 @@ function startMonitorView() {
 function stopMonitorView() {
   ST.running = false;
   clearInterval(ST.timer); ST.timer = null;
-  document.getElementById('btn-start').textContent = '▶ Iniciar';
+  document.getElementById('btn-start').textContent = '▶ Monitor';
   setBadge(false);
   renderOnboard();
   renderDecisionIdle();
@@ -2838,6 +2839,20 @@ function renderAll() {
   renderBuySection(ST.buyAds);
   updateSellPricePlaceholder();
   updateSessionStats();
+}
+
+// Hero plegable (solo telefono, ver .hero-fold en el CSS). Compacto por defecto; la
+// eleccion se recuerda.
+function heroFoldOpen() { try { return localStorage.getItem('p2p_hero_open') === '1'; } catch (e) { return false; } }
+function applyHeroFold() {
+  var h = document.getElementById('spread-hero');
+  if (h) h.classList.toggle('hero-open', heroFoldOpen());
+  var b = document.getElementById('hero-fold');
+  if (b) b.textContent = heroFoldOpen() ? 'Ver menos ▴' : 'Ver más ▾';
+}
+function toggleHeroFold() {
+  try { localStorage.setItem('p2p_hero_open', heroFoldOpen() ? '0' : '1'); } catch (e) {}
+  applyHeroFold();
 }
 
 function updateSessionStats() {
@@ -2980,7 +2995,7 @@ function renderSpreadHero() {
     pct.style.color = 'var(--text-2)';
     document.getElementById('hero-label').textContent = 'Diferencia: ' + fmt(spreadBs) + fiatSuf() + '/USDT' + commNote;
     pill.className = 'sh-pill opp-no';
-    pill.textContent = 'Neto por debajo del umbral';
+    pill.textContent = 'Spread bajo · tu umbral ' + threshold + '%';
   }
 
   // El estirado pisa al veredicto de umbral: es la señal mas accionable de las dos
@@ -3050,6 +3065,18 @@ function pisadoCls(ads, idx) {
   return ' libre';
 }
 
+// Cierre del libro. Antes se rellenaba hasta 10 con filas de guiones: con el monitor
+// apagado nada decia que habia que encenderlo, y con pocos anuncios parecia carga
+// pendiente. Ahora una sola linea que dice que pasa.
+function obEndRow(ads) {
+  if (!ads.length && !ST.running && !ST.lastFetch) {
+    return '<div class="empty-ob ob-cta">Toca <button class="btn btn-sm btn-gold" type="button" onclick="toggleMonitor()">▶ Monitor</button> para ver el libro en vivo</div>';
+  }
+  var msg = ads.length ? 'No hay más anuncios en este rango'
+    : (!ST.lastFetch ? 'Cargando anuncios…' : 'Sin anuncios con este filtro de monto');
+  return '<div class="ob-end">' + msg + '</div>';
+}
+
 function renderOB(id, ads, bestCls) {
   var wrap = document.getElementById(id);
   var rows = '';
@@ -3090,14 +3117,8 @@ function renderOB(id, ads, bestCls) {
         popupHtml +
       '</div>';
     } else {
-      rows += '<div class="ob-row" style="opacity:0.18">' +
-        '<span class="rank">' + (i + 1) + '</span>' +
-        '<span class="merch" style="color:var(--text-3)">—</span>' +
-        '<span class="lim-c">—</span>' +
-        '<span class="price-c">—</span>' +
-        '<span class="chg-c"></span>' +
-        '<span class="lim-c">—</span>' +
-      '</div>';
+      rows += obEndRow(ads);
+      break;
     }
   }
   wrap.innerHTML = rows;
@@ -3161,14 +3182,8 @@ function renderBuySection(ads) {
         popupHtml +
       '</div>';
     } else {
-      rows += '<div class="ob-row" style="opacity:0.18">' +
-        '<span class="rank">' + (i + 1) + '</span>' +
-        '<span class="merch" style="color:var(--text-3)">—</span>' +
-        '<span class="lim-c">—</span>' +
-        '<span class="price-c">—</span>' +
-        '<span class="chg-c"></span>' +
-        '<span class="lim-c">—</span>' +
-      '</div>';
+      rows += obEndRow(ads);
+      break;
     }
   }
   wrap.innerHTML = rows;
@@ -3358,7 +3373,8 @@ function reqNotif() {
 function updNotifSt() {
   var el = document.getElementById('notif-st');
   if (!('Notification' in window)) { el.textContent = ''; return; }
-  el.textContent = Notification.permission === 'granted' ? '✓' : Notification.permission === 'denied' ? '✗' : '?';
+  // Antes: ✓/✗/? sin explicacion junto a Guardar. Solo se avisa si el navegador las bloqueo.
+  el.textContent = Notification.permission === 'denied' ? 'Notificaciones bloqueadas en el navegador' : '';
 }
 // Silencio nocturno del lado del CLIENTE: con la app abierta el servidor cede el
 // monitor (heartbeat) y quien alerta es el cliente — debe respetar el mismo horario.
@@ -3782,6 +3798,7 @@ function fillBotInputs() {
   document.getElementById('cfg-bot-sell').value     = BOT_CFG.sellPrice || '';
   document.getElementById('cfg-bot-spread').value   = BOT_CFG.minSpread;
   document.getElementById('cfg-bot-minlimit').value = BOT_CFG.minLimit || '';
+  updateAmtHints();
   renderBotPayChecks();
   botUpdateCeiling();
 }
@@ -4258,6 +4275,13 @@ async function botToggle() {
     saveBotConfig();
     if (!SESSION.token) { toast('Inicia sesión primero'); return; }
     if (!(await requireSub())) return;
+    // Sin llaves de Binance arrancaba igual y fallaba despues con un error tecnico.
+    // Solo se bloquea si el servidor ya confirmo que no hay llaves (BNC.known).
+    if (BNC.known && !BNC.connected) {
+      toast('Conecta tu Binance para usar el bot');
+      onboardGoBinance();
+      return;
+    }
     var falta = botMissingFields();
     if (falta.length) {
       toast('Falta configurar: ' + falta.join(', '));
@@ -4680,10 +4704,10 @@ function applyMarketMode() {
   }
   var note = document.getElementById('sh-mode-note');
   if (note) note.textContent = off ? ' · Vendedores vs Compradores' : '';
-  var metrics = document.getElementById('hero-metrics');
-  if (metrics) metrics.classList.toggle('hm-3', off);
-  var hmRange = document.getElementById('hm-range');
-  if (hmRange) hmRange.style.display = off ? 'none' : '';
+  // El rango 24h sale de la serie de compradores (la misma del sparkline): en la vista
+  // simple tambien vale, con su etiqueta. Antes se ocultaba y dejaba un hueco grande.
+  var rangeT = document.getElementById('hm-range-t');
+  if (rangeT) rangeT.textContent = off ? 'Rango 24h · compradores' : 'Rango 24h';
   // "¿Vendo ahora?" evalua el ciclo vender→recomprar: sin Recompra (vista simple)
   // no tiene con que calcular, asi que es parte de la vista avanzada.
   var dec = document.getElementById('decision-wrap');
@@ -6088,6 +6112,22 @@ function setFilter(which, raw) {
   saveUserSettings();
 }
 
+// Monto compacto para leer sin contar ceros: 2000000 → "2 M", 59999 → "60 mil".
+function amtCompact(v) {
+  v = parseFloat(v);
+  if (!(v >= 1000)) return '';
+  if (v >= 1e6) return (v / 1e6).toLocaleString('es-VE', { maximumFractionDigits: 2 }) + ' M';
+  return (v / 1e3).toLocaleString('es-VE', { maximumFractionDigits: 1 }) + ' mil';
+}
+// Los campos con data-hint="<id>" muestran su monto compacto en ese elemento.
+function updateAmtHints() {
+  document.querySelectorAll('input[data-hint]').forEach(function(inp) {
+    var h = document.getElementById(inp.getAttribute('data-hint'));
+    if (h) h.textContent = amtCompact(inp.value);
+  });
+}
+document.addEventListener('input', function(e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-hint')) updateAmtHints(); });
+
 function syncFilterInputs() {
   [['flt-may','cfg-may-amount','mayAmount'],
    ['flt-small','cfg-small-amount','smallAmount'],
@@ -6096,6 +6136,7 @@ function syncFilterInputs() {
     if (a) a.value = CFG[p[2]];
     if (b) b.value = CFG[p[2]];
   });
+  updateAmtHints();
 }
 
 // ── Utils ─────────────────────────────────────────────
@@ -6145,7 +6186,7 @@ function initBuySection() {
   setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
 }
 
-loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
+loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); applyHeroFold(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
 initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });

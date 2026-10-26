@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=47">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=48">
 </head>
 <body>
 
@@ -34,7 +34,7 @@
       <input class="auth-inp" type="email" id="gate-email" name="email" autocomplete="username" placeholder="Email" required>
       <input class="auth-inp" type="password" id="gate-pass" name="password" autocomplete="current-password" placeholder="Contraseña" minlength="8" required>
       <button class="btn btn-gold" type="submit" style="width:100%;margin-top:12px;padding:10px;font-size:15px;font-weight:700">Entrar</button>
-      <button class="btn" type="button" style="width:100%;margin-top:7px" onclick="authRegister()">Crear cuenta</button>
+      <button class="btn" type="button" style="width:100%;margin-top:7px;padding:10px;font-size:15px;font-weight:600" onclick="authRegister()">Crear cuenta</button>
       <span id="gate-st" style="display:block;text-align:center;font-size:13px;color:var(--text-2);margin-top:12px;min-height:16px"></span>
       <div style="text-align:center;margin-top:6px"><a href="#" onclick="authForgot();return false" style="font-size:12px;color:var(--text-2);text-decoration:none">¿Olvidaste tu contraseña?</a></div>
     </form>
@@ -89,13 +89,13 @@
   <div class="icon-cluster" id="icon-cluster">
   <button class="btn btn-sm" onclick="fetchOnce()" title="Actualizar">&#8635;</button>
   <button class="btn btn-sm" id="btn-bell" onclick="toggleAlertDropdown(event)" style="position:relative" title="Alertas">🔔<span id="bell-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
-  <button class="btn btn-sm secondary" id="btn-activity" onclick="toggleActivityGuard()" title="Alertas de actividad / apagado por inactividad">🛡️</button>
-  <button class="btn btn-sm secondary" id="btn-sub" onclick="openSubModal()" title="Suscripción">💳<span id="sub-badge" style="display:none;margin-left:4px"></span></button>
-  <button class="btn btn-sm secondary" id="btn-admin-pay" onclick="goAdminPending()" style="display:none;position:relative" title="Pagos pendientes de confirmar">🧾<span id="admin-pay-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
+  <button class="btn btn-sm secondary" id="btn-activity" onclick="toggleActivityGuard()" title="Alertas de actividad / apagado por inactividad">🛡️<span class="ic-lbl">Actividad</span></button>
+  <button class="btn btn-sm secondary" id="btn-sub" onclick="openSubModal()" title="Suscripción">💳<span class="ic-lbl">Plan</span><span id="sub-badge" style="display:none;margin-left:4px"></span></button>
+  <button class="btn btn-sm secondary" id="btn-admin-pay" onclick="goAdminPending()" style="display:none;position:relative" title="Pagos pendientes de confirmar">🧾<span class="ic-lbl">Pagos</span><span id="admin-pay-badge" style="display:none;position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;pointer-events:none"></span></button>
   </div>
   <button type="button" class="btn btn-sm more-btn" id="more-btn" onclick="toggleMoreActions(event)" title="Más acciones">⋯</button>
   <span class="top-break"></span>
-  <button class="btn btn-gold" id="btn-start" onclick="toggleMonitor()">▶ Iniciar</button>
+  <button class="btn btn-gold" id="btn-start" onclick="toggleMonitor()" title="Libro en vivo y alertas del mercado">▶ Monitor</button>
   </div>
 </div>
 
@@ -370,7 +370,8 @@
 <div class="hero-wrap">
     <div class="spread-hero-full" id="spread-hero">
       <div class="hero-lead">
-        <div class="sh-label">Spread neto<span id="sh-mode-note" style="color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0"></span></div>
+        <div class="sh-label" style="display:flex;align-items:center;gap:5px">Spread neto<span id="sh-mode-note" style="color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0"></span><button class="help-ico" type="button" onclick="toggleHelpBlock('hero-help')" aria-label="Qué es el spread neto">?</button></div>
+        <div id="hero-help" class="cfg-help" style="text-align:left;margin-top:6px">La diferencia entre los dos precios de <b>Ahora</b>, en % del primero, <b>menos tu comisión</b>. Es el margen que queda para quien compra en un libro y vende en el otro.<br>Cuando supera tu <b>umbral</b> (se ajusta en la 🔔 campana) se marca como oportunidad y te avisa.</div>
         <div class="sh-pct" id="hero-pct">—</div>
         <div id="hero-pill" class="sh-pill opp-no">Sin datos</div>
         <div class="hero-sublabel" id="hero-label"></div>
@@ -404,7 +405,7 @@
           </div>
         </div>
         <div class="hm-block" id="hm-range">
-          <div class="hm-block-t">Rango 24h</div>
+          <div class="hm-block-t" id="hm-range-t">Rango 24h</div>
           <div class="hm-range-top">
             <span class="hm-range-v" id="sess-min">—</span>
             <span class="hm-range-v" id="sess-max">—</span>
@@ -445,6 +446,7 @@
       </div>
 
       <span id="hero-small-lbl" style="display:none"></span>
+      <button type="button" class="hero-fold" id="hero-fold" onclick="toggleHeroFold()">Ver más ▾</button>
     </div>
 </div>
 
@@ -474,7 +476,7 @@
         <div class="ptitle" style="margin-bottom:8px">Configuración</div>
         <div class="cfg-row"><span title="Apagada (por defecto): Vendedores (donde compras USDT) y Compradores (donde vendes), con el spread entre ambos. Encendida: el ciclo vender al mayor y recomprar — Mayoristas y Recompra arriba, Verde plegado en Sección Compra, y el panel ¿Vendo ahora?.">Vista avanzada</span><input type="checkbox" id="cfg-shortmode" onchange="toggleShortMode()" style="width:18px;height:18px;accent-color:var(--gold);cursor:pointer"></div>
         <div class="cfg-row"><span title="Cada cuánto se refresca el monitor mientras la app está abierta">Intervalo (seg)</span><input type="number" id="cfg-int" value="15" min="10" max="300"></div>
-        <div class="cfg-row"><span title="La comisión que Binance cobra al comprar USDT (0.175% es lo usual). Se descuenta en el spread neto y en el P&amp;L">Comisión Binance (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
+        <div class="cfg-row"><span title="La comisión que Binance cobra al comprar USDT (0.175% es lo usual). Se descuenta en el spread neto y en el P&amp;L">Comisión (%)</span><input type="number" id="cfg-commission" value="0" min="0" max="5" step="0.01"></div>
         <div class="cfg-row" style="border-bottom:none"><span style="font-size:11px;color:var(--text-3)">Los umbrales de alerta y el push están en la 🔔 campana</span></div>
         <details style="margin-top:6px">
           <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;padding:4px 0">Monitor 24/7</summary>
@@ -482,7 +484,7 @@
           <div class="cfg-row"><span>Silencio desde</span><input type="time" id="cfg-mon-qstart" value="00:00" style="width:96px"></div>
           <div class="cfg-row"><span>Silencio hasta</span><input type="time" id="cfg-mon-qend" value="07:00" style="width:96px"></div>
           <div class="cfg-row"><span title="Hora a la que se envía por Telegram el resumen del día (máximo, mínimo y promedio de precio)">Resumen diario</span><input type="time" id="cfg-mon-summary" value="08:00" style="width:96px"></div>
-          <div style="font-size:11px;color:var(--text-3);margin-top:4px">Al pulsar Iniciar también corre 24/7 en el servidor y avisa por el Telegram del bot (requiere token+chat). De noche solo silencia las alertas: los datos se siguen registrando igual.</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">Al pulsar ▶ Monitor también corre 24/7 en el servidor y avisa por el Telegram del bot (requiere token+chat). De noche solo silencia las alertas: los datos se siguen registrando igual.</div>
         </details>
         <div class="gear-filter">
           <div class="cfg-row"><span title="Monto de referencia para buscar anuncios de compradores: filtra a comerciantes que operan ese volumen" id="lbl-cfg-may">Compradores — monto (VES)</span><input type="number" id="cfg-may-amount" value="2000000" min="0" step="100000"></div>
@@ -491,19 +493,19 @@
         </div>
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
           <button class="btn btn-gold" style="flex:1" onclick="saveConfig()">Guardar</button>
-          <span id="notif-st" style="font-size:14px;color:#555;align-self:center"></span>
+          <span id="notif-st" style="font-size:11px;color:var(--red);align-self:center;line-height:1.2"></span>
         </div>
       </div>
 
       <div class="ob-grid" id="ob-grid">
         <div class="ob-side" id="ob-side-may">
-          <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-vol" id="vol-may" title="Cuanto del top 5 se vació (rojo) o repuso (verde) en los últimos 3 min"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="2000000" onchange="setFilter('may',this.value)"><span class="lbl-unit"> VES</span></span></div>
+          <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-vol" id="vol-may" title="Cuanto del top 5 se vació (rojo) o repuso (verde) en los últimos 3 min"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="2000000" onchange="setFilter('may',this.value)" data-hint="hint-flt-may"><span class="amt-hint" id="hint-flt-may"></span><span class="lbl-unit"> VES</span></span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Cambio</span><span style="text-align:center">Límites</span></div>
           <div id="ob-may"></div>
           <button class="ob-more" id="more-ob-may" onclick="toggleShowMore('ob-may')" style="display:none"></button>
         </div>
         <div class="ob-side" id="ob-side-small">
-          <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">Recompra</span><span class="lbl-extra" id="extra-small"></span><span class="lbl-vol" id="vol-small" title="Cuanto del top 5 se vació (rojo) o repuso (verde) en los últimos 3 min"></span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="20000" onchange="setFilter('small',this.value)"><span class="lbl-unit"> VES</span></span></div>
+          <div id="label-small" class="ob-side-title smallbuyers"><span class="lbl-txt">Recompra</span><span class="lbl-extra" id="extra-small"></span><span class="lbl-vol" id="vol-small" title="Cuanto del top 5 se vació (rojo) o repuso (verde) en los últimos 3 min"></span><span class="lbl-filter"><input type="number" id="flt-small" min="10000" step="20000" onchange="setFilter('small',this.value)" data-hint="hint-flt-small"><span class="amt-hint" id="hint-flt-small"></span><span class="lbl-unit"> VES</span></span></div>
           <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Cambio</span><span style="text-align:center">Límites</span></div>
           <div id="ob-small"></div>
           <button class="ob-more" id="more-ob-small" onclick="toggleShowMore('ob-small')" style="display:none"></button>
@@ -520,7 +522,7 @@
         <div class="buy-section-row" id="buy-section-body">
           <div class="buy-ob-wrap" id="buy-ob-wrap">
             <div class="ob-side" id="ob-side-buy">
-              <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">Verde</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)"><span class="lbl-unit"> VES</span></span></div>
+              <div id="label-buy" class="ob-side-title buyads"><span class="lbl-txt">Verde</span><span class="lbl-extra" id="extra-buy"></span><span class="lbl-filter"><input type="number" id="flt-buy" min="100000" step="100000" onchange="setFilter('buy',this.value)" data-hint="hint-flt-buy"><span class="amt-hint" id="hint-flt-buy"></span><span class="lbl-unit"> VES</span></span></div>
               <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Cambio</span><span style="text-align:center">Límites</span></div>
               <div id="ob-buy"></div>
               <button class="ob-more" id="more-ob-buy" onclick="toggleShowMore('ob-buy')" style="display:none"></button>
@@ -624,7 +626,7 @@
           <div id="bot-qty" style="font-size:17px;color:var(--text);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">—</div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px" title="Ganancia potencial en USDT de llenar el anuncio completo al precio actual vs tu precio de venta, neto de la comisión de compra">
-          <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">P&amp;L</div>
+          <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Ganancia</div>
           <div id="bot-pnl" style="font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">—</div>
         </div>
       </div>
@@ -638,15 +640,15 @@
       <div id="cfg-help-main" class="cfg-help"><b>Precio venta:</b> el precio al que vendes tus USDT.<br><b>Margen mínimo:</b> tu ganancia mínima por operación, ya descontada la comisión.<br><b>Límite mínimo:</b> límite mínimo configurado en el anuncio.<br><b>Cantidad:</b> cuánto USDT poner en el anuncio. Se aplica al guardar; déjalo vacío para no tocarla.</div>
       <div class="cfg-row"><span title="El precio neto al que vendes USDT. El bot compra por debajo de esto, con al menos tu margen mínimo de ganancia">Precio venta</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-sell',-1)">−</button><input type="number" id="cfg-bot-sell" placeholder="" min="0" step="1" oninput="botUpdateCeiling()"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-sell',1)">+</button></div></div>
       <div class="cfg-row"><span title="Tu ganancia mínima exigida antes de comprar. Negativo = techo por encima del precio de venta, para comprar a pérdida sin inflar el precio">Margen mínimo</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-spread',-1)">−</button><input type="number" id="cfg-bot-spread" placeholder="0.5" min="-5" max="10" step="0.1" oninput="botUpdateCeiling()"><span class="stp-unit">%</span><button class="stp-btn" onclick="stepInput('cfg-bot-spread',1)">+</button></div></div>
-      <div class="cfg-row"><span title="El monto mínimo de transacción que tu anuncio exige. El bot lo actualiza en Binance automáticamente si lo cambias aquí">Límite mínimo</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" placeholder="50000" min="5000" step="10000"><span class="stp-unit">VES</span><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
-      <div class="cfg-row"><span title="Cuánto poner en el anuncio. Déjalo vacío para no tocar la cantidad actual">Cantidad</span><div class="num-stepper qty-stepper"><input type="number" id="manual-qty" placeholder="opcional" min="1" step="10000" oninput="updateManualTotal()"><button type="button" class="stp-unit stp-unit-btn" id="manual-qty-unit" onclick="toggleQtyUnit()" title="Cambiar entre USDT y Bs">↻ Bs</button></div></div>
+      <div class="cfg-row"><span title="El monto mínimo de transacción que tu anuncio exige. El bot lo actualiza en Binance automáticamente si lo cambias aquí">Límite mínimo <span class="amt-hint" id="hint-minlimit"></span></span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',-1)">−</button><input type="number" id="cfg-bot-minlimit" data-hint="hint-minlimit" placeholder="50000" min="5000" step="10000"><span class="stp-unit">VES</span><button class="stp-btn" onclick="stepInput('cfg-bot-minlimit',1)">+</button></div></div>
+      <div class="cfg-row"><span title="Cuánto poner en el anuncio. Déjalo vacío para no tocar la cantidad actual">Cantidad</span><div class="num-stepper qty-stepper"><input type="number" id="manual-qty" placeholder="opcional" min="1" step="10000" oninput="updateManualTotal()"><button type="button" class="stp-unit stp-unit-btn" id="manual-qty-unit" onclick="toggleQtyUnit()" title="Toca para escribir la cantidad en USDT o en moneda local">↻ Bs</button></div></div>
       <div class="cfg-row"><span style="color:var(--text-3)">Total <span id="manual-balance" style="margin-left:4px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums"></span></span><span id="manual-total" style="font-size:16px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">—</span></div>
       <div id="manual-st" style="font-size:13px;color:var(--text-2);padding:0"></div>
       </div>
       <details class="bot-details">
         <summary><span style="display:inline-flex;align-items:center;gap:5px">Ajustes avanzados<button class="help-ico" type="button" onclick="event.preventDefault();event.stopPropagation();toggleHelpBlock('cfg-help-adv')" aria-label="Ayuda">?</button></span></summary>
         <div id="cfg-help-adv" class="cfg-help"><b>Tolerancia:</b> margen entre tu anuncio y el competidor de arriba, para no pisarte con él ni con límites más altos.<br><b>Incremento:</b> diferencia de precio entre tu anuncio y el competidor justo debajo.<br><b>Gap máx.:</b> si el de arriba está muy lejos, el bot no lo persigue y espera, para no pegar saltos de precio.</div>
-        <div class="cfg-row"><span title="Holgura sobre tu límite mínimo para decidir qué competidores cuentan">Tolerancia</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" placeholder="10000" min="5000" step="5000"><span class="stp-unit">VES</span><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
+        <div class="cfg-row"><span title="Holgura sobre tu límite mínimo para decidir qué competidores cuentan">Tolerancia <span class="amt-hint" id="hint-thr"></span></span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-thr',-1)">−</button><input type="number" id="cfg-bot-thr" data-hint="hint-thr" placeholder="10000" min="5000" step="5000"><span class="stp-unit">VES</span><button class="stp-btn" onclick="stepInput('cfg-bot-thr',1)">+</button></div></div>
         <div class="cfg-row"><span title="Cuánto se suma al precio de un competidor al superarlo. Muy bajo = reprecia poco a poco; muy alto = puede saltarse el techo">Incremento</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-inc',-1)">−</button><input type="number" id="cfg-bot-inc" placeholder="0.001" min="0.001" step="0.001"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-inc',1)">+</button></div></div>
         <div class="cfg-row"><span title="Máxima distancia de precio para perseguir a un competidor arriba tuyo. Si está más lejos que esto, el bot no lo sigue y queda en espera">Gap máx.</span><div class="num-stepper"><button class="stp-btn" onclick="stepInput('cfg-bot-gap',-1)">−</button><input type="number" id="cfg-bot-gap" placeholder="1.0" min="0.5" step="0.5"><span class="stp-unit">Bs</span><button class="stp-btn" onclick="stepInput('cfg-bot-gap',1)">+</button></div></div>
         <div style="margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--border)">
@@ -694,7 +696,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=133"></script>
+<script src="/p2p-monitor/main.js?v=134"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

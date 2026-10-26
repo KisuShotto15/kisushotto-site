@@ -479,7 +479,6 @@ body {
 /* Modo Short apagado: Máx/Mín 24h se ocultan (esa serie persistida sigue siendo
    la de Mayoristas, mostrarla junto a un spread Verde confundiria); 3 columnas
    en vez de 5 para no dejar hueco vacio a la derecha. */
-.hero-metrics.hm-3 { grid-template-columns: minmax(0, 1fr); }
 /* Celdas compactas y cifra grande: antes eran cajas altas con el numero pequeno
    perdido en el medio, mucho aire y poca lectura. El dato manda sobre la etiqueta. */
 .hero-metric {
@@ -510,6 +509,9 @@ body {
   border-right: 1px solid rgba(255,255,255,.07);
 }
 .icon-cluster .btn:last-child { border-right: none; }
+/* Texto junto a los iconos menos obvios: el title solo se ve con mouse, y en el
+   telefono no hay hover. */
+.ic-lbl { font-size: 12px; font-weight: 600; margin-left: 5px; color: var(--text-2); }
 .icon-cluster .btn:hover { background: var(--surf-3); }
 /* Chip de filtros y menu ⋯: solo movil. */
 .filters-chip, .more-btn { display: none; }
@@ -541,11 +543,27 @@ body {
 .sh-sell { color: var(--green); font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-buy  { color: var(--blue);  font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-arrow { color: var(--text-3); }
+/* Plegado del hero: solo en telefono (ver el bloque de abajo). */
+.hero-fold { display: none; }
 @media (max-width: 760px) {
   .spread-hero-full { flex-direction: column; gap: 12px; padding: 14px 16px; }
+  /* Compacto por defecto: el hero ocupaba media pantalla antes del libro. Quedan el
+     spread, el veredicto, los dos precios y el sparkline (entrada al historial). */
+  .hero-fold {
+    display: block; align-self: center; background: none; border: none; cursor: pointer;
+    color: var(--text-3); font: inherit; font-size: 12px; font-weight: 600; padding: 0 8px;
+  }
+  .spread-hero-full:not(.hero-open) .hero-sublabel,
+  .spread-hero-full:not(.hero-open) #hm-range,
+  .spread-hero-full:not(.hero-open) .hm-now-right,
+  .spread-hero-full:not(.hero-open) .hm-block-t { display: none; }
+  .spread-hero-full:not(.hero-open) .hero-lead { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 4px 12px; }
+  .spread-hero-full:not(.hero-open) .hero-lead .sh-label,
+  .spread-hero-full:not(.hero-open) .hero-lead .cfg-help { flex-basis: 100%; justify-content: center; }
+  .spread-hero-full:not(.hero-open) .hero-lead .sh-pct { font-size: 30px; }
   .hero-lead { min-width: 0; }
   .hero-lead .sh-pct { font-size: 40px; }
-  .hero-metrics, .hero-metrics.hm-3 { grid-template-columns: minmax(0,1fr); }
+  .hero-metrics { grid-template-columns: minmax(0,1fr); }
   .hm-block { padding: 11px 12px; gap: 9px; }
   .hm-now-row { gap: 10px; flex-wrap: wrap; }
   /* Spread y 10 min bajan a su propia linea: en telefono no queda ancho para
@@ -760,6 +778,13 @@ body {
 @keyframes availFade { from { opacity: 1; } to { opacity: 0; } }
 @keyframes availFade60 { 0%,82% { opacity: 1; } 100% { opacity: 0; } }
 .empty-ob { text-align: center; padding: 20px; color: var(--text-3); font-size:16px; }
+.ob-cta { font-size: 14px; padding: 28px 12px; line-height: 2; }
+.ob-cta .btn { margin: 0 4px; vertical-align: middle; }
+/* Monto compacto junto a un campo numerico ("2 M", "50 mil"): sin separador de
+   miles, 2000000 obligaba a contar ceros. */
+.amt-hint { font-size: 11px; font-weight: 600; color: var(--text-3); white-space: nowrap; }
+.lbl-filter .amt-hint { margin-left: 4px; }
+.ob-end { text-align: center; padding: 10px 12px; color: var(--text-3); font-size: 12px; }
 
 /* ── Alerts ─────────────────────────────────────────── */
 .alert-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
@@ -840,6 +865,12 @@ input[type=number] { width: 135px; }
    (en Bs se convierte a USDT con el precio de venta antes de aplicarla). */
 .stp-unit-btn { background: transparent; border: none; cursor: pointer; padding: 2px 3px 2px 0; line-height: 1; white-space: nowrap; color: var(--gold); opacity: .85; font-size: 12px; }
 .stp-unit-btn:active { color: var(--gold); }
+/* Cantidad: el cambio USDT/moneda no se notaba como boton (texto suelto). Chip con
+   borde y fondo, como el resto de lo tocable. */
+#bot-panel #manual-qty-unit {
+  border: 1px solid var(--gold-b); background: var(--gold-d); border-radius: 6px;
+  padding: 3px 6px; margin-right: 4px; opacity: 1; font-weight: 700;
+}
 #bot-panel .stp-unit-btn { width: auto; }
 /* Cantidad no lleva -/+ (se escribe el monto entero, no se ajusta de a pasos), asi
    que entra en el mismo ancho que el resto de steppers: el input se come el hueco
@@ -866,6 +897,10 @@ input[type=number] { width: 135px; }
 }
 input[type=password],
 input[type=text]   { width: 140px; text-align: left; }
+/* Campos de cuenta (acceso, llaves de Binance). La regla generica de arriba (y la de
+   movil) les ganaba por especificidad: Contraseña quedaba en 140px y con otra letra
+   que Email. [type] sube la especificidad sobre ambas. */
+input.auth-inp[type] { width: 100%; font-size: 14px; padding: 9px 11px; text-align: left; }
 input:focus {
   outline: none;
   border-color: var(--gold);
@@ -1067,6 +1102,8 @@ input:focus {
 
   input[type=number] { width: 117px; }
   input[type=password], input[type=text] { width: 115px; }
+  /* 16px en telefono: con menos, iOS hace zoom al tocar el campo. */
+  input.auth-inp[type], .auth-inp { font-size: 16px; }
 
   #alert-dropdown { width: calc(100vw - 24px); right: 12px; left: 12px; }
   #ob-gear-popup, #bot-gear-popup { width: calc(100vw - 50px); right: 0; }
