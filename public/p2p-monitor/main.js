@@ -1089,7 +1089,7 @@ var CFG = {
   monQuietStart: '00:00',// Monitor 24/7: inicio del silencio nocturno (America/Caracas)
   monQuietEnd:   '07:00',// Monitor 24/7: fin del silencio nocturno
   monSummary:    '08:00',// Monitor 24/7: hora del resumen diario por Telegram (Caracas)
-  shortMode: true         // ON (defecto) = Mayoristas/Recompra arriba; OFF = Verde/Mayoristas
+  shortMode: false        // Vista avanzada. OFF (defecto) = Vendedores/Compradores; ON = Mayoristas/Recompra
 };
 
 // Unico punto donde vive el origen del backend: el resto se deriva de aqui.
@@ -2856,10 +2856,9 @@ function renderStats() {
 
 // Nick propio para resaltar mis filas en el libro. Sale de la config del bot
 // (se autodetecta al cargar los anuncios de Binance), asi que el resaltado
-// funciona para cualquier usuario. El valor fijo queda solo de respaldo para
-// cuando todavia no hay config cargada.
-var MY_NICK_FALLBACK = 'キスショット';
-function myNick() { return (BOT_CFG && BOT_CFG.myNick) || BOT.myNick || MY_NICK_FALLBACK; }
+// funciona para cualquier usuario. Sin config todavia no se resalta nada: un nick
+// fijo de respaldo marcaba como "mio" el anuncio de otra persona.
+function myNick() { return (BOT_CFG && BOT_CFG.myNick) || BOT.myNick || ''; }
 
 // Si la fila idx es mia, indica si me estan "pisando": alguien mejor posicionado
 // (arriba) con limite minimo <= al mio y disponibilidad real (>=150). rojo = pisado, verde = libre.
@@ -3042,7 +3041,7 @@ function checkAlerts() {
           '💰 Spread ' + spread.toFixed(3) + '%' + netLabel + ' — OPORTUNIDAD',
           L.primary + ': ' + fmt(bestMay) + fiatSuf() + ' (' + esc(cMay.merchant) + ') → ' + L.secondary + ': ' + fmt(bestSmall) + fiatSuf() + ' · Dif: ' + fmt(bestMay - bestSmall) + fiatSuf() + '/USDT'
         );
-        push('Spread P2P ' + spread.toFixed(3) + '%', 'Vende a ' + fmt(bestMay) + fiatSuf() + ' — compra ref. ' + fmt(bestSmall) + fiatSuf());
+        push('Spread P2P ' + spread.toFixed(3) + '%', L.primary + ' ' + fmt(bestMay) + fiatSuf() + ' → ' + L.secondary + ' ' + fmt(bestSmall) + fiatSuf());
       }
     }
   }
@@ -4459,13 +4458,16 @@ var MIN_AVAIL = 2000;
 var CORROB_PCT = 1;
 // Mejor precio creible CONFIRMADO por otro anuncio a menos de CORROB_PCT. Ordena por
 // precio: la lista puede venir en orden nativo de Binance si el filtro de monto esta en 0.
-function credibleBest(a) {
+// asc=true para vendedores (Verde): ahi el mejor precio es el MAS BAJO. Antes se
+// ordenaba siempre de mayor a menor y la vista Vendedores vs Compradores tomaba el
+// peor vendedor como precio de referencia (hero, spread, alertas).
+function credibleBest(a, asc) {
   var list = [];
   for (var i = 0; i < (a || []).length; i++) if (a[i].avail >= MIN_AVAIL) list.push(a[i]);
-  list.sort(function(x, y) { return y.price - x.price; });
+  list.sort(function(x, y) { return asc ? x.price - y.price : y.price - x.price; });
   if (list.length < 2) return list[0] || null;
   for (var j = 0; j < list.length - 1; j++) {
-    if ((list[j].price - list[j + 1].price) / list[j].price * 100 <= CORROB_PCT) return list[j];
+    if (Math.abs(list[j].price - list[j + 1].price) / list[j].price * 100 <= CORROB_PCT) return list[j];
   }
   return list[1]; // ninguno confirmado: el primero es el menos fiable
 }
@@ -4494,16 +4496,34 @@ function applyMarketMode() {
     }
   }
   var note = document.getElementById('sh-mode-note');
-  if (note) note.textContent = off ? ' · Verde vs Mayorista' : '';
+  if (note) note.textContent = off ? ' · Vendedores vs Compradores' : '';
   var metrics = document.getElementById('hero-metrics');
   if (metrics) metrics.classList.toggle('hm-3', off);
   var hmRange = document.getElementById('hm-range');
   if (hmRange) hmRange.style.display = off ? 'none' : '';
+  // "¿Vendo ahora?" evalua el ciclo vender→recomprar: sin Recompra (vista simple)
+  // no tiene con que calcular, asi que es parte de la vista avanzada.
+  var dec = document.getElementById('decision-wrap');
+  if (dec) dec.style.display = off ? 'none' : '';
+  var v = marketVocab();
+  var setTxt = function(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; };
+  var setLbl = function(id, t) { var el = document.querySelector('#' + id + ' .lbl-txt'); if (el) el.textContent = t; };
+  setTxt('ob-sec-title', v.section);
+  setLbl('label-may', v.may);
+  setLbl('label-buy', v.buy);
+  setTxt('hero-may-k', v.primary);
+  setTxt('hero-small-k', v.secondary);
+  setTxt('lbl-cfg-may', v.cfgMay);
+  setTxt('lbl-cfg-buy', v.cfgBuy);
+  setTxt('spark-lbl', v.series);
+  setTxt('hx-sub-lbl', v.seriesHx);
+  var rowSmall = document.getElementById('row-cfg-small');
+  if (rowSmall) rowSmall.style.display = off ? 'none' : '';
 }
 
 function credibleMay()   { return credibleBest(ST.mayoristas); }
 function credibleSmall() { return credibleBest(ST.smallAds); }
-function credibleBuy()   { return credibleBest(ST.buyAds); }
+function credibleBuy()   { return credibleBest(ST.buyAds, true); }
 function bestCredibleMay() { var m = credibleMay(); return m ? m.price : null; }
 function bestCredibleBuy() { var m = credibleBuy(); return m ? m.price : null; }
 
@@ -4514,8 +4534,20 @@ function isShortOff() { return CFG.shortMode === false; }
 function marketPrimary()      { return isShortOff() ? credibleBuy()      : credibleMay(); }
 function marketSecondary()    { return isShortOff() ? credibleMay()      : credibleSmall(); }
 function marketPrimaryPrice() { return isShortOff() ? bestCredibleBuy()  : bestCredibleMay(); }
+// Textos de cada vista. Simple (Short OFF, defecto para usuarios nuevos): el lenguaje
+// de Binance, Vendedores (ahi compras USDT) vs Compradores (ahi vendes). Avanzada
+// (Short ON): el ciclo vender al mayor y recomprar, con Mayoristas/Recompra/Verde.
+// El libro "may" son siempre anuncios de compradores; cambia solo como se llama.
+function marketVocab() {
+  return isShortOff()
+    ? { section: 'Mercado', may: 'Compradores', buy: 'Vendedores', primary: 'Vendedores', secondary: 'Compradores',
+        series: 'compradores', seriesHx: 'compradores', cfgMay: 'Compradores — monto (VES)', cfgBuy: 'Vendedores — monto (VES)' }
+    : { section: 'Sección Vender', may: 'Mayoristas', buy: 'Verde', primary: 'Mayorista', secondary: 'Recompra',
+        series: 'mayorista', seriesHx: 'mayoristas', cfgMay: 'Mayoristas — filtro (VES)', cfgBuy: 'Secc. Compra — mínimo (VES)' };
+}
 function marketLabels() {
-  return isShortOff() ? { primary: 'Verde', secondary: 'Mayorista' } : { primary: 'Mayorista', secondary: 'Compra' };
+  var v = marketVocab();
+  return { primary: v.primary, secondary: v.secondary };
 }
 
 // ── Tabs Mercado/Bot (solo movil) ─────────────────────────────────────
@@ -5788,8 +5820,12 @@ function saveConfig() {
 function loadConfig() {
   try {
     var s = localStorage.getItem('p2p_cfg2');
-    if (!s) return;
-    Object.assign(CFG, JSON.parse(s));
+    if (!s) { applyMarketMode(); return; } // usuario nuevo: vista simple por defecto
+    var saved = JSON.parse(s);
+    Object.assign(CFG, saved);
+    // La vista simple paso a ser el defecto: quien ya tenia config guardada sin
+    // shortMode venia usando la avanzada (antes era el defecto) y la conserva.
+    if (!('shortMode' in saved)) CFG.shortMode = true;
     // Migracion unica al nuevo default: quien venia de 10s pasa a 15s. Sigue siendo
     // editable a mano hasta el minimo de 10s.
     if (!CFG.intervalMigrated) {

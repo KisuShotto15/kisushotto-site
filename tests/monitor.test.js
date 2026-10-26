@@ -214,21 +214,34 @@ test('nick con HTML queda escapado en la alerta (Telegram)', () => {
 
 // ── Modo Short: labels en la alerta de spread + bestOf ──────────────
 
-test('sin labels, la alerta de spread dice Mayorista/Compra (default)', () => {
+test('sin labels, la alerta de spread dice Mayorista/Recompra (default)', () => {
   const r = computeAlerts({
     mayRaw: [rawAd({ price: 110 })], smallRaw: [rawAd({ price: 100 })],
     cfg: cfgAlert, priceHist: [], cooldowns: {}, now: 1000000000000,
   });
-  assert.match(r.alerts[0].desc, /^Mayorista: .* → Compra: /);
+  assert.match(r.alerts[0].desc, /^Mayorista: .* → Recompra: /);
 });
 
-test('con labels custom, la alerta de spread usa Verde/Mayorista (Modo Short apagado)', () => {
+test('con labels custom, la alerta de spread usa Vendedores/Compradores (vista simple)', () => {
   const r = computeAlerts({
     mayRaw: [rawAd({ price: 110 })], smallRaw: [rawAd({ price: 100 })],
     cfg: cfgAlert, priceHist: [], cooldowns: {}, now: 1000000000000,
-    labels: { primary: 'Verde', secondary: 'Mayorista' },
+    labels: { primary: 'Vendedores', secondary: 'Compradores' },
   });
-  assert.match(r.alerts[0].desc, /^Verde: .* → Mayorista: /);
+  assert.match(r.alerts[0].desc, /^Vendedores: .* → Compradores: /);
+});
+
+test('vista simple: con primario de vendedores, el mejor precio es el MAS BAJO', () => {
+  // Dos vendedores que se confirman entre si (0.02%): el mejor para comprar es 989.0,
+  // no 989.2. Antes se ordenaba siempre de mayor a menor y salia el peor.
+  const r = computeAlerts({
+    mayRaw: [rawAd({ price: 989.2, merchant: 'caro' }), rawAd({ price: 989.0, merchant: 'barato' })],
+    smallRaw: [rawAd({ price: 985.5 }), rawAd({ price: 985.4 })],
+    cfg: cfgAlert, priceHist: [], cooldowns: {}, now: 1000000000000, silent: true,
+    labels: { primary: 'Vendedores', secondary: 'Compradores' }, primaryAsc: true,
+  });
+  assert.equal(r.bestMay, 989.0);
+  assert.equal(r.bestSmall, 985.5);
 });
 
 test('bestOf devuelve el mejor precio corroborado, igual que computeAlerts.bestMay', () => {

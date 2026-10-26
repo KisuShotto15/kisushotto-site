@@ -214,9 +214,10 @@ async function tickMonitor(row, now) {
   ]);
   const primaryRaw   = shortOff ? otherRaw : mayRaw;
   const secondaryRaw = shortOff ? mayRaw   : otherRaw;
-  const labels = shortOff ? { primary: 'Verde', secondary: 'Mayorista' } : { primary: 'Mayorista', secondary: 'Compra' };
+  // Mismos textos que la vista del cliente (marketVocab en main.js).
+  const labels = shortOff ? { primary: 'Vendedores', secondary: 'Compradores' } : { primary: 'Mayorista', secondary: 'Recompra' };
 
-  const out = computeAlerts({ mayRaw: primaryRaw, smallRaw: secondaryRaw, cfg, priceHist: h.price_hist, cooldowns: h.cooldowns, now, silent, labels });
+  const out = computeAlerts({ mayRaw: primaryRaw, smallRaw: secondaryRaw, cfg, priceHist: h.price_hist, cooldowns: h.cooldowns, now, silent, labels, primaryAsc: shortOff });
   const pay = pays[0] || 'BancoDeVenezuela';
   // Tasa USDT/VES publica (mediana top-10 mayoristas): la consume el portfolio.
   // Best-effort: un fallo aqui no debe tumbar el tick del monitor.

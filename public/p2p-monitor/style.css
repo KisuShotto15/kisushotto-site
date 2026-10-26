@@ -605,6 +605,8 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   overflow: hidden;
+  /* Contenedor para la regla de libro angosto (ver @container ob mas abajo). */
+  container: ob / inline-size;
 }
 .ob-side-title {
   padding: 8px 12px;
@@ -688,6 +690,22 @@ body {
   align-items: center;
   transition: background .1s;
   position: relative;
+}
+/* Libro angosto (dos libros lado a lado en una pantalla mediana): las 6 columnas
+   no entran y COMERCIANTE quedaba en 3 letras. Se cae la columna Cambio; el precio
+   igual marca la variacion con su color, como en movil. Va antes del bloque movil
+   de max-width:640px para que en telefono mande el layout de 3 columnas. */
+@container ob (max-width: 540px) {
+  .ob-head, .ob-row { grid-template-columns: 22px 1fr 62px 82px 115px; }
+  .ob-head span:nth-child(5), .ob-row > span:nth-child(5) { display: none; }
+}
+/* Mas angosto todavia (pantallas de ~1100px): el mismo layout de 3 columnas que en
+   movil — sin # ni Cantidad, que pasa debajo de los limites. */
+@container ob (max-width: 400px) {
+  .ob-head, .ob-row { grid-template-columns: 1fr 86px 92px; }
+  .ob-head span:nth-child(1), .ob-row > span:nth-child(1),
+  .ob-head span:nth-child(3), .ob-row > span:nth-child(3) { display: none; }
+  .ob-row .lim-amount { display: block; } /* mas especifico: la base .lim-amount va despues */
 }
 .ob-row:last-child { border-bottom: none; }
 .ob-row:hover { background: rgba(255,255,255,.03); }

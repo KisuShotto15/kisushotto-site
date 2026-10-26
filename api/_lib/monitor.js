@@ -75,14 +75,16 @@ function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function mapBest(raw, verifiedOnly) {
+// asc=true para anuncios de vendedores (tradeType BUY): ahi el mejor precio es el
+// MAS BAJO. Por defecto (compradores) el mejor es el mas alto.
+function mapBest(raw, verifiedOnly, asc) {
   return raw.map(item => ({
     price: parseFloat(item.adv.price),
     avail: parseFloat(item.adv.tradableQuantity),
     merchant: item.advertiser.nickName,
     badges: item.advertiser.badges,
   })).filter(a => a.price > 0 && a.avail >= MIN_AVAIL && (!verifiedOnly || (a.badges && a.badges.length > 0)))
-    .sort((a, b) => b.price - a.price);
+    .sort((a, b) => asc ? a.price - b.price : b.price - a.price);
 }
 
 // Margen dentro del cual otro anuncio "confirma" un precio. Un unico anuncio por
@@ -97,7 +99,7 @@ const CORROB_PCT = 1;
 function bestCorroborated(list) {
   if (list.length < 2) return list[0] || null;
   for (let i = 0; i < list.length - 1; i++) {
-    if ((list[i].price - list[i + 1].price) / list[i].price * 100 <= CORROB_PCT) return list[i];
+    if (Math.abs(list[i].price - list[i + 1].price) / list[i].price * 100 <= CORROB_PCT) return list[i];
   }
   return list[1];
 }
@@ -140,11 +142,12 @@ export function topMedianRate(raw, n, verifiedOnly) {
 // mayRaw/smallRaw son "primario"/"secundario": con Modo Short apagado el caller
 // (bot-tick.js) pasa aqui Verde en mayRaw y Mayoristas en smallRaw, con labels
 // acorde, para reusar exactamente este mismo calculo sin bifurcar el modulo.
-export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now, silent, labels }) {
+// primaryAsc: el primario son vendedores (Verde), cuyo mejor precio es el mas bajo.
+export function computeAlerts({ mayRaw, smallRaw, cfg, priceHist, cooldowns, now, silent, labels, primaryAsc }) {
   now = now || Date.now();
-  const L = labels || { primary: 'Mayorista', secondary: 'Compra' };
+  const L = labels || { primary: 'Mayorista', secondary: 'Recompra' };
   const verifiedOnly = cfg.verifiedOnly !== false;
-  const may = mapBest(mayRaw, verifiedOnly);
+  const may = mapBest(mayRaw, verifiedOnly, primaryAsc);
   const small = mapBest(smallRaw, verifiedOnly);
   const cd = { ...(cooldowns || {}) };
   const hist = Array.isArray(priceHist) ? priceHist.slice() : [];
