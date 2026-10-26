@@ -1152,4 +1152,20 @@ input:focus {
 .sub-step-body { flex: 1; min-width: 0; }
 .sub-step-t { font-size: 14px; font-weight: 600; color: var(--text); }
 .sub-inp { font-size: 15px; padding: 11px 12px; margin-top: 8px; }
+/* Primeros pasos → "Tu mercado" (moneda, metodo y rol). */
+.ob-market { text-align: left; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.ob-market-row { display: flex; gap: 8px; }
+.ob-market-row select {
+  flex: 1; min-width: 0; font: inherit; font-size: 14px; font-weight: 600;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  color: var(--text); background-color: var(--surf-2);
+  border: 1px solid var(--border-2); border-radius: var(--r-sm);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237d8590' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+  padding: 8px 26px 8px 10px;
+}
+.ob-market-row select option { background: var(--surf-1); color: var(--text); }
+.ob-role { display: flex; gap: 6px; }
+.ob-role .btn { flex: 1; padding: 7px 4px; font-size: 13px; }
+.ob-role .btn.is-on { background: var(--gold); border-color: var(--gold); color: #0b0e11; font-weight: 700; }
 .sub-inp::placeholder { color: var(--text-2); opacity: .75; }

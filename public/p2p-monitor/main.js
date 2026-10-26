@@ -1041,6 +1041,7 @@ function setPayMethod(id) {
   // del monitor no le afecta, se puede revisar otros metodos con el bot prendido.
   ACTIVE_PAY = id;
   PAY_SEL[ACTIVE_FIAT] = id;
+  renderPaySelect(); // puede venir de Primeros pasos: el selector de arriba tambien
   resetLocalSeries();
   persistPaySel();
   if (typeof fetchOnce === 'function') fetchOnce();
@@ -1165,7 +1166,8 @@ var CFG = {
   monQuietStart: '00:00',// Monitor 24/7: inicio del silencio nocturno (America/Caracas)
   monQuietEnd:   '07:00',// Monitor 24/7: fin del silencio nocturno
   monSummary:    '08:00',// Monitor 24/7: hora del resumen diario por Telegram (Caracas)
-  shortMode: false        // Vista avanzada. OFF (defecto) = Vendedores/Compradores; ON = Mayoristas/Recompra
+  shortMode: false,       // Vista avanzada. OFF (defecto) = Vendedores/Compradores; ON = Mayoristas/Recompra
+  role: 'both'            // Primeros pasos: 'sell' (vende USDT), 'buy' (compra) o 'both'. Ordena los libros
 };
 
 // Unico punto donde vive el origen del backend: el resto se deriva de aqui.
@@ -1805,7 +1807,39 @@ function closeSubModal() {
 // Si hay llaves de Binance guardadas. Lo mantienen refreshAuthUI y binanceConnect.
 var BNC = { connected: false };
 
+// Rol del usuario (Primeros pasos). Solo ordena los libros de la vista simple.
+var ROLE_HELP = {
+  sell: 'Primero verás a los Compradores: quienes te compran USDT.',
+  buy:  'Primero verás a los Vendedores: a quienes les compras USDT.',
+  both: 'Verás a Vendedores y Compradores lado a lado, con el spread entre ambos.'
+};
+function setRole(r) {
+  if (!ROLE_HELP[r]) return;
+  CFG.role = r;
+  try { localStorage.setItem('p2p_cfg2', JSON.stringify(CFG)); } catch (e) {}
+  applyMarketMode();
+  saveUserSettings();
+  renderOnboard();
+}
+function renderOnboardMarket() {
+  var opts = function(list, cur) {
+    return list.map(function(o) { return '<option value="' + o.id + '"' + (o.id === cur ? ' selected' : '') + '>' + o.label + '</option>'; }).join('');
+  };
+  var fs = document.getElementById('ob-fiat');
+  if (fs) fs.innerHTML = opts(FIATS.map(function(f) { return { id: f, label: f + '/USDT' }; }), ACTIVE_FIAT);
+  var ps = document.getElementById('ob-pay');
+  if (ps) ps.innerHTML = opts(PAY_METHODS, ACTIVE_PAY);
+  var role = ROLE_HELP[CFG.role] ? CFG.role : 'both';
+  document.querySelectorAll('#ob-role .btn').forEach(function(b) { b.classList.toggle('is-on', b.getAttribute('data-role') === role); });
+  var help = document.getElementById('ob-role-help');
+  if (help) help.textContent = ROLE_HELP[role];
+  // En la vista avanzada el orden lo fija el ciclo Mayoristas/Recompra: el rol no aplica.
+  var wrap = document.getElementById('ob-role-wrap');
+  if (wrap) wrap.style.display = isShortOff() ? '' : 'none';
+}
+
 function renderOnboard() {
+  renderOnboardMarket();
   // Sin bot de Telegram configurado en el servidor no tiene sentido pedirlo, y el
   // paso desaparece — por eso los numeros se asignan sobre los pasos visibles, para
   // no dejar un hueco (1, 3) que parece un error.
@@ -4576,11 +4610,16 @@ function applyMarketMode() {
   var buysecOuter = document.getElementById('buysec-outer');
   if (grid && mayS && smallS && buyS && buyWrap && buysecOuter) {
     if (off) {
-      if (buyS.parentNode !== grid) grid.insertBefore(buyS, mayS);
+      // Primero el libro donde opera: quien vende USDT mira a los Compradores.
+      var first = CFG.role === 'sell' ? mayS : buyS;
+      var second = first === mayS ? buyS : mayS;
+      grid.insertBefore(first, grid.firstChild);
+      grid.insertBefore(second, first.nextSibling);
       smallS.style.display = 'none';
       buysecOuter.style.display = 'none';
     } else {
       if (buyS.parentNode !== buyWrap) buyWrap.appendChild(buyS);
+      grid.insertBefore(mayS, smallS);
       smallS.style.display = '';
       buysecOuter.style.display = '';
     }

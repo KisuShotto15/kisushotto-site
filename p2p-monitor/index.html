@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=46">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=47">
 </head>
 <body>
 
@@ -106,6 +106,25 @@
   <div class="sub-card">
     <div style="font-size:20px;font-weight:700;color:var(--gold);margin-bottom:4px">Primeros pasos</div>
     <div class="sub-help" id="onboard-sub" style="margin-bottom:16px">Tres cosas y queda trabajando solo.</div>
+
+    <!-- Paso cero: donde opera y que hace. Sin esto la app arrancaba en VES/BDV con
+         los dos libros en el orden de siempre, sea cual sea el mercado de quien entra. -->
+    <div class="ob-market">
+      <div class="sub-sec-title">Tu mercado</div>
+      <div class="ob-market-row">
+        <select id="ob-fiat" aria-label="Moneda" onchange="setFiat(this.value);renderOnboard()"></select>
+        <select id="ob-pay" aria-label="Método de pago" onchange="setPayMethod(this.value);renderOnboard()"></select>
+      </div>
+      <div id="ob-role-wrap">
+        <div class="sub-sec-title" style="margin-top:12px">¿Qué haces?</div>
+        <div class="ob-role" id="ob-role">
+          <button type="button" class="btn btn-sm" data-role="sell" onclick="setRole('sell')">Vendo USDT</button>
+          <button type="button" class="btn btn-sm" data-role="buy" onclick="setRole('buy')">Compro USDT</button>
+          <button type="button" class="btn btn-sm" data-role="both" onclick="setRole('both')">Ambos</button>
+        </div>
+        <div class="sub-help" id="ob-role-help"></div>
+      </div>
+    </div>
 
     <div class="sub-step">
       <div class="sub-step-n" id="ob-n-1">1</div>
@@ -675,7 +694,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=131"></script>
+<script src="/p2p-monitor/main.js?v=132"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
