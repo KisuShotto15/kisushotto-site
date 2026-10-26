@@ -3444,12 +3444,11 @@ function loadActivityGuard() {
 function updateActivityBtn() {
   var b = document.getElementById('btn-activity');
   if (!b) return;
+  b.innerHTML = '🛡️<span class="ic-lbl">Actividad</span>'; // con texto: sin hover en el telefono
   if (ACTIVITY.enabled) {
-    b.textContent = '🛡️';
     b.style.opacity = '1';
     b.title = 'Alertas de actividad activas (click para desactivar)';
   } else {
-    b.textContent = '🛡️';
     b.style.opacity = '0.35';
     b.title = 'Alertas de actividad DESACTIVADAS (click para activar)';
   }

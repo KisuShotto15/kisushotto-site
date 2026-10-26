@@ -545,6 +545,9 @@ body {
 .sh-arrow { color: var(--text-3); }
 /* Plegado del hero: solo en telefono (ver el bloque de abajo). */
 .hero-fold { display: none; }
+/* Ayuda del spread: sin tope, el texto ensanchaba la columna y aplastaba "Ahora"
+   (los precios quedaban encimados). */
+.hero-lead .cfg-help { max-width: 300px; }
 @media (max-width: 760px) {
   .spread-hero-full { flex-direction: column; gap: 12px; padding: 14px 16px; }
   /* Compacto por defecto: el hero ocupaba media pantalla antes del libro. Quedan el
@@ -560,6 +563,7 @@ body {
   .spread-hero-full:not(.hero-open) .hero-lead { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 4px 12px; }
   .spread-hero-full:not(.hero-open) .hero-lead .sh-label,
   .spread-hero-full:not(.hero-open) .hero-lead .cfg-help { flex-basis: 100%; justify-content: center; }
+  .hero-lead .cfg-help { max-width: none; }
   .spread-hero-full:not(.hero-open) .hero-lead .sh-pct { font-size: 30px; }
   .hero-lead { min-width: 0; }
   .hero-lead .sh-pct { font-size: 40px; }
