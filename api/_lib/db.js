@@ -196,6 +196,22 @@ export async function ensureMarketHist() {
 // Las series del monitor se agregan en Postgres (jsonb_set por metodo de pago), y eso
 // exige el formato { pay: [...] }. El legado (array plano = serie de BDV, ver histMap)
 // se convierte una vez por instancia; despues la sentencia no toca ninguna fila.
+// Llaves de la P2P API de OKX: tres partes (key, secret y passphrase), las tres
+// cifradas como las de Binance. A demanda y fuera de ensureSchema para no mover su
+// sonda de un round trip.
+let okxCredsReady = false;
+export async function ensureOkxCreds() {
+  if (okxCredsReady) return;
+  await sql`CREATE TABLE IF NOT EXISTS okx_creds (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    enc_key TEXT NOT NULL, iv_key TEXT NOT NULL, tag_key TEXT NOT NULL,
+    enc_secret TEXT NOT NULL, iv_secret TEXT NOT NULL, tag_secret TEXT NOT NULL,
+    enc_pass TEXT NOT NULL, iv_pass TEXT NOT NULL, tag_pass TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+  )`;
+  okxCredsReady = true;
+}
+
 let histMapsReady = false;
 export async function ensureHistMaps() {
   if (histMapsReady) return;

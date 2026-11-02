@@ -1,15 +1,33 @@
 import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
-import { sql, ensureSchema, ensureMarketHist } from './_lib/db.js';
+import { sql, ensureSchema, ensureMarketHist, ensureOkxCreds } from './_lib/db.js';
 import { histMap } from './_lib/monitor.js';
 import { DEFAULT_FIAT, safeTz, zonedMidnight } from './_lib/market.js';
 import { tradeMethods } from './_lib/binance.js';
+import { okxBasicInfo, okxActiveAds, okxMarketplace, splitMarketplace } from './_lib/okx.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
 import { fifoMatch, fifoShort, summarize, lotsSince, spreadCurve, timeBudget, spreadWindows, SAMPLE_MIN } from './_lib/pnl.js';
 
 // La unica serie de mercado global (grafico ya poblado para cualquier usuario).
 const GLOBAL_KEY = 'BancoDeVenezuela';
+
+// Llaves de OKX del usuario, descifradas (null si no conecto OKX).
+async function okxCreds(uid) {
+  await ensureOkxCreds();
+  const rows = await sql`SELECT * FROM okx_creds WHERE user_id = ${uid}`;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    key: decrypt({ ct: r.enc_key, iv: r.iv_key, tag: r.tag_key }),
+    secret: decrypt({ ct: r.enc_secret, iv: r.iv_secret, tag: r.tag_secret }),
+    passphrase: decrypt({ ct: r.enc_pass, iv: r.iv_pass, tag: r.tag_pass }),
+  };
+}
+const okxFiat = params => {
+  const f = String((params && params.fiat) || 'VES').toUpperCase();
+  return /^[A-Z]{3,4}$/.test(f) ? f : null;
+};
 
 const BINANCE = 'https://api.binance.com';
 
@@ -478,6 +496,74 @@ export default async function handler(req, res) {
       const st = rows[0] || { enabled: false };
       st.hist24 = (g[0] && g[0].hist24) || {};
       return res.status(200).json(st);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // ── OKX (fase 1: solo lectura) ──────────────────────
+  // Conectar/estado/desconectar y leer anuncios propios y el libro. Nada de aca
+  // modifica anuncios: sirve para confirmar firma y formato con llaves reales antes
+  // de repreciar. Va en este router para no sumar funciones (Hobby: 12 maximo).
+  if (path && path.startsWith('/okx-')) {
+    try {
+      await ensureSchema();
+      await ensureOkxCreds();
+      if (path === '/okx-status') {
+        const rows = await sql`SELECT created_at FROM okx_creds WHERE user_id = ${user.uid}`;
+        return res.status(200).json({ connected: rows.length > 0 });
+      }
+      if (path === '/okx-disconnect') {
+        await sql`DELETE FROM okx_creds WHERE user_id = ${user.uid}`;
+        return res.status(200).json({ ok: true });
+      }
+      if (path === '/okx-connect') {
+        const key = String((params && params.apiKey) || '').trim();
+        const secret = String((params && params.apiSecret) || '').trim();
+        const passphrase = String((params && params.passphrase) || '');
+        if (!key || !secret || !passphrase) return res.status(400).json({ error: 'Faltan la API key, el secret o la passphrase' });
+        // Validar con una llamada firmada antes de guardar nada.
+        const v = await okxBasicInfo({ key, secret, passphrase }).catch(e => ({ ok: false, msg: e.message }));
+        if (!v.ok) {
+          return res.status(400).json({
+            error: 'OKX rechazó las llaves. Revisa que copiaste las tres partes y que la key tiene permiso Read + Trade',
+            detail: [v.status, v.code, v.msg].filter(Boolean).join(' · '),
+          });
+        }
+        const ek = encrypt(key), es = encrypt(secret), ep = encrypt(passphrase);
+        await sql`INSERT INTO okx_creds
+          (user_id, enc_key, iv_key, tag_key, enc_secret, iv_secret, tag_secret, enc_pass, iv_pass, tag_pass)
+          VALUES (${user.uid}, ${ek.ct}, ${ek.iv}, ${ek.tag}, ${es.ct}, ${es.iv}, ${es.tag}, ${ep.ct}, ${ep.iv}, ${ep.tag})
+          ON CONFLICT (user_id) DO UPDATE SET
+            enc_key = EXCLUDED.enc_key, iv_key = EXCLUDED.iv_key, tag_key = EXCLUDED.tag_key,
+            enc_secret = EXCLUDED.enc_secret, iv_secret = EXCLUDED.iv_secret, tag_secret = EXCLUDED.tag_secret,
+            enc_pass = EXCLUDED.enc_pass, iv_pass = EXCLUDED.iv_pass, tag_pass = EXCLUDED.tag_pass, created_at = now()`;
+        const info = Array.isArray(v.data) ? v.data[0] : v.data;
+        return res.status(200).json({ ok: true, nick: (info && info.nickName) || null });
+      }
+      const creds = await okxCreds(user.uid);
+      if (!creds) return res.status(400).json({ error: 'Conecta OKX primero' });
+      const fiat = okxFiat(params);
+      if (!fiat) return res.status(400).json({ error: 'Moneda inválida' });
+      if (path === '/okx-my-ads') {
+        const [buy, sell] = await Promise.all(['buy', 'sell'].map(side => okxActiveAds(creds, { side, fiat })));
+        const bad = [buy, sell].find(x => !x.ok);
+        if (bad) return res.status(502).json({ error: 'OKX: ' + (bad.msg || 'error'), detail: [bad.status, bad.code].join(' · ') });
+        const ads = [].concat(buy.data || [], sell.data || []).map(a => ({
+          adId: String(a.adId), side: a.side, type: a.type, price: parseFloat(a.unitPrice),
+          priceMargin: a.priceMargin != null ? parseFloat(a.priceMargin) : null,
+          available: parseFloat(a.availableAmount), onHold: parseFloat(a.onHoldAmount) || 0,
+          min: parseFloat(a.minOrderSize), max: parseFloat(a.maxOrderSize), fiat: a.fiatCurrency, crypto: a.cryptoCurrency,
+        }));
+        return res.status(200).json({ fiat, ads });
+      }
+      if (path === '/okx-market') {
+        const amount = parseFloat(params && params.amount) || 0;
+        const r = await okxMarketplace(creds, { fiat, paymentMethod: (params && params.pay) || undefined, amount });
+        if (!r.ok) return res.status(502).json({ error: 'OKX: ' + (r.msg || 'error'), detail: [r.status, r.code].join(' · ') });
+        return res.status(200).json({ fiat, ...splitMarketplace(r.data) });
+      }
+      return res.status(404).json({ error: 'Ruta OKX desconocida' });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
