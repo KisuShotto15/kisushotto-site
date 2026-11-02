@@ -2125,6 +2125,7 @@ function okxSetConnected(on) {
   if (c) c.style.display = on ? 'flex' : 'none';
   if (f) f.style.display = on ? 'none' : '';
   okxRenderBot();
+  applyExchangeTabs();
   if (on) { okxLoadAds(); okxBotRefresh(); }
 }
 function okxShowForm() { okxSetConnected(false); }
@@ -2164,25 +2165,37 @@ function okxRenderBot() {
   OKX.running = OKX.connected && !!s.enabled;
   var t = document.getElementById('okx-bot-toggle'), st = document.getElementById('okx-bot-st');
   if (t) {
-    t.textContent = !OKX.connected ? 'Conectar' : (OKX.running ? '⏹ Detener' : '▶ Iniciar');
-    t.classList.toggle('botl-btn-stop', OKX.running);
+    t.textContent = !OKX.connected ? 'Conectar OKX' : (OKX.running ? '⏹ Detener bot OKX' : '▶ Iniciar bot OKX');
+    t.style.background = OKX.running ? '#E24B4A' : '';
   }
   if (st) {
-    var p = s.current_price != null ? fmtP(parseFloat(s.current_price)) + fiatSuf() + ' · ' : '';
-    st.textContent = !OKX.connected ? 'No conectado' : (OKX.running ? p + (s.status || 'Iniciando...') : (s.status && s.status !== 'Detenido' ? s.status : 'Detenido'));
+    st.textContent = !OKX.connected ? 'No conectado' : (OKX.running ? (s.status || 'Iniciando...') : (s.status && s.status !== 'Detenido' ? s.status : 'Detenido'));
     st.title = st.textContent;
-    st.classList.toggle('on', OKX.running);
+    st.style.color = OKX.running ? '#1D9E75' : '';
   }
-  var dot = document.getElementById('botl-dot-okx');
-  if (dot) dot.classList.toggle('on', OKX.running);
+  renderXtab('okx', OKX.running);
   var cur = document.getElementById('okx-cur-price');
   if (cur) cur.textContent = s.current_price != null ? fmtP(parseFloat(s.current_price)) + fiatSuf() : '—';
   okxUpdateCeiling();
   var sel = document.getElementById('okx-adsel');
   if (sel) sel.disabled = OKX.running;
+  var lg = document.getElementById('okx-log');
+  if (lg && s.log && s.log.length) {
+    lg.innerHTML = s.log.slice().reverse().map(function(l) {
+      var c = l.level === 'error' ? 'var(--red)' : (l.level === 'warn' ? 'var(--gold)' : (l.level === 'up' || l.level === 'down' ? 'var(--text)' : 'var(--text-2)'));
+      return '<div style="color:' + c + '">' + new Date(l.ts).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) + ' · ' + esc(l.msg) + '</div>';
+    }).join('');
+  }
   renderTabDot();
+  if (OKX.running && MKT_TAB === 'okx') okxRenderBook();
   clearInterval(OKX.poll);
   if (OKX.running) OKX.poll = setInterval(okxBotRefresh, 20000);
+}
+// Punto verde + estado corto en la tab de cada exchange.
+function renderXtab(k, on) {
+  var dot = document.getElementById('botl-dot-' + k), st = document.getElementById('xtab-st-' + k);
+  if (dot) dot.classList.toggle('on', !!on);
+  if (st) { st.textContent = on ? 'activo' : 'detenido'; st.classList.toggle('on', !!on); }
 }
 // Techo de OKX: como el de Binance pero sin comision (el P2P de OKX no cobra fee).
 function okxUpdateCeiling() {
@@ -2191,21 +2204,6 @@ function okxUpdateCeiling() {
   var sell = parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
   var spr = parseFloat(document.getElementById('cfg-bot-spread').value);
   el.textContent = sell > 0 ? (sell * (1 - (isNaN(spr) ? 0.5 : spr) / 100)).toFixed(3) + fiatSuf(botFiat()) : '—';
-}
-// Lista de bots: abrir/cerrar los datos de cada fila (se recuerda por navegador).
-function botlToggle(k, force) {
-  var det = document.getElementById('botl-det-' + k), ch = document.getElementById('botl-chev-' + k);
-  if (!det) return;
-  var open = force != null ? force : det.style.display === 'none';
-  det.style.display = open ? '' : 'none';
-  if (ch) ch.textContent = open ? '▾' : '▸';
-  if (force == null) { try { localStorage.setItem('p2p_botl_' + k, open ? '1' : '0'); } catch (e) {} }
-}
-function botlRestore() {
-  ['bnc', 'okx'].forEach(function(k) {
-    var v = null; try { v = localStorage.getItem('p2p_botl_' + k); } catch (e) {}
-    if (v != null) botlToggle(k, v === '1');
-  });
 }
 async function okxBotRefresh() {
   if (!SESSION.token) return;
@@ -2225,47 +2223,63 @@ async function okxBotToggle(ev) {
     await okxBotRefresh();
   } catch (e) { if (st) { st.textContent = '⚠ ' + e.message; st.title = e.message; } }
 }
-function closeOkxBook() {
-  var m = document.getElementById('okx-modal');
-  if (m) m.style.display = 'none';
-  modalClosed('okx-modal');
-}
-// Libro de compradores. Con el bot corriendo se usa el que trajo en su ultimo ciclo
-// (cero requests extra); apagado, se pide uno a OKX.
-async function okxBook() {
-  var m = document.getElementById('okx-modal'), box = document.getElementById('okx-preview'), src = document.getElementById('okx-book-src');
-  if (!m || !box) return;
-  document.getElementById('okx-fiat').textContent = botFiat();
-  m.style.display = 'flex';
-  modalOpened('okx-modal');
-  box.innerHTML = '<div class="sub-help">Cargando…</div>';
-  src.textContent = '';
-  var row = function(cols) { return '<div class="okx-row">' + cols.map(function(c) { return '<span>' + c + '</span>'; }).join('') + '</div>'; };
+// Libro de OKX en la tab del Mercado (mismo renderOB que Binance). Con el bot
+// corriendo se pinta el libro de su ultimo ciclo (cero requests extra); apagado se
+// consulta a OKX cada 30s mientras la tab este a la vista.
+var MKT_TAB = 'bnc';
+async function okxRenderBook(forceFetch) {
+  if (MKT_TAB !== 'okx' || !OKX.connected) return;
+  var src = document.getElementById('okx-book-src');
+  var b = OKX.state && OKX.state.book;
   try {
-    await okxBotRefresh();
-    var s = OKX.state || {}, b = s.book, list, when;
-    if (OKX.running && b && b.buyers && Date.now() - b.ts < 120000) {
-      list = b.buyers; when = 'Del último ciclo del bot, hace ' + fmtDur((Date.now() - b.ts) / 1000) + '.';
+    var list, when;
+    if (!forceFetch && OKX.running && b && b.buyers && Date.now() - b.ts < 120000) {
+      list = b.buyers; when = 'bot · hace ' + fmtDur((Date.now() - b.ts) / 1000);
     } else {
       var mk = await okxCall('/okx-market', { fiat: botFiat() });
-      list = mk.buyers || []; when = 'Consultado ahora.';
+      list = mk.buyers || []; when = 'en vivo';
     }
-    src.textContent = when;
-    var html = list.length ? list.slice(0, 10).map(function(a) {
-      return row([esc(a.merchant) + (a.isOwner ? ' <b style="color:var(--purple)">(tú)</b>' : ''), fmtP(a.price) + fiatSuf(), fmt(a.avail) + ' USDT',
-                  fmtM(a.minVES) + '–' + fmtM(a.maxVES), '<span style="color:var(--text-3)">' + esc((a.payTypes || []).join(', ')) + '</span>']);
-    }).join('') : '<div class="sub-help" style="margin:0">Sin compradores.</div>';
-    var log = (s.log || []).slice(-6).reverse();
-    if (log.length) {
-      html += '<div class="sub-sec-title" style="margin-top:12px">Bot OKX</div>' + log.map(function(l) {
-        var c = l.level === 'error' ? 'var(--red)' : (l.level === 'warn' ? 'var(--gold)' : 'var(--text-2)');
-        return '<div style="font-size:13px;color:' + c + ';padding:2px 0">' + new Date(l.ts).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) + ' · ' + esc(l.msg) + '</div>';
-      }).join('');
-    }
-    box.innerHTML = html;
+    if (src) src.textContent = when;
+    renderOB('ob-okx', list, 'best');
   } catch (e) {
-    box.innerHTML = '<div class="sub-help" style="color:var(--red)">⚠ ' + esc(e.message) + '</div>';
+    document.getElementById('ob-okx').innerHTML = '<div class="sub-help" style="color:var(--red);padding:10px">⚠ ' + esc(e.message) + '</div>';
   }
+}
+function mktTab(k) {
+  MKT_TAB = (k === 'okx' && OKX.connected) ? 'okx' : 'bnc';
+  try { localStorage.setItem('p2p_mkt_tab', MKT_TAB); } catch (e) {}
+  ['bnc', 'okx'].forEach(function(x) {
+    var t = document.getElementById('mtab-' + x), c = document.getElementById('mkt-' + x);
+    if (t) t.classList.toggle('on', x === MKT_TAB);
+    if (c) c.style.display = x === MKT_TAB ? '' : 'none';
+  });
+  // La comision del encabezado es la de Binance: en OKX no aplica.
+  var cl = document.getElementById('ob-commission-label');
+  if (cl) cl.style.visibility = MKT_TAB === 'okx' ? 'hidden' : '';
+  clearInterval(OKX.bookPoll);
+  if (MKT_TAB === 'okx') {
+    okxRenderBook();
+    OKX.bookPoll = setInterval(function() { if (!OKX.running && !document.hidden) okxRenderBook(); }, 30000);
+  }
+}
+var BOT_TAB = 'bnc';
+function botTab(k) {
+  BOT_TAB = (k === 'okx' && OKX.connected) ? 'okx' : 'bnc';
+  try { localStorage.setItem('p2p_bot_tab', BOT_TAB); } catch (e) {}
+  ['bnc', 'okx'].forEach(function(x) {
+    var t = document.getElementById('xtab-' + x), c = document.getElementById('botl-det-' + x);
+    if (t) t.classList.toggle('on', x === BOT_TAB);
+    if (c) c.style.display = x === BOT_TAB ? '' : 'none';
+  });
+}
+// Las tabs por exchange solo existen para quien conecto un exchange ademas de Binance.
+function applyExchangeTabs() {
+  document.querySelectorAll('.xtabs').forEach(function(el) { el.style.display = OKX.connected ? 'flex' : 'none'; });
+  document.body.classList.toggle('has-xtabs', !!OKX.connected);
+  var mt = 'bnc', bt = 'bnc';
+  try { mt = localStorage.getItem('p2p_mkt_tab') || 'bnc'; bt = localStorage.getItem('p2p_bot_tab') || 'bnc'; } catch (e) {}
+  mktTab(OKX.connected ? mt : 'bnc');
+  botTab(OKX.connected ? bt : 'bnc');
 }
 
 // Formatea una duracion en segundos de forma legible (seg / min / h).
@@ -3274,7 +3288,7 @@ function renderOB(id, ads, bestCls) {
       var pd = pDisp && pDisp[ad.advNo];
       var chgCls = priceChgCls(pd), chgHtml = priceChgHtml(pd);
       var flashCls = priceFlashCls(pd), priceHtml = priceSplitHtml(ad.price, pd);
-      var meCls = ad.merchant === myNick() ? ' me' : '';
+      var meCls = (ad.isOwner || ad.merchant === myNick()) ? ' me' : '';
       rows += '<div class="' + cls + '">' + rnk +
         '<span class="merch' + meCls + '" style="display:flex;align-items:center;gap:0" title="' + esc(ad.merchant) + '">' + esc(ad.merchant) + badgeHtml + '</span>' +
         '<span class="lim-c" style="font-variant-numeric:tabular-nums" title="' + Math.round(ad.avail) + ' USDT disponibles"><span class="avail-num">' + arrowHtml + availStr + '</span></span>' +
@@ -4385,10 +4399,9 @@ function botServerConfig() {
 function renderBotToggle() {
   var b = document.getElementById('bot-toggle');
   if (!b) return;
-  b.textContent = BOT.running ? '⏹ Detener' : '▶ Iniciar';
-  b.classList.toggle('botl-btn-stop', !!BOT.running);
-  var dot = document.getElementById('botl-dot-bnc');
-  if (dot) dot.classList.toggle('on', !!BOT.running);
+  b.textContent = BOT.running ? '⏹ Detener bot Binance' : '▶ Iniciar bot Binance';
+  b.style.background = BOT.running ? '#E24B4A' : '';
+  renderXtab('bnc', BOT.running);
   renderAdHidden(BOT.adHidden); // el chip "Oculto" no aplica con el bot detenido
   renderTabDot();
   renderSaveRow(); // Guardar/Descartar solo aplica con el bot corriendo
@@ -6356,7 +6369,7 @@ function initBuySection() {
   setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
 }
 
-loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); applyHeroFold(); botlRestore(); okxRenderBot(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
+loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); applyHeroFold(); okxRenderBot(); applyExchangeTabs(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
 initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });

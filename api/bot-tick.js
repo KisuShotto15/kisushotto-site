@@ -595,8 +595,9 @@ export async function tickOkx(row) {
   const mkt = await okxMarketplace(creds, { side: 'buy', fiat, amount: myMin + (cfg.limitThreshold || 0), limit: 50, sortType: 'price_desc' });
   if (!mkt.ok) { log = pushLog(log, 'Libro OKX ' + err(mkt), 'warn'); return keep('Error leyendo el libro'); }
   const raw = okxBuyAds(mkt.data);
-  book = { ts: Date.now(), buyers: raw.map(mapOkxAd).filter(a => a.price > 0).sort((a, b) => b.price - a.price).slice(0, 10)
-    .map(a => ({ merchant: a.merchant, price: a.price, avail: a.avail, minVES: a.minVES, maxVES: a.maxVES, payTypes: a.payTypes, isOwner: a.isOwner || a.advNo === adId })) };
+  book = { ts: Date.now(), buyers: raw.map(mapOkxAd).filter(a => a.price > 0).sort((a, b) => b.price - a.price).slice(0, 20)
+    .map(a => ({ advNo: a.advNo, merchant: a.merchant, price: a.price, avail: a.avail, minVES: a.minVES, maxVES: a.maxVES,
+                 badges: a.badges, vipLevel: a.vipLevel, payTypes: a.payTypes, isOwner: a.isOwner || a.advNo === adId })) };
 
   const step = parseFloat(ad.fiatPriceIncrement) > 0 ? parseFloat(ad.fiatPriceIncrement) : 0.001;
   // Sin filtro de verificados: en OKX el taker ve a todos. Mis otros anuncios no compiten.

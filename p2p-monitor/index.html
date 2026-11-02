@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=52">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=53">
 </head>
 <body>
 
@@ -102,18 +102,6 @@
 <!-- Suscripcion -->
 <!-- Primeros pasos. Al activar la prueba el usuario caia en la app sin Binance,
      sin Telegram y sin nada que le dijera por donde empezar. -->
-<!-- OKX: libro de compradores (el que el bot ya trae en cada ciclo) + log del bot -->
-<div id="okx-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3050;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeOkxBook()">
-  <div class="sub-card" style="max-width:560px;text-align:left">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
-      <div style="font-size:18px;font-weight:700;color:var(--gold)">OKX · Compradores <span id="okx-fiat"></span>/USDT</div>
-      <button class="btn btn-sm" type="button" onclick="closeOkxBook()">✕</button>
-    </div>
-    <div class="sub-help" id="okx-book-src" style="margin:0 0 10px"></div>
-    <div id="okx-preview"></div>
-  </div>
-</div>
-
 <div id="onboard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3050;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeOnboard()">
   <div class="sub-card">
     <div style="font-size:20px;font-weight:700;color:var(--gold);margin-bottom:4px">Primeros pasos</div>
@@ -476,7 +464,13 @@
     <!-- Order book dividido -->
     <div class="panel" style="padding:11px;position:relative">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+<div style="display:flex;align-items:center;gap:10px;min-width:0">
         <div class="ptitle" id="ob-sec-title" style="margin-bottom:0;font-size:13px">Mercado</div>
+        <div class="xtabs xtabs-sm" role="tablist" style="display:none">
+          <button class="xtab on" type="button" id="mtab-bnc" onclick="mktTab('bnc')"><svg class="xlogo" viewBox="0 0 24 24" aria-hidden="true"><path fill="#F0B90B" d="M12 2.5l3 3-3 3-3-3zM6 8.5l3 3-3 3-3-3zm12 0l3 3-3 3-3-3zm-6 0l3 3-3 3-3-3zm0 6l3 3-3 3-3-3z"/></svg>Binance</button>
+          <button class="xtab" type="button" id="mtab-okx" onclick="mktTab('okx')"><svg class="xlogo" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="5" fill="#000"/><path fill="#fff" d="M4 4h5v5H4zm11 0h5v5h-5zM9.5 9.5h5v5h-5zM4 15h5v5H4zm11 0h5v5h-5z"/></svg>OKX</button>
+        </div>
+        </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <span id="ob-commission-label" style="font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.04em;display:none">COMISIÓN —</span>
           <button id="ob-gear-btn" class="btn btn-sm" onclick="toggleObGear(event)" title="Configuración" style="font-size:15px;padding:3px 9px">⚙</button>
@@ -509,6 +503,7 @@
         </div>
       </div>
 
+      <div id="mkt-bnc">
       <div class="ob-grid" id="ob-grid">
         <div class="ob-side" id="ob-side-may">
           <div id="label-may" class="ob-side-title mayoristas"><span class="lbl-txt">Mayoristas</span><span class="lbl-extra" id="extra-may"></span><span class="lbl-vol" id="vol-may" title="Cuanto del top 5 se vació (rojo) o repuso (verde) en los últimos 3 min"></span><span class="lbl-filter"><input type="number" id="flt-may" min="0" step="2000000" onchange="setFilter('may',this.value)" data-hint="hint-flt-may"><span class="amt-hint" id="hint-flt-may"></span><span class="lbl-unit"> VES</span></span></div>
@@ -540,6 +535,17 @@
               <button class="ob-more" id="more-ob-buy" onclick="toggleShowMore('ob-buy')" style="display:none"></button>
             </div>
           </div>
+        </div>
+      </div>
+      </div>
+      <!-- Libro de OKX: solo Compradores (el lado donde compite tu anuncio de compra).
+           Con el bot de OKX corriendo es el que trae en cada ciclo, sin requests extra. -->
+      <div id="mkt-okx" style="display:none">
+        <div class="ob-side">
+          <div class="ob-side-title smallbuyers"><span class="lbl-txt">Compradores · OKX</span><span class="lbl-extra" id="okx-book-src"></span></div>
+          <div class="ob-head"><span style="text-align:center">#</span><span>Comerciante</span><span style="text-align:center">Cantidad</span><span style="text-align:center">Precio</span><span style="text-align:center">Cambio</span><span style="text-align:center">Límites</span></div>
+          <div id="ob-okx"></div>
+          <button class="ob-more" id="more-ob-okx" onclick="toggleShowMore('ob-okx')" style="display:none"></button>
         </div>
       </div>
     </div>
@@ -589,7 +595,6 @@
           <div id="okx-connected" style="display:none;align-items:center;justify-content:space-between;gap:8px;background:var(--surf-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 11px">
             <span style="font-size:13px;color:#1D9E75">✓ OKX conectado</span>
             <span style="display:flex;gap:6px;flex-shrink:0">
-              <button class="btn btn-sm" type="button" onclick="okxBook()">Ver libro</button>
               <button class="btn btn-sm" type="button" onclick="okxShowForm()">Cambiar</button>
             </span>
           </div>
@@ -629,23 +634,22 @@
         </div>
       </div>
 
-      <!-- Lista de bots: una fila por exchange (estado + iniciar/detener); al tocarla se
-           despliegan sus datos. Comparten la configuracion de abajo. -->
-      <div class="botl">
-        <div class="botl-row" onclick="botlToggle('bnc')">
-          <span class="botl-dot" id="botl-dot-bnc"></span>
-          <div class="botl-main">
-            <div class="botl-name">Bot Binance
+      <!-- Una tab por exchange: cada una con su boton, estado y datos. El punto verde
+           marca el bot activo. La configuracion de abajo es compartida. -->
+      <div class="xtabs" role="tablist" style="display:none">
+        <button class="xtab on" type="button" id="xtab-bnc" onclick="botTab('bnc')"><span class="botl-dot" id="botl-dot-bnc"></span><svg class="xlogo" viewBox="0 0 24 24" aria-hidden="true"><path fill="#F0B90B" d="M12 2.5l3 3-3 3-3-3zM6 8.5l3 3-3 3-3-3zm12 0l3 3-3 3-3-3zm-6 0l3 3-3 3-3-3zm0 6l3 3-3 3-3-3z"/></svg>Binance <span class="xtab-st" id="xtab-st-bnc">detenido</span></button>
+        <button class="xtab" type="button" id="xtab-okx" onclick="botTab('okx')"><span class="botl-dot" id="botl-dot-okx"></span><svg class="xlogo" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="5" fill="#000"/><path fill="#fff" d="M4 4h5v5H4zm11 0h5v5h-5zM9.5 9.5h5v5h-5zM4 15h5v5H4zm11 0h5v5h-5z"/></svg>OKX <span class="xtab-st" id="xtab-st-okx">detenido</span></button>
+      </div>
+      <div id="botl-det-bnc">
+        <div class="bot-chips" style="margin-bottom:8px">
           <span id="bot-pay-badge" class="bchip bchip-gold" style="display:none">—</span>
           <span id="bot-commission-label" class="bchip" style="display:none">—</span>
           <span id="bot-hidden-badge" class="bchip bchip-red" style="display:none" title="Binance ocultó tu anuncio del mercado (se acumularon órdenes). Sigue activo y repreciando; vuelve solo al completarse."><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="vertical-align:-2px"><path d="M2 2l20 20"/><path d="M6.7 6.7C4.4 8.2 2.8 10.4 2 12c1.7 3.6 5.5 6 10 6 1.7 0 3.3-.4 4.7-1"/><path d="M9.9 4.2A10 10 0 0 1 12 4c4.5 0 8.3 2.4 10 6-.7 1.4-1.7 2.7-3 3.7"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg> Oculto</span>
-            </div>
-            <div class="botl-sub" id="bot-status">Detenido</div>
-          </div>
-          <button class="btn btn-sm botl-btn" id="bot-toggle" type="button" onclick="event.stopPropagation();botToggle()">▶ Iniciar</button>
-          <span class="botl-chev" id="botl-chev-bnc">▾</span>
         </div>
-        <div class="botl-det" id="botl-det-bnc">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <button class="btn" id="bot-toggle" onclick="botToggle()" style="flex:0 0 50%;font-weight:700;font-size:17px">▶ Iniciar bot Binance</button>
+          <span id="bot-status" style="flex:1;min-width:0;font-size:14px;color:var(--text-3);text-align:center">Detenido</span>
+        </div>
       <!-- Info en vivo -->
       <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px" id="bot-live">
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
@@ -668,27 +672,24 @@
 
       <!-- Salud del bot (ultimo tick / reprice del servidor) -->
       <div id="bot-health" style="display:none;justify-content:space-between;font-size:12px;color:var(--text-3);margin:8px 2px 0;font-variant-numeric:tabular-nums"><span id="bh-tick">Tick: —</span><span id="bh-reprice">Reprice: —</span></div>
+      </div>
+      <div id="botl-det-okx" style="display:none">
+        <div class="bot-chips" style="margin-bottom:8px"><span class="bchip">sin fee</span></div>
+        <select id="okx-adsel" class="botl-sel" title="Tu anuncio de compra en OKX" style="width:100%;margin-bottom:8px"><option value="">Anuncio: auto</option></select>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <button class="btn" id="okx-bot-toggle" type="button" onclick="okxBotToggle(event)" style="flex:0 0 50%;font-weight:700;font-size:17px">Conectar OKX</button>
+          <span id="okx-bot-st" style="flex:1;min-width:0;font-size:14px;color:var(--text-3);text-align:center">No conectado</span>
         </div>
-        <div class="botl-row" onclick="botlToggle('okx')">
-          <span class="botl-dot" id="botl-dot-okx"></span>
-          <div class="botl-main">
-            <div class="botl-name">Bot OKX <span class="bchip">sin fee</span></div>
-            <div class="botl-sub" id="okx-bot-st">No conectado</div>
-          </div>
-          <button class="btn btn-sm botl-btn" id="okx-bot-toggle" type="button" onclick="event.stopPropagation();okxBotToggle(event)">Conectar</button>
-          <span class="botl-chev" id="botl-chev-okx">▸</span>
-        </div>
-        <div class="botl-det" id="botl-det-okx" style="display:none">
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <select id="okx-adsel" class="botl-sel" title="Tu anuncio de compra en OKX"><option value="">Anuncio: auto</option></select>
-            <button class="btn btn-sm" type="button" onclick="okxBook()">Libro</button>
-          </div>
-          <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px">
           <div class="botl-tile" title="El precio de tu anuncio de OKX ahora mismo"><div class="botl-lbl">Precio actual</div><div id="okx-cur-price" class="botl-val" style="color:var(--gold)">—</div></div>
           <div class="botl-tile" title="Precio de venta menos tu margen mínimo. OKX P2P no cobra comisión"><div class="botl-lbl">Precio máximo</div><div id="okx-ceiling" class="botl-val" style="color:var(--red)">—</div></div>
-          </div>
         </div>
+        <details class="bot-details admin-only" style="display:none;margin-top:10px">
+          <summary>Log de reprecio OKX</summary>
+          <div id="okx-log" style="font-size:14px;color:var(--text-2);max-height:120px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px"><span style="color:var(--text-3)">Sin actividad</span></div>
+        </details>
       </div>
+      <div style="height:10px"></div>
 
       <!-- Config bot: campos primarios (los que se ajustan a diario) -->
       <div class="bot-group">
@@ -752,7 +753,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=138"></script>
+<script src="/p2p-monitor/main.js?v=139"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
