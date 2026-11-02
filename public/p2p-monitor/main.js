@@ -1415,7 +1415,7 @@ function enterApp() {
         startMonitorView();
       }
     } catch(e) {}
-    try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { loadTradeMethods(ACTIVE_FIAT); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} try { checkAdminPending(); } catch(e) {} try { tgRefreshLink(); } catch(e) {} }
+    try { initTabs(); } catch(e) {} try { loadUserSettings(); } catch(e) {} try { loadTradeMethods(ACTIVE_FIAT); } catch(e) {} try { okxRefreshStatus(); } catch(e) {} try { hydrateBotState(); } catch(e) {} try { hydrateMon24(); } catch(e) {} try { loadOrderStats(); } catch(e) {} try { loadSubscription(); } catch(e) {} try { checkAdminPending(); } catch(e) {} try { tgRefreshLink(); } catch(e) {} }
 }
 
 // ── Suscripcion (Binance Pay) ───────────────────────────
@@ -2099,6 +2099,86 @@ function bncShowForm() {
   var f = document.getElementById('bnc-form');
   if (c) c.style.display = 'none';
   if (f) f.style.display = '';
+}
+
+// ── OKX (fase 1: solo lectura) ─────────────────────────
+// Conecta key + secret + passphrase y deja ver tus anuncios y el libro de OKX para
+// confirmar firma y formato con llaves reales antes de repreciar.
+var OKX = { connected: false };
+// Como botCallWorker, pero con el detalle de OKX en el error (codigo, estado): en
+// la primera conexion es lo que dice por que fallo.
+async function okxCall(path, body) {
+  if (!SESSION.token) throw new Error('Inicia sesión primero');
+  var r = await fetchRetry(BOT_CFG.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SESSION.token },
+    body: JSON.stringify({ path: path, params: body || {} })
+  }, 20000);
+  var d = await r.json().catch(function() { return {}; });
+  if (!r.ok) throw new Error((d.error || ('Error ' + r.status)) + (d.detail ? ' (' + d.detail + ')' : ''));
+  return d;
+}
+function okxSetConnected(on) {
+  OKX.connected = !!on;
+  var c = document.getElementById('okx-connected'), f = document.getElementById('okx-form');
+  if (c) c.style.display = on ? 'flex' : 'none';
+  if (f) f.style.display = on ? 'none' : '';
+}
+function okxShowForm() { okxSetConnected(false); }
+async function okxRefreshStatus() {
+  if (!SESSION.token) return;
+  try { var d = await okxCall('/okx-status'); okxSetConnected(!!d.connected); } catch (e) {}
+}
+async function okxConnect() {
+  var st = document.getElementById('okx-st');
+  var ids = ['cfg-okx-key', 'cfg-okx-secret', 'cfg-okx-pass'];
+  var v = ids.map(function(id) { return document.getElementById(id).value; });
+  if (!v[0].trim() || !v[1].trim() || !v[2]) { st.textContent = '⚠ Faltan datos: van las tres partes de la key'; st.style.color = 'var(--red)'; return; }
+  st.textContent = 'Validando con OKX...'; st.style.color = 'var(--text-2)';
+  try {
+    var d = await okxCall('/okx-connect', { apiKey: v[0].trim(), apiSecret: v[1].trim(), passphrase: v[2] });
+    ids.forEach(function(id) { document.getElementById(id).value = ''; });
+    st.textContent = '✓ Conectado' + (d.nick ? ' como ' + d.nick : ''); st.style.color = '#1D9E75';
+    okxSetConnected(true);
+  } catch (e) { st.textContent = '⚠ ' + e.message; st.style.color = 'var(--red)'; }
+}
+function closeOkxPreview() {
+  var m = document.getElementById('okx-modal');
+  if (m) m.style.display = 'none';
+  modalClosed('okx-modal');
+}
+async function okxPreview() {
+  var m = document.getElementById('okx-modal'), box = document.getElementById('okx-preview');
+  if (!m || !box) return;
+  document.getElementById('okx-fiat').textContent = ACTIVE_FIAT;
+  m.style.display = 'flex';
+  modalOpened('okx-modal');
+  box.innerHTML = '<div class="sub-help">Cargando desde OKX…</div>';
+  var price = function(n) { return fmtP(n) + fiatSuf(); };
+  var row = function(cols) { return '<div class="okx-row">' + cols.map(function(c) { return '<span>' + c + '</span>'; }).join('') + '</div>'; };
+  var html = '';
+  try {
+    var mine = await okxCall('/okx-my-ads', { fiat: ACTIVE_FIAT });
+    html += '<div class="sub-sec-title">Tus anuncios activos</div>';
+    html += mine.ads.length ? mine.ads.map(function(a) {
+      return row([a.side === 'buy' ? 'Compra' : 'Venta', price(a.price), fmt(a.available) + ' USDT',
+                  fmtM(a.min) + '–' + fmtM(a.max), '<span style="color:var(--text-3)">#' + esc(a.adId) + '</span>']);
+    }).join('') : '<div class="sub-help" style="margin:0 0 10px">No tienes anuncios activos en ' + esc(ACTIVE_FIAT) + '.</div>';
+    var mk = await okxCall('/okx-market', { fiat: ACTIVE_FIAT });
+    var book = function(title, list) {
+      return '<div class="sub-sec-title" style="margin-top:12px">' + title + '</div>' + (list.length ? list.slice(0, 6).map(function(a) {
+        return row([esc(a.merchant) + (a.isOwner ? ' <b style="color:var(--purple)">(tú)</b>' : ''), price(a.price), fmt(a.avail) + ' USDT',
+                    fmtM(a.minVES) + '–' + fmtM(a.maxVES), '<span style="color:var(--text-3)">' + esc((a.payTypes || []).join(', ')) + '</span>']);
+      }).join('') : '<div class="sub-help" style="margin:0">Sin anuncios.</div>');
+    };
+    // Compradores = donde vendes; Vendedores = donde compras (mismo criterio que el libro)
+    html += book('Compradores · mejor precio para vender', mk.buyers || []);
+    html += book('Vendedores · mejor precio para comprar', mk.sellers || []);
+    html += '<div class="sub-help" style="margin-top:12px">Los nombres de la última columna son los métodos de pago tal como los nombra OKX: los vamos a necesitar para el bot.</div>';
+    box.innerHTML = html;
+  } catch (e) {
+    box.innerHTML = html + '<div class="sub-help" style="color:var(--red)">⚠ ' + esc(e.message) + '</div>';
+  }
 }
 
 // Formatea una duracion en segundos de forma legible (seg / min / h).

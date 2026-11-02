@@ -526,7 +526,7 @@ export default async function handler(req, res) {
         const v = await okxBasicInfo({ key, secret, passphrase }).catch(e => ({ ok: false, msg: e.message }));
         if (!v.ok) {
           return res.status(400).json({
-            error: 'OKX rechazó las llaves. Revisa que copiaste las tres partes y que la key tiene permiso Read + Trade',
+            error: 'OKX rechazó las llaves. Revisa que copiaste las tres partes y que la key tiene el permiso Read',
             detail: [v.status, v.code, v.msg].filter(Boolean).join(' · '),
           });
         }

@@ -1210,3 +1210,9 @@ input:focus {
 .ob-role .btn { flex: 1; padding: 7px 4px; font-size: 13px; }
 .ob-role .btn.is-on { background: var(--gold); border-color: var(--gold); color: #0b0e11; font-weight: 700; }
 .sub-inp::placeholder { color: var(--text-2); opacity: .75; }
+
+/* OKX · vista previa (fase 1): filas compactas de anuncio. */
+.okx-row { display: grid; grid-template-columns: minmax(0, 1.4fr) auto auto auto minmax(0, 1fr); gap: 10px; align-items: baseline;
+  padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; font-variant-numeric: tabular-nums; }
+.okx-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .okx-row { grid-template-columns: minmax(0, 1fr) auto auto; } .okx-row span:nth-child(n+4) { display: none; } }
