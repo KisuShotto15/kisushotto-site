@@ -2101,10 +2101,11 @@ function bncShowForm() {
   if (f) f.style.display = '';
 }
 
-// ── OKX (fase 1: solo lectura) ─────────────────────────
-// Conecta key + secret + passphrase y deja ver tus anuncios y el libro de OKX para
-// confirmar firma y formato con llaves reales antes de repreciar.
-var OKX = { connected: false };
+// ── OKX ────────────────────────────────────────────────
+// Conecta key + secret + passphrase y controla el bot de OKX: reprecia tu anuncio de
+// compra con la misma config del bot de Binance. Lo corre el servidor (bot-tick); el
+// cliente solo lo prende/apaga y muestra estado y libro.
+var OKX = { connected: false, running: false, state: null, poll: null };
 // Como botCallWorker, pero con el detalle de OKX en el error (codigo, estado): en
 // la primera conexion es lo que dice por que fallo.
 async function okxCall(path, body) {
@@ -2123,6 +2124,9 @@ function okxSetConnected(on) {
   var c = document.getElementById('okx-connected'), f = document.getElementById('okx-form');
   if (c) c.style.display = on ? 'flex' : 'none';
   if (f) f.style.display = on ? 'none' : '';
+  var b = document.getElementById('okx-bot');
+  if (b) b.style.display = on ? 'flex' : 'none';
+  if (on) { okxLoadAds(); okxBotRefresh(); }
 }
 function okxShowForm() { okxSetConnected(false); }
 async function okxRefreshStatus() {
@@ -2142,42 +2146,92 @@ async function okxConnect() {
     okxSetConnected(true);
   } catch (e) { st.textContent = '⚠ ' + e.message; st.style.color = 'var(--red)'; }
 }
-function closeOkxPreview() {
+// Anuncios de compra para el selector. "Auto" = el primero visible.
+async function okxLoadAds() {
+  var sel = document.getElementById('okx-adsel');
+  if (!sel) return;
+  try {
+    var d = await okxCall('/okx-my-ads', { fiat: botFiat() });
+    var cur = (OKX.state && OKX.state.ad_id) || sel.value;
+    sel.innerHTML = '<option value="">Auto</option>' + d.ads.filter(function(a) { return a.side === 'buy'; }).map(function(a) {
+      return '<option value="' + esc(a.adId) + '">' + fmtP(a.price) + ' · ' + fmt(a.available) + ' USDT' + (a.hidden ? ' (oculto)' : '') + '</option>';
+    }).join('');
+    if (cur) sel.value = cur;
+    if (sel.value !== cur) sel.value = '';
+  } catch (e) {}
+}
+function okxRenderBot() {
+  var s = OKX.state || {};
+  OKX.running = !!s.enabled;
+  var t = document.getElementById('okx-bot-toggle'), st = document.getElementById('okx-bot-st');
+  if (t) { t.textContent = OKX.running ? '⏹ Detener' : '▶ Iniciar'; t.style.background = OKX.running ? '#E24B4A' : ''; }
+  if (st) {
+    var p = s.current_price != null ? fmtP(parseFloat(s.current_price)) + fiatSuf() + ' · ' : '';
+    st.textContent = OKX.running ? p + (s.status || 'Iniciando...') : (s.status && s.status !== 'Detenido' ? s.status : 'Detenido');
+    st.title = st.textContent;
+  }
+  var sel = document.getElementById('okx-adsel');
+  if (sel) sel.disabled = OKX.running;
+  clearInterval(OKX.poll);
+  if (OKX.running) OKX.poll = setInterval(okxBotRefresh, 20000);
+}
+async function okxBotRefresh() {
+  if (!SESSION.token) return;
+  try { OKX.state = await okxCall('/okx-bot-state'); okxRenderBot(); } catch (e) {}
+}
+async function okxBotToggle() {
+  var st = document.getElementById('okx-bot-st');
+  try {
+    if (OKX.running) {
+      await okxCall('/okx-bot-stop');
+    } else {
+      if (!(await requireSub())) return;
+      if (!(BOT_CFG.sellPrice > 0)) throw new Error('Pon el precio de venta en el panel del bot');
+      await okxCall('/okx-bot-start', { config: botServerConfig(), adId: document.getElementById('okx-adsel').value || null });
+    }
+    await okxBotRefresh();
+  } catch (e) { if (st) { st.textContent = '⚠ ' + e.message; st.title = e.message; } }
+}
+function closeOkxBook() {
   var m = document.getElementById('okx-modal');
   if (m) m.style.display = 'none';
   modalClosed('okx-modal');
 }
-async function okxPreview() {
-  var m = document.getElementById('okx-modal'), box = document.getElementById('okx-preview');
+// Libro de compradores. Con el bot corriendo se usa el que trajo en su ultimo ciclo
+// (cero requests extra); apagado, se pide uno a OKX.
+async function okxBook() {
+  var m = document.getElementById('okx-modal'), box = document.getElementById('okx-preview'), src = document.getElementById('okx-book-src');
   if (!m || !box) return;
-  document.getElementById('okx-fiat').textContent = ACTIVE_FIAT;
+  document.getElementById('okx-fiat').textContent = botFiat();
   m.style.display = 'flex';
   modalOpened('okx-modal');
-  box.innerHTML = '<div class="sub-help">Cargando desde OKX…</div>';
-  var price = function(n) { return fmtP(n) + fiatSuf(); };
+  box.innerHTML = '<div class="sub-help">Cargando…</div>';
+  src.textContent = '';
   var row = function(cols) { return '<div class="okx-row">' + cols.map(function(c) { return '<span>' + c + '</span>'; }).join('') + '</div>'; };
-  var html = '';
   try {
-    var mine = await okxCall('/okx-my-ads', { fiat: ACTIVE_FIAT });
-    html += '<div class="sub-sec-title">Tus anuncios activos</div>';
-    html += mine.ads.length ? mine.ads.map(function(a) {
-      return row([a.side === 'buy' ? 'Compra' : 'Venta', price(a.price), fmt(a.available) + ' USDT',
-                  fmtM(a.min) + '–' + fmtM(a.max), '<span style="color:var(--text-3)">#' + esc(a.adId) + '</span>']);
-    }).join('') : '<div class="sub-help" style="margin:0 0 10px">No tienes anuncios activos en ' + esc(ACTIVE_FIAT) + '.</div>';
-    var mk = await okxCall('/okx-market', { fiat: ACTIVE_FIAT });
-    var book = function(title, list) {
-      return '<div class="sub-sec-title" style="margin-top:12px">' + title + '</div>' + (list.length ? list.slice(0, 6).map(function(a) {
-        return row([esc(a.merchant) + (a.isOwner ? ' <b style="color:var(--purple)">(tú)</b>' : ''), price(a.price), fmt(a.avail) + ' USDT',
-                    fmtM(a.minVES) + '–' + fmtM(a.maxVES), '<span style="color:var(--text-3)">' + esc((a.payTypes || []).join(', ')) + '</span>']);
-      }).join('') : '<div class="sub-help" style="margin:0">Sin anuncios.</div>');
-    };
-    // Compradores = donde vendes; Vendedores = donde compras (mismo criterio que el libro)
-    html += book('Compradores · mejor precio para vender', mk.buyers || []);
-    html += book('Vendedores · mejor precio para comprar', mk.sellers || []);
-    html += '<div class="sub-help" style="margin-top:12px">Los nombres de la última columna son los métodos de pago tal como los nombra OKX: los vamos a necesitar para el bot.</div>';
+    await okxBotRefresh();
+    var s = OKX.state || {}, b = s.book, list, when;
+    if (OKX.running && b && b.buyers && Date.now() - b.ts < 120000) {
+      list = b.buyers; when = 'Del último ciclo del bot, hace ' + fmtDur((Date.now() - b.ts) / 1000) + '.';
+    } else {
+      var mk = await okxCall('/okx-market', { fiat: botFiat() });
+      list = mk.buyers || []; when = 'Consultado ahora.';
+    }
+    src.textContent = when;
+    var html = list.length ? list.slice(0, 10).map(function(a) {
+      return row([esc(a.merchant) + (a.isOwner ? ' <b style="color:var(--purple)">(tú)</b>' : ''), fmtP(a.price) + fiatSuf(), fmt(a.avail) + ' USDT',
+                  fmtM(a.minVES) + '–' + fmtM(a.maxVES), '<span style="color:var(--text-3)">' + esc((a.payTypes || []).join(', ')) + '</span>']);
+    }).join('') : '<div class="sub-help" style="margin:0">Sin compradores.</div>';
+    var log = (s.log || []).slice(-6).reverse();
+    if (log.length) {
+      html += '<div class="sub-sec-title" style="margin-top:12px">Bot OKX</div>' + log.map(function(l) {
+        var c = l.level === 'error' ? 'var(--red)' : (l.level === 'warn' ? 'var(--gold)' : 'var(--text-2)');
+        return '<div style="font-size:13px;color:' + c + ';padding:2px 0">' + new Date(l.ts).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) + ' · ' + esc(l.msg) + '</div>';
+      }).join('');
+    }
     box.innerHTML = html;
   } catch (e) {
-    box.innerHTML = html + '<div class="sub-help" style="color:var(--red)">⚠ ' + esc(e.message) + '</div>';
+    box.innerHTML = '<div class="sub-help" style="color:var(--red)">⚠ ' + esc(e.message) + '</div>';
   }
 }
 
@@ -3800,6 +3854,7 @@ function saveBotConfig() {
   // y aplica el cambio de verdad (ver la firma de ciclo en renderBotState).
   // Si el bot ya corre en el servidor, empujar la config en caliente (limite, spread, etc.).
   if (BOT.running) botCallWorker('/bot-config', { config: botServerConfig() }).catch(function(){});
+  if (OKX.running) okxCall('/okx-bot-config', { config: botServerConfig() }).catch(function(){});
   // Destello corto: el "✓ Guardado" fijo competia con los datos del panel.
   var st = document.getElementById('bot-cfg-st');
   st.textContent = '✓ Guardado'; st.style.color = '#1D9E75';

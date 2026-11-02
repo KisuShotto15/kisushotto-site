@@ -1,6 +1,7 @@
 // Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~15s.
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
-import { sql, ensureMarketHist, ensureBotAdMinLimit, ensureHistMaps } from './_lib/db.js';
+import { sql, ensureMarketHist, ensureBotAdMinLimit, ensureHistMaps, ensureOkxCreds } from './_lib/db.js';
+import { okxActiveAds, okxMarketplace, okxPendingOrders, okxUpdatePrice, okxAdForReprice, okxRawForReprice, okxBuyAds, okxRoundPrice, mapOkxAd } from './_lib/okx.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
@@ -542,6 +543,129 @@ async function maybeCheckOrders(row, now, notify = true) {
   return { known: newKnown, checkedAt, log };
 }
 
+// ── Bot de OKX ─────────────────────────────────────────
+// Mismo algoritmo y misma config que el de Binance (computeReprice; la config la
+// manda el cliente desde el panel del bot), solo el anuncio de compra. Diferencias de OKX:
+// - ad/update cancela el anuncio y crea otro: se sigue el newAdId.
+// - no se reprecia con una orden abierta en el anuncio (podria cancelarla).
+// - el libro que ya se pidio para repreciar se guarda para mostrarlo en la app.
+async function tickOkx(row) {
+  const cfg = row.config || {};
+  let log = row.log;
+  let adId = row.ad_id;
+  let currentPrice = row.current_price;
+  let lastReprice = row.last_reprice;
+  let book = row.book;
+  const keep = (status, extra) => ({ enabled: true, status, log, adId, currentPrice, lastReprice, book, ...extra });
+  const creds = {
+    key: decrypt({ ct: row.enc_key, iv: row.iv_key, tag: row.tag_key }),
+    secret: decrypt({ ct: row.enc_secret, iv: row.iv_secret, tag: row.tag_secret }),
+    passphrase: decrypt({ ct: row.enc_pass, iv: row.iv_pass, tag: row.tag_pass }),
+  };
+  const fiat = cfg.fiat || DEFAULT_FIAT;
+  const err = r => '[' + [r.status, r.code].filter(Boolean).join(' · ') + '] ' + (r.msg || '');
+
+  const my = await okxActiveAds(creds, { side: 'buy', fiat });
+  if (!my.ok) { log = pushLog(log, 'Anuncios OKX ' + err(my), 'warn'); return keep('Error leyendo anuncios'); }
+  const ads = Array.isArray(my.data) ? my.data : [];
+  // El id guardado deja de existir tras cada reprice si el tick se corto antes de
+  // guardarlo: en ese caso, el primer anuncio de compra visible.
+  const ad = ads.find(a => String(a.adId) === String(adId)) || ads.find(a => a.isHidden !== true && a.isHidden !== 'true');
+  if (!ad) { log = pushLog(log, 'Sin anuncio de compra USDT/' + fiat + ' visible en OKX', 'warn'); return keep('Anuncio no encontrado'); }
+  if (String(ad.adId) !== String(adId) && adId) log = pushLog(log, 'Anuncio OKX ' + adId + ' no está; uso ' + ad.adId, 'warn');
+  adId = String(ad.adId);
+  currentPrice = parseFloat(ad.unitPrice);
+
+  // Oculto (lo pausaste o se quedo sin fondos) → detener, igual que en Binance.
+  if (row.last_tick && (ad.isHidden === true || ad.isHidden === 'true')) {
+    const sinFondos = String(ad.hiddenCategory) === '3';
+    log = pushLog(log, sinFondos ? '🛑 Anuncio OKX sin fondos — bot detenido' : '🛑 Anuncio OKX oculto — bot detenido', 'warn');
+    await botNotify(cfg, row.user_id, '🔴 <b>Bot OKX detenido</b>\n' + (sinFondos ? 'El anuncio se quedó sin fondos.' : 'El anuncio está oculto en OKX.'),
+      '🔴 Bot OKX detenido', sinFondos ? 'El anuncio se quedó sin fondos' : 'El anuncio está oculto en OKX');
+    return keep('Detenido: anuncio oculto', { enabled: false });
+  }
+  if (!cfg.sellPrice) { log = pushLog(log, 'Configura el precio de venta en el bot', 'warn'); return keep('Falta precio de venta'); }
+
+  const myMin = parseFloat(ad.minOrderSize) || 0;
+  const mkt = await okxMarketplace(creds, { side: 'buy', fiat, amount: myMin + (cfg.limitThreshold || 0), limit: 50, sortType: 'price_desc' });
+  if (!mkt.ok) { log = pushLog(log, 'Libro OKX ' + err(mkt), 'warn'); return keep('Error leyendo el libro'); }
+  const raw = okxBuyAds(mkt.data);
+  book = { ts: Date.now(), buyers: raw.map(mapOkxAd).filter(a => a.price > 0).sort((a, b) => b.price - a.price).slice(0, 10)
+    .map(a => ({ merchant: a.merchant, price: a.price, avail: a.avail, minVES: a.minVES, maxVES: a.maxVES, payTypes: a.payTypes, isOwner: a.isOwner || a.advNo === adId })) };
+
+  const step = parseFloat(ad.fiatPriceIncrement) > 0 ? parseFloat(ad.fiatPriceIncrement) : 0.001;
+  // Sin filtro de verificados: en OKX el taker ve a todos. Mis otros anuncios no compiten.
+  const res = computeReprice({
+    ad: okxAdForReprice(ad),
+    marketRaw: raw.filter(a => !(a.isOwner === true || a.isOwner === 'true')).map(okxRawForReprice),
+    cfg: { ...cfg, verifiedOnly: false, increment: Math.max(cfg.increment || 0.001, step) },
+  });
+  if (res.targetPrice === null) return keep(res.reason);
+  const price = okxRoundPrice(res.targetPrice, step, res.ceiling);
+  if (Math.abs(price - currentPrice) < step / 2) return keep('Posición óptima');
+
+  // Con una orden en curso no se toca: el update cancela y recrea el anuncio.
+  const pend = await okxPendingOrders(creds, adId);
+  if (!pend.ok) { log = pushLog(log, 'Órdenes OKX ' + err(pend), 'warn'); return keep('En espera: no pude revisar órdenes'); }
+  const open = (Array.isArray(pend.data) ? pend.data : (pend.data ? [pend.data] : [])).filter(o => o && o.orderId);
+  if (open.length) return keep('En espera: orden abierta');
+
+  const up = await okxUpdatePrice(creds, adId, price);
+  if (!up.ok) {
+    log = pushLog(log, 'Update OKX ' + err(up), 'error');
+    return keep('Error al actualizar');
+  }
+  const d = Array.isArray(up.data) ? up.data[0] : up.data;
+  if (d && d.newAdId) adId = String(d.newAdId);
+  const isUp = price > currentPrice;
+  log = pushLog(log, (isUp ? '↑' : '↓') + ' ' + currentPrice.toFixed(3) + ' → ' + price.toFixed(3) + ' ' + fiatUnit(fiat) + ' | ' + res.reason, isUp ? 'up' : 'down');
+  currentPrice = price;
+  lastReprice = new Date().toISOString();
+  return keep('✓ Repreciado');
+}
+
+async function tickOkxAll(adminId, graceFrom) {
+  await ensureOkxCreds();
+  const rows = await sql`
+    SELECT o.user_id, o.ad_id, o.current_price, o.last_reprice, o.last_tick, o.log, o.book, COALESCE(o.config, b.config) AS config,
+           c.enc_key, c.iv_key, c.tag_key, c.enc_secret, c.iv_secret, c.tag_secret, c.enc_pass, c.iv_pass, c.tag_pass
+    FROM okx_bot o
+    JOIN okx_creds c ON c.user_id = o.user_id
+    LEFT JOIN bot_state b ON b.user_id = o.user_id
+    LEFT JOIN subscriptions s ON s.user_id = o.user_id
+    WHERE o.enabled = true
+      AND (o.user_id = ${adminId}
+        OR (s.status = 'trialing' AND s.trial_end > now())
+        OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))
+    LIMIT ${MAX_USERS}`;
+  for (const row of rows) {
+    const claim = await sql`
+      UPDATE okx_bot SET last_tick = now()
+      WHERE user_id = ${row.user_id} AND enabled = true
+        AND (last_tick IS NULL OR last_tick < now() - interval '12 seconds')
+      RETURNING user_id`;
+    if (!claim.length) continue;
+    let out;
+    try { out = await tickOkx(row); }
+    catch (e) {
+      out = { enabled: true, status: 'Error: ' + e.message, log: pushLog(row.log, 'Error: ' + e.message, 'error'),
+              adId: row.ad_id, currentPrice: row.current_price, lastReprice: row.last_reprice, book: row.book };
+    }
+    await sql`
+      UPDATE okx_bot SET
+        enabled = enabled AND ${out.enabled},
+        status = ${out.status || null},
+        log = ${JSON.stringify(out.log || [])}::jsonb,
+        ad_id = ${out.adId || null},
+        current_price = ${out.currentPrice != null && isFinite(out.currentPrice) ? out.currentPrice : null},
+        last_reprice = ${out.lastReprice || null},
+        book = ${out.book ? JSON.stringify(out.book) : null}::jsonb,
+        updated_at = now()
+      WHERE user_id = ${row.user_id}`;
+  }
+  return rows.length;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!process.env.BOT_TICK_SECRET || req.headers['x-bot-secret'] !== process.env.BOT_TICK_SECRET) {
@@ -579,6 +703,10 @@ export default async function handler(req, res) {
           OR (s.status = 'trialing' AND s.trial_end > now())
           OR (s.status = 'active' AND s.current_period_end > ${graceFrom}))
       LIMIT ${MAX_USERS}`;
+
+    // Bot de OKX (aparte del de Binance; un fallo aca no frena al otro).
+    let okxBots = 0;
+    try { okxBots = await tickOkxAll(adminId, graceFrom); } catch (e) {}
 
     let ticked = 0;
     for (const row of rows) {
@@ -685,7 +813,7 @@ export default async function handler(req, res) {
     let monitored = 0;
     // ms hasta el proximo trabajo real: el scheduler espacia su alarma con esto.
     // Con bots activos siempre hay trabajo en el proximo tick.
-    let nextMs = rows.length ? 0 : Infinity;
+    let nextMs = (rows.length || okxBots) ? 0 : Infinity;
     for (const row of mrows) {
       let out;
       try {
@@ -714,9 +842,9 @@ export default async function handler(req, res) {
     // (15s con bots, 30s solo-monitor, backoff si no hay nada habilitado).
     // nextSec: sin bots, cuando toca el proximo refresh de monitor. tickMonitor
     // ya devuelve cuanto falta (incluye silencio nocturno y latido del cliente).
-    const nextSec = (!rows.length && mrows.length && nextMs !== Infinity)
+    const nextSec = (!rows.length && !okxBots && mrows.length && nextMs !== Infinity)
       ? Math.max(Math.round(nextMs / 1000), 5) : null;
-    return res.status(200).json({ ok: true, ticked, monitored, bots: rows.length, monitors: mrows.length, nextSec });
+    return res.status(200).json({ ok: true, ticked, monitored, bots: rows.length + okxBots, okxBots, monitors: mrows.length, nextSec });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

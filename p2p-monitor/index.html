@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=50">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=51">
 </head>
 <body>
 
@@ -102,14 +102,14 @@
 <!-- Suscripcion -->
 <!-- Primeros pasos. Al activar la prueba el usuario caia en la app sin Binance,
      sin Telegram y sin nada que le dijera por donde empezar. -->
-<!-- OKX: vista previa (fase 1, solo lectura) -->
-<div id="okx-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3050;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeOkxPreview()">
+<!-- OKX: libro de compradores (el que el bot ya trae en cada ciclo) + log del bot -->
+<div id="okx-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3050;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeOkxBook()">
   <div class="sub-card" style="max-width:560px;text-align:left">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
-      <div style="font-size:18px;font-weight:700;color:var(--gold)">OKX · <span id="okx-fiat"></span>/USDT</div>
-      <button class="btn btn-sm" type="button" onclick="closeOkxPreview()">✕</button>
+      <div style="font-size:18px;font-weight:700;color:var(--gold)">OKX · Compradores <span id="okx-fiat"></span>/USDT</div>
+      <button class="btn btn-sm" type="button" onclick="closeOkxBook()">✕</button>
     </div>
-    <div class="sub-help" style="margin:0 0 10px">Solo lectura, para confirmar que tu key funciona. Nada de esto modifica tus anuncios.</div>
+    <div class="sub-help" id="okx-book-src" style="margin:0 0 10px"></div>
     <div id="okx-preview"></div>
   </div>
 </div>
@@ -589,13 +589,12 @@
             <span id="bnc-st" style="display:block;font-size:13px;color:var(--text-2);margin-top:6px"></span>
             <div style="font-size:12px;color:var(--text-2);margin-top:7px;line-height:1.45">Sin permiso de retiro: tus fondos no se pueden mover. <a href="#" onclick="openApiKeyModal();return false" style="color:var(--gold);text-decoration:underline">Cómo crear la API key</a></div>
           </div>
-          <!-- OKX, fase 1: solo lectura. Conecta las tres partes de la key y deja ver
-               tus anuncios y el libro para confirmar la firma antes de repreciar. -->
-          <div class="ptitle" style="margin:12px 0 6px">OKX <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-3)">· beta, solo lectura</span></div>
+          <!-- OKX: las tres partes de la key. El bot se controla desde el panel. -->
+          <div class="ptitle" style="margin:12px 0 6px">OKX <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-3)">· beta</span></div>
           <div id="okx-connected" style="display:none;align-items:center;justify-content:space-between;gap:8px;background:var(--surf-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 11px">
             <span style="font-size:13px;color:#1D9E75">✓ OKX conectado</span>
             <span style="display:flex;gap:6px;flex-shrink:0">
-              <button class="btn btn-sm" type="button" onclick="okxPreview()">Ver mercado</button>
+              <button class="btn btn-sm" type="button" onclick="okxBook()">Ver libro</button>
               <button class="btn btn-sm" type="button" onclick="okxShowForm()">Cambiar</button>
             </span>
           </div>
@@ -605,7 +604,7 @@
             <input class="auth-inp" type="password" id="cfg-okx-pass" autocomplete="off" data-bwignore data-1p-ignore placeholder="Passphrase">
             <button class="btn btn-gold btn-sm" style="width:100%;margin-top:8px" onclick="okxConnect()">Conectar OKX</button>
             <span id="okx-st" style="display:block;font-size:13px;color:var(--text-2);margin-top:6px"></span>
-            <div style="font-size:12px;color:var(--text-2);margin-top:7px;line-height:1.45">Basta el permiso <b>Read</b> (sin Trade ni Withdraw): por ahora la app solo lee y no toca ningún anuncio.</div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:7px;line-height:1.45">Para que el bot reprecie, la key necesita <b>Read</b> y <b>Trade</b>. Nunca le des <b>Withdraw</b>.</div>
           </div>
         </div>
         <div class="cfg-row" style="margin-top:8px"><span>Anuncio</span><div style="display:flex;gap:4px;align-items:center"><select id="cfg-bot-adsel" onchange="onAdSelect()" style="font-size:13px;max-width:160px"><option value="">Auto-detectar</option></select><button class="btn btn-sm" type="button" onclick="loadMyAds()" title="Cargar mis anuncios">↻</button></div></div>
@@ -639,6 +638,16 @@
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <button class="btn" id="bot-toggle" onclick="botToggle()" style="flex:0 0 50%;font-weight:700;font-size:17px">▶ Iniciar Bot</button>
         <span id="bot-status" style="flex:1;min-width:0;font-size:14px;color:var(--text-3);text-align:center">Detenido</span>
+      </div>
+
+      <!-- Bot de OKX: mismo precio de venta, spread e incremento que el de Binance.
+           Solo aparece con OKX conectado (Bot ⚙ → OKX). -->
+      <div id="okx-bot" class="okx-bot" style="display:none">
+        <b class="okx-tag">OKX</b>
+        <select id="okx-adsel" title="Tu anuncio de compra en OKX"><option value="">Auto</option></select>
+        <button class="btn btn-sm" id="okx-bot-toggle" type="button" onclick="okxBotToggle()">▶ Iniciar</button>
+        <span id="okx-bot-st" class="okx-bot-st">Detenido</span>
+        <button class="btn btn-sm" type="button" onclick="okxBook()">Libro</button>
       </div>
 
       <!-- Info en vivo -->
@@ -726,7 +735,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=136"></script>
+<script src="/p2p-monitor/main.js?v=137"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

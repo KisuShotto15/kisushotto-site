@@ -73,3 +73,21 @@ test('splitMarketplace: compradores de mayor a menor, vendedores de menor a mayo
   assert.deepEqual(sellers.map(x => x.advNo), ['s1', 's2']);
   assert.deepEqual(splitMarketplace(null), { buyers: [], sellers: [] });
 });
+
+test('okx: reprice de compra con el libro de OKX (adaptador + computeReprice)', async () => {
+  const { okxAdForReprice, okxRawForReprice, okxRoundPrice } = await import('../api/_lib/okx.js');
+  const { computeReprice } = await import('../api/_lib/reprice.js');
+  const mk = (adId, price, extra) => ({ adId, unitPrice: String(price), minOrderSize: '50000', maxOrderSize: '2000000',
+    availableAmount: '500', paymentMethods: ['pagoMovil'], isOwner: 'false', creator: { nickName: 'n' + adId, type: 'common' }, ...extra });
+  const mine = mk('me', 995, { fiatCurrency: 'ves' });
+  const lo = { minOrderSize: '40000' };
+  const book = [mk('a', 1001.5, lo), mk('b', 999, lo), mk('c', 1003, { ...lo, paymentMethods: ['zelle'] })];
+  const res = computeReprice({ ad: okxAdForReprice(mine), marketRaw: book.map(okxRawForReprice),
+    cfg: { sellPrice: 1020, minSpread: 1, commission: 0, increment: 0.01, maxGap: 10, verifiedOnly: false } });
+  // c no comparte metodo de pago; sube sobre a (1001.5 + 0.01)
+  assert.ok(Math.abs(res.targetPrice - 1001.51) < 1e-9, String(res.targetPrice));
+  assert.equal(okxRoundPrice(1001.5149, 0.01, res.ceiling), 1001.51);
+  // nunca sobre el techo
+  assert.equal(okxRoundPrice(1009.796, 0.01, 1009.79), 1009.79);
+  assert.equal(okxRoundPrice(1009.7951, 0.01, 1009.792), 1009.79);
+});

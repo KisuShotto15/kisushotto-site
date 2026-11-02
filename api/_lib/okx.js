@@ -50,11 +50,47 @@ export const okxPendingOrders = (creds, adId) =>
   okxRequest(creds, 'GET', '/api/v5/p2p/order/pending-order', { adId });
 // Libro publico. amount = monto en fiat que el anuncio debe aceptar por orden (el
 // equivalente al transAmount de Binance).
-export const okxMarketplace = (creds, { side = 'all', fiat, crypto = 'USDT', paymentMethod, amount, limit = 20 }) =>
+export const okxMarketplace = (creds, { side = 'all', fiat, crypto = 'USDT', paymentMethod, amount, limit = 20, sortType }) =>
   okxRequest(creds, 'GET', '/api/v5/p2p/ad/marketplace-list', {
     side, cryptoCurrency: crypto, fiatCurrency: fiat, paymentMethod,
-    minFiatAmountPerOrder: amount > 0 ? amount : undefined, limit,
+    minFiatAmountPerOrder: amount > 0 ? amount : undefined, limit, sortType,
   });
+// Precio fijo: si el anuncio era flotante, unitPrice se ignora sin type=limit.
+// OKX cancela el anuncio y crea otro: la respuesta trae newAdId.
+export const okxUpdatePrice = (creds, adId, price) =>
+  okxRequest(creds, 'POST', '/api/v5/p2p/ad/update', { adId: String(adId), type: 'limit', unitPrice: String(price) });
+
+// ── Adaptador al reprice de Binance (computeReprice en reprice.js) ──
+// Mi anuncio de active-list → la forma de getMyAds de Binance.
+export function okxAdForReprice(ad) {
+  return {
+    advNo: String(ad.adId), price: ad.unitPrice, minSingleTransAmount: ad.minOrderSize,
+    fiat: ad.fiatCurrency ? String(ad.fiatCurrency).toUpperCase() : undefined,
+    tradeMethods: (Array.isArray(ad.paymentMethods) ? ad.paymentMethods : []).map(id => ({ identifier: id })),
+  };
+}
+// Anuncio del libro de OKX → la forma de publicSearch de Binance.
+export function okxRawForReprice(ad) {
+  const a = mapOkxAd(ad);
+  return {
+    adv: { advNo: a.advNo, price: String(a.price), minSingleTransAmount: String(a.minVES), maxSingleTransAmount: String(a.maxVES),
+           tradableQuantity: String(a.avail), tradeMethods: a.payTypes.map(id => ({ identifier: id })) },
+    advertiser: { nickName: a.merchant, badges: a.badges },
+  };
+}
+// Lista de compradores del libro (marketplace-list side=buy) en bruto.
+export function okxBuyAds(data) {
+  const d = Array.isArray(data) ? (data[0] || {}) : (data || {});
+  return Array.isArray(d.buyAds) ? d.buyAds : [];
+}
+// Redondeo al paso de precio de OKX sin pasarse del techo.
+export function okxRoundPrice(price, step, ceiling) {
+  const s = step > 0 ? step : 0.001;
+  const dec = Math.max(0, Math.round(-Math.log10(s)));
+  let p = Number((Math.round(price / s) * s).toFixed(dec));
+  if (ceiling != null && p > ceiling + 1e-9) p = Number((p - s).toFixed(dec));
+  return p;
+}
 
 // ── Normalizacion ─────────────────────────────────────
 // Anuncio de OKX → la misma forma que usa el monitor para Binance (ver mapAds en

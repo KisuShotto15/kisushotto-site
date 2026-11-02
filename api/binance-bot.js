@@ -501,10 +501,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── OKX (fase 1: solo lectura) ──────────────────────
-  // Conectar/estado/desconectar y leer anuncios propios y el libro. Nada de aca
-  // modifica anuncios: sirve para confirmar firma y formato con llaves reales antes
-  // de repreciar. Va en este router para no sumar funciones (Hobby: 12 maximo).
+  // ── OKX ─────────────────────────────────────────────
+  // Conectar/estado/desconectar, leer anuncios propios y el libro, y prender/apagar
+  // el bot (el reprice lo hace bot-tick). Va en este router para no sumar funciones (Hobby: 12 maximo).
   if (path && path.startsWith('/okx-')) {
     try {
       await ensureSchema();
@@ -541,6 +540,35 @@ export default async function handler(req, res) {
         const info = Array.isArray(v.data) ? v.data[0] : v.data;
         return res.status(200).json({ ok: true, nick: (info && info.nickName) || null });
       }
+      // Bot de OKX: lo corre bot-tick. Aca solo se prende, apaga y lee.
+      if (path === '/okx-bot-state') {
+        const rows = await sql`SELECT enabled, ad_id, current_price, last_reprice, last_tick, status, log, book FROM okx_bot WHERE user_id = ${user.uid}`;
+        return res.status(200).json(rows[0] || { enabled: false });
+      }
+      if (path === '/okx-bot-stop') {
+        await sql`UPDATE okx_bot SET enabled = false, status = 'Detenido', updated_at = now() WHERE user_id = ${user.uid}`;
+        return res.status(200).json({ ok: true });
+      }
+      if (path === '/okx-bot-config') {
+        const cfg = JSON.stringify((params && params.config) || {});
+        await sql`UPDATE okx_bot SET config = ${cfg}::jsonb, updated_at = now() WHERE user_id = ${user.uid} AND enabled = true`;
+        return res.status(200).json({ ok: true });
+      }
+      if (path === '/okx-bot-start') {
+        const c = (params && params.config) || {};
+        if (!(c.sellPrice > 0)) return res.status(400).json({ error: 'Pon el precio de venta en el panel del bot' });
+        const has = await sql`SELECT 1 FROM okx_creds WHERE user_id = ${user.uid}`;
+        if (!has.length) return res.status(400).json({ error: 'Conecta OKX primero' });
+        const adId = params && params.adId ? String(params.adId) : null;
+        const cfg = JSON.stringify(c);
+        await sql`
+          INSERT INTO okx_bot (user_id, enabled, config, ad_id, status, log, updated_at)
+          VALUES (${user.uid}, true, ${cfg}::jsonb, ${adId}, 'Iniciando...', '[]'::jsonb, now())
+          ON CONFLICT (user_id) DO UPDATE SET enabled = true, config = ${cfg}::jsonb, ad_id = ${adId},
+            status = 'Iniciando...', log = '[]'::jsonb, last_tick = NULL, last_reprice = NULL, current_price = NULL, updated_at = now()`;
+        await pokeScheduler();
+        return res.status(200).json({ ok: true });
+      }
       const creds = await okxCreds(user.uid);
       if (!creds) return res.status(400).json({ error: 'Conecta OKX primero' });
       const fiat = okxFiat(params);
@@ -554,6 +582,7 @@ export default async function handler(req, res) {
           priceMargin: a.priceMargin != null ? parseFloat(a.priceMargin) : null,
           available: parseFloat(a.availableAmount), onHold: parseFloat(a.onHoldAmount) || 0,
           min: parseFloat(a.minOrderSize), max: parseFloat(a.maxOrderSize), fiat: a.fiatCurrency, crypto: a.cryptoCurrency,
+          hidden: a.isHidden === true || a.isHidden === 'true',
         }));
         return res.status(200).json({ fiat, ads });
       }

@@ -209,6 +209,15 @@ export async function ensureOkxCreds() {
     enc_pass TEXT NOT NULL, iv_pass TEXT NOT NULL, tag_pass TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // Estado del bot de OKX. config = la misma del bot de Binance (precio de venta,
+  // spread, incremento...), la manda el cliente al iniciar y al guardar. ad_id
+  // cambia con cada reprice: OKX cancela el anuncio y crea otro con id nuevo.
+  await sql`CREATE TABLE IF NOT EXISTS okx_bot (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    enabled BOOLEAN DEFAULT false, config JSONB,
+    ad_id TEXT, current_price NUMERIC, status TEXT, log JSONB DEFAULT '[]'::jsonb,
+    book JSONB, last_tick TIMESTAMPTZ, last_reprice TIMESTAMPTZ, updated_at TIMESTAMPTZ DEFAULT now()
+  )`;
   okxCredsReady = true;
 }
 

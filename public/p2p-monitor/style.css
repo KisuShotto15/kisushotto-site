@@ -1215,4 +1215,9 @@ input:focus {
 .okx-row { display: grid; grid-template-columns: minmax(0, 1.4fr) auto auto auto minmax(0, 1fr); gap: 10px; align-items: baseline;
   padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; font-variant-numeric: tabular-nums; }
 .okx-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.okx-bot { align-items: center; gap: 8px; margin: -2px 0 10px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); }
+.okx-tag { font-size: 12px; letter-spacing: .05em; color: var(--text-2); }
+.okx-bot select { font-size: 13px; max-width: 150px; min-width: 0; }
+.okx-bot-st { flex: 1; min-width: 0; font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .okx-bot { flex-wrap: wrap; } .okx-bot select { flex: 1 1 0; max-width: none; } .okx-bot-st { flex-basis: 100%; order: 9; } }
 @media (max-width: 640px) { .okx-row { grid-template-columns: minmax(0, 1fr) auto auto; } .okx-row span:nth-child(n+4) { display: none; } }
