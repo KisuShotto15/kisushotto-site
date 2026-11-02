@@ -27,7 +27,7 @@ function mockOkx(mine, buyers, pending = []) {
   };
   return calls;
 }
-const cfg = { sellPrice: 1030, minSpread: 1, commission: 0, increment: 0.001, maxGap: 1, fiat: 'VES' };
+const cfg = { sellPrice: 1030, minSpread: 1, commission: 0.2, increment: 0.001, maxGap: 1, fiat: 'VES' };
 const lo = { minOrderSize: '40000' };
 const book = [ad('a', 1001, lo), ad('b', 1000.36, lo), ad('mine2', 748, { ...lo, isOwner: 'true' })];
 
@@ -60,4 +60,12 @@ test('okx tick: anuncio oculto despues del arranque detiene el bot', async () =>
   mockOkx([ad('x', 1001.001, { isHidden: 'true' })], book);
   const out = await tickOkx({ user_id: 1, ad_id: 'x', last_tick: new Date().toISOString(), log: [], config: cfg, ...creds() });
   assert.equal(out.enabled, false);
+});
+
+test('okx tick: el techo ignora la comision de Binance (OKX P2P sin fee)', async () => {
+  // techo con fee 0.2%: 1011*0.99*0.998 = 998.9; sin fee: 1000.89 → debe pasar a b (1000.36)
+  const calls = mockOkx([ad('x', 999)], [ad('b', 1000.36, lo)]);
+  const out = await tickOkx({ user_id: 1, ad_id: 'x', last_tick: new Date().toISOString(), log: [], config: { ...cfg, sellPrice: 1011, maxGap: 2 }, ...creds() });
+  assert.equal(calls.find(c => c.path.endsWith('/ad/update')).body.unitPrice, '1000.361');
+  assert.equal(out.currentPrice, 1000.361);
 });

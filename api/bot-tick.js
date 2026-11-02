@@ -600,10 +600,11 @@ export async function tickOkx(row) {
 
   const step = parseFloat(ad.fiatPriceIncrement) > 0 ? parseFloat(ad.fiatPriceIncrement) : 0.001;
   // Sin filtro de verificados: en OKX el taker ve a todos. Mis otros anuncios no compiten.
+  // commission 0: el P2P de OKX no cobra fee (la comision de la config es la de Binance).
   const res = computeReprice({
     ad: okxAdForReprice(ad),
     marketRaw: raw.filter(a => !(a.isOwner === true || a.isOwner === 'true')).map(okxRawForReprice),
-    cfg: { ...cfg, verifiedOnly: false, increment: Math.max(cfg.increment || 0.001, step), maxGap: first ? 1e12 : cfg.maxGap },
+    cfg: { ...cfg, commission: 0, verifiedOnly: false, increment: Math.max(cfg.increment || 0.001, step), maxGap: first ? 1e12 : cfg.maxGap },
   });
   // Publicar el anuncio oculto una vez que su precio ya es el correcto.
   const show = async () => {
