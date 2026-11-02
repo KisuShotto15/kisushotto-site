@@ -2124,8 +2124,7 @@ function okxSetConnected(on) {
   var c = document.getElementById('okx-connected'), f = document.getElementById('okx-form');
   if (c) c.style.display = on ? 'flex' : 'none';
   if (f) f.style.display = on ? 'none' : '';
-  var b = document.getElementById('okx-bot');
-  if (b) b.style.display = on ? 'flex' : 'none';
+  okxRenderBot();
   if (on) { okxLoadAds(); okxBotRefresh(); }
 }
 function okxShowForm() { okxSetConnected(false); }
@@ -2153,7 +2152,7 @@ async function okxLoadAds() {
   try {
     var d = await okxCall('/okx-my-ads', { fiat: botFiat() });
     var cur = (OKX.state && OKX.state.ad_id) || sel.value;
-    sel.innerHTML = '<option value="">Auto</option>' + d.ads.filter(function(a) { return a.side === 'buy'; }).map(function(a) {
+    sel.innerHTML = '<option value="">Anuncio: auto</option>' + d.ads.filter(function(a) { return a.side === 'buy'; }).map(function(a) {
       return '<option value="' + esc(a.adId) + '">' + fmtP(a.price) + ' · ' + fmt(a.available) + ' USDT' + (a.hidden ? ' (oculto)' : '') + '</option>';
     }).join('');
     if (cur) sel.value = cur;
@@ -2162,25 +2161,59 @@ async function okxLoadAds() {
 }
 function okxRenderBot() {
   var s = OKX.state || {};
-  OKX.running = !!s.enabled;
+  OKX.running = OKX.connected && !!s.enabled;
   var t = document.getElementById('okx-bot-toggle'), st = document.getElementById('okx-bot-st');
-  if (t) { t.textContent = OKX.running ? '⏹ Detener' : '▶ Iniciar'; t.style.background = OKX.running ? '#E24B4A' : ''; }
+  if (t) {
+    t.textContent = !OKX.connected ? 'Conectar' : (OKX.running ? '⏹ Detener' : '▶ Iniciar');
+    t.classList.toggle('botl-btn-stop', OKX.running);
+  }
   if (st) {
     var p = s.current_price != null ? fmtP(parseFloat(s.current_price)) + fiatSuf() + ' · ' : '';
-    st.textContent = OKX.running ? p + (s.status || 'Iniciando...') : (s.status && s.status !== 'Detenido' ? s.status : 'Detenido');
+    st.textContent = !OKX.connected ? 'No conectado' : (OKX.running ? p + (s.status || 'Iniciando...') : (s.status && s.status !== 'Detenido' ? s.status : 'Detenido'));
     st.title = st.textContent;
+    st.classList.toggle('on', OKX.running);
   }
+  var dot = document.getElementById('botl-dot-okx');
+  if (dot) dot.classList.toggle('on', OKX.running);
+  var cur = document.getElementById('okx-cur-price');
+  if (cur) cur.textContent = s.current_price != null ? fmtP(parseFloat(s.current_price)) + fiatSuf() : '—';
+  okxUpdateCeiling();
   var sel = document.getElementById('okx-adsel');
   if (sel) sel.disabled = OKX.running;
+  renderTabDot();
   clearInterval(OKX.poll);
   if (OKX.running) OKX.poll = setInterval(okxBotRefresh, 20000);
+}
+// Techo de OKX: como el de Binance pero sin comision (el P2P de OKX no cobra fee).
+function okxUpdateCeiling() {
+  var el = document.getElementById('okx-ceiling');
+  if (!el) return;
+  var sell = parseFloat(document.getElementById('cfg-bot-sell').value) || 0;
+  var spr = parseFloat(document.getElementById('cfg-bot-spread').value);
+  el.textContent = sell > 0 ? (sell * (1 - (isNaN(spr) ? 0.5 : spr) / 100)).toFixed(3) + fiatSuf(botFiat()) : '—';
+}
+// Lista de bots: abrir/cerrar los datos de cada fila (se recuerda por navegador).
+function botlToggle(k, force) {
+  var det = document.getElementById('botl-det-' + k), ch = document.getElementById('botl-chev-' + k);
+  if (!det) return;
+  var open = force != null ? force : det.style.display === 'none';
+  det.style.display = open ? '' : 'none';
+  if (ch) ch.textContent = open ? '▾' : '▸';
+  if (force == null) { try { localStorage.setItem('p2p_botl_' + k, open ? '1' : '0'); } catch (e) {} }
+}
+function botlRestore() {
+  ['bnc', 'okx'].forEach(function(k) {
+    var v = null; try { v = localStorage.getItem('p2p_botl_' + k); } catch (e) {}
+    if (v != null) botlToggle(k, v === '1');
+  });
 }
 async function okxBotRefresh() {
   if (!SESSION.token) return;
   try { OKX.state = await okxCall('/okx-bot-state'); okxRenderBot(); } catch (e) {}
 }
-async function okxBotToggle() {
+async function okxBotToggle(ev) {
   var st = document.getElementById('okx-bot-st');
+  if (!OKX.connected) { toggleBotGear(ev || { stopPropagation: function(){} }); return; }
   try {
     if (OKX.running) {
       await okxCall('/okx-bot-stop');
@@ -3977,6 +4010,7 @@ function botUpdateCeiling() {
     BOT.ceiling = null;
     if (el) el.textContent = '—';
   }
+  okxUpdateCeiling();
   updateBotPnl();
 }
 
@@ -4351,8 +4385,10 @@ function botServerConfig() {
 function renderBotToggle() {
   var b = document.getElementById('bot-toggle');
   if (!b) return;
-  b.textContent = BOT.running ? '⏹ Detener Bot' : '▶ Iniciar Bot';
-  b.style.background = BOT.running ? '#E24B4A' : '';
+  b.textContent = BOT.running ? '⏹ Detener' : '▶ Iniciar';
+  b.classList.toggle('botl-btn-stop', !!BOT.running);
+  var dot = document.getElementById('botl-dot-bnc');
+  if (dot) dot.classList.toggle('on', !!BOT.running);
   renderAdHidden(BOT.adHidden); // el chip "Oculto" no aplica con el bot detenido
   renderTabDot();
   renderSaveRow(); // Guardar/Descartar solo aplica con el bot corriendo
@@ -4974,7 +5010,7 @@ function currentTab() {
 // Punto verde en la tab del Bot: ver que sigue corriendo sin cambiar de pestaña.
 function renderTabDot() {
   var d = document.getElementById('tab-bot-dot');
-  if (d) d.classList.toggle('on', !!BOT.running);
+  if (d) d.classList.toggle('on', !!BOT.running || !!OKX.running);
 }
 
 // ── Motor de decision de venta (decision-engine.js + decision-journal.js) ──
@@ -6320,7 +6356,7 @@ function initBuySection() {
   setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
 }
 
-loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); applyHeroFold(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
+loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); applyHeroFold(); botlRestore(); okxRenderBot(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
 initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });

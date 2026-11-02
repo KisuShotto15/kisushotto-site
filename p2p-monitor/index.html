@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=51">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=52">
 </head>
 <body>
 
@@ -558,14 +558,9 @@
 
     <!-- Auto-Repricing Bot -->
     <div class="panel" id="bot-panel" style="position:relative">
-      <!-- Titulo + chips de contexto (metodo, comision, estado) en la misma fila -->
+      <!-- Titulo + engranaje (cuenta, llaves de Binance y OKX) -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <div class="ptitle" style="margin-bottom:0;flex-shrink:0">Bot</div>
-        <div class="bot-chips">
-          <span id="bot-pay-badge" class="bchip bchip-gold" style="display:none">—</span>
-          <span id="bot-commission-label" class="bchip" style="display:none">—</span>
-          <span id="bot-hidden-badge" class="bchip bchip-red" style="display:none" title="Binance ocultó tu anuncio del mercado (se acumularon órdenes). Sigue activo y repreciando; vuelve solo al completarse."><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="vertical-align:-2px"><path d="M2 2l20 20"/><path d="M6.7 6.7C4.4 8.2 2.8 10.4 2 12c1.7 3.6 5.5 6 10 6 1.7 0 3.3-.4 4.7-1"/><path d="M9.9 4.2A10 10 0 0 1 12 4c4.5 0 8.3 2.4 10 6-.7 1.4-1.7 2.7-3 3.7"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg> Oculto</span>
-        </div>
+        <div class="ptitle" style="margin-bottom:0;flex:1">Bots</div>
         <button id="bot-gear-btn" class="btn btn-sm" onclick="toggleBotGear(event)" title="Configuración API" style="font-size:15px;padding:3px 9px;flex-shrink:0">⚙</button>
       </div>
 
@@ -634,24 +629,25 @@
         </div>
       </div>
 
-      <!-- Accion principal + estado del bot al lado (mitad y mitad) -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <button class="btn" id="bot-toggle" onclick="botToggle()" style="flex:0 0 50%;font-weight:700;font-size:17px">▶ Iniciar Bot</button>
-        <span id="bot-status" style="flex:1;min-width:0;font-size:14px;color:var(--text-3);text-align:center">Detenido</span>
-      </div>
-
-      <!-- Bot de OKX: mismo precio de venta, spread e incremento que el de Binance.
-           Solo aparece con OKX conectado (Bot ⚙ → OKX). -->
-      <div id="okx-bot" class="okx-bot" style="display:none">
-        <b class="okx-tag">OKX</b>
-        <select id="okx-adsel" title="Tu anuncio de compra en OKX"><option value="">Auto</option></select>
-        <button class="btn btn-sm" id="okx-bot-toggle" type="button" onclick="okxBotToggle()">▶ Iniciar</button>
-        <span id="okx-bot-st" class="okx-bot-st">Detenido</span>
-        <button class="btn btn-sm" type="button" onclick="okxBook()">Libro</button>
-      </div>
-
+      <!-- Lista de bots: una fila por exchange (estado + iniciar/detener); al tocarla se
+           despliegan sus datos. Comparten la configuracion de abajo. -->
+      <div class="botl">
+        <div class="botl-row" onclick="botlToggle('bnc')">
+          <span class="botl-dot" id="botl-dot-bnc"></span>
+          <div class="botl-main">
+            <div class="botl-name">Bot Binance
+          <span id="bot-pay-badge" class="bchip bchip-gold" style="display:none">—</span>
+          <span id="bot-commission-label" class="bchip" style="display:none">—</span>
+          <span id="bot-hidden-badge" class="bchip bchip-red" style="display:none" title="Binance ocultó tu anuncio del mercado (se acumularon órdenes). Sigue activo y repreciando; vuelve solo al completarse."><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="vertical-align:-2px"><path d="M2 2l20 20"/><path d="M6.7 6.7C4.4 8.2 2.8 10.4 2 12c1.7 3.6 5.5 6 10 6 1.7 0 3.3-.4 4.7-1"/><path d="M9.9 4.2A10 10 0 0 1 12 4c4.5 0 8.3 2.4 10 6-.7 1.4-1.7 2.7-3 3.7"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg> Oculto</span>
+            </div>
+            <div class="botl-sub" id="bot-status">Detenido</div>
+          </div>
+          <button class="btn btn-sm botl-btn" id="bot-toggle" type="button" onclick="event.stopPropagation();botToggle()">▶ Iniciar</button>
+          <span class="botl-chev" id="botl-chev-bnc">▾</span>
+        </div>
+        <div class="botl-det" id="botl-det-bnc">
       <!-- Info en vivo -->
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;margin-bottom:10px" id="bot-live">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px" id="bot-live">
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px">
           <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px" title="El precio de tu anuncio ahora mismo, el que el bot está repreciando">Precio actual</div>
           <div id="bot-cur-price" style="font-size:20px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums">—</div>
@@ -671,7 +667,28 @@
       </div>
 
       <!-- Salud del bot (ultimo tick / reprice del servidor) -->
-      <div id="bot-health" style="display:none;justify-content:space-between;font-size:12px;color:var(--text-3);margin:-4px 2px 10px;font-variant-numeric:tabular-nums"><span id="bh-tick">Tick: —</span><span id="bh-reprice">Reprice: —</span></div>
+      <div id="bot-health" style="display:none;justify-content:space-between;font-size:12px;color:var(--text-3);margin:8px 2px 0;font-variant-numeric:tabular-nums"><span id="bh-tick">Tick: —</span><span id="bh-reprice">Reprice: —</span></div>
+        </div>
+        <div class="botl-row" onclick="botlToggle('okx')">
+          <span class="botl-dot" id="botl-dot-okx"></span>
+          <div class="botl-main">
+            <div class="botl-name">Bot OKX <span class="bchip">sin fee</span></div>
+            <div class="botl-sub" id="okx-bot-st">No conectado</div>
+          </div>
+          <button class="btn btn-sm botl-btn" id="okx-bot-toggle" type="button" onclick="event.stopPropagation();okxBotToggle(event)">Conectar</button>
+          <span class="botl-chev" id="botl-chev-okx">▸</span>
+        </div>
+        <div class="botl-det" id="botl-det-okx" style="display:none">
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <select id="okx-adsel" class="botl-sel" title="Tu anuncio de compra en OKX"><option value="">Anuncio: auto</option></select>
+            <button class="btn btn-sm" type="button" onclick="okxBook()">Libro</button>
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px">
+          <div class="botl-tile" title="El precio de tu anuncio de OKX ahora mismo"><div class="botl-lbl">Precio actual</div><div id="okx-cur-price" class="botl-val" style="color:var(--gold)">—</div></div>
+          <div class="botl-tile" title="Precio de venta menos tu margen mínimo. OKX P2P no cobra comisión"><div class="botl-lbl">Precio máximo</div><div id="okx-ceiling" class="botl-val" style="color:var(--red)">—</div></div>
+          </div>
+        </div>
+      </div>
 
       <!-- Config bot: campos primarios (los que se ajustan a diario) -->
       <div class="bot-group">
@@ -735,7 +752,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=137"></script>
+<script src="/p2p-monitor/main.js?v=138"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

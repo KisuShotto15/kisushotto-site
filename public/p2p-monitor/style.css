@@ -1215,9 +1215,21 @@ input:focus {
 .okx-row { display: grid; grid-template-columns: minmax(0, 1.4fr) auto auto auto minmax(0, 1fr); gap: 10px; align-items: baseline;
   padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; font-variant-numeric: tabular-nums; }
 .okx-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.okx-bot { align-items: center; gap: 8px; margin: -2px 0 10px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); }
-.okx-tag { font-size: 12px; letter-spacing: .05em; color: var(--text-2); }
-.okx-bot select { font-size: 13px; max-width: 150px; min-width: 0; }
-.okx-bot-st { flex: 1; min-width: 0; font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 640px) { .okx-bot { flex-wrap: wrap; } .okx-bot select { flex: 1 1 0; max-width: none; } .okx-bot-st { flex-basis: 100%; order: 9; } }
+.botl { border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 10px; }
+.botl-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); cursor: pointer; }
+.botl-row + .botl-det, .botl-det + .botl-row, .botl-row + .botl-row { border-top: 1px solid var(--border); }
+.botl-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-3); flex-shrink: 0; }
+.botl-dot.on { background: #1D9E75; box-shadow: 0 0 0 3px rgba(29,158,117,.22); }
+.botl-main { flex: 1; min-width: 0; }
+.botl-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; }
+.botl-sub { font-size: 13px; color: var(--text-3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.botl-sub.on { color: #1D9E75; }
+.botl-btn { flex-shrink: 0; font-weight: 700; min-width: 92px; }
+.botl-btn-stop { background: #E24B4A !important; border-color: #E24B4A !important; color: #fff !important; }
+.botl-chev { color: var(--text-3); font-size: 12px; width: 10px; flex-shrink: 0; }
+.botl-det { padding: 10px 12px; background: var(--surf-2); }
+.botl-sel { flex: 1; min-width: 0; font-size: 13px; }
+.botl-tile { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 10px; }
+.botl-lbl { font-size: 13px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
+.botl-val { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) { .okx-row { grid-template-columns: minmax(0, 1fr) auto auto; } .okx-row span:nth-child(n+4) { display: none; } }
