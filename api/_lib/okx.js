@@ -60,6 +60,10 @@ export const okxMarketplace = (creds, { side = 'all', fiat, crypto = 'USDT', pay
 export const okxUpdatePrice = (creds, adId, price) =>
   okxRequest(creds, 'POST', '/api/v5/p2p/ad/update', { adId: String(adId), type: 'limit', unitPrice: String(price) });
 
+// status: 'show' (publicar) u 'hidden' (ocultar).
+export const okxSetAdStatus = (creds, adId, status) =>
+  okxRequest(creds, 'POST', '/api/v5/p2p/ad/update-active-status', { adId: String(adId), status });
+
 // ── Adaptador al reprice de Binance (computeReprice en reprice.js) ──
 // Mi anuncio de active-list → la forma de getMyAds de Binance.
 export function okxAdForReprice(ad) {

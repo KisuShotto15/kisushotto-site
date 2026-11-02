@@ -1,7 +1,7 @@
 // Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~15s.
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
 import { sql, ensureMarketHist, ensureBotAdMinLimit, ensureHistMaps, ensureOkxCreds } from './_lib/db.js';
-import { okxActiveAds, okxMarketplace, okxPendingOrders, okxUpdatePrice, okxAdForReprice, okxRawForReprice, okxBuyAds, okxRoundPrice, mapOkxAd } from './_lib/okx.js';
+import { okxActiveAds, okxMarketplace, okxPendingOrders, okxUpdatePrice, okxSetAdStatus, okxAdForReprice, okxRawForReprice, okxBuyAds, okxRoundPrice, mapOkxAd } from './_lib/okx.js';
 import { decrypt } from './_lib/crypto.js';
 import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
@@ -549,7 +549,7 @@ async function maybeCheckOrders(row, now, notify = true) {
 // - ad/update cancela el anuncio y crea otro: se sigue el newAdId.
 // - no se reprecia con una orden abierta en el anuncio (podria cancelarla).
 // - el libro que ya se pidio para repreciar se guarda para mostrarlo en la app.
-async function tickOkx(row) {
+export async function tickOkx(row) {
   const cfg = row.config || {};
   let log = row.log;
   let adId = row.ad_id;
@@ -576,8 +576,13 @@ async function tickOkx(row) {
   adId = String(ad.adId);
   currentPrice = parseFloat(ad.unitPrice);
 
-  // Oculto (lo pausaste o se quedo sin fondos) → detener, igual que en Binance.
-  if (row.last_tick && (ad.isHidden === true || ad.isHidden === 'true')) {
+  const hidden = ad.isHidden === true || ad.isHidden === 'true';
+  // Primer ciclo (como botInitialCycle en Binance): salta directo al mercado sin
+  // limite de gap (un anuncio viejo puede estar lejisimos) y, si estaba oculto, se
+  // publica ya reposicionado.
+  const first = !row.last_tick;
+  // Oculto despues del arranque (lo pausaste o se quedo sin fondos) → detener.
+  if (!first && hidden) {
     const sinFondos = String(ad.hiddenCategory) === '3';
     log = pushLog(log, sinFondos ? '🛑 Anuncio OKX sin fondos — bot detenido' : '🛑 Anuncio OKX oculto — bot detenido', 'warn');
     await botNotify(cfg, row.user_id, '🔴 <b>Bot OKX detenido</b>\n' + (sinFondos ? 'El anuncio se quedó sin fondos.' : 'El anuncio está oculto en OKX.'),
@@ -598,11 +603,17 @@ async function tickOkx(row) {
   const res = computeReprice({
     ad: okxAdForReprice(ad),
     marketRaw: raw.filter(a => !(a.isOwner === true || a.isOwner === 'true')).map(okxRawForReprice),
-    cfg: { ...cfg, verifiedOnly: false, increment: Math.max(cfg.increment || 0.001, step) },
+    cfg: { ...cfg, verifiedOnly: false, increment: Math.max(cfg.increment || 0.001, step), maxGap: first ? 1e12 : cfg.maxGap },
   });
-  if (res.targetPrice === null) return keep(res.reason);
+  // Publicar el anuncio oculto una vez que su precio ya es el correcto.
+  const show = async () => {
+    if (!(first && hidden)) return;
+    const r = await okxSetAdStatus(creds, adId, 'show');
+    log = pushLog(log, r.ok ? '👁 Anuncio OKX publicado' : 'Publicar anuncio OKX ' + err(r), r.ok ? 'info' : 'error');
+  };
+  if (res.targetPrice === null) { await show(); return keep(res.reason); }
   const price = okxRoundPrice(res.targetPrice, step, res.ceiling);
-  if (Math.abs(price - currentPrice) < step / 2) return keep('Posición óptima');
+  if (Math.abs(price - currentPrice) < step / 2) { await show(); return keep('Posición óptima'); }
 
   // Con una orden en curso no se toca: el update cancela y recrea el anuncio.
   const pend = await okxPendingOrders(creds, adId);
@@ -621,6 +632,7 @@ async function tickOkx(row) {
   log = pushLog(log, (isUp ? '↑' : '↓') + ' ' + currentPrice.toFixed(3) + ' → ' + price.toFixed(3) + ' ' + fiatUnit(fiat) + ' | ' + res.reason, isUp ? 'up' : 'down');
   currentPrice = price;
   lastReprice = new Date().toISOString();
+  await show();
   return keep('✓ Repreciado');
 }
 
