@@ -680,10 +680,29 @@ async function tickOkxAll(adminId, graceFrom) {
   return rows.length;
 }
 
+// Export de solo lectura para analisis offline (GET con el mismo secreto del tick):
+// snapshots de mercado del admin (cada 5 min, hasta 60 dias) y sus ordenes.
+async function exportForAnalysis(res) {
+  const uid = await adminUserId();
+  if (!uid) return res.status(404).json({ error: 'Sin admin' });
+  const [snaps, orders, mon] = await Promise.all([
+    sql`SELECT (extract(epoch FROM ts) * 1000)::bigint ts, may_best::float mb, rec_best::float rb, verde_best::float vb,
+               may_avail5::float ma, rec_avail5::float ra, spread_net::float sn, commission::float c
+        FROM market_snapshots WHERE user_id = ${uid} AND ts > now() - interval '60 days' ORDER BY ts`,
+    sql`SELECT (extract(epoch FROM created_at) * 1000)::bigint ts, trade_type, amount::float amount, price::float price, status
+        FROM orders WHERE user_id = ${uid} AND created_at > now() - interval '60 days' ORDER BY created_at`,
+    sql`SELECT config->>'tz' tz, config->>'shortMode' short_mode, config->>'commission' commission FROM monitor_state WHERE user_id = ${uid}`,
+  ]);
+  return res.status(200).json({ monitor: mon[0] || null, snaps, orders });
+}
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   if (!process.env.BOT_TICK_SECRET || req.headers['x-bot-secret'] !== process.env.BOT_TICK_SECRET) {
     return res.status(401).json({ error: 'No autorizado' });
+  }
+  if (req.method === 'GET') {
+    try { return await exportForAnalysis(res); } catch (e) { return res.status(500).json({ error: e.message }); }
   }
 
   try {
