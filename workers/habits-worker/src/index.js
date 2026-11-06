@@ -332,6 +332,23 @@ async function getHabits(request, env, uid) {
   return json({ habits: results });
 }
 
+// Compact list for the Android home-screen widget: habits due on `date` with done flag.
+async function getWidget(request, env, uid) {
+  const date = new URL(request.url).searchParams.get('date') || isoUTC(new Date());
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM habits WHERE active = 1 AND user_id = ? ORDER BY sort_order, created_at`
+  ).bind(uid).all();
+  const { results: comps } = await env.DB.prepare(
+    `SELECT habit_id, value FROM completions WHERE user_id = ? AND date = ?`
+  ).bind(uid, date).all();
+  const val = Object.fromEntries(comps.map(c => [c.habit_id, c.value]));
+  const items = results.filter(h => activeDueOn(h, date)).map(h => ({
+    id: h.id, name: h.name, emoji: h.emoji || '', type: h.type,
+    target_value: h.target_value || 1, done: habitDone(h, val[h.id]),
+  }));
+  return json({ date, items });
+}
+
 async function createHabit(request, env, uid) {
   const b = await request.json();
   if (!b.name?.trim()) return err('name required');
@@ -519,6 +536,7 @@ export default {
       if (path === '/completions/set'    && method === 'POST')   return await setCompletion(request, env, uid);
 
       if (path === '/stats' && method === 'GET') return await getStats(request, env, uid);
+      if (path === '/widget' && method === 'GET') return await getWidget(request, env, uid);
 
       return err('Not found', 404);
     } catch (e) {

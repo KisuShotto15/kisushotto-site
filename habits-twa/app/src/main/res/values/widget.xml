@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Conexion del widget con habits-worker (mismos valores que la PWA) -->
+    <string name="widget_api_base" translatable="false">https://habits-worker.efrenalejandro2010.workers.dev</string>
+    <!-- widget_api_token y widget_user_email se inyectan desde app/build.gradle -->
+
+    <string name="widget_title">Plan de hoy</string>
+    <string name="widget_desc">Habitos de hoy; toca uno para tacharlo</string>
+    <string name="widget_empty">Nada pendiente para hoy</string>
+    <string name="widget_loading">Cargando…</string>
+    <string name="widget_error">Sin conexion. Toca ⟳ para reintentar</string>
+
+    <color name="widget_bg">#E6111118</color>
+    <color name="widget_text">#ECE9FF</color>
+    <color name="widget_muted">#6B6B88</color>
+    <color name="widget_accent">#C4B5FD</color>
+</resources>

@@ -6,8 +6,11 @@ android {
         applicationId 'com.kisushotto.habits'
         minSdk 21
         targetSdk 34
-        versionCode 3
-        versionName '1.2.0'
+        versionCode 4
+        versionName '1.3.0'
+        // Credenciales del widget: definir habitsToken y habitsEmail en ~/.gradle/gradle.properties
+        resValue 'string', 'widget_api_token',  (project.findProperty('habitsToken') ?: '')
+        resValue 'string', 'widget_user_email', (project.findProperty('habitsEmail') ?: '')
     }
     signingConfigs {
         release {
