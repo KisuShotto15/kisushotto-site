@@ -1,10 +1,14 @@
-name: Deploy P2P Scheduler Worker
+name: Deploy Worker
 
-# Despliega workers/p2p-bot-scheduler en Cloudflare con wrangler.
+# Despliega workers/<worker> en Cloudflare con wrangler.
 # Token: input manual (cf_token) o secret CLOUDFLARE_API_TOKEN del repo.
 on:
   workflow_dispatch:
     inputs:
+      worker:
+        description: 'Carpeta dentro de workers/'
+        required: false
+        default: 'p2p-bot-scheduler'
       cf_token:
         description: 'Cloudflare API token (opcional si existe el secret CLOUDFLARE_API_TOKEN)'
         required: false
@@ -15,7 +19,7 @@ jobs:
     timeout-minutes: 5
     defaults:
       run:
-        working-directory: workers/p2p-bot-scheduler
+        working-directory: workers/${{ inputs.worker || 'p2p-bot-scheduler' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -1,0 +1,48 @@
+name: Build Habits APK
+
+# Compila habits-twa (con el widget) y publica el APK como artefacto.
+# Firma con el keystore del secret HABITS_KEYSTORE_B64 (base64 de habits-twa.keystore);
+# sin ese secret genera un APK debug (para instalarlo hay que desinstalar la version actual).
+on:
+  workflow_dispatch:
+    inputs:
+      habits_token:
+        description: 'Token de habits-worker'
+        required: true
+      habits_email:
+        description: 'Correo del usuario en Habits'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: habits-twa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+      - name: Build
+        env:
+          KEYSTORE_B64: ${{ secrets.HABITS_KEYSTORE_B64 }}
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ARGS="-PhabitsToken=${{ inputs.habits_token }} -PhabitsEmail=${{ inputs.habits_email }}"
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > ../habits-twa.keystore
+            gradle assembleRelease $ARGS
+          else
+            echo "::warning::Sin HABITS_KEYSTORE_B64: se genera APK debug"
+            gradle assembleDebug $ARGS
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KsHabits-apk
+          path: habits-twa/app/build/outputs/apk/**/*.apk
