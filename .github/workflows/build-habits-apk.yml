@@ -3,15 +3,11 @@ name: Build Habits APK
 # Compila habits-twa (con el widget) y publica el APK como artefacto.
 # Firma con el keystore del secret HABITS_KEYSTORE_B64 (base64 de habits-twa.keystore);
 # sin ese secret genera un APK debug (para instalarlo hay que desinstalar la version actual).
+# Token y correo del widget: los mismos que usa habits-worker (wrangler.toml).
 on:
   workflow_dispatch:
-    inputs:
-      habits_token:
-        description: 'Token de habits-worker'
-        required: true
-      habits_email:
-        description: 'Correo del usuario en Habits'
-        required: true
+  push:
+    paths: ['habits-twa/**', '.github/workflows/build-habits-apk.yml']
 
 jobs:
   build:
@@ -34,7 +30,10 @@ jobs:
           KEYSTORE_B64: ${{ secrets.HABITS_KEYSTORE_B64 }}
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ARGS="-PhabitsToken=${{ inputs.habits_token }} -PhabitsEmail=${{ inputs.habits_email }}"
+          CFG=../workers/habits-worker/wrangler.toml
+          TOKEN=$(sed -n 's/^TOKEN *= *"\(.*\)"/\1/p' $CFG)
+          EMAIL=$(sed -n 's/^VAPID_SUBJECT *= *"mailto:\(.*\)"/\1/p' $CFG)
+          ARGS="-PhabitsToken=$TOKEN -PhabitsEmail=$EMAIL"
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > ../habits-twa.keystore
             gradle assembleRelease $ARGS
