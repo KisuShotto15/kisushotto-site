@@ -7,6 +7,20 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Nutrition · KS</title>
+<script>
+// Esta app vive como pestana de Health. Visita directa -> redirige a Health;
+// embebida (?embed) -> el link al hub abre fuera del iframe.
+(function () {
+  const embed = new URLSearchParams(location.search).has('embed');
+  if (!embed && window.self === window.top) {
+    location.replace((location.hostname.startsWith('health.') ? '/' : '/health/') + '#nutricion');
+    return;
+  }
+  if (embed) document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('a[href="/"]').forEach(a => { a.href = 'https://kisushotto.com'; a.target = '_top'; });
+  });
+})();
+</script>
 <link rel="icon" type="image/svg+xml" href="/images/nutrition-favicon.svg">
 <link rel="manifest" href="/manifests/nutrition.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -287,6 +301,7 @@
 <script>
 (function () {
   if (window.self === window.top) return; // visita normal: sin React/Babel (~500KB)
+  if (new URLSearchParams(location.search).has('embed')) return; // pestana de Health, no editor
   const babelSrc = (src) => {
     const s = document.createElement('script');
     s.type = 'text/babel'; s.src = src;

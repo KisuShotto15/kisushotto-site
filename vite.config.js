@@ -9,6 +9,8 @@ export default defineConfig({
         nutrition:     resolve(__dirname, 'nutrition/index.html'),
         bodyMetrics:    resolve(__dirname, 'body-metrics/index.html'),
         planner:        resolve(__dirname, 'planner/index.html'),
+        health:         resolve(__dirname, 'health/index.html'),
+        healthRutina:   resolve(__dirname, 'health/rutina.html'),
       }
     }
   }

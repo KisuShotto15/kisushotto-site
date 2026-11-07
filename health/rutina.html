@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rutina de Equilibrio y Estiramiento</title>
+<style>
+  :root{
+    --bg:#0c110f; --panel:#151d19; --panel-done:#0f1a14; --border:#2b3832;
+    --text:#eef5f1; --muted:#9db0a7; --accent:#43e68d; --accent-dim:#1f7a4c; --warn:#f0c04a;
+    box-sizing:border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  *,*::before,*::after{box-sizing:inherit;}
+  html{scroll-padding-top: env(safe-area-inset-top, 0px);}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:18px; line-height:1.55;
+    padding:20px 16px 150px;
+  }
+  .wrap{max-width:780px;margin:0 auto;}
+  header{text-align:center;margin-bottom:22px;}
+  header h1{font-size:1.5rem;color:var(--accent);margin:0 0 6px;letter-spacing:.5px;}
+  header p{color:var(--muted);font-size:.95rem;margin:0;}
+  header .streak{margin-top:6px;color:var(--accent);font-weight:600;font-size:.9rem;}
+  header .streak:empty{display:none;}
+
+  .progress-wrap{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+  .bar{flex:1;height:10px;background:var(--border);border-radius:5px;overflow:hidden;}
+  .bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s;}
+  .progress-label{font-size:1rem;font-weight:700;color:var(--accent);white-space:nowrap;}
+
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;}
+  .tool-btn{
+    background:transparent;border:1.5px solid var(--border);color:var(--muted);
+    font:inherit;font-size:.85rem;padding:9px 14px;border-radius:6px;cursor:pointer;
+  }
+  .tool-btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);}
+
+  .block-title{
+    color:var(--accent);font-size:1.1rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:1.2px;margin:38px 0 14px;padding-bottom:8px;border-bottom:2px solid var(--border);
+  }
+
+  .card{
+    background:var(--panel);border:1.5px solid var(--border);border-radius:10px;
+    padding:16px 18px;margin-bottom:14px;transition:.2s;
+  }
+  .card.done{background:var(--panel-done);border-color:var(--accent-dim);opacity:.5;}
+  .card.done .name{text-decoration:line-through;}
+  .card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+
+  .card-head{display:flex;align-items:flex-start;gap:14px;}
+  .check{
+    flex-shrink:0;width:42px;height:42px;border-radius:8px;border:1.5px solid var(--border);
+    background:transparent;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1;
+  }
+  .check[aria-pressed="true"]{background:var(--accent-dim);border-color:var(--accent);color:#fff;}
+  .head-text{flex:1;min-width:0;}
+  .name{font-size:1.2rem;font-weight:700;}
+  .dose{font-size:1rem;color:var(--accent);font-weight:600;margin-top:2px;}
+
+  .detail{
+    margin-top:12px;padding-top:12px;border-top:1px solid var(--border);
+    font-size:1rem;color:var(--text);
+  }
+  .detail ol{margin:0;padding-left:22px;}
+  .detail li{margin-bottom:7px;}
+  .detail .watch{
+    margin-top:10px;font-size:.95rem;color:var(--warn);
+  }
+  .phases{margin-top:12px;display:flex;flex-wrap:wrap;gap:7px;}
+  .phase-chip{
+    font-size:.85rem;padding:5px 10px;border-radius:14px;
+    border:1px solid var(--border);color:var(--muted);
+  }
+  .phase-chip.on{border-color:var(--accent);color:var(--accent);font-weight:700;}
+  .phase-chip.past{opacity:.4;text-decoration:line-through;}
+
+  .actions{display:flex;gap:10px;margin-top:14px;}
+  .btn{
+    flex:1;background:transparent;border:1.5px solid var(--accent-dim);color:var(--accent);
+    font:inherit;font-size:1rem;font-weight:600;padding:12px;border-radius:8px;
+    cursor:pointer;text-decoration:none;text-align:center;
+  }
+  .btn.running{border-color:var(--warn);color:var(--warn);}
+
+  #timerBar{
+    position:fixed;left:0;right:0;bottom:0;z-index:60;display:none;
+    background:#070b09;border-top:2px solid var(--accent);
+    padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));
+    text-align:center;
+  }
+  #timerBar.on{display:block;}
+  #tName{font-size:1.05rem;font-weight:700;}
+  #tPhase{font-size:1.05rem;color:var(--accent);margin-top:2px;}
+  #tCount{font-size:3.2rem;font-weight:800;color:var(--accent);line-height:1.1;margin:4px 0;font-variant-numeric:tabular-nums;}
+  #tActions{display:flex;gap:10px;max-width:420px;margin:0 auto;}
+  footer{margin-top:40px;color:var(--muted);font-size:.9rem;text-align:center;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>EQUILIBRIO + ESTIRAMIENTO</h1>
+  <p>20 minutos · temporizador por fase con voz</p>
+  <p id="streak" class="streak"></p>
+</header>
+
+<div class="progress-wrap">
+  <div class="bar"><i id="barFill"></i></div>
+  <span class="progress-label" id="progressLabel">0/15</span>
+</div>
+
+<div class="toolbar">
+  <button class="tool-btn" id="resetBtn">Reiniciar todo</button>
+  <button class="tool-btn" id="voiceBtn" aria-pressed="true">Voz: ON</button>
+  <button class="tool-btn" id="soundBtn" aria-pressed="true">Pitido: ON</button>
+  <button class="tool-btn" id="autoBtn" aria-pressed="true">Auto-avance: ON</button>
+  <button class="tool-btn" id="wakeBtn" aria-pressed="false">Pantalla: OFF</button>
+</div>
+
+<div id="list"></div>
+
+<footer>
+  Orden fijo: activación → equilibrio → estático.<br>
+  Nunca estiramiento estático antes de entrenar con pesas.
+</footer>
+</div>
+
+<div id="timerBar">
+  <div id="tName"></div>
+  <div id="tPhase"></div>
+  <div id="tCount">00:00</div>
+  <div id="tActions">
+    <button class="btn" id="pauseBtn">Pausar</button>
+    <button class="btn" id="skipBtn">Saltar fase</button>
+    <button class="btn" id="stopBtn">Detener</button>
+  </div>
+</div>
+
+<script>
+const DATA=[
+{block:"Bloque 1 — Activación (5 min)",items:[
+ {name:"Círculos de cadera",dose:"30 s cada sentido",q:"hip circles exercise standing",
+  phases:[{l:"Sentido horario",s:30},{l:"Sentido antihorario",s:30}],
+  steps:["Pies separados al ancho de los hombros, manos en la cintura.",
+         "Mantén los pies fijos y las rodillas suaves, sin bloquear.",
+         "Dibuja un círculo amplio con la cadera, como si trazaras el borde de un plato grande.",
+         "Movimiento lento y controlado: cada círculo completo debe tomar unos 3 segundos."],
+  watch:"No muevas los hombros ni el torso. Solo la cadera gira."},
+
+ {name:"Círculos de hombro",dose:"30 s cada sentido",q:"arm circles shoulder warmup",
+  phases:[{l:"Hacia adelante",s:30},{l:"Hacia atrás",s:30}],
+  steps:["De pie, brazos extendidos a los lados formando una T.",
+         "Comienza con círculos pequeños y agrándalos progresivamente.",
+         "El movimiento nace del hombro, no del codo ni de la muñeca.",
+         "Últimos 10 segundos: círculos lo más amplios que puedas."],
+  watch:"No encojas los hombros hacia las orejas. Mantén el cuello largo."},
+
+ {name:"Balanceo de pierna",dose:"30 s cada pierna",q:"leg swings dynamic stretch",
+  phases:[{l:"Pierna derecha",s:30},{l:"Pierna izquierda",s:30}],
+  steps:["Apóyate con una mano en la pared o en el marco de la puerta.",
+         "Balancea la pierna libre hacia adelante y hacia atrás como un péndulo.",
+         "Pierna relajada, no tensa. La gravedad hace la mitad del trabajo.",
+         "Aumenta el rango progresivamente, nunca de golpe."],
+  watch:"Torso erguido. Si te inclinas hacia atrás al subir la pierna, redujiste el rango."},
+
+ {name:"World's Greatest Stretch",dose:"1 min cada lado",q:"world's greatest stretch exercise",
+  phases:[{l:"Lado derecho",s:60},{l:"Lado izquierdo",s:60}],
+  steps:["Desde posición de plancha, lleva el pie derecho junto a la mano derecha.",
+         "Baja el codo derecho hacia el piso, cerca del pie. Mantén 2 segundos.",
+         "Sube el brazo derecho rotando el torso, mirando la mano que apunta al techo.",
+         "Regresa y repite el ciclo durante todo el minuto, sin apuro."],
+  watch:"La rodilla trasera estirada y la cadera baja. Ahí está el estiramiento del flexor."},
+
+ {name:"Rotación de tobillo",dose:"30 s cada pie",q:"ankle circles mobility exercise",
+  phases:[{l:"Pie derecho",s:30},{l:"Pie izquierdo",s:30}],
+  steps:["Apóyate si lo necesitas y levanta un pie del piso.",
+         "Dibuja círculos amplios con la punta del pie, 15 s en cada sentido.",
+         "Busca el rango máximo en cada dirección, sin forzar.",
+         "Si escuchas chasquidos sin dolor, es normal."],
+  watch:"Mueve solo el tobillo. La rodilla y la pierna se quedan quietas."}
+]},
+
+{block:"Bloque 2 — Equilibrio funcional (10 min)",items:[
+ {name:"Balance a una pierna · ojos abiertos",dose:"2 × 30 s cada pierna",q:"single leg balance exercise standing",
+  phases:[{l:"Serie 1 · derecha",s:30},{l:"Serie 1 · izquierda",s:30},{l:"Serie 2 · derecha",s:30},{l:"Serie 2 · izquierda",s:30}],
+  steps:["Párate sobre una pierna, rodilla ligeramente flexionada.",
+         "La otra rodilla sube hasta la altura de la cadera.",
+         "Fija la mirada en un punto de la pared a la altura de los ojos.",
+         "Reparte el peso entre el talón y los dedos. Deja que el pie trabaje."],
+  watch:"Si te tambaleas mucho, el problema es el tobillo, no el equilibrio. Mejora con las semanas."},
+
+ {name:"Balance a una pierna · ojos cerrados",dose:"2 × 20 s cada pierna",q:"single leg balance eyes closed",
+  phases:[{l:"Serie 1 · derecha",s:20},{l:"Serie 1 · izquierda",s:20},{l:"Serie 2 · derecha",s:20},{l:"Serie 2 · izquierda",s:20}],
+  steps:["Misma posición que el ejercicio anterior.",
+         "Cierra los ojos por completo antes de que empiece el conteo.",
+         "Sin la vista, el tobillo y el oído interno hacen todo el trabajo.",
+         "Si pierdes el equilibrio, reposiciona y continúa sin detener el reloj."],
+  watch:"Hazlo cerca de una pared. Es normal durar mucho menos que con los ojos abiertos."},
+
+ {name:"Single-leg RDL sin peso",dose:"2 × 8 reps cada pierna",q:"single leg romanian deadlift bodyweight",
+  phases:[{l:"Serie 1 · derecha",s:40},{l:"Serie 1 · izquierda",s:40},{l:"Serie 2 · derecha",s:40},{l:"Serie 2 · izquierda",s:40}],
+  steps:["Párate sobre una pierna, la otra extendida hacia atrás.",
+         "Empuja la cadera hacia atrás mientras el torso baja al frente.",
+         "El cuerpo forma una línea recta desde la cabeza hasta el talón trasero.",
+         "Baja hasta tocar el piso con las manos, sube apretando el glúteo."],
+  watch:"Espalda plana, nunca redondeada. La cadera no debe abrirse hacia un lado."},
+
+ {name:"Bird dog",dose:"2 × 10 reps cada lado",q:"bird dog exercise form",
+  phases:[{l:"Serie 1 · brazo derecho",s:40},{l:"Serie 1 · brazo izquierdo",s:40},{l:"Serie 2 · brazo derecho",s:40},{l:"Serie 2 · brazo izquierdo",s:40}],
+  steps:["En cuatro apoyos: manos bajo los hombros, rodillas bajo la cadera.",
+         "Extiende brazo derecho y pierna izquierda al mismo tiempo.",
+         "Mantén 2 segundos en la extensión máxima.",
+         "Regresa controlado sin tocar el piso y repite."],
+  watch:"La cadera no debe rotar. Imagina un vaso de agua en tu espalda baja."},
+
+ {name:"Búlgara isométrica · sin peso",dose:"2 × 20 s cada pierna",q:"bulgarian split squat isometric hold",
+  phases:[{l:"Serie 1 · derecha",s:20},{l:"Serie 1 · izquierda",s:20},{l:"Serie 2 · derecha",s:20},{l:"Serie 2 · izquierda",s:20}],
+  steps:["Empeine del pie trasero sobre una silla o el borde de la cama.",
+         "Pie delantero suficientemente adelante para que la rodilla no pase los dedos.",
+         "Baja hasta que el muslo delantero quede casi paralelo al piso.",
+         "Mantén esa posición todo el tiempo, sin subir ni bajar."],
+  watch:"Torso vertical. El peso en el talón delantero, no en la punta."}
+]},
+
+{block:"Bloque 3 — Estiramiento estático (5 min)",items:[
+ {name:"Pecho en marco de puerta",dose:"45 s cada lado",q:"doorway chest stretch",
+  phases:[{l:"Lado derecho",s:45},{l:"Lado izquierdo",s:45}],
+  steps:["Antebrazo apoyado en el marco, codo a la altura del hombro.",
+         "Da un paso adelante con la pierna del mismo lado.",
+         "Gira el torso lentamente en dirección contraria al brazo apoyado.",
+         "Respira profundo: en cada exhalación cede un poco más."],
+  watch:"Estiramiento en el pecho, no en el hombro. Si duele el hombro, baja el codo."},
+
+ {name:"Hombro cruzado",dose:"30 s cada lado",q:"cross body shoulder stretch",
+  phases:[{l:"Lado derecho",s:30},{l:"Lado izquierdo",s:30}],
+  steps:["Cruza el brazo derecho por delante del pecho, bien extendido.",
+         "Con el antebrazo izquierdo, engánchalo y acércalo al cuerpo.",
+         "Mantén el hombro derecho hacia abajo, no lo dejes subir.",
+         "Presión constante, sin rebotes."],
+  watch:"Si no sientes nada, estás subiendo el hombro. Bájalo y aumenta la presión."},
+
+ {name:"Flexor de cadera",dose:"45 s cada lado",q:"kneeling hip flexor stretch",
+  phases:[{l:"Lado derecho",s:45},{l:"Lado izquierdo",s:45}],
+  steps:["Rodilla derecha en el piso sobre algo acolchado, pie izquierdo adelante.",
+         "Aprieta el glúteo derecho con fuerza. Esto es lo que activa el estiramiento.",
+         "Empuja la cadera hacia adelante manteniendo el torso vertical.",
+         "Para más intensidad, sube el brazo derecho e inclínate a la izquierda."],
+  watch:"No arquees la espalda baja. El glúteo apretado lo previene."},
+
+ {name:"Isquiotibial",dose:"45 s cada lado",q:"standing hamstring stretch",
+  phases:[{l:"Lado derecho",s:45},{l:"Lado izquierdo",s:45}],
+  steps:["Talón derecho apoyado en una silla baja o escalón, pierna extendida.",
+         "Pie en flexión, dedos apuntando hacia arriba.",
+         "Dobla desde la cadera, no desde la espalda, llevando el pecho al muslo.",
+         "Mantén la rodilla casi recta pero sin bloquearla por completo."],
+  watch:"Si redondeas la espalda, estiras la espalda y no el isquiotibial. Baja la altura."},
+
+ {name:"Pantorrilla en pared",dose:"30 s cada lado",q:"calf stretch against wall",
+  phases:[{l:"Lado derecho",s:30},{l:"Lado izquierdo",s:30}],
+  steps:["Manos en la pared, pierna derecha atrás bien extendida.",
+         "Talón trasero completamente pegado al piso.",
+         "Empuja la pared mientras acercas la cadera hacia ella.",
+         "Dedos del pie trasero apuntando al frente, no hacia afuera."],
+  watch:"Si el talón se levanta, acerca el pie. Esa es la señal de que fuiste muy lejos."}
+]}];
+
+const state={done:{},voice:true,sound:true,auto:true,wake:null};
+let flat=[], T={id:null,i:null,p:0,left:0,paused:false};
+
+/* ---------- persistencia: progreso del dia, preferencias e historial ---------- */
+const LS_KEY='health_rutina_v1';
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+let saved={};
+try{saved=JSON.parse(localStorage.getItem(LS_KEY))||{};}catch(e){}
+const hist=Array.isArray(saved.history)?saved.history:[];
+if(saved.date===today()&&saved.done)state.done=saved.done;
+if(saved.prefs)['voice','sound','auto'].forEach(k=>{if(typeof saved.prefs[k]==='boolean')state[k]=saved.prefs[k];});
+function save(){
+  try{localStorage.setItem(LS_KEY,JSON.stringify({date:today(),done:state.done,
+    prefs:{voice:state.voice,sound:state.sound,auto:state.auto},history:hist}));}catch(e){}
+}
+function streakText(){
+  if(!hist.length)return '';
+  const set=new Set(hist);let n=0;const d=new Date();
+  if(!set.has(today()))d.setDate(d.getDate()-1); // la racha sigue viva si hoy aun no la haces
+  while(true){const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    if(!set.has(k))break;n++;d.setDate(d.getDate()-1);}
+  const hoy=set.has(today())?' · hoy completada ✓':'';
+  return (n?'Racha: '+n+(n===1?' día':' días'):'Racha: 0 días')+' · total: '+hist.length+hoy;
+}
+
+const list=document.getElementById('list');
+DATA.forEach(sec=>{
+  const h=document.createElement('div');h.className='block-title';h.textContent=sec.block;list.appendChild(h);
+  sec.items.forEach(it=>{
+    const i=flat.length;flat.push(it);
+    const total=it.phases.reduce((a,p)=>a+p.s,0);
+    const c=document.createElement('div');c.className='card';c.id='c'+i;
+    c.innerHTML=`
+      <div class="card-head">
+        <button class="check" id="k${i}" aria-pressed="false">✓</button>
+        <div class="head-text">
+          <div class="name">${it.name}</div>
+          <div class="dose">${it.dose} · ${fmt(total)} total</div>
+        </div>
+      </div>
+      <div class="detail">
+        <ol>${it.steps.map(s=>`<li>${s}</li>`).join('')}</ol>
+        <div class="watch">⚠ ${it.watch}</div>
+      </div>
+      <div class="phases" id="ph${i}">
+        ${it.phases.map((p,j)=>`<span class="phase-chip" id="p${i}_${j}">${p.l} · ${p.s}s</span>`).join('')}
+      </div>
+      <div class="actions">
+        <button class="btn" id="t${i}">▶ Iniciar</button>
+        <a class="btn" target="_blank" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(it.q)}">Ver imagen</a>
+      </div>`;
+    list.appendChild(c);
+    c.querySelector('#k'+i).onclick=()=>toggle(i);
+    c.querySelector('#t'+i).onclick=()=>start(i,0);
+    if(state.done[i]){c.classList.add('done');c.querySelector('#k'+i).setAttribute('aria-pressed','true');}
+  });
+});
+
+function fmt(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+function toggle(i){
+  state.done[i]=!state.done[i];
+  document.getElementById('c'+i).classList.toggle('done',!!state.done[i]);
+  document.getElementById('k'+i).setAttribute('aria-pressed',!!state.done[i]);
+  prog();
+}
+function prog(){
+  const n=Object.values(state.done).filter(Boolean).length;
+  document.getElementById('barFill').style.width=(n/flat.length*100)+'%';
+  document.getElementById('progressLabel').textContent=n+'/'+flat.length;
+  if(n===flat.length&&!hist.includes(today()))hist.push(today());
+  save();
+  document.getElementById('streak').textContent=streakText();
+}
+
+const bar=document.getElementById('timerBar'),tN=document.getElementById('tName'),
+      tP=document.getElementById('tPhase'),tC=document.getElementById('tCount');
+
+function start(i,p){
+  clearInterval(T.id);
+  T={id:null,i:i,p:p,left:flat[i].phases[p].s,paused:false};
+  document.querySelectorAll('.card').forEach(c=>c.classList.remove('active'));
+  document.getElementById('c'+i).classList.add('active');
+  document.querySelectorAll('.btn').forEach(b=>b.classList.remove('running'));
+  document.getElementById('t'+i).classList.add('running');
+  document.getElementById('t'+i).textContent='En curso…';
+  marks(i,p);
+  tN.textContent=flat[i].name;
+  tP.textContent=flat[i].phases[p].l;
+  bar.classList.add('on');
+  if(p===0) document.getElementById('c'+i).scrollIntoView({behavior:'smooth',block:'center'});
+  say(p===0 ? flat[i].name+'. '+flat[i].phases[p].l+'. Comienza.' : flat[i].phases[p].l+'. Comienza.');
+  draw();
+  T.id=setInterval(tick,1000);
+}
+function marks(i,p){
+  flat[i].phases.forEach((_,j)=>{
+    const el=document.getElementById('p'+i+'_'+j);
+    el.classList.toggle('on',j===p);
+    el.classList.toggle('past',j<p);
+  });
+}
+function tick(){
+  if(T.paused)return;
+  T.left--;
+  draw();
+  if(T.left===3) beep(1);
+  if(T.left<=0) nextPhase();
+}
+function draw(){tC.textContent=fmt(Math.max(T.left,0));}
+
+function nextPhase(){
+  clearInterval(T.id);
+  const i=T.i, next=T.p+1;
+  beep(2);
+  if(navigator.vibrate)navigator.vibrate([220,110,220]);
+  if(next<flat[i].phases.length){
+    say('Cambio. '+flat[i].phases[next].l);
+    setTimeout(()=>start(i,next),1400);
+  }else{
+    say('Ejercicio completado.');
+    document.getElementById('t'+i).textContent='▶ Iniciar';
+    document.getElementById('t'+i).classList.remove('running');
+    document.getElementById('c'+i).classList.remove('active');
+    flat[i].phases.forEach((_,j)=>{const e=document.getElementById('p'+i+'_'+j);e.classList.remove('on');e.classList.add('past');});
+    if(!state.done[i])toggle(i);
+    bar.classList.remove('on');
+    if(state.auto&&i+1<flat.length){
+      const n=document.getElementById('c'+(i+1));
+      n.classList.add('active');
+      n.scrollIntoView({behavior:'smooth',block:'center'});
+    }
+    T.i=null;
+  }
+}
+
+document.getElementById('pauseBtn').onclick=e=>{
+  T.paused=!T.paused;
+  e.target.textContent=T.paused?'Seguir':'Pausar';
+  say(T.paused?'Pausa':'Seguimos');
+};
+document.getElementById('skipBtn').onclick=()=>{ if(T.i!==null){T.left=0;nextPhase();} };
+document.getElementById('stopBtn').onclick=()=>stopAll();
+function stopAll(){
+  clearInterval(T.id);
+  if(T.i!==null){
+    const i=T.i;
+    document.getElementById('t'+i).textContent='▶ Iniciar';
+    document.getElementById('t'+i).classList.remove('running');
+    document.getElementById('c'+i).classList.remove('active');
+    flat[i].phases.forEach((_,j)=>document.getElementById('p'+i+'_'+j).classList.remove('on'));
+  }
+  bar.classList.remove('on');T.i=null;
+}
+
+document.getElementById('resetBtn').onclick=()=>{
+  stopAll();state.done={};
+  flat.forEach((it,i)=>{
+    document.getElementById('c'+i).classList.remove('done','active');
+    document.getElementById('k'+i).setAttribute('aria-pressed','false');
+    document.getElementById('t'+i).textContent='▶ Iniciar';
+    it.phases.forEach((_,j)=>{const e=document.getElementById('p'+i+'_'+j);e.classList.remove('on','past');});
+  });
+  prog();window.scrollTo({top:0,behavior:'smooth'});
+};
+
+/* ---------- voz ---------- */
+let esVoice=null;
+function pickVoice(){
+  const vs=speechSynthesis.getVoices();
+  esVoice = vs.find(v=>/^es[-_]/i.test(v.lang)&&/VE|MX|US|419/i.test(v.lang))
+         || vs.find(v=>/^es/i.test(v.lang)) || null;
+}
+if('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
+function say(txt){
+  if(!state.voice||!('speechSynthesis' in window))return;
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(txt);
+    u.lang='es-419'; u.rate=1.05; u.pitch=1;
+    if(esVoice)u.voice=esVoice;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ---------- pitido ---------- */
+let ctx;
+function unlock(){
+  try{
+    ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+    if(ctx.state==='suspended')ctx.resume();
+  }catch(e){}
+}
+document.addEventListener('pointerdown',unlock);
+function beep(n){
+  if(!state.sound)return;
+  try{
+    ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+    if(ctx.state==='suspended')ctx.resume();
+    const offs = n===1 ? [0] : [0,0.2,0.4];
+    offs.forEach((off,k)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.type='sine'; o.frequency.value = (n===2&&k===2)?1200:880;
+      g.gain.setValueAtTime(0.0001,ctx.currentTime+off);
+      g.gain.exponentialRampToValueAtTime(0.35,ctx.currentTime+off+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+off+0.17);
+      o.connect(g);g.connect(ctx.destination);
+      o.start(ctx.currentTime+off);o.stop(ctx.currentTime+off+0.18);
+    });
+  }catch(e){}
+}
+
+/* ---------- toggles ---------- */
+function tog(id,key,label,extra){
+  const b=document.getElementById(id);
+  const paint=()=>{b.setAttribute('aria-pressed',state[key]);b.textContent=label+': '+(state[key]?'ON':'OFF');};
+  paint();
+  b.onclick=()=>{state[key]=!state[key];paint();save(); if(extra&&state[key])extra();};
+}
+tog('voiceBtn','voice','Voz',()=>say('Voz activada'));
+tog('soundBtn','sound','Pitido',()=>beep(1));
+tog('autoBtn','auto','Auto-avance');
+
+/* ---------- wake lock ---------- */
+const wakeBtn=document.getElementById('wakeBtn');let vid=null;
+function vidOn(){
+  if(vid)return true;
+  try{
+    const v=document.createElement('video');
+    v.setAttribute('playsinline','');v.muted=true;v.loop=true;
+    v.style.cssText='position:fixed;width:1px;height:1px;opacity:.01;pointer-events:none;bottom:0;left:0;';
+    v.src='data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAr1tZGF0AAACrgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE0OA==';
+    document.body.appendChild(v);const p=v.play();if(p)p.catch(()=>{});vid=v;return true;
+  }catch(e){return false;}
+}
+function lbl(on,note){wakeBtn.setAttribute('aria-pressed',on);wakeBtn.textContent='Pantalla: '+(on?'ON':'OFF')+(note?' ('+note+')':'');}
+wakeBtn.onclick=async()=>{
+  if(state.wake||vid){try{if(state.wake)await state.wake.release();}catch(e){}state.wake=null;if(vid){vid.pause();vid.remove();vid=null;}lbl(false);return;}
+  if('wakeLock' in navigator){try{state.wake=await navigator.wakeLock.request('screen');state.wake.addEventListener('release',()=>state.wake=null);lbl(true);return;}catch(e){}}
+  lbl(vidOn(),'modo alterno');
+};
+
+prog();
+</script>
+</body>
+</html>
