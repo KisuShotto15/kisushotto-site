@@ -11,6 +11,12 @@ database_id = "d15b535c-edda-4bf8-8805-1fc3c1c244ea"
 binding = "PUSH_KV"
 id = "183e28e496f3468fae40a58237cb098f"
 
+# Lectura del peso para el resumen semanal de Health (un worker no puede hacer
+# fetch a otro *.workers.dev de la misma cuenta; con service binding si).
+[[services]]
+binding = "BODY_METRICS"
+service = "body-metrics-worker"
+
 [triggers]
 crons = ["* * * * *"]
 

@@ -44,6 +44,23 @@
   .switch input:checked+span::before{transform:translateX(20px);}
   .msg{font-size:.85rem;color:var(--muted);margin-top:8px;min-height:1em;}
   .msg.err{color:var(--warn);}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+  .chip{background:transparent;border:1.5px solid var(--border);color:var(--muted);font:inherit;font-size:.88rem;
+    padding:7px 12px;border-radius:16px;cursor:pointer;}
+  .chip.on{border-color:var(--c);color:var(--c);font-weight:700;}
+  .chip.skip.on{border-color:var(--warn);color:var(--warn);}
+  select{background:#0c110f;border:1.5px solid var(--border);color:var(--text);font:inherit;font-size:.9rem;
+    padding:8px 10px;border-radius:9px;max-width:60%;}
+  .week{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .week .big{font-size:1.6rem;}
+  .strip{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:14px;text-align:center;}
+  .strip .d{font-size:.75rem;color:var(--muted);}
+  .strip .d.today{color:var(--text);font-weight:700;}
+  .strip .dots{display:flex;justify-content:center;gap:4px;margin-top:4px;}
+  .strip .dot{width:9px;height:9px;border-radius:50%;background:var(--border);}
+  .strip .dot.r.on{background:var(--accent);} .strip .dot.n.on{background:var(--lime);}
+  .legend{display:flex;gap:14px;margin-top:10px;font-size:.8rem;color:var(--muted);}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;}
   .link{background:none;border:0;color:var(--muted);font:inherit;font-size:.85rem;text-decoration:underline;cursor:pointer;padding:0;}
 </style>
 </head>
@@ -65,6 +82,10 @@
       <button class="btn solid" id="r-go">Empezar</button>
     </div>
     <div class="bar"><i id="r-bar"></i></div>
+    <div class="row space" style="margin-top:12px">
+      <span class="sub" style="margin:0">Marcar en Habits al completarla</span>
+      <select id="h-link"><option value="">No vincular</option></select>
+    </div>
   </section>
 
   <!-- Peso -->
@@ -90,11 +111,25 @@
       <button class="btn" id="n-go">Ver plan</button>
     </div>
     <div class="bar"><i id="n-bar"></i></div>
+    <div class="sub" style="margin-top:14px">¿Qué comiste hoy?</div>
+    <div class="chips" id="n-chips"></div>
+  </section>
+
+  <!-- Ultimos 7 dias -->
+  <section class="card" style="--c:var(--warn)">
+    <h2>Últimos 7 días</h2>
+    <div class="week">
+      <div><div class="big" id="wk-r">0<small>/7</small></div><div class="sub">Rutina</div></div>
+      <div><div class="big" id="wk-n">0<small>/7</small></div><div class="sub">Plan cumplido</div></div>
+      <div><div class="big" id="wk-w">—</div><div class="sub">Peso</div></div>
+    </div>
+    <div class="strip" id="wk-strip"></div>
+    <div class="legend"><span><i style="background:var(--accent)"></i>Rutina</span><span><i style="background:var(--lime)"></i>Plan</span></div>
   </section>
 
   <!-- Recordatorio -->
   <section class="card" style="--c:var(--accent)">
-    <h2>Recordatorio diario</h2>
+    <h2>Recordatorios</h2>
     <div class="row space">
       <div>
         <div style="font-weight:600">Avisarme de la rutina</div>
@@ -102,11 +137,19 @@
       </div>
       <label class="switch"><input type="checkbox" id="rem-on"><span></span></label>
     </div>
+    <div class="row space" style="margin-top:14px">
+      <div>
+        <div style="font-weight:600">Resumen semanal</div>
+        <div class="sub">Los domingos a esa misma hora</div>
+      </div>
+      <label class="switch"><input type="checkbox" id="rem-weekly"><span></span></label>
+    </div>
     <div class="row" style="margin-top:12px">
       <input type="time" id="rem-time" value="19:00">
       <button class="btn" id="rem-test">Probar</button>
     </div>
     <div class="msg" id="rem-msg"></div>
+    <button class="link" id="rem-test-weekly">Probar resumen semanal</button>
   </section>
 </div>
 
@@ -138,7 +181,10 @@ function streak(hist) {
   while (set.has(isoLocal(d))) { n++; d.setDate(d.getDate() - 1); }
   return n;
 }
+let rutinaHist = [];
 function paintRutina(r) {
+  rutinaHist = r.history || [];
+  paintWeek();
   const total = r.total || 15;
   const done = r.date === today() ? Object.values(r.done || {}).filter(Boolean).length : 0;
   const hist = r.history || [];
@@ -166,9 +212,32 @@ async function loadRutina() {
 }
 $('r-go').onclick = () => toParent({ type: 'health:tab', tab: 'rutina' });
 
+/* ---------- Vinculo con Habits: al completar la rutina se marca ese habito ---------- */
+async function loadHabits() {
+  try {
+    const { habits, link } = await api('/habits');
+    const users = [...new Set(habits.map(h => h.user_id))];
+    const sel = $('h-link');
+    const opt = (value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; return o; };
+    sel.replaceChildren(opt('', 'No vincular'));
+    habits.forEach(h => sel.append(opt(h.id + '|' + h.user_id, `${h.emoji || '✓'} ${h.name}${users.length > 1 ? ' · ' + h.user_id.split('@')[0] : ''}`)));
+    users.forEach(u => sel.append(opt('create|' + u, `+ Crear «Rutina de estiramiento»${users.length > 1 ? ' · ' + u.split('@')[0] : ''}`)));
+    sel.value = link?.habit_id ? link.habit_id + '|' + link.user_id : '';
+  } catch {}
+}
+$('h-link').onchange = async e => {
+  let [habit_id, user_id] = e.target.value.split('|');
+  try {
+    if (habit_id === 'create') ({ habit: { id: habit_id } } = await api('/habits', { method: 'POST', body: JSON.stringify({ user_id }) }));
+    await api('/habit-link', { method: 'PUT', body: JSON.stringify({ habit_id: habit_id || null, user_id, today: today() }) });
+  } catch {}
+  loadHabits();
+};
+
 /* ---------- Peso (mismo estado que Body Metrics) ---------- */
 let bm = null;
 function paintWeight() {
+  paintWeek();
   const entries = (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
   const last = entries[entries.length - 1];
   if (!last) { $('w-last').innerHTML = '—<small>kg</small>'; $('w-sub').textContent = 'Sin registros todavía'; return; }
@@ -215,7 +284,9 @@ $('w-save').onclick = async () => {
 };
 
 /* ---------- Nutricion (plan activo) ---------- */
+let nState = null, nlog = {};
 function paintNutrition(S) {
+  nState = S; paintChips();
   const p = S?.profiles?.[S.activeProfile];
   if (!p) { $('n-sub').textContent = 'Sin plan configurado'; return; }
   const day = (p.days || []).find(d => d.id === p.activeDay) || (p.days || [])[0] || { meals: [] };
@@ -233,6 +304,52 @@ async function loadNutrition() {
   if (remote && (!S || (remote.lastModified || 0) > (S.lastModified || 0))) paintNutrition(remote);
 }
 $('n-go').onclick = () => toParent({ type: 'health:tab', tab: 'nutricion' });
+
+/* ---------- Que dia del plan se comio hoy (adherencia) ---------- */
+function paintChips() {
+  const p = nState?.profiles?.[nState.activeProfile];
+  const cur = nlog[today()];
+  const box = $('n-chips'); box.replaceChildren();
+  const chip = (text, on, cls, onclick) => {
+    const b = document.createElement('button'); b.className = 'chip' + (cls ? ' ' + cls : '') + (on ? ' on' : '');
+    b.textContent = (on ? '✓ ' : '') + text; b.onclick = onclick; box.append(b);
+  };
+  (p?.days || []).forEach(d => chip(d.label || 'Día', cur && !cur.skipped && cur.dayId === d.id, '', () =>
+    setLog(cur && cur.dayId === d.id ? null : { dayId: d.id, label: d.label, profile: p.name })));
+  chip('No seguí el plan', !!cur?.skipped, 'skip', () => setLog(cur?.skipped ? null : { skipped: true }));
+}
+async function setLog(entry) {
+  if (entry) nlog[today()] = entry; else delete nlog[today()];
+  // conservar solo los ultimos ~4 meses
+  nlog = Object.fromEntries(Object.entries(nlog).sort(([a], [b]) => a.localeCompare(b)).slice(-120));
+  paintChips(); paintWeek();
+  try { await api('/nutrition_log', { method: 'PUT', body: JSON.stringify(nlog) }); } catch {}
+}
+async function loadLog() {
+  try { const { data } = await api('/nutrition_log'); nlog = data || {}; } catch {}
+  paintChips(); paintWeek();
+}
+
+/* ---------- Ultimos 7 dias ---------- */
+function paintWeek() {
+  const days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); return d; });
+  const isos = days.map(isoLocal);
+  const r = isos.filter(d => rutinaHist.includes(d)).length;
+  const n = isos.filter(d => nlog[d] && !nlog[d].skipped).length;
+  $('wk-r').innerHTML = `${r}<small>/7</small>`;
+  $('wk-n').innerHTML = `${n}<small>/7</small>`;
+  const comp = (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
+  const last = comp[comp.length - 1];
+  if (last) {
+    const ref = new Date(last.date + 'T00:00:00'); ref.setDate(ref.getDate() - 7);
+    const prev = [...comp].reverse().find(e => e.date <= isoLocal(ref));
+    const d = prev ? +(last.weight - prev.weight).toFixed(1) : null;
+    $('wk-w').innerHTML = d == null ? `${last.weight}<small>kg</small>` : `${d > 0 ? '+' : ''}${d}<small>kg</small>`;
+  }
+  const L = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+  $('wk-strip').innerHTML = days.map((d, i) => `<div><div class="d${i === 6 ? ' today' : ''}">${L[d.getDay()]}</div>
+    <div class="dots"><span class="dot r${rutinaHist.includes(isos[i]) ? ' on' : ''}"></span><span class="dot n${nlog[isos[i]] && !nlog[isos[i]].skipped ? ' on' : ''}"></span></div></div>`).join('');
+}
 
 /* ---------- Recordatorio push ---------- */
 const canPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -255,21 +372,33 @@ async function subscribe() {
   }
   await api('/push', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
 }
-async function saveReminder() {
-  const enabled = $('rem-on').checked;
-  const time = $('rem-time').value || '19:00';
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+function remStatus(r) {
+  if (!r.enabled && !r.weekly) return 'Recordatorios desactivados';
+  return [r.enabled && `rutina todos los días a las ${r.time}`, r.weekly && `resumen los domingos a las ${r.time}`]
+    .filter(Boolean).join(' · ').replace(/^./, c => c.toUpperCase());
+}
+async function saveReminder(e) {
+  const r = { enabled: $('rem-on').checked, weekly: $('rem-weekly').checked, time: $('rem-time').value || '19:00',
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
   try {
-    if (enabled) await subscribe();
-    await api('/reminder', { method: 'PUT', body: JSON.stringify({ enabled, time, tz }) });
-    remMsg(enabled ? `Te aviso todos los días a las ${time} si no has hecho la rutina` : 'Recordatorio desactivado');
-  } catch (e) {
-    $('rem-on').checked = false;
-    remMsg(e.message, true);
+    if (r.enabled || r.weekly) await subscribe();
+    await api('/reminder', { method: 'PUT', body: JSON.stringify(r) });
+    remMsg(remStatus(r));
+  } catch (err) {
+    if (e?.target?.type === 'checkbox') e.target.checked = false;
+    remMsg(err.message, true);
   }
 }
 $('rem-on').onchange = saveReminder;
-$('rem-time').onchange = () => { if ($('rem-on').checked) saveReminder(); };
+$('rem-weekly').onchange = saveReminder;
+$('rem-time').onchange = () => { if ($('rem-on').checked || $('rem-weekly').checked) saveReminder(); };
+$('rem-test-weekly').onclick = async () => {
+  try {
+    await subscribe();
+    const { sent, payload } = await api('/test-push', { method: 'POST', body: JSON.stringify({ kind: 'weekly' }) });
+    remMsg(sent ? `Enviado: ${payload.body}` : 'No se pudo enviar (sin dispositivos suscritos)', !sent);
+  } catch (e) { remMsg(e.message, true); }
+};
 $('rem-test').onclick = async () => {
   try {
     await subscribe();
@@ -280,13 +409,13 @@ $('rem-test').onclick = async () => {
 async function loadReminder() {
   try {
     const { data } = await api('/reminder');
-    if (data) { $('rem-on').checked = !!data.enabled; if (data.time) $('rem-time').value = data.time; }
-    if (data?.enabled) remMsg(`Activo: todos los días a las ${data.time}`);
+    if (data) { $('rem-on').checked = !!data.enabled; $('rem-weekly').checked = !!data.weekly; if (data.time) $('rem-time').value = data.time; }
+    if (data?.enabled || data?.weekly) remMsg(remStatus(data));
   } catch {}
 }
 
-function loadAll() { loadRutina(); loadWeight(); loadNutrition(); }
-loadAll(); loadReminder();
+function loadAll() { loadRutina(); loadWeight(); loadNutrition(); loadLog(); }
+loadAll(); loadReminder(); loadHabits();
 // El shell avisa al volver a esta pestana para refrescar lo que cambio en las otras
 window.addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'health:refresh') loadAll(); });
 </script>

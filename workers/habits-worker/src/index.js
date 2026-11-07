@@ -314,6 +314,55 @@ const RUTINA_PUSH = {
   url:   '/#rutina',
 };
 
+// ── Health: vinculo con Habits ────────────────────────────────────────────────
+// Al completar la rutina se marca el habito vinculado (habit_link) ese dia.
+async function markLinkedHabit(env, date) {
+  const link = await healthGet(env, 'habit_link');
+  if (!link?.habit_id) return;
+  const h = await env.DB.prepare('SELECT type, target_value FROM habits WHERE id = ? AND user_id = ? AND active = 1')
+    .bind(link.habit_id, link.user_id).first();
+  if (!h) return;
+  const value = h.type === 'count' ? (h.target_value || 1) : 1;
+  await env.DB.prepare(
+    `INSERT INTO completions (id,user_id,habit_id,date,value,note,created_at) VALUES (?,?,?,?,?,NULL,?)
+     ON CONFLICT(habit_id, date) DO UPDATE SET value = MAX(value, excluded.value)`
+  ).bind(uuid(), link.user_id, link.habit_id, date, value, Math.floor(Date.now() / 1000)).run();
+}
+
+// ── Health: resumen de los ultimos 7 dias ────────────────────────────────────
+function shiftISO(dateISO, days) {
+  const d = new Date(dateISO + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+async function weeklySummary(env, today) {
+  const from = shiftISO(today, -6);
+  const inWeek = d => d >= from && d <= today;
+  const rutina = await healthGet(env, 'rutina');
+  const rutinaDays = (rutina?.history || []).filter(inWeek).length;
+  const nlog = (await healthGet(env, 'nutrition_log')) || {};
+  const planDays = Object.entries(nlog).filter(([d, v]) => inWeek(d) && v && !v.skipped).length;
+  let weight = null;
+  if (env.BODY_METRICS) {
+    try {
+      const r = await env.BODY_METRICS.fetch('https://body-metrics-worker/', { headers: { Authorization: `Bearer ${env.TOKEN}` } });
+      const comp = ((await r.json())?.data?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
+      const last = comp[comp.length - 1];
+      const prev = [...comp].reverse().find(e => e.date <= shiftISO(last?.date || today, -7));
+      if (last) weight = { last: last.weight, delta: prev ? +(last.weight - prev.weight).toFixed(1) : null };
+    } catch (_) {}
+  }
+  const parts = [`Rutina ${rutinaDays}/7`, `Plan ${planDays}/7`];
+  if (weight) parts.push(weight.delta == null ? `Peso ${weight.last} kg`
+    : `Peso ${weight.delta > 0 ? '+' : ''}${weight.delta} kg (${weight.last})`);
+  return {
+    title: 'Tu semana en Health',
+    body:  parts.join(' · '),
+    tag:   'health-weekly',
+    url:   '/#hoy',
+  };
+}
+
 async function handleHealth(path, request, env) {
   const method = request.method;
   if (path === '/health/vapid' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null });
@@ -326,9 +375,45 @@ async function handleHealth(path, request, env) {
     return json({ ok: true });
   }
   if (path === '/health/test-push' && method === 'POST') {
-    return json({ sent: await sendHealthPush(env, RUTINA_PUSH) });
+    const b = await request.json().catch(() => ({}));
+    const r = await healthGet(env, 'reminder');
+    const payload = b?.kind === 'weekly' ? await weeklySummary(env, localParts(r?.tz).date) : RUTINA_PUSH;
+    return json({ sent: await sendHealthPush(env, payload), payload });
   }
-  const m = path.match(/^\/health\/(rutina|reminder)$/);
+  // Habitos que se pueden vincular a la rutina (todos los usuarios de Habits)
+  if (path === '/health/habits' && method === 'GET') {
+    const { results } = await env.DB.prepare(
+      'SELECT id, user_id, name, emoji FROM habits WHERE active = 1 ORDER BY user_id, sort_order, created_at'
+    ).all();
+    return json({ habits: results || [], link: await healthGet(env, 'habit_link') });
+  }
+  if (path === '/health/habits' && method === 'POST') { // crea "Rutina de estiramiento" en Habits
+    const b = await request.json();
+    if (!b?.user_id) return err('user_id required');
+    const id = uuid();
+    await env.DB.prepare(
+      `INSERT INTO habits (id,user_id,name,description,type,target_value,target_unit,frequency,color,emoji,sort_order,created_at)
+       VALUES (?,?,?,?,'binary',1,'veces','daily','mint','🧘',0,?)`
+    ).bind(id, b.user_id, 'Rutina de estiramiento', 'Se marca sola al completar la rutina en Health',
+      Math.floor(Date.now() / 1000)).run();
+    return json({ habit: { id, user_id: b.user_id } }, 201);
+  }
+  if (path === '/health/habit-link' && method === 'PUT') {
+    const b = await request.json();
+    await healthSet(env, 'habit_link', b?.habit_id ? { habit_id: b.habit_id, user_id: b.user_id } : null);
+    const rutina = await healthGet(env, 'rutina');
+    if (b?.habit_id && b.today && rutina?.history?.includes(b.today)) await markLinkedHabit(env, b.today);
+    return json({ ok: true });
+  }
+  if (path === '/health/rutina' && method === 'PUT') {
+    const next = await request.json();
+    const prev = await healthGet(env, 'rutina');
+    await healthSet(env, 'rutina', next);
+    const before = new Set(prev?.history || []);
+    for (const d of next?.history || []) if (!before.has(d)) await markLinkedHabit(env, d);
+    return json({ ok: true });
+  }
+  const m = path.match(/^\/health\/(rutina|reminder|nutrition_log)$/);
   if (m && method === 'GET') return json({ data: await healthGet(env, m[1]) });
   if (m && method === 'PUT') {
     await healthSet(env, m[1], await request.json());
@@ -339,14 +424,20 @@ async function handleHealth(path, request, env) {
 
 async function dispatchHealthReminder(env) {
   const r = await healthGet(env, 'reminder');
-  if (!r?.enabled || !r.time) return;
+  if (!r?.time) return;
   const { date, hhmm } = localParts(r.tz);
   if (hhmm !== r.time) return;
-  if ((await healthGet(env, 'reminder_sent')) === date) return;
-  await healthSet(env, 'reminder_sent', date);
-  const rutina = await healthGet(env, 'rutina');
-  if (rutina?.history?.includes(date)) return; // ya la hizo hoy
-  await sendHealthPush(env, RUTINA_PUSH);
+  if (r.enabled && (await healthGet(env, 'reminder_sent')) !== date) {
+    await healthSet(env, 'reminder_sent', date);
+    const rutina = await healthGet(env, 'rutina');
+    if (!rutina?.history?.includes(date)) await sendHealthPush(env, RUTINA_PUSH); // si ya la hizo, no avisa
+  }
+  // Resumen semanal: los domingos a la misma hora del recordatorio
+  const sunday = new Date(date + 'T00:00:00Z').getUTCDay() === 0;
+  if (r.weekly && sunday && (await healthGet(env, 'weekly_sent')) !== date) {
+    await healthSet(env, 'weekly_sent', date);
+    await sendHealthPush(env, await weeklySummary(env, date));
+  }
 }
 
 // ── DB bootstrap ──────────────────────────────────────────────────────────────
