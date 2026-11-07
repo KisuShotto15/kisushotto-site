@@ -1,0 +1,94 @@
+name: Deploy Workers
+
+# Despliega con wrangler los workers de workers/ que cambiaron en un push a main.
+# Tambien se puede correr a mano: Actions -> Deploy Workers -> Run workflow,
+# eligiendo un worker o "all".
+# p2p-bot-scheduler y trade-journal-worker tienen su propio workflow (manual);
+# p2p-proxy no se usa en el codigo actual, por eso no esta aqui.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/body-metrics-worker/**'
+      - 'workers/habits-worker/**'
+      - 'workers/notes-worker/**'
+      - 'workers/nutrition-worker/**'
+      - 'workers/planner-worker/**'
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: 'Worker a desplegar'
+        type: choice
+        default: all
+        options:
+          - all
+          - body-metrics-worker
+          - habits-worker
+          - notes-worker
+          - nutrition-worker
+          - planner-worker
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      workers: ${{ steps.pick.outputs.workers }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: pick
+        env:
+          ALL: 'body-metrics-worker habits-worker notes-worker nutrition-worker planner-worker'
+          EVENT: ${{ github.event_name }}
+          INPUT: ${{ inputs.worker }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ "$INPUT" = "all" ]; then list="$ALL"; else list="$INPUT"; fi
+          else
+            if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              changed=$(git diff --name-only "$BEFORE" "$SHA")
+            else
+              changed=$(git diff --name-only "$SHA~1" "$SHA")
+            fi
+            list=""
+            for w in $ALL; do
+              if echo "$changed" | grep -q "^workers/$w/"; then list="$list $w"; fi
+            done
+          fi
+          if [ -z "${list// /}" ]; then json='[]'; else json=$(printf '%s\n' $list | jq -R . | jq -sc .); fi
+          echo "workers=$json" >> "$GITHUB_OUTPUT"
+          echo "A desplegar: $json"
+
+  deploy:
+    needs: changes
+    if: needs.changes.outputs.workers != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: ${{ fromJson(needs.changes.outputs.workers) }}
+    defaults:
+      run:
+        working-directory: workers/${{ matrix.worker }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: check token
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Falta el secret CLOUDFLARE_API_TOKEN" >&2
+            exit 1
+          fi
+
+      - name: wrangler deploy
+        run: npx --yes wrangler@4 deploy
