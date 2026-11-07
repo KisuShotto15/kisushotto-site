@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Hoy · Health</title>
+<style>
+  :root{
+    --bg:#0c110f; --panel:#151d19; --border:#2b3832; --text:#eef5f1; --muted:#9db0a7;
+    --accent:#43e68d; --lime:#c8f135; --blue:#3b82f6; --warn:#f0c04a; --down:#43e68d; --up:#f0c04a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:16px;line-height:1.45;padding:20px 16px 40px;}
+  .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+  header h1{margin:0;font-size:1.6rem;letter-spacing:.3px;}
+  header p{margin:2px 0 0;color:var(--muted);font-size:.95rem;}
+  header p::first-letter{text-transform:uppercase;}
+
+  .card{background:var(--panel);border:1.5px solid var(--border);border-radius:12px;padding:16px;}
+  .card h2{margin:0 0 10px;font-size:.8rem;letter-spacing:1.2px;text-transform:uppercase;color:var(--c);display:flex;align-items:center;gap:8px;}
+  .big{font-size:2rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .big small{font-size:.95rem;font-weight:600;color:var(--muted);margin-left:3px;}
+  .sub{color:var(--muted);font-size:.92rem;margin-top:4px;}
+  .row{display:flex;align-items:center;gap:10px;}
+  .row.space{justify-content:space-between;}
+  .bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:10px;}
+  .bar>i{display:block;height:100%;width:0;background:var(--c);transition:width .3s;}
+  .btn{background:transparent;border:1.5px solid var(--c);color:var(--c);font:inherit;font-size:.95rem;font-weight:600;
+    padding:10px 14px;border-radius:9px;cursor:pointer;white-space:nowrap;}
+  .btn.solid{background:var(--c);color:#06100b;}
+  .btn:disabled{opacity:.45;cursor:default;}
+  .done-pill{color:var(--accent);font-weight:700;}
+  .delta.down{color:var(--down);} .delta.up{color:var(--up);}
+  input[type=number],input[type=time]{background:#0c110f;border:1.5px solid var(--border);color:var(--text);font:inherit;
+    padding:9px 10px;border-radius:9px;width:100%;min-width:0;}
+  input:focus{outline:none;border-color:var(--c);}
+  .switch{position:relative;width:46px;height:26px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .switch span{position:absolute;inset:0;background:var(--border);border-radius:13px;transition:.2s;cursor:pointer;}
+  .switch span::before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+  .switch input:checked+span{background:var(--accent);}
+  .switch input:checked+span::before{transform:translateX(20px);}
+  .msg{font-size:.85rem;color:var(--muted);margin-top:8px;min-height:1em;}
+  .msg.err{color:var(--warn);}
+  .link{background:none;border:0;color:var(--muted);font:inherit;font-size:.85rem;text-decoration:underline;cursor:pointer;padding:0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Hoy</h1>
+    <p id="date"></p>
+  </header>
+
+  <!-- Rutina -->
+  <section class="card" style="--c:var(--accent)">
+    <h2>Rutina · equilibrio + estiramiento</h2>
+    <div class="row space">
+      <div>
+        <div class="big" id="r-progress">0<small>/15</small></div>
+        <div class="sub" id="r-streak">Sin historial todavía</div>
+      </div>
+      <button class="btn solid" id="r-go">Empezar</button>
+    </div>
+    <div class="bar"><i id="r-bar"></i></div>
+  </section>
+
+  <!-- Peso -->
+  <section class="card" style="--c:var(--blue)">
+    <h2>Peso</h2>
+    <div class="big" id="w-last">—<small>kg</small></div>
+    <div class="sub" id="w-sub">Sin registros todavía</div>
+    <div class="row" style="margin-top:12px">
+      <input type="number" id="w-input" inputmode="decimal" step="0.1" min="20" max="400" placeholder="Peso de hoy (kg)">
+      <button class="btn solid" id="w-save">Guardar</button>
+    </div>
+    <div class="msg" id="w-msg"></div>
+  </section>
+
+  <!-- Nutricion -->
+  <section class="card" style="--c:var(--lime)">
+    <h2>Nutrición · plan del día</h2>
+    <div class="row space">
+      <div>
+        <div class="big" id="n-kcal">—<small>kcal</small></div>
+        <div class="sub" id="n-sub">Cargando…</div>
+      </div>
+      <button class="btn" id="n-go">Ver plan</button>
+    </div>
+    <div class="bar"><i id="n-bar"></i></div>
+  </section>
+
+  <!-- Recordatorio -->
+  <section class="card" style="--c:var(--accent)">
+    <h2>Recordatorio diario</h2>
+    <div class="row space">
+      <div>
+        <div style="font-weight:600">Avisarme de la rutina</div>
+        <div class="sub">Solo si ese día aún no la hiciste</div>
+      </div>
+      <label class="switch"><input type="checkbox" id="rem-on"><span></span></label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <input type="time" id="rem-time" value="19:00">
+      <button class="btn" id="rem-test">Probar</button>
+    </div>
+    <div class="msg" id="rem-msg"></div>
+  </section>
+</div>
+
+<script type="module">
+import { calcBMR, calcTDEE, calcTarget, totalMacros } from '../nutrition/calculator.js';
+import { loadLocal as nLoad, pull as nPull } from '../nutrition/sync.js';
+import { loadLocal as bLoad, saveLocal as bSave, pull as bPull, push as bPush } from '../body-metrics/sync.js';
+
+const API = 'https://habits-worker.efrenalejandro2010.workers.dev/health';
+const AUTH = { Authorization: 'Bearer 151322' };
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const isoLocal = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const today = () => isoLocal(new Date());
+const toParent = msg => { if (window.parent !== window) window.parent.postMessage(msg, location.origin); };
+
+$('date').textContent = new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' });
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { ...AUTH, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+/* ---------- Rutina ---------- */
+function streak(hist) {
+  const set = new Set(hist); let n = 0; const d = new Date();
+  if (!set.has(today())) d.setDate(d.getDate() - 1);
+  while (set.has(isoLocal(d))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+function paintRutina(r) {
+  const total = r.total || 15;
+  const done = r.date === today() ? Object.values(r.done || {}).filter(Boolean).length : 0;
+  const hist = r.history || [];
+  const completed = hist.includes(today());
+  $('r-progress').innerHTML = `${completed ? total : done}<small>/${total}</small>`;
+  $('r-bar').style.width = ((completed ? total : done) / total * 100) + '%';
+  const s = streak(hist);
+  $('r-streak').innerHTML = completed
+    ? `<span class="done-pill">Completada hoy ✓</span> · racha ${s} ${s === 1 ? 'día' : 'días'}`
+    : hist.length ? `Racha: ${s} ${s === 1 ? 'día' : 'días'} · total ${hist.length}` : 'Sin historial todavía';
+  $('r-go').textContent = completed ? 'Ver rutina' : done ? 'Continuar' : 'Empezar';
+  $('r-go').classList.toggle('solid', !completed);
+}
+async function loadRutina() {
+  let local = {};
+  try { local = JSON.parse(localStorage.getItem('health_rutina_v1')) || {}; } catch {}
+  paintRutina(local);
+  try {
+    const { data } = await api('/rutina');
+    if (!data) return;
+    const merged = (data.updated || 0) > (local.updated || 0) ? { ...data } : { ...local };
+    merged.history = [...new Set([...(local.history || []), ...(data.history || [])])];
+    paintRutina(merged);
+  } catch {}
+}
+$('r-go').onclick = () => toParent({ type: 'health:tab', tab: 'rutina' });
+
+/* ---------- Peso (mismo estado que Body Metrics) ---------- */
+let bm = null;
+function paintWeight() {
+  const entries = (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
+  const last = entries[entries.length - 1];
+  if (!last) { $('w-last').innerHTML = '—<small>kg</small>'; $('w-sub').textContent = 'Sin registros todavía'; return; }
+  $('w-last').innerHTML = `${last.weight}<small>kg</small>`;
+  // tendencia contra el registro mas cercano a 7 dias antes
+  const ref = new Date(last.date + 'T00:00:00'); ref.setDate(ref.getDate() - 7);
+  const prev = [...entries].reverse().find(e => e.date <= isoLocal(ref)) || entries[entries.length - 2];
+  const when = last.date === today() ? 'hoy' : new Date(last.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  if (prev && prev !== last) {
+    const d = +(last.weight - prev.weight).toFixed(1);
+    const cls = d > 0 ? 'up' : d < 0 ? 'down' : '';
+    $('w-sub').innerHTML = `Registrado ${when} · <span class="delta ${cls}">${d > 0 ? '+' : ''}${d} kg</span> desde ${new Date(prev.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}`;
+  } else {
+    $('w-sub').textContent = `Registrado ${when}`;
+  }
+  if (last.date === today()) $('w-input').placeholder = `Hoy: ${last.weight} kg (corregir)`;
+}
+async function loadWeight() {
+  bm = bLoad(); paintWeight();
+  const remote = await bPull();
+  if (remote && (!bm || (remote.lastModified || 0) > (bm.lastModified || 0))) { bm = remote; bSave(bm); paintWeight(); }
+}
+$('w-save').onclick = async () => {
+  const weight = parseFloat($('w-input').value.replace(',', '.'));
+  if (!weight || weight < 20 || weight > 400) { $('w-msg').textContent = 'Escribe un peso válido'; $('w-msg').className = 'msg err'; return; }
+  $('w-save').disabled = true;
+  // releer lo ultimo antes de escribir, para no pisar cambios hechos en Metricas
+  const remote = await bPull();
+  bm = remote && (remote.lastModified || 0) > (bLoad()?.lastModified || 0) ? remote : (bLoad() || remote || { bodyComp: [], exercises: [], sessions: [], lastModified: 0 });
+  bm.bodyComp = bm.bodyComp || [];
+  const date = today();
+  const i = bm.bodyComp.findIndex(e => e.date === date);
+  if (i >= 0) bm.bodyComp[i] = { ...bm.bodyComp[i], weight };
+  else bm.bodyComp.push({ date, weight, fatPct: null, measurements: { waist: null, chest: null, arm: null, hip: null, thigh: null } });
+  bm.bodyComp.sort((a, b) => a.date.localeCompare(b.date));
+  bm.lastModified = Date.now();
+  bSave(bm);
+  await bPush(bm);
+  $('w-input').value = '';
+  $('w-msg').textContent = 'Guardado ✓'; $('w-msg').className = 'msg';
+  $('w-save').disabled = false;
+  paintWeight();
+  toParent({ type: 'health:reload', tab: 'metricas' });
+};
+
+/* ---------- Nutricion (plan activo) ---------- */
+function paintNutrition(S) {
+  const p = S?.profiles?.[S.activeProfile];
+  if (!p) { $('n-sub').textContent = 'Sin plan configurado'; return; }
+  const day = (p.days || []).find(d => d.id === p.activeDay) || (p.days || [])[0] || { meals: [] };
+  const m = totalMacros(day.meals || []);
+  const t = p.tdee || {};
+  let target = 0;
+  if (t.weight && t.height && t.age) target = calcTarget(calcTDEE(calcBMR(+t.weight, +t.height, +t.age, t.gender), t.activity), t.goal, t.goalPct);
+  $('n-kcal').innerHTML = `${Math.round(m.calories)}<small>${target ? '/ ' + Math.round(target) + ' kcal' : 'kcal'}</small>`;
+  $('n-sub').textContent = `${p.name} · ${day.label || 'Día'} · ${Math.round(m.protein)} g proteína`;
+  $('n-bar').style.width = target ? Math.min(100, m.calories / target * 100) + '%' : '0';
+}
+async function loadNutrition() {
+  let S = nLoad(); paintNutrition(S);
+  const remote = await nPull();
+  if (remote && (!S || (remote.lastModified || 0) > (S.lastModified || 0))) paintNutrition(remote);
+}
+$('n-go').onclick = () => toParent({ type: 'health:tab', tab: 'nutricion' });
+
+/* ---------- Recordatorio push ---------- */
+const canPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+function remMsg(t, err) { $('rem-msg').textContent = t; $('rem-msg').className = 'msg' + (err ? ' err' : ''); }
+const b64ToBytes = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+
+async function subscribe() {
+  if (!canPush) throw new Error('Este navegador no soporta notificaciones push');
+  if (!location.hostname.startsWith('health.')) throw new Error('Abre health.kisushotto.com para activar recordatorios');
+  let perm = Notification.permission;
+  if (perm === 'default') perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('Permiso de notificaciones denegado');
+  const reg = await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    const { key } = await api('/vapid');
+    if (!key) throw new Error('El servidor no tiene llave VAPID');
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+  }
+  await api('/push', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
+}
+async function saveReminder() {
+  const enabled = $('rem-on').checked;
+  const time = $('rem-time').value || '19:00';
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  try {
+    if (enabled) await subscribe();
+    await api('/reminder', { method: 'PUT', body: JSON.stringify({ enabled, time, tz }) });
+    remMsg(enabled ? `Te aviso todos los días a las ${time} si no has hecho la rutina` : 'Recordatorio desactivado');
+  } catch (e) {
+    $('rem-on').checked = false;
+    remMsg(e.message, true);
+  }
+}
+$('rem-on').onchange = saveReminder;
+$('rem-time').onchange = () => { if ($('rem-on').checked) saveReminder(); };
+$('rem-test').onclick = async () => {
+  try {
+    await subscribe();
+    const { sent } = await api('/test-push', { method: 'POST' });
+    remMsg(sent ? 'Notificación de prueba enviada' : 'No se pudo enviar (sin dispositivos suscritos)', !sent);
+  } catch (e) { remMsg(e.message, true); }
+};
+async function loadReminder() {
+  try {
+    const { data } = await api('/reminder');
+    if (data) { $('rem-on').checked = !!data.enabled; if (data.time) $('rem-time').value = data.time; }
+    if (data?.enabled) remMsg(`Activo: todos los días a las ${data.time}`);
+  } catch {}
+}
+
+function loadAll() { loadRutina(); loadWeight(); loadNutrition(); }
+loadAll(); loadReminder();
+// El shell avisa al volver a esta pestana para refrescar lo que cambio en las otras
+window.addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'health:refresh') loadAll(); });
+</script>
+</body>
+</html>

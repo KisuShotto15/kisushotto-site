@@ -279,10 +279,23 @@ try{saved=JSON.parse(localStorage.getItem(LS_KEY))||{};}catch(e){}
 const hist=Array.isArray(saved.history)?saved.history:[];
 if(saved.date===today()&&saved.done)state.done=saved.done;
 if(saved.prefs)['voice','sound','auto'].forEach(k=>{if(typeof saved.prefs[k]==='boolean')state[k]=saved.prefs[k];});
-function save(){
-  try{localStorage.setItem(LS_KEY,JSON.stringify({date:today(),done:state.done,
-    prefs:{voice:state.voice,sound:state.sound,auto:state.auto},history:hist}));}catch(e){}
+// Sincronizacion con la nube (worker de Habits, ruta /health/rutina): el
+// historial se une; el progreso del dia y las preferencias gana el mas reciente.
+const SYNC_URL='https://habits-worker.efrenalejandro2010.workers.dev/health/rutina';
+const SYNC_AUTH={Authorization:'Bearer 151322'};
+let syncTimer=null;
+function snapshot(){
+  return {date:today(),done:state.done,prefs:{voice:state.voice,sound:state.sound,auto:state.auto},
+    history:hist,updated:saved.updated||0,total:flat.length};
 }
+function writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(snapshot()));}catch(e){}}
+function pushRemote(){
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(()=>{fetch(SYNC_URL,{method:'PUT',headers:{...SYNC_AUTH,'Content-Type':'application/json'},
+    body:JSON.stringify(snapshot())}).catch(()=>{});},1200);
+}
+// Cambio hecho por el usuario: marca la hora y sube a la nube
+function save(){saved.updated=Date.now();writeLocal();pushRemote();}
 function streakText(){
   if(!hist.length)return '';
   const set=new Set(hist);let n=0;const d=new Date();
@@ -332,13 +345,13 @@ function toggle(i){
   document.getElementById('c'+i).classList.toggle('done',!!state.done[i]);
   document.getElementById('k'+i).setAttribute('aria-pressed',!!state.done[i]);
   prog();
+  save();
 }
 function prog(){
   const n=Object.values(state.done).filter(Boolean).length;
   document.getElementById('barFill').style.width=(n/flat.length*100)+'%';
   document.getElementById('progressLabel').textContent=n+'/'+flat.length;
   if(n===flat.length&&!hist.includes(today()))hist.push(today());
-  save();
   document.getElementById('streak').textContent=streakText();
 }
 
@@ -430,7 +443,7 @@ document.getElementById('resetBtn').onclick=()=>{
     document.getElementById('t'+i).textContent='▶ Iniciar';
     it.phases.forEach((_,j)=>{const e=document.getElementById('p'+i+'_'+j);e.classList.remove('on','past');});
   });
-  prog();window.scrollTo({top:0,behavior:'smooth'});
+  prog();save();window.scrollTo({top:0,behavior:'smooth'});
 };
 
 /* ---------- voz ---------- */
@@ -480,10 +493,11 @@ function beep(n){
 }
 
 /* ---------- toggles ---------- */
+const paints=[];
 function tog(id,key,label,extra){
   const b=document.getElementById(id);
   const paint=()=>{b.setAttribute('aria-pressed',state[key]);b.textContent=label+': '+(state[key]?'ON':'OFF');};
-  paint();
+  paint();paints.push(paint);
   b.onclick=()=>{state[key]=!state[key];paint();save(); if(extra&&state[key])extra();};
 }
 tog('voiceBtn','voice','Voz',()=>say('Voz activada'));
@@ -510,6 +524,29 @@ wakeBtn.onclick=async()=>{
 };
 
 prog();
+
+/* ---------- traer el estado de la nube y fusionarlo ---------- */
+fetch(SYNC_URL,{headers:SYNC_AUTH}).then(r=>r.ok?r.json():null).then(res=>{
+  const r=res&&res.data;
+  if(!r){if(saved.updated||hist.length)pushRemote();return;}
+  const remoteDays=(r.history||[]).length;
+  (r.history||[]).forEach(d=>{if(!hist.includes(d))hist.push(d);});
+  const localNewer=(saved.updated||0)>(r.updated||0);
+  if((r.updated||0)>(saved.updated||0)){
+    // la nube es mas reciente: adoptar su progreso del dia y preferencias
+    state.done=r.date===today()?(r.done||{}):{};
+    if(r.prefs)['voice','sound','auto'].forEach(k=>{if(typeof r.prefs[k]==='boolean')state[k]=r.prefs[k];});
+    saved.updated=r.updated;
+    flat.forEach((_,i)=>{
+      document.getElementById('c'+i).classList.toggle('done',!!state.done[i]);
+      document.getElementById('k'+i).setAttribute('aria-pressed',!!state.done[i]);
+    });
+    paints.forEach(f=>f());
+  }
+  // subir si lo local es mas nuevo o tiene dias completados que la nube no tiene
+  if(localNewer||hist.length>remoteDays)pushRemote();
+  writeLocal();prog();
+}).catch(()=>{});
 </script>
 </body>
 </html>

@@ -47,12 +47,17 @@
 <body>
 
 <div class="frames">
+  <iframe id="f-hoy"       title="Hoy"       data-src="hoy.html" hidden></iframe>
   <iframe id="f-rutina"    title="Rutina"    data-src="rutina.html" hidden></iframe>
   <iframe id="f-nutricion" title="Nutrición" data-src="../nutrition/?embed=1" hidden></iframe>
   <iframe id="f-metricas"  title="Métricas"  data-src="../body-metrics/?embed=1" hidden></iframe>
 </div>
 
 <nav class="tabs" role="tablist">
+  <button class="tab" role="tab" data-tab="hoy" style="--c:#eef5f1">
+    <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/></svg></span>
+    Hoy
+  </button>
   <button class="tab" role="tab" data-tab="rutina" style="--c:#43e68d">
     <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M4 17l5-1 1.5-3"/><path d="M15 21l-1.5-5.5L10 13l1-6 3.5 3.5L18 11"/><path d="M11 7L7 9l-1 3"/></svg></span>
     Rutina
@@ -69,31 +74,39 @@
 
 <script>
 (function () {
-  const TABS = ['rutina', 'nutricion', 'metricas'];
-  const KEY = 'health_last_tab';
+  const TABS = ['hoy', 'rutina', 'nutricion', 'metricas'];
   const btns = document.querySelectorAll('.tab');
 
   // Las iframes se cargan la primera vez que se abre su pestana y despues se
   // quedan vivas: el temporizador de la rutina sigue corriendo al cambiar.
   function show(tab) {
-    if (!TABS.includes(tab)) tab = 'rutina';
+    if (!TABS.includes(tab)) tab = 'hoy';
     TABS.forEach(t => {
       const f = document.getElementById('f-' + t);
       const on = t === tab;
       if (on && !f.src) f.src = f.dataset.src;
+      else if (on && t === 'hoy' && f.hidden) f.contentWindow?.postMessage({ type: 'health:refresh' }, location.origin);
       f.hidden = !on;
     });
     btns.forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
-    try { localStorage.setItem(KEY, tab); } catch {}
     if (location.hash !== '#' + tab) history.replaceState(null, '', '#' + tab);
   }
 
   btns.forEach(b => b.addEventListener('click', () => show(b.dataset.tab)));
   window.addEventListener('hashchange', () => show(location.hash.slice(1)));
 
-  let initial = location.hash.slice(1);
-  if (!TABS.includes(initial)) { try { initial = localStorage.getItem(KEY); } catch {} }
-  show(initial);
+  // Mensajes de las pestanas: cambiar de pestana o recargar una que ya cargo
+  window.addEventListener('message', e => {
+    if (e.origin !== location.origin || !e.data) return;
+    if (e.data.type === 'health:tab') show(e.data.tab);
+    if (e.data.type === 'health:reload') {
+      const f = document.getElementById('f-' + e.data.tab);
+      if (f && f.src) f.src = f.dataset.src;
+    }
+  });
+
+  // Hoy es la pantalla de inicio; un #pestana en la URL (p. ej. desde una notificacion) manda
+  show(location.hash.slice(1) || 'hoy');
 })();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 </script>

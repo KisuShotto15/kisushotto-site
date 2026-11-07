@@ -286,6 +286,69 @@ async function dispatchReminders(env) {
   }
 }
 
+// ── Health (health.kisushotto.com) ────────────────────────────────────────────
+// Backend de la app Health: guarda el progreso de la rutina y envia un
+// recordatorio diario por push reutilizando las llaves VAPID de este worker.
+// Es de un solo usuario (igual que Nutrition y Body Metrics): no usa X-User-Email.
+async function healthGet(env, k) {
+  const row = await env.DB.prepare('SELECT v FROM health_kv WHERE k = ?').bind(k).first();
+  return row ? JSON.parse(row.v) : null;
+}
+async function healthSet(env, k, v) {
+  await env.DB.prepare(
+    'INSERT INTO health_kv (k, v, updated_at) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated_at = excluded.updated_at'
+  ).bind(k, JSON.stringify(v), Date.now()).run();
+}
+
+async function sendHealthPush(env, payload) {
+  const subs = (await healthGet(env, 'push')) || [];
+  let sent = 0;
+  for (const s of subs) if (await sendWebPush(env, s, payload)) sent++;
+  return sent;
+}
+
+const RUTINA_PUSH = {
+  title: 'Rutina de hoy',
+  body:  'Equilibrio + estiramiento, 20 minutos. No pierdas la racha.',
+  tag:   'health-rutina',
+  url:   '/#rutina',
+};
+
+async function handleHealth(path, request, env) {
+  const method = request.method;
+  if (path === '/health/vapid' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null });
+  if (path === '/health/push' && method === 'POST') {
+    const sub = await request.json();
+    if (!sub?.endpoint) return err('subscription required');
+    const subs = ((await healthGet(env, 'push')) || []).filter(s => s.endpoint !== sub.endpoint);
+    subs.push(sub);
+    await healthSet(env, 'push', subs.slice(-5)); // un par de dispositivos; descarta los mas viejos
+    return json({ ok: true });
+  }
+  if (path === '/health/test-push' && method === 'POST') {
+    return json({ sent: await sendHealthPush(env, RUTINA_PUSH) });
+  }
+  const m = path.match(/^\/health\/(rutina|reminder)$/);
+  if (m && method === 'GET') return json({ data: await healthGet(env, m[1]) });
+  if (m && method === 'PUT') {
+    await healthSet(env, m[1], await request.json());
+    return json({ ok: true });
+  }
+  return err('Not found', 404);
+}
+
+async function dispatchHealthReminder(env) {
+  const r = await healthGet(env, 'reminder');
+  if (!r?.enabled || !r.time) return;
+  const { date, hhmm } = localParts(r.tz);
+  if (hhmm !== r.time) return;
+  if ((await healthGet(env, 'reminder_sent')) === date) return;
+  await healthSet(env, 'reminder_sent', date);
+  const rutina = await healthGet(env, 'rutina');
+  if (rutina?.history?.includes(date)) return; // ya la hizo hoy
+  await sendHealthPush(env, RUTINA_PUSH);
+}
+
 // ── DB bootstrap ──────────────────────────────────────────────────────────────
 async function migrate(env) {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS habits (id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT '', name TEXT NOT NULL, description TEXT, type TEXT NOT NULL DEFAULT 'binary', target_value REAL DEFAULT 1, target_unit TEXT DEFAULT 'veces', frequency TEXT NOT NULL DEFAULT 'daily', frequency_days TEXT, frequency_every INTEGER DEFAULT 1, color TEXT NOT NULL DEFAULT 'lavender', emoji TEXT NOT NULL DEFAULT '✓', reminder_time TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)").run();
@@ -297,6 +360,7 @@ async function migrate(env) {
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN tz TEXT").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN paused INTEGER NOT NULL DEFAULT 0").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN paused_at TEXT").run(); } catch (_) {}
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS health_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL, updated_at INTEGER NOT NULL)").run();
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -491,6 +555,16 @@ export default {
     }
     if (!auth(request, env)) return err('Unauthorized', 401);
 
+    const healthPath = new URL(request.url).pathname.replace(/\/$/, '');
+    if (healthPath.startsWith('/health/')) {
+      try {
+        await migrate(env);
+        return await handleHealth(healthPath, request, env);
+      } catch (e) {
+        return err(e.message, 500);
+      }
+    }
+
     const uid = getUser(request);
     if (!uid) return err('User identity required', 401);
 
@@ -529,5 +603,6 @@ export default {
   async scheduled(_event, env) {
     try { await migrate(env); } catch (_) {}
     await dispatchReminders(env);
+    try { await dispatchHealthReminder(env); } catch (_) {}
   },
 };

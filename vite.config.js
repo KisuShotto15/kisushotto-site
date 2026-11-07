@@ -11,6 +11,7 @@ export default defineConfig({
         planner:        resolve(__dirname, 'planner/index.html'),
         health:         resolve(__dirname, 'health/index.html'),
         healthRutina:   resolve(__dirname, 'health/rutina.html'),
+        healthHoy:      resolve(__dirname, 'health/hoy.html'),
       }
     }
   }

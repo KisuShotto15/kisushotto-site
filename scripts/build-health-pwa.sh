@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds a self-contained health-pwa/ directory for deployment to health.kisushotto.com
-# Layout: / (shell con pestanas), /rutina.html, /nutrition/, /body-metrics/
-# El shell usa rutas relativas (rutina.html, ../nutrition/, ../body-metrics/) que
+# Layout: / (shell con pestanas), /hoy.html, /rutina.html, /nutrition/, /body-metrics/
+# El shell usa rutas relativas (hoy.html, rutina.html, ../nutrition/, ../body-metrics/) que
 # funcionan igual aqui y en kisushotto.com/health/.
 set -e
 
@@ -12,6 +12,7 @@ mkdir -p "$OUT/icons" "$OUT/images" "$OUT/manifests"
 # Shell + rutina
 cp health/index.html  "$OUT/index.html"
 cp health/rutina.html "$OUT/rutina.html"
+cp health/hoy.html    "$OUT/hoy.html"
 # En el subdominio el manifest vive en la raiz
 sed -i 's|href="/manifests/health.json"|href="/manifest.json"|g' "$OUT/index.html"
 
@@ -31,13 +32,37 @@ cp public/images/health-icon.svg public/images/health-favicon.svg \
    public/images/nutrition-favicon.svg public/images/nutrition-icon.svg \
    public/images/bm-favicon.svg public/images/bm-icon.svg "$OUT/images/"
 
-# Service worker minimo (instalable como PWA, sin cache: siempre la ultima version)
+# Service worker: instalable como PWA, sin cache (siempre la ultima version) y
+# con el recordatorio diario por push (lo envia habits-worker, ruta /health/*)
 cat > "$OUT/sw.js" << 'SWEOF'
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
     .then(keys => Promise.all(keys.map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
+});
+
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch {}
+  e.waitUntil(self.registration.showNotification(d.title || 'Health', {
+    body: d.body || 'Tu rutina de hoy te espera',
+    tag: d.tag || 'health',
+    icon: '/icons/health-192.png',
+    badge: '/icons/health-192.png',
+    data: { url: d.url || '/#rutina' },
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || '/#rutina', self.location.origin).href;
+  e.waitUntil((async () => {
+    const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const w = wins.find(c => new URL(c.url).origin === self.location.origin);
+    if (w) { await w.focus(); return w.navigate(url); }
+    return clients.openWindow(url);
+  })());
 });
 SWEOF
 
