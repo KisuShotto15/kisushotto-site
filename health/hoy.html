@@ -151,15 +151,38 @@
     <div class="msg" id="rem-msg"></div>
     <button class="link" id="rem-test-weekly">Probar resumen semanal</button>
   </section>
+
+  <!-- Cuenta -->
+  <section class="card" style="--c:var(--muted)">
+    <h2>Cuenta</h2>
+    <div class="row space">
+      <div style="min-width:0">
+        <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis" id="acc-email"></div>
+        <div class="sub">Se vuelve a pedir el inicio de sesión cada 30 días</div>
+      </div>
+      <button class="btn" id="acc-logout">Salir</button>
+    </div>
+    <div id="pk-box" hidden style="margin-top:14px">
+      <div class="row space">
+        <div>
+          <div style="font-weight:600">Passkey</div>
+          <div class="sub">Entra con huella o Face ID en vez del código</div>
+        </div>
+        <button class="btn" id="pk-add">Crear</button>
+      </div>
+      <div id="pk-list"></div>
+    </div>
+    <div class="msg" id="acc-msg"></div>
+  </section>
 </div>
 
 <script type="module">
 import { calcBMR, calcTDEE, calcTarget, totalMacros } from '../nutrition/calculator.js';
 import { loadLocal as nLoad, pull as nPull } from '../nutrition/sync.js';
 import { loadLocal as bLoad, saveLocal as bSave, pull as bPull, push as bPush } from '../body-metrics/sync.js';
+import { authFetch, currentEmail, logout, passkeysUsable, passkeyRegister, listPasskeys, deletePasskey } from './auth.js';
 
 const API = 'https://habits-worker.efrenalejandro2010.workers.dev/health';
-const AUTH = { Authorization: 'Bearer 151322' };
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 const isoLocal = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -169,7 +192,7 @@ const toParent = msg => { if (window.parent !== window) window.parent.postMessag
 $('date').textContent = new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' });
 
 async function api(path, opts = {}) {
-  const r = await fetch(API + path, { ...opts, headers: { ...AUTH, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } });
+  const r = await authFetch(API + path, { ...opts, headers: opts.body ? { 'Content-Type': 'application/json' } : {} });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
@@ -216,20 +239,19 @@ $('r-go').onclick = () => toParent({ type: 'health:tab', tab: 'rutina' });
 async function loadHabits() {
   try {
     const { habits, link } = await api('/habits');
-    const users = [...new Set(habits.map(h => h.user_id))];
     const sel = $('h-link');
     const opt = (value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; return o; };
     sel.replaceChildren(opt('', 'No vincular'));
-    habits.forEach(h => sel.append(opt(h.id + '|' + h.user_id, `${h.emoji || '✓'} ${h.name}${users.length > 1 ? ' · ' + h.user_id.split('@')[0] : ''}`)));
-    users.forEach(u => sel.append(opt('create|' + u, `+ Crear «Rutina de estiramiento»${users.length > 1 ? ' · ' + u.split('@')[0] : ''}`)));
-    sel.value = link?.habit_id ? link.habit_id + '|' + link.user_id : '';
+    habits.forEach(h => sel.append(opt(h.id, `${h.emoji || '✓'} ${h.name}`)));
+    sel.append(opt('create', '+ Crear «Rutina de estiramiento»'));
+    sel.value = link?.habit_id || '';
   } catch {}
 }
 $('h-link').onchange = async e => {
-  let [habit_id, user_id] = e.target.value.split('|');
+  let habit_id = e.target.value;
   try {
-    if (habit_id === 'create') ({ habit: { id: habit_id } } = await api('/habits', { method: 'POST', body: JSON.stringify({ user_id }) }));
-    await api('/habit-link', { method: 'PUT', body: JSON.stringify({ habit_id: habit_id || null, user_id, today: today() }) });
+    if (habit_id === 'create') ({ habit: { id: habit_id } } = await api('/habits', { method: 'POST', body: '{}' }));
+    await api('/habit-link', { method: 'PUT', body: JSON.stringify({ habit_id: habit_id || null, today: today() }) });
   } catch {}
   loadHabits();
 };
@@ -413,6 +435,25 @@ async function loadReminder() {
     if (data?.enabled || data?.weekly) remMsg(remStatus(data));
   } catch {}
 }
+
+/* ---------- Cuenta y passkeys ---------- */
+$('acc-email').textContent = currentEmail();
+$('acc-logout').onclick = () => { logout(); toParent({ type: 'health:login' }); };
+async function paintPasskeys() {
+  const list = await listPasskeys();
+  $('pk-list').innerHTML = list.map(p => `<div class="row space" style="margin-top:8px;font-size:.9rem">
+    <span>🔑 ${(p.friendly_name || 'Passkey').replace(/[<>&]/g, '')} <span class="sub">${p.created_at ? new Date(p.created_at).toLocaleDateString('es') : ''}</span></span>
+    <button class="link" data-pk="${p.id}">Borrar</button></div>`).join('');
+  $('pk-list').querySelectorAll('[data-pk]').forEach(b => b.onclick = async () => {
+    if (await deletePasskey(b.dataset.pk)) paintPasskeys();
+  });
+}
+passkeysUsable().then(ok => { $('pk-box').hidden = !ok; if (ok) paintPasskeys(); });
+$('pk-add').onclick = async () => {
+  $('acc-msg').textContent = 'Creando passkey…'; $('acc-msg').className = 'msg';
+  try { await passkeyRegister(); $('acc-msg').textContent = 'Passkey creada ✓'; paintPasskeys(); }
+  catch (e) { $('acc-msg').textContent = e?.name === 'NotAllowedError' ? 'Cancelado' : e.message; $('acc-msg').className = 'msg err'; }
+};
 
 function loadAll() { loadRutina(); loadWeight(); loadNutrition(); loadLog(); }
 loadAll(); loadReminder(); loadHabits();

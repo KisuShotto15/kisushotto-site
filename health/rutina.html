@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rutina de Equilibrio y Estiramiento</title>
+<!-- fetch con el token de la cuenta (lo usa la sincronizacion de abajo) -->
+<script type="module">import { authFetch } from './auth.js'; window.healthFetch = authFetch;</script>
 <style>
   :root{
     --bg:#0c110f; --panel:#151d19; --panel-done:#0f1a14; --border:#2b3832;
@@ -282,7 +284,6 @@ if(saved.prefs)['voice','sound','auto'].forEach(k=>{if(typeof saved.prefs[k]==='
 // Sincronizacion con la nube (worker de Habits, ruta /health/rutina): el
 // historial se une; el progreso del dia y las preferencias gana el mas reciente.
 const SYNC_URL='https://habits-worker.efrenalejandro2010.workers.dev/health/rutina';
-const SYNC_AUTH={Authorization:'Bearer 151322'};
 let syncTimer=null;
 function snapshot(){
   return {date:today(),done:state.done,prefs:{voice:state.voice,sound:state.sound,auto:state.auto},
@@ -291,7 +292,7 @@ function snapshot(){
 function writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(snapshot()));}catch(e){}}
 function pushRemote(){
   clearTimeout(syncTimer);
-  syncTimer=setTimeout(()=>{fetch(SYNC_URL,{method:'PUT',headers:{...SYNC_AUTH,'Content-Type':'application/json'},
+  syncTimer=setTimeout(()=>{window.healthFetch(SYNC_URL,{method:'PUT',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(snapshot())}).catch(()=>{});},1200);
 }
 // Cambio hecho por el usuario: marca la hora y sube a la nube
@@ -526,7 +527,8 @@ wakeBtn.onclick=async()=>{
 prog();
 
 /* ---------- traer el estado de la nube y fusionarlo ---------- */
-fetch(SYNC_URL,{headers:SYNC_AUTH}).then(r=>r.ok?r.json():null).then(res=>{
+// window.healthFetch lo define un modulo, que corre antes del evento load
+window.addEventListener('load',()=>window.healthFetch(SYNC_URL).then(r=>r.ok?r.json():null).then(res=>{
   const r=res&&res.data;
   if(!r){if(saved.updated||hist.length)pushRemote();return;}
   const remoteDays=(r.history||[]).length;
@@ -546,7 +548,7 @@ fetch(SYNC_URL,{headers:SYNC_AUTH}).then(r=>r.ok?r.json():null).then(res=>{
   // subir si lo local es mas nuevo o tiene dias completados que la nube no tiene
   if(localNewer||hist.length>remoteDays)pushRemote();
   writeLocal();prog();
-}).catch(()=>{});
+}).catch(()=>{}));
 </script>
 </body>
 </html>

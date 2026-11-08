@@ -23,6 +23,11 @@ crons = ["* * * * *"]
 [vars]
 TOKEN = "151322"
 VAPID_SUBJECT = "mailto:efrenalejandro2010@gmail.com"
+# Health: cuentas del mismo Supabase que Portfolio (URL y publishable key son publicas)
+SUPABASE_URL = "https://fcrqrfpjpuscorbogjho.supabase.co"
+SUPABASE_KEY = "sb_publishable_1ru1s3pT8wJ75GEKa2ag5A_jlz0y1GQ"
+# Duenio de los datos de Health de antes de las cuentas, y de Body Metrics (aun de un solo usuario)
+HEALTH_OWNER = "efrenalejandro2010@gmail.com"
 
 # Set as secrets via:
 #   wrangler secret put VAPID_PUBLIC

@@ -13,6 +13,7 @@ mkdir -p "$OUT/icons" "$OUT/images" "$OUT/manifests"
 cp health/index.html  "$OUT/index.html"
 cp health/rutina.html "$OUT/rutina.html"
 cp health/hoy.html    "$OUT/hoy.html"
+cp health/auth.js     "$OUT/auth.js"
 # En el subdominio el manifest vive en la raiz
 sed -i 's|href="/manifests/health.json"|href="/manifest.json"|g' "$OUT/index.html"
 

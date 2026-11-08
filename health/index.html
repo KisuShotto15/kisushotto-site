@@ -42,9 +42,51 @@
   .tab .pill { display:flex; align-items:center; justify-content:center; width:56px; height:30px; border-radius:15px; transition:background .15s; }
   .tab[aria-selected="true"] { color:var(--c); }
   .tab[aria-selected="true"] .pill { background:color-mix(in srgb, var(--c) 16%, transparent); }
+
+  /* Login */
+  .auth { position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; padding:24px;
+    background:var(--bg); color:#eef5f1; }
+  .auth[hidden] { display:none; }
+  .auth-card { width:100%; max-width:360px; text-align:center; }
+  .auth-card img { width:64px; height:64px; }
+  .auth-card h1 { font-size:1.5rem; margin:10px 0 4px; }
+  .auth-card p { color:var(--muted); margin:0 0 20px; font-size:.95rem; }
+  .auth-card input { width:100%; background:#151d19; border:1.5px solid var(--border); color:#eef5f1; font:inherit; font-size:1rem;
+    padding:12px 14px; border-radius:10px; margin-bottom:10px; text-align:center; }
+  .auth-card input:focus { outline:none; border-color:#43e68d; }
+  .auth-card #a-code { letter-spacing:.3em; font-size:1.3rem; }
+  .auth-btn { width:100%; background:#43e68d; color:#06100b; border:0; font:inherit; font-weight:700; font-size:1rem;
+    padding:12px; border-radius:10px; cursor:pointer; }
+  .auth-btn.ghost { background:transparent; color:#43e68d; border:1.5px solid #43e68d; margin-bottom:14px; }
+  .auth-btn:disabled { opacity:.5; }
+  .auth-or { color:var(--muted); font-size:.85rem; margin:4px 0 14px; }
+  .auth-link { background:none; border:0; color:var(--muted); font:inherit; font-size:.88rem; text-decoration:underline; cursor:pointer; margin-top:12px; }
+  .auth-msg { min-height:1.3em; margin-top:12px; color:#f0c04a; font-size:.9rem; }
 </style>
 </head>
 <body>
+
+<div class="auth" id="auth" hidden>
+  <div class="auth-card">
+    <img src="/images/health-icon.svg" alt="">
+    <h1>Health</h1>
+    <p>Entra con tu cuenta de kisushotto</p>
+    <div id="a-step-email">
+      <div id="a-pk-wrap" hidden>
+        <button class="auth-btn ghost" id="a-pk">🔑 Entrar con passkey</button>
+        <div class="auth-or">o con un código al correo</div>
+      </div>
+      <input type="email" id="a-email" placeholder="tu@correo.com" autocomplete="email" inputmode="email">
+      <button class="auth-btn" id="a-send">Enviar código</button>
+    </div>
+    <div id="a-step-code" hidden>
+      <input type="text" id="a-code" placeholder="Código" inputmode="numeric" autocomplete="one-time-code" maxlength="10">
+      <button class="auth-btn" id="a-verify">Entrar</button>
+      <button class="auth-link" id="a-back">Usar otro correo</button>
+    </div>
+    <div class="auth-msg" id="a-msg"></div>
+  </div>
+</div>
 
 <div class="frames">
   <iframe id="f-hoy"       title="Hoy"       data-src="hoy.html" hidden></iframe>
@@ -72,8 +114,9 @@
   </button>
 </nav>
 
-<script>
-(function () {
+<script type="module">
+import { hasSession, requestCode, verifyCode, passkeysUsable, passkeyLogin, currentEmail } from './auth.js';
+{
   const TABS = ['hoy', 'rutina', 'nutricion', 'metricas'];
   const btns = document.querySelectorAll('.tab');
 
@@ -105,9 +148,61 @@
     }
   });
 
-  // Hoy es la pantalla de inicio; un #pestana en la URL (p. ej. desde una notificacion) manda
-  show(location.hash.slice(1) || 'hoy');
-})();
+  // ── Login (codigo al correo o passkey) ──────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const msg = t => { $('a-msg').textContent = t || ''; };
+  let started = false;
+  function start() {
+    $('auth').hidden = true;
+    if (started) { // volvio a entrar tras expirar: recargar las pestanas con la sesion nueva
+      TABS.forEach(t => { const f = $('f-' + t); if (f.src) f.src = f.dataset.src; });
+      return;
+    }
+    started = true;
+    // Hoy es la pantalla de inicio; un #pestana en la URL (p. ej. desde una notificacion) manda
+    show(location.hash.slice(1) || 'hoy');
+  }
+  function askLogin() {
+    $('auth').hidden = false;
+    $('a-step-email').hidden = false; $('a-step-code').hidden = true;
+    $('a-email').value = currentEmail() || $('a-email').value;
+    msg('');
+    passkeysUsable().then(ok => { $('a-pk-wrap').hidden = !ok; });
+  }
+  $('a-send').onclick = async () => {
+    const email = $('a-email').value.trim().toLowerCase();
+    if (!email.includes('@')) return msg('Escribe un correo válido');
+    $('a-send').disabled = true; msg('Enviando código…');
+    const r = await requestCode(email);
+    $('a-send').disabled = false;
+    if (r.ok) { $('a-step-email').hidden = true; $('a-step-code').hidden = false; msg('Te enviamos un código a ' + email); $('a-code').focus(); }
+    else if (r.code === 'signup_disabled' || r.code === 'otp_disabled' || r.code === '422') msg('Este correo no tiene acceso. Pídele al administrador que lo agregue.');
+    else if (r.code === 'over_email_send_rate_limit' || r.code === '429') msg('Espera un momento antes de pedir otro código.');
+    else msg('No se pudo enviar el código. Intenta de nuevo.');
+  };
+  $('a-verify').onclick = async () => {
+    const code = $('a-code').value.trim();
+    if (!code) return msg('Escribe el código');
+    $('a-verify').disabled = true; msg('Verificando…');
+    const ok = await verifyCode($('a-email').value.trim().toLowerCase(), code);
+    $('a-verify').disabled = false;
+    if (ok) start(); else msg('Código incorrecto o vencido.');
+  };
+  $('a-back').onclick = () => { $('a-step-code').hidden = true; $('a-step-email').hidden = false; msg(''); };
+  $('a-email').onkeydown = e => { if (e.key === 'Enter') $('a-send').click(); };
+  $('a-code').onkeydown = e => { if (e.key === 'Enter') $('a-verify').click(); };
+  $('a-pk').onclick = async () => {
+    msg('Esperando la passkey…');
+    try { await passkeyLogin(); start(); }
+    catch (e) { msg(e?.name === 'NotAllowedError' ? 'Cancelado' : e.message); }
+  };
+  // Una pestana avisa que la sesion ya no vale (o el usuario cerro sesion)
+  window.addEventListener('message', e => {
+    if (e.origin === location.origin && e.data?.type === 'health:login') askLogin();
+  });
+
+  if (hasSession()) start(); else askLogin();
+}
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 </script>
 </body>

@@ -287,21 +287,42 @@ async function dispatchReminders(env) {
 }
 
 // ── Health (health.kisushotto.com) ────────────────────────────────────────────
-// Backend de la app Health: guarda el progreso de la rutina y envia un
-// recordatorio diario por push reutilizando las llaves VAPID de este worker.
-// Es de un solo usuario (igual que Nutrition y Body Metrics): no usa X-User-Email.
-async function healthGet(env, k) {
-  const row = await env.DB.prepare('SELECT v FROM health_kv WHERE k = ?').bind(k).first();
-  return row ? JSON.parse(row.v) : null;
-}
-async function healthSet(env, k, v) {
-  await env.DB.prepare(
-    'INSERT INTO health_kv (k, v, updated_at) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated_at = excluded.updated_at'
-  ).bind(k, JSON.stringify(v), Date.now()).run();
+// Backend de la app Health. Cada usuario entra con su cuenta de Supabase (la
+// misma de Portfolio: codigo por correo o passkey) y todos sus datos se guardan
+// en health_kv con la clave "<email>|<dato>". Los recordatorios por push
+// reutilizan las llaves VAPID de este worker.
+
+// Valida el token de Supabase y devuelve el email. Cache corto por isolate
+// para no consultar a Supabase en cada pedido.
+const _healthUsers = new Map(); // token -> { email, until }
+async function healthUser(request, env) {
+  const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!token || !env.SUPABASE_URL) return null;
+  const hit = _healthUsers.get(token);
+  if (hit && hit.until > Date.now()) return hit.email;
+  const r = await fetch(env.SUPABASE_URL + '/auth/v1/user', {
+    headers: { apikey: env.SUPABASE_KEY, Authorization: 'Bearer ' + token },
+  });
+  if (!r.ok) return null;
+  const email = ((await r.json())?.email || '').toLowerCase();
+  if (!email) return null;
+  if (_healthUsers.size > 500) _healthUsers.clear();
+  _healthUsers.set(token, { email, until: Date.now() + 5 * 60 * 1000 });
+  return email;
 }
 
-async function sendHealthPush(env, payload) {
-  const subs = (await healthGet(env, 'push')) || [];
+async function healthGet(env, user, k) {
+  const row = await env.DB.prepare('SELECT v FROM health_kv WHERE k = ?').bind(user + '|' + k).first();
+  return row ? JSON.parse(row.v) : null;
+}
+async function healthSet(env, user, k, v) {
+  await env.DB.prepare(
+    'INSERT INTO health_kv (k, v, updated_at) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated_at = excluded.updated_at'
+  ).bind(user + '|' + k, JSON.stringify(v), Date.now()).run();
+}
+
+async function sendHealthPush(env, user, payload) {
+  const subs = (await healthGet(env, user, 'push')) || [];
   let sent = 0;
   for (const s of subs) if (await sendWebPush(env, s, payload)) sent++;
   return sent;
@@ -315,18 +336,18 @@ const RUTINA_PUSH = {
 };
 
 // ── Health: vinculo con Habits ────────────────────────────────────────────────
-// Al completar la rutina se marca el habito vinculado (habit_link) ese dia.
-async function markLinkedHabit(env, date) {
-  const link = await healthGet(env, 'habit_link');
+// Al completar la rutina se marca el habito vinculado (siempre del mismo usuario).
+async function markLinkedHabit(env, user, date) {
+  const link = await healthGet(env, user, 'habit_link');
   if (!link?.habit_id) return;
   const h = await env.DB.prepare('SELECT type, target_value FROM habits WHERE id = ? AND user_id = ? AND active = 1')
-    .bind(link.habit_id, link.user_id).first();
+    .bind(link.habit_id, user).first();
   if (!h) return;
   const value = h.type === 'count' ? (h.target_value || 1) : 1;
   await env.DB.prepare(
     `INSERT INTO completions (id,user_id,habit_id,date,value,note,created_at) VALUES (?,?,?,?,?,NULL,?)
      ON CONFLICT(habit_id, date) DO UPDATE SET value = MAX(value, excluded.value)`
-  ).bind(uuid(), link.user_id, link.habit_id, date, value, Math.floor(Date.now() / 1000)).run();
+  ).bind(uuid(), user, link.habit_id, date, value, Math.floor(Date.now() / 1000)).run();
 }
 
 // ── Health: resumen de los ultimos 7 dias ────────────────────────────────────
@@ -335,15 +356,16 @@ function shiftISO(dateISO, days) {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
-async function weeklySummary(env, today) {
+async function weeklySummary(env, user, today) {
   const from = shiftISO(today, -6);
   const inWeek = d => d >= from && d <= today;
-  const rutina = await healthGet(env, 'rutina');
+  const rutina = await healthGet(env, user, 'rutina');
   const rutinaDays = (rutina?.history || []).filter(inWeek).length;
-  const nlog = (await healthGet(env, 'nutrition_log')) || {};
+  const nlog = (await healthGet(env, user, 'nutrition_log')) || {};
   const planDays = Object.entries(nlog).filter(([d, v]) => inWeek(d) && v && !v.skipped).length;
   let weight = null;
-  if (env.BODY_METRICS) {
+  // Body Metrics todavia es de un solo usuario: su peso solo va en el resumen del duenio
+  if (env.BODY_METRICS && user === (env.HEALTH_OWNER || '').toLowerCase()) {
     try {
       const r = await env.BODY_METRICS.fetch('https://body-metrics-worker/', { headers: { Authorization: `Bearer ${env.TOKEN}` } });
       const comp = ((await r.json())?.data?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
@@ -366,77 +388,87 @@ async function weeklySummary(env, today) {
 async function handleHealth(path, request, env) {
   const method = request.method;
   if (path === '/health/vapid' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null });
+  const user = await healthUser(request, env);
+  if (!user) return err('Sesion invalida', 401);
+
+  if (path === '/health/me' && method === 'GET') return json({ email: user });
   if (path === '/health/push' && method === 'POST') {
     const sub = await request.json();
     if (!sub?.endpoint) return err('subscription required');
-    const subs = ((await healthGet(env, 'push')) || []).filter(s => s.endpoint !== sub.endpoint);
+    const subs = ((await healthGet(env, user, 'push')) || []).filter(s => s.endpoint !== sub.endpoint);
     subs.push(sub);
-    await healthSet(env, 'push', subs.slice(-5)); // un par de dispositivos; descarta los mas viejos
+    await healthSet(env, user, 'push', subs.slice(-5)); // un par de dispositivos; descarta los mas viejos
     return json({ ok: true });
   }
   if (path === '/health/test-push' && method === 'POST') {
     const b = await request.json().catch(() => ({}));
-    const r = await healthGet(env, 'reminder');
-    const payload = b?.kind === 'weekly' ? await weeklySummary(env, localParts(r?.tz).date) : RUTINA_PUSH;
-    return json({ sent: await sendHealthPush(env, payload), payload });
+    const r = await healthGet(env, user, 'reminder');
+    const payload = b?.kind === 'weekly' ? await weeklySummary(env, user, localParts(r?.tz).date) : RUTINA_PUSH;
+    return json({ sent: await sendHealthPush(env, user, payload), payload });
   }
-  // Habitos que se pueden vincular a la rutina (todos los usuarios de Habits)
+  // Habitos del usuario que se pueden vincular a la rutina
   if (path === '/health/habits' && method === 'GET') {
     const { results } = await env.DB.prepare(
-      'SELECT id, user_id, name, emoji FROM habits WHERE active = 1 ORDER BY user_id, sort_order, created_at'
-    ).all();
-    return json({ habits: results || [], link: await healthGet(env, 'habit_link') });
+      'SELECT id, name, emoji FROM habits WHERE active = 1 AND user_id = ? ORDER BY sort_order, created_at'
+    ).bind(user).all();
+    return json({ habits: results || [], link: await healthGet(env, user, 'habit_link') });
   }
   if (path === '/health/habits' && method === 'POST') { // crea "Rutina de estiramiento" en Habits
-    const b = await request.json();
-    if (!b?.user_id) return err('user_id required');
     const id = uuid();
     await env.DB.prepare(
       `INSERT INTO habits (id,user_id,name,description,type,target_value,target_unit,frequency,color,emoji,sort_order,created_at)
        VALUES (?,?,?,?,'binary',1,'veces','daily','mint','🧘',0,?)`
-    ).bind(id, b.user_id, 'Rutina de estiramiento', 'Se marca sola al completar la rutina en Health',
+    ).bind(id, user, 'Rutina de estiramiento', 'Se marca sola al completar la rutina en Health',
       Math.floor(Date.now() / 1000)).run();
-    return json({ habit: { id, user_id: b.user_id } }, 201);
+    return json({ habit: { id } }, 201);
   }
   if (path === '/health/habit-link' && method === 'PUT') {
     const b = await request.json();
-    await healthSet(env, 'habit_link', b?.habit_id ? { habit_id: b.habit_id, user_id: b.user_id } : null);
-    const rutina = await healthGet(env, 'rutina');
-    if (b?.habit_id && b.today && rutina?.history?.includes(b.today)) await markLinkedHabit(env, b.today);
+    if (b?.habit_id) {
+      const own = await env.DB.prepare('SELECT 1 FROM habits WHERE id = ? AND user_id = ?').bind(b.habit_id, user).first();
+      if (!own) return err('Habito no encontrado', 404);
+    }
+    await healthSet(env, user, 'habit_link', b?.habit_id ? { habit_id: b.habit_id } : null);
+    const rutina = await healthGet(env, user, 'rutina');
+    if (b?.habit_id && b.today && rutina?.history?.includes(b.today)) await markLinkedHabit(env, user, b.today);
     return json({ ok: true });
   }
   if (path === '/health/rutina' && method === 'PUT') {
     const next = await request.json();
-    const prev = await healthGet(env, 'rutina');
-    await healthSet(env, 'rutina', next);
+    const prev = await healthGet(env, user, 'rutina');
+    await healthSet(env, user, 'rutina', next);
     const before = new Set(prev?.history || []);
-    for (const d of next?.history || []) if (!before.has(d)) await markLinkedHabit(env, d);
+    for (const d of next?.history || []) if (!before.has(d)) await markLinkedHabit(env, user, d);
     return json({ ok: true });
   }
   const m = path.match(/^\/health\/(rutina|reminder|nutrition_log)$/);
-  if (m && method === 'GET') return json({ data: await healthGet(env, m[1]) });
+  if (m && method === 'GET') return json({ data: await healthGet(env, user, m[1]) });
   if (m && method === 'PUT') {
-    await healthSet(env, m[1], await request.json());
+    await healthSet(env, user, m[1], await request.json());
     return json({ ok: true });
   }
   return err('Not found', 404);
 }
 
 async function dispatchHealthReminder(env) {
-  const r = await healthGet(env, 'reminder');
-  if (!r?.time) return;
-  const { date, hhmm } = localParts(r.tz);
-  if (hhmm !== r.time) return;
-  if (r.enabled && (await healthGet(env, 'reminder_sent')) !== date) {
-    await healthSet(env, 'reminder_sent', date);
-    const rutina = await healthGet(env, 'rutina');
-    if (!rutina?.history?.includes(date)) await sendHealthPush(env, RUTINA_PUSH); // si ya la hizo, no avisa
-  }
-  // Resumen semanal: los domingos a la misma hora del recordatorio
-  const sunday = new Date(date + 'T00:00:00Z').getUTCDay() === 0;
-  if (r.weekly && sunday && (await healthGet(env, 'weekly_sent')) !== date) {
-    await healthSet(env, 'weekly_sent', date);
-    await sendHealthPush(env, await weeklySummary(env, date));
+  const { results } = await env.DB.prepare("SELECT k, v FROM health_kv WHERE k LIKE '%|reminder'").all();
+  for (const row of results || []) {
+    const user = row.k.slice(0, -'|reminder'.length);
+    let r; try { r = JSON.parse(row.v); } catch { continue; }
+    if (!r?.time) continue;
+    const { date, hhmm } = localParts(r.tz);
+    if (hhmm !== r.time) continue;
+    if (r.enabled && (await healthGet(env, user, 'reminder_sent')) !== date) {
+      await healthSet(env, user, 'reminder_sent', date);
+      const rutina = await healthGet(env, user, 'rutina');
+      if (!rutina?.history?.includes(date)) await sendHealthPush(env, user, RUTINA_PUSH); // si ya la hizo, no avisa
+    }
+    // Resumen semanal: los domingos a la misma hora del recordatorio
+    const sunday = new Date(date + 'T00:00:00Z').getUTCDay() === 0;
+    if (r.weekly && sunday && (await healthGet(env, user, 'weekly_sent')) !== date) {
+      await healthSet(env, user, 'weekly_sent', date);
+      await sendHealthPush(env, user, await weeklySummary(env, user, date));
+    }
   }
 }
 
@@ -452,6 +484,11 @@ async function migrate(env) {
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN paused INTEGER NOT NULL DEFAULT 0").run(); } catch (_) {}
   try { await env.DB.prepare("ALTER TABLE habits ADD COLUMN paused_at TEXT").run(); } catch (_) {}
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS health_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL, updated_at INTEGER NOT NULL)").run();
+  // Health antes era de un solo usuario: sus datos sin duenio pasan a HEALTH_OWNER
+  if (env.HEALTH_OWNER) {
+    await env.DB.prepare("UPDATE OR IGNORE health_kv SET k = ? || '|' || k WHERE k NOT LIKE '%|%'")
+      .bind(env.HEALTH_OWNER.toLowerCase()).run();
+  }
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -644,8 +681,7 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
     }
-    if (!auth(request, env)) return err('Unauthorized', 401);
-
+    // Health usa el token de Supabase del usuario, no el TOKEN compartido
     const healthPath = new URL(request.url).pathname.replace(/\/$/, '');
     if (healthPath.startsWith('/health/')) {
       try {
@@ -655,6 +691,8 @@ export default {
         return err(e.message, 500);
       }
     }
+
+    if (!auth(request, env)) return err('Unauthorized', 401);
 
     const uid = getUser(request);
     if (!uid) return err('User identity required', 401);
