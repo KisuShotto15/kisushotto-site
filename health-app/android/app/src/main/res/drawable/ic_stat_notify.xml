@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono chico de las notificaciones: Android lo pinta de un solo color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="8"
+        android:strokeLineJoin="round"
+        android:pathData="M50,80 C30,66 17,54 17,39 C17,29 25,21 35,21 C42,21 47,25 50,30 C53,25 58,21 65,21 C75,21 83,29 83,39 C83,54 70,66 50,80 Z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M24,47 L38,47 L44,37 L51,58 L57,43 L61,47 L76,47" />
+</vector>

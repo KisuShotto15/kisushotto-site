@@ -525,11 +525,28 @@ function paintWeek() {
 }
 
 /* ---------- Recordatorio push ---------- */
+// App Android (Capacitor, health-app/): sus plugins propios; null en la web.
+// Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
+const nativeApp = () => { try { const c = (window.parent !== window && parent.Capacitor) || window.Capacitor; return c?.isNativePlatform?.() && c.Plugins?.Native || null; } catch { return null; } };
 const canPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 function remMsg(t, err) { $('rem-msg').textContent = t; $('rem-msg').className = 'msg' + (err ? ' err' : ''); }
 const b64ToBytes = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
 
 async function subscribe() {
+  // En la app los avisos llegan por FCM (el WebView no tiene Web Push)
+  const n = nativeApp();
+  if (n) {
+    const { fcm } = await api('/vapid');
+    if (!fcm) throw new Error('Los recordatorios de la app aún no están configurados en el servidor');
+    let t;
+    try { t = await n.pushToken(); } catch (e) {
+      const m = String(e?.message || e);
+      throw new Error(m === 'denied' ? 'Las notificaciones están bloqueadas para la app en los ajustes del teléfono'
+        : m === 'not set up' ? 'Esta versión de la app no tiene notificaciones: instala el APK más reciente' : 'No se pudo activar: ' + m);
+    }
+    await api('/push', { method: 'POST', body: JSON.stringify({ fcm: t.token }) });
+    return;
+  }
   if (!canPush) throw new Error('Este navegador no soporta notificaciones push');
   if (!location.hostname.startsWith('health.')) throw new Error('Abre health.kisushotto.com para activar recordatorios');
   let perm = Notification.permission;
@@ -584,6 +601,8 @@ async function loadReminder() {
     const { data } = await api('/reminder');
     if (data) { $('rem-on').checked = !!data.enabled; $('rem-weekly').checked = !!data.weekly; if (data.time) $('rem-time').value = data.time; }
     if (data?.enabled || data?.weekly) remMsg(remStatus(data));
+    // En la app: el token de FCM al dia (Firebase lo rota a veces)
+    if ((data?.enabled || data?.weekly) && nativeApp()) subscribe().catch(() => {});
   } catch {}
 }
 

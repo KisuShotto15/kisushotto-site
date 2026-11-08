@@ -1,0 +1,18 @@
+{
+  "appId": "com.kisushotto.health.app",
+  "appName": "Health",
+  "webDir": "www",
+  "server": {
+    "url": "https://health.kisushotto.com",
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#0e0f13"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "disable",
+      "style": "DARK"
+    }
+  }
+}

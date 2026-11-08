@@ -1,0 +1,12 @@
+{
+  "name": "health-app",
+  "private": true,
+  "description": "App Android de Health (Capacitor): carga health.kisushotto.com",
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}

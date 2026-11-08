@@ -630,6 +630,10 @@ $('resetBtn').onclick=()=>{
   stopAll();doneBy[active]={};sel=null;save();renderAll();window.scrollTo({top:0,behavior:'smooth'});
 };
 
+// App Android (Capacitor, health-app/): sus plugins propios; null en la web.
+// Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
+const nativeApp=()=>{try{const c=(window.parent!==window&&parent.Capacitor)||window.Capacitor;return c?.isNativePlatform?.()&&c.Plugins?.Native||null;}catch(e){return null;}};
+
 /* ---------- voz ---------- */
 let esVoice=null;
 function pickVoice(){
@@ -639,7 +643,10 @@ function pickVoice(){
 }
 if('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
 function say(txt){
-  if(!state.voice||!('speechSynthesis' in window))return;
+  if(!state.voice)return;
+  const n=nativeApp(); // el WebView de la app no trae speechSynthesis
+  if(n){n.say({text:txt}).catch(()=>{});return;}
+  if(!('speechSynthesis' in window))return;
   try{
     speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(txt);
@@ -702,6 +709,8 @@ let autoWake=false;
 async function wakeOn(auto){
   if(state.wake||vid)return;
   autoWake=!!auto;
+  const n=nativeApp(); // en la app: la pantalla encendida es nativa
+  if(n){n.keepAwake({on:true}).catch(()=>{});state.wake={release:()=>n.keepAwake({on:false})};paintTools();return;}
   if('wakeLock' in navigator){try{
     state.wake=await navigator.wakeLock.request('screen');
     state.wake.addEventListener('release',()=>{state.wake=null;paintTools();});

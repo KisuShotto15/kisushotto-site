@@ -26,3 +26,4 @@ HEALTH_OWNER = "efrenalejandro2010@gmail.com"
 # Set as secrets via:
 #   wrangler secret put VAPID_PUBLIC
 #   wrangler secret put VAPID_PRIVATE_JWK
+#   wrangler secret put FIREBASE_SERVICE_ACCOUNT  (app Android de Health: el JSON de la cuenta de servicio de Firebase)

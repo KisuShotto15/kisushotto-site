@@ -1,0 +1,76 @@
+# APK de la app Android de Health (Capacitor, health-app/). La app carga
+# health.kisushotto.com, asi que los cambios de la web NO necesitan APK nuevo:
+# esto corre solo cuando cambia lo nativo. El APK firmado queda en el release
+# "health-android" del repo.
+name: Health Android APK
+
+on:
+  push:
+    branches: [main]
+    paths: ['health-app/**', '.github/workflows/health-android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: health-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: health-app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npx cap sync android
+
+      # La llave de firma vive en los secrets, nunca en el repo (puede ser la misma
+      # de Portfolio). Sin ella sale un APK de prueba (firma debug) como artifact.
+      - name: Keystore
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/release.p12"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
+          fi
+
+      # Firebase (recordatorios): el archivo no vive en el repo. Sin el, el APK sale sin push.
+      - name: Firebase
+        env:
+          GSJ: ${{ secrets.HEALTH_GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GSJ" ]; then printf '%s' "$GSJ" > android/app/google-services.json; fi
+
+      - name: Build
+        working-directory: health-app/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: health-apk
+          path: health-app/android/app/build/outputs/apk/release/*.apk
+
+      - name: Release
+        if: env.KEYSTORE_FILE != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk health.apk
+          gh release delete health-android --yes --cleanup-tag || true
+          gh release create health-android health.apk --target "$GITHUB_SHA" --latest=false \
+            --title "Health Android · build ${{ github.run_number }}" \
+            --notes "Abre esta pagina en el celular y toca health.apk para instalar o actualizar."

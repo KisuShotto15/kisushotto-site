@@ -208,6 +208,9 @@ import { hasSession, requestCode, verifyCode, passkeysUsable, passkeyLogin, curr
     started = true;
     // Hoy es la pantalla de inicio; un #pestana en la URL (p. ej. desde una notificacion) manda
     show(location.hash.slice(1) || 'hoy', 'replace');
+    // App Android: la pestana de una notificacion tocada con la app cerrada
+    const n = window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins?.Native;
+    n?.pushOpen?.().then(o => { if (/^\/#\w+$/.test(o?.url || '')) location.hash = o.url.slice(1); }).catch(() => {});
   }
   function askLogin() {
     $('auth').hidden = false;

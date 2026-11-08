@@ -321,19 +321,74 @@ async function healthSet(env, user, k, v) {
   ).bind(user + '|' + k, JSON.stringify(v), Date.now()).run();
 }
 
+// ── Push a la app Android de Health por FCM (API HTTP v1) ────────────────────
+// Un JWT firmado con la cuenta de servicio se cambia por un access token de OAuth.
+// La cuenta de servicio es el secret FIREBASE_SERVICE_ACCOUNT (el JSON entero de
+// Firebase, el mismo proyecto que Portfolio); sin el, la app no ofrece push.
+function serviceAccount(env) {
+  try {
+    const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT || '');
+    return sa?.client_email && sa.private_key && sa.project_id ? sa : null;
+  } catch { return null; }
+}
+const b64urlBytes = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64urlJson = o => b64urlBytes(new TextEncoder().encode(JSON.stringify(o)));
+let fcmAuth = null; // { token, exp }: el access token dura una hora
+async function fcmAccessToken(sa) {
+  if (fcmAuth && fcmAuth.exp > Date.now() + 60000) return fcmAuth.token;
+  const der = Uint8Array.from(atob(sa.private_key.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const iat = Math.floor(Date.now() / 1000);
+  const unsigned = b64urlJson({ alg: 'RS256', typ: 'JWT' }) + '.' + b64urlJson({
+    iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600,
+  });
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned));
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: unsigned + '.' + b64urlBytes(sig) }),
+  });
+  if (!r.ok) throw new Error('oauth ' + r.status);
+  const j = await r.json();
+  fcmAuth = { token: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+  return fcmAuth.token;
+}
+// channel_id y el icono existen en el APK (PushService / ic_stat_notify); url va en
+// data: al tocar la notificacion la app abre esa pestana.
+async function sendFcm(env, token, p) {
+  const sa = serviceAccount(env);
+  if (!sa) return false;
+  try {
+    const r = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(sa.project_id)}/messages:send`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + await fcmAccessToken(sa), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: {
+        token,
+        notification: { title: p.title, body: p.body },
+        data: { url: p.url || '/', tag: p.tag || 'health' },
+        android: { priority: 'HIGH', notification: { channel_id: 'reminders', tag: p.tag || 'health', icon: 'ic_stat_notify', color: '#4F86FF' } },
+      } }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
 async function sendHealthPush(env, user, payload) {
   const subs = (await healthGet(env, user, 'push')) || [];
   let sent = 0;
-  for (const s of subs) if (await sendWebPush(env, s, payload)) sent++;
+  for (const s of subs) if (await (s.fcm ? sendFcm(env, s.fcm, payload) : sendWebPush(env, s, payload))) sent++;
   return sent;
 }
 
-const RUTINA_PUSH = {
-  title: 'Rutina de hoy',
-  body:  'Equilibrio + estiramiento, 20 minutos. No pierdas la racha.',
-  tag:   'health-rutina',
-  url:   '/#rutina',
-};
+// El aviso nombra la rutina que el usuario tiene elegida en Rutina
+function rutinaPush(rutina) {
+  return {
+    title: 'Rutina de hoy',
+    body:  `${rutina?.name || 'Tu rutina'} te espera. No pierdas la racha.`,
+    tag:   'health-rutina',
+    url:   '/#rutina',
+  };
+}
 
 // ── Health: vinculo con Habits ────────────────────────────────────────────────
 // Al completar la rutina se marca el habito vinculado (siempre del mismo usuario).
@@ -384,15 +439,16 @@ async function weeklySummary(env, user, today) {
 
 async function handleHealth(path, request, env) {
   const method = request.method;
-  if (path === '/health/vapid' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null });
+  if (path === '/health/vapid' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null, fcm: !!serviceAccount(env) });
   const user = await healthUser(request, env);
   if (!user) return err('Sesion invalida', 401);
 
   if (path === '/health/me' && method === 'GET') return json({ email: user });
   if (path === '/health/push' && method === 'POST') {
+    // Web Push ({endpoint, keys}) o la app Android ({fcm: token})
     const sub = await request.json();
-    if (!sub?.endpoint) return err('subscription required');
-    const subs = ((await healthGet(env, user, 'push')) || []).filter(s => s.endpoint !== sub.endpoint);
+    if (!sub?.endpoint && typeof sub?.fcm !== 'string') return err('subscription required');
+    const subs = ((await healthGet(env, user, 'push')) || []).filter(s => sub.fcm ? s.fcm !== sub.fcm : s.endpoint !== sub.endpoint);
     subs.push(sub);
     await healthSet(env, user, 'push', subs.slice(-5)); // un par de dispositivos; descarta los mas viejos
     return json({ ok: true });
@@ -400,7 +456,7 @@ async function handleHealth(path, request, env) {
   if (path === '/health/test-push' && method === 'POST') {
     const b = await request.json().catch(() => ({}));
     const r = await healthGet(env, user, 'reminder');
-    const payload = b?.kind === 'weekly' ? await weeklySummary(env, user, localParts(r?.tz).date) : RUTINA_PUSH;
+    const payload = b?.kind === 'weekly' ? await weeklySummary(env, user, localParts(r?.tz).date) : rutinaPush(await healthGet(env, user, 'rutina'));
     return json({ sent: await sendHealthPush(env, user, payload), payload });
   }
   // Habitos del usuario que se pueden vincular a la rutina
@@ -458,7 +514,7 @@ async function dispatchHealthReminder(env) {
     if (r.enabled && (await healthGet(env, user, 'reminder_sent')) !== date) {
       await healthSet(env, user, 'reminder_sent', date);
       const rutina = await healthGet(env, user, 'rutina');
-      if (!rutina?.history?.includes(date)) await sendHealthPush(env, user, RUTINA_PUSH); // si ya la hizo, no avisa
+      if (!rutina?.history?.includes(date)) await sendHealthPush(env, user, rutinaPush(rutina)); // si ya la hizo, no avisa
     }
     // Resumen semanal: los domingos a la misma hora del recordatorio
     const sunday = new Date(date + 'T00:00:00Z').getUTCDay() === 0;
