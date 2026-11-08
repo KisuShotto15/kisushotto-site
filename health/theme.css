@@ -4,23 +4,29 @@
    Se carga despues de los estilos de cada pestana. */
 
 :root {
-  --h-bg:       #0c110f;
-  --h-panel:    #151d19;
-  --h-panel-2:  #1a241f;
-  --h-panel-3:  #202b26;
-  --h-border:   #2b3832;
-  --h-border-2: #3a4a42;
-  --h-text:     #eef5f1;
-  --h-text-2:   #c5d3cc;
-  --h-muted:    #9db0a7;
-  --h-muted-2:  #6f8279;
-  --h-rutina:   #43e68d;
-  --h-nutri:    #c8f135;
-  --h-metric:   #3b82f6;
-  --h-warn:     #f0c04a;
+  --h-bg:       #0e0f13;
+  --h-panel:    #17181d;
+  --h-panel-2:  #1f2127;
+  --h-panel-3:  #272a32;
+  --h-border:   #25272e;
+  --h-border-2: #32353e;
+  --h-text:     #ececf1;
+  --h-text-2:   #b4b6bf;
+  --h-muted:    #80838e;
+  --h-muted-2:  #5d606a;
+  --h-rutina:   #4f86ff;
+  --h-rutina-soft: rgba(79,134,255,.15);
+  --h-nutri:    #fb923c;
+  --h-nutri-soft: rgba(251,146,60,.14);
+  --h-metric:   #a78bfa;
+  --h-metric-soft: rgba(167,139,250,.15);
+  --h-ok:       #34d399;
+  --h-ok-soft:  rgba(52,211,153,.14);
+  --h-warn:     #fbbf24;
+  --h-warn-soft: rgba(251,191,36,.10);
   --h-danger:   #f87171;
-  --h-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  --h-radius: 12px;
+  --h-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --h-radius: 16px;
 
   /* Nutricion (style.css) */
   --bg: var(--h-bg);
@@ -38,6 +44,9 @@
   --font-display: var(--h-font);
   --card-bg: var(--h-panel);
   --card-border: 1px solid var(--h-border);
+  --protein: #f87171;
+  --fat: #fbbf24;
+  --carb: #38bdf8;
 
   /* Metricas (inline) */
   --surf: var(--h-panel);
@@ -45,11 +54,12 @@
   --border: var(--h-border);
   --border-2: var(--h-border-2);
   --text-3: var(--h-muted-2);
-  --r: var(--h-radius);
-
-  /* Hoy y Rutina */
-  --panel: var(--h-panel);
+  --r: 14px;
+  --green: var(--h-ok);
 }
+/* Color de cada pestana */
+html.t-nutri  { --accent: var(--h-nutri); --accent-d: #ea7c22; --accent-glow: var(--h-nutri-soft); --cal: var(--h-nutri); }
+html.t-metric { --accent: var(--h-metric); }
 
 html, body {
   background: var(--h-bg) !important;
@@ -58,8 +68,9 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Encabezado comun: titulo grande a la izquierda + subtitulo */
-.h-head { margin: 0 0 18px; }
-.h-head h1 { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: .2px; color: var(--h-text); line-height: 1.2; }
-.h-head p { margin: 3px 0 0; color: var(--h-muted); font-size: .95rem; }
+/* Encabezado comun: linea chica arriba (fecha o detalle) + titulo grande */
+.h-head { margin: 0 0 20px; display: flex; flex-direction: column-reverse; }
+.h-head h1 { margin: 0; font-size: 1.85rem; font-weight: 700; letter-spacing: -.03em; color: var(--h-text); line-height: 1.15; }
+.h-head p { margin: 0 0 3px; color: var(--h-muted); font-size: .92rem; }
 .h-head p::first-letter { text-transform: uppercase; }
+@media (max-width: 640px) { .h-head h1 { font-size: 1.55rem; } }

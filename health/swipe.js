@@ -8,7 +8,7 @@
   // se desplazan de lado (p. ej. la fila de dias de Nutricion).
   function blocked(el) {
     for (; el && el !== document.body; el = el.parentElement) {
-      if (el.matches?.('input, textarea, select, [contenteditable], .modal-bg.open, .modal-backdrop:not(.hidden), .celebrate')) return true;
+      if (el.matches?.('input, textarea, select, [contenteditable], .modal-bg.open, .modal-backdrop:not(.hidden), .celebrate, dialog[open]')) return true;
       const ox = getComputedStyle(el).overflowX;
       if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 2) return true;
     }

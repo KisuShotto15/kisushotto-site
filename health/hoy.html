@@ -7,186 +7,259 @@
 <title>Hoy · Health</title>
 <style>
   :root{
-    --bg:#0c110f; --panel:#151d19; --border:#2b3832; --text:#eef5f1; --muted:#9db0a7;
-    --accent:#43e68d; --lime:#c8f135; --blue:#3b82f6; --warn:#f0c04a; --down:#43e68d; --up:#f0c04a;
+    --card:var(--h-panel); --card2:var(--h-panel-2); --track:var(--h-panel-3); --line:var(--h-border); --line2:var(--h-border-2);
+    --text:var(--h-text); --text2:var(--h-text-2); --muted:var(--h-muted);
+    --rut:var(--h-rutina); --nut:var(--h-nutri); --met:var(--h-metric); --ok:var(--h-ok); --warn:var(--h-warn);
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    font-size:16px;line-height:1.45;padding:20px 16px 40px;}
-  .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+  [hidden]{display:none!important;}
+  body{margin:0;font-size:15px;line-height:1.45;padding:26px 32px 48px;}
+  main{max-width:1240px;margin:0 auto;}
+  button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 
-  .card{background:var(--panel);border:1.5px solid var(--border);border-radius:12px;padding:16px;}
-  .card h2{margin:0 0 10px;font-size:.8rem;letter-spacing:1.2px;text-transform:uppercase;color:var(--c);display:flex;align-items:center;gap:8px;}
-  .big{font-size:2rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;}
-  .big small{font-size:.95rem;font-weight:600;color:var(--muted);margin-left:3px;}
-  .sub{color:var(--muted);font-size:.92rem;margin-top:4px;}
-  .row{display:flex;align-items:center;gap:10px;}
-  .row.space{justify-content:space-between;}
-  .bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:10px;}
-  .bar>i{display:block;height:100%;width:0;background:var(--c);transition:width .3s;}
-  .btn{background:transparent;border:1.5px solid var(--c);color:var(--c);font:inherit;font-size:.95rem;font-weight:600;
-    padding:10px 14px;border-radius:9px;cursor:pointer;white-space:nowrap;}
-  .btn.solid{background:var(--c);color:#06100b;}
+  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;}
+  .top .h-head{margin:0;}
+  .actions{display:flex;gap:10px;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line2);background:var(--card);
+    padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;white-space:nowrap;}
+  .btn.primary{background:var(--text);border-color:var(--text);color:var(--h-bg);}
+  .btn.sm{padding:8px 12px;font-size:13px;}
   .btn:disabled{opacity:.45;cursor:default;}
-  .done-pill{color:var(--accent);font-weight:700;}
-  .delta.down{color:var(--down);} .delta.up{color:var(--up);}
-  input[type=number],input[type=time],input[type=password]{background:#0c110f;border:1.5px solid var(--border);color:var(--text);font:inherit;
-    padding:9px 10px;border-radius:9px;width:100%;min-width:0;}
-  input:focus{outline:none;border-color:var(--c);}
-  .switch{position:relative;width:46px;height:26px;flex-shrink:0;}
-  .switch input{opacity:0;width:0;height:0;}
-  .switch span{position:absolute;inset:0;background:var(--border);border-radius:13px;transition:.2s;cursor:pointer;}
-  .switch span::before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
-  .switch input:checked+span{background:var(--accent);}
-  .switch input:checked+span::before{transform:translateX(20px);}
-  .msg{font-size:.85rem;color:var(--muted);margin-top:8px;min-height:1em;}
-  .msg.err{color:var(--warn);}
-  /* Placeholder mientras llegan los datos */
-  .sk{display:inline-block;border-radius:6px;color:transparent;background:linear-gradient(90deg,#1a241f 25%,#24302a 50%,#1a241f 75%);
-    background-size:200% 100%;animation:sk 1.2s ease-in-out infinite;}
-  .big .sk{font-size:1.4rem;}
-  @keyframes sk{to{background-position:-200% 0;}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;min-width:0;}
+  .label{font-size:13px;font-weight:600;color:var(--muted);}
+  .num{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .num small{font-size:15px;color:var(--muted);font-weight:500;margin-left:4px;letter-spacing:0;}
+  .sub{color:var(--text2);font-size:13px;}
+  .muted{color:var(--muted);}
+  .row{display:flex;align-items:center;gap:12px;}
+  .between{justify-content:space-between;}
+  .bar{height:6px;background:var(--track);border-radius:3px;overflow:hidden;}
+  .bar>i{display:block;height:100%;width:0;border-radius:3px;background:var(--c);transition:width .3s;}
+  .pill{display:inline-flex;align-items:center;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;white-space:nowrap;
+    background:var(--h-rutina-soft);color:var(--rut);}
+  .pill.ok{background:var(--h-ok-soft);color:var(--ok);}
+  .delta.down{color:var(--ok);font-weight:600;} .delta.up{color:var(--warn);font-weight:600;}
+
+  /* Indicadores */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px;}
+  .kpi{cursor:pointer;}
+  .kpi .icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px;margin-bottom:14px;}
+  .kpi .num{margin-top:2px;}
+  .kpi .bar,.kpi .sub{margin-top:12px;}
+  .wform{display:flex;gap:8px;margin-top:12px;}
+
+  .two{display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:16px;}
+  .two.b{grid-template-columns:2fr 1fr;}
+  .ttl{font-size:19px;font-weight:700;margin-top:2px;letter-spacing:-.01em;}
+
+  /* Siguientes ejercicios */
+  .nx{display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--line);}
+  .nx:first-child{border-top:0;}
+  .nx .n{width:28px;height:28px;border-radius:8px;background:var(--card2);display:grid;place-items:center;font-weight:700;font-size:12px;color:var(--muted);flex-shrink:0;}
+  .nx .n.go{background:var(--rut);color:#fff;}
+  .nx .tx{flex:1;min-width:0;} .nx b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .empty{color:var(--muted);padding:14px 0;}
+  .foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding-top:14px;border-top:1px solid var(--line);}
+
+  /* Nutricion */
+  .donut{display:flex;align-items:center;gap:22px;margin-top:14px;}
+  .donut svg{width:104px;height:104px;flex-shrink:0;transform:rotate(-90deg);}
+  .legend{display:flex;flex-direction:column;gap:7px;font-size:13px;min-width:150px;}
+  .legend div{display:flex;align-items:center;gap:8px;}
+  .legend i{width:9px;height:9px;border-radius:3px;display:inline-block;}
+  .legend b{margin-left:auto;padding-left:16px;font-variant-numeric:tabular-nums;}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
-  .chip{background:transparent;border:1.5px solid var(--border);color:var(--muted);font:inherit;font-size:.88rem;
-    padding:7px 12px;border-radius:16px;cursor:pointer;}
-  .chip.on{border-color:var(--c);color:var(--c);font-weight:700;}
-  .chip.skip.on{border-color:var(--warn);color:var(--warn);}
-  select{background:#0c110f;border:1.5px solid var(--border);color:var(--text);font:inherit;font-size:.9rem;
-    padding:8px 10px;border-radius:9px;max-width:60%;}
-  .week{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-  .week .big{font-size:1.6rem;}
-  .strip{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:14px;text-align:center;}
-  .strip .d{font-size:.75rem;color:var(--muted);}
-  .strip .d.today{color:var(--text);font-weight:700;}
-  .strip .dots{display:flex;justify-content:center;gap:4px;margin-top:4px;}
-  .strip .dot{width:9px;height:9px;border-radius:50%;background:var(--border);}
-  .strip .dot.r.on{background:var(--accent);} .strip .dot.n.on{background:var(--lime);}
-  .legend{display:flex;gap:14px;margin-top:10px;font-size:.8rem;color:var(--muted);}
-  .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;}
-  .link{background:none;border:0;color:var(--muted);font:inherit;font-size:.85rem;text-decoration:underline;cursor:pointer;padding:0;}
+  .chip{background:transparent;border:1px solid var(--line2);color:var(--text2);font-size:13px;padding:7px 13px;border-radius:999px;}
+  .chip.on{background:var(--h-nutri-soft);border-color:transparent;color:var(--nut);font-weight:600;}
+  .chip.skip.on{background:var(--h-warn-soft);color:var(--warn);}
+
+  /* Ultimos 7 dias */
+  .heat{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:14px;}
+  .heat div{text-align:center;font-size:12px;color:var(--muted);}
+  .heat div.today{color:var(--text);font-weight:600;}
+  .heat span{display:block;height:34px;border-radius:9px;margin-top:6px;background:var(--track);}
+  .heat span.on{background:var(--rut);}
+  .heat em{display:block;height:8px;border-radius:4px;margin-top:4px;background:var(--track);}
+  .heat em.on{background:var(--nut);}
+  .heat .today span:not(.on){background:var(--h-rutina-soft);outline:1.5px dashed var(--rut);outline-offset:-1.5px;}
+  .lg{display:flex;gap:14px;margin-top:12px;font-size:12px;color:var(--muted);}
+  .lg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+
+  /* Formularios */
+  input[type=number],input[type=time],input[type=password]{background:var(--h-bg);border:1px solid var(--line2);color:var(--text);font:inherit;
+    font-size:14px;padding:9px 11px;border-radius:10px;width:100%;min-width:0;}
+  input[type=time]{width:auto;}
+  input:focus,select:focus{outline:none;border-color:var(--rut);}
+  select{background:var(--h-bg);border:1px solid var(--line2);color:var(--text);font:inherit;font-size:13px;padding:7px 10px;border-radius:10px;max-width:55%;}
+  .switch{position:relative;width:40px;height:24px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .switch span{position:absolute;inset:0;background:var(--line2);border-radius:12px;transition:.2s;cursor:pointer;}
+  .switch span::before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+  .switch input:checked+span{background:var(--rut);}
+  .switch input:checked+span::before{transform:translateX(16px);}
+  .opt{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;}
+  .opt b{font-weight:600;}
+  .msg{font-size:13px;color:var(--muted);margin-top:10px;min-height:1em;}
+  .msg.err{color:var(--warn);}
+  .link{background:none;border:0;color:var(--muted);font-size:13px;text-decoration:underline;padding:0;}
+  .acc{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:12px;}
+  .acc>div{min-width:0;}
+
+  /* Placeholder mientras llegan los datos */
+  .sk{display:inline-block;border-radius:6px;color:transparent!important;background:linear-gradient(90deg,var(--card2) 25%,var(--track) 50%,var(--card2) 75%);
+    background-size:200% 100%;animation:sk 1.2s ease-in-out infinite;}
+  .num .sk{font-size:22px;}
+  @keyframes sk{to{background-position:-200% 0;}}
+
+  @media (max-width:900px){
+    .kpis{grid-template-columns:1fr 1fr;}
+    .two,.two.b{grid-template-columns:1fr;}
+    .acc{grid-template-columns:1fr;gap:16px;}
+  }
+  @media (max-width:640px){
+    body{padding:18px 16px 32px;}
+    .top{flex-direction:column;align-items:stretch;margin-bottom:16px;}
+    .actions .btn{flex:1;padding:11px 10px;}
+    .kpis{gap:10px;margin-bottom:10px;}
+    .two{gap:10px;margin-bottom:10px;}
+    .card{padding:16px;border-radius:16px;}
+    .num{font-size:27px;}
+    .kpi .icon{width:30px;height:30px;margin-bottom:10px;}
+    .heat{gap:5px;} .heat span{height:30px;}
+    .donut{gap:16px;}
+  }
 </style>
 <link rel="stylesheet" href="theme.css">
 <script type="module" src="swipe.js"></script>
 </head>
 <body>
-<div class="wrap">
-  <header class="h-head">
-    <h1>Hoy</h1>
-    <p id="date"></p>
-  </header>
+<main>
+  <div class="top">
+    <header class="h-head"><h1 id="hello">Hola</h1><p id="date"></p></header>
+    <div class="actions">
+      <button class="btn" id="w-open">＋ Registrar peso</button>
+      <button class="btn primary" id="r-go">Empezar rutina →</button>
+    </div>
+  </div>
 
-  <!-- Rutina -->
-  <section class="card" style="--c:var(--accent)">
-    <h2>Rutina · equilibrio + estiramiento</h2>
-    <div class="row space">
-      <div>
-        <div class="big" id="r-progress">0<small>/15</small></div>
-        <div class="sub" id="r-streak">Sin historial todavía</div>
+  <div class="kpis">
+    <section class="card kpi" id="k-rut" style="--c:var(--rut)">
+      <div class="icon" style="background:var(--h-rutina-soft)">🏋️</div>
+      <div class="label">Rutina</div>
+      <div class="num" id="r-progress"><span class="sk">0/15</span></div>
+      <div class="bar"><i id="r-bar"></i></div>
+    </section>
+    <section class="card kpi" id="k-peso" style="--c:var(--met)">
+      <div class="icon" style="background:var(--h-metric-soft)">⚖️</div>
+      <div class="label">Peso</div>
+      <div class="num" id="w-last"><span class="sk">00.0 kg</span></div>
+      <div class="sub" id="w-sub"><span class="sk">esta semana</span></div>
+      <div class="wform" id="w-form" hidden>
+        <input type="number" id="w-input" inputmode="decimal" step="0.1" min="20" max="400" placeholder="kg">
+        <button class="btn sm" id="w-save">Guardar</button>
       </div>
-      <button class="btn solid" id="r-go">Empezar</button>
-    </div>
-    <div class="bar"><i id="r-bar"></i></div>
-    <div class="row space" style="margin-top:12px">
-      <span class="sub" style="margin:0">Marcar en Habits al completarla</span>
-      <select id="h-link"><option value="">No vincular</option></select>
-    </div>
-  </section>
+      <div class="msg" id="w-msg" hidden></div>
+    </section>
+    <section class="card kpi" id="k-nut" style="--c:var(--nut)">
+      <div class="icon" style="background:var(--h-nutri-soft)">🍳</div>
+      <div class="label">Calorías del plan</div>
+      <div class="num" id="n-kcal"><span class="sk">0000</span></div>
+      <div class="bar"><i id="n-bar"></i></div>
+    </section>
+    <section class="card kpi" id="k-racha" style="--c:var(--warn)">
+      <div class="icon" style="background:var(--h-warn-soft)">🔥</div>
+      <div class="label">Racha</div>
+      <div class="num" id="s-num">0<small>días</small></div>
+      <div class="sub" id="s-sub">Sin historial todavía</div>
+    </section>
+  </div>
 
-  <!-- Peso -->
-  <section class="card" style="--c:var(--blue)">
-    <h2>Peso</h2>
-    <div class="big" id="w-last"><span class="sk">00.0 kg</span></div>
-    <div class="sub" id="w-sub"><span class="sk">Registrado hace unos días</span></div>
-    <div class="row" style="margin-top:12px">
-      <input type="number" id="w-input" inputmode="decimal" step="0.1" min="20" max="400" placeholder="Peso de hoy (kg)">
-      <button class="btn solid" id="w-save">Guardar</button>
-    </div>
-    <div class="msg" id="w-msg"></div>
-  </section>
-
-  <!-- Nutricion -->
-  <section class="card" style="--c:var(--lime)">
-    <h2>Nutrición · plan del día</h2>
-    <div class="row space">
-      <div>
-        <div class="big" id="n-kcal"><span class="sk">0000 kcal</span></div>
-        <div class="sub" id="n-sub"><span class="sk">Perfil · plan del día</span></div>
+  <div class="two">
+    <section class="card">
+      <div class="row between" style="align-items:flex-start">
+        <div style="min-width:0"><div class="label">Rutina de hoy</div><div class="ttl" id="r-name">—</div></div>
+        <span class="pill" id="r-left" hidden></span>
       </div>
-      <button class="btn" id="n-go">Ver plan</button>
-    </div>
-    <div class="bar"><i id="n-bar"></i></div>
-    <div class="sub" style="margin-top:14px">¿Qué comiste hoy?</div>
-    <div class="chips" id="n-chips"></div>
-  </section>
-
-  <!-- Ultimos 7 dias -->
-  <section class="card" style="--c:var(--warn)">
-    <h2>Últimos 7 días</h2>
-    <div class="week">
-      <div><div class="big" id="wk-r">0<small>/7</small></div><div class="sub">Rutina</div></div>
-      <div><div class="big" id="wk-n">0<small>/7</small></div><div class="sub">Plan cumplido</div></div>
-      <div><div class="big" id="wk-w"><span class="sk">0.0</span></div><div class="sub">Peso</div></div>
-    </div>
-    <div class="strip" id="wk-strip"></div>
-    <div class="legend"><span><i style="background:var(--accent)"></i>Rutina</span><span><i style="background:var(--lime)"></i>Plan</span></div>
-  </section>
-
-  <!-- Recordatorio -->
-  <section class="card" style="--c:var(--accent)">
-    <h2>Recordatorios</h2>
-    <div class="row space">
-      <div>
-        <div style="font-weight:600">Avisarme de la rutina</div>
-        <div class="sub">Solo si ese día aún no la hiciste</div>
+      <div id="r-next" style="margin-top:8px"></div>
+      <div class="foot">
+        <span class="sub">Marcar en Habits al completarla</span>
+        <select id="h-link"><option value="">No vincular</option></select>
       </div>
-      <label class="switch"><input type="checkbox" id="rem-on"><span></span></label>
-    </div>
-    <div class="row space" style="margin-top:14px">
-      <div>
-        <div style="font-weight:600">Resumen semanal</div>
-        <div class="sub">Los domingos a esa misma hora</div>
+    </section>
+    <section class="card" style="--c:var(--nut)">
+      <div class="row between"><div class="label" id="n-title">Nutrición</div><button class="link" id="n-go">Ver plan</button></div>
+      <div class="donut">
+        <svg viewBox="0 0 42 42" id="n-donut"><circle cx="21" cy="21" r="15.9" fill="none" style="stroke:var(--track)" stroke-width="5"/></svg>
+        <div class="legend">
+          <div><i style="background:var(--protein)"></i>Proteína<b id="m-p">—</b></div>
+          <div><i style="background:var(--fat)"></i>Grasas<b id="m-f">—</b></div>
+          <div><i style="background:var(--carb)"></i>Carbs<b id="m-c">—</b></div>
+        </div>
       </div>
-      <label class="switch"><input type="checkbox" id="rem-weekly"><span></span></label>
-    </div>
-    <div class="row" style="margin-top:12px">
-      <input type="time" id="rem-time" value="19:00">
-      <button class="btn" id="rem-test">Probar</button>
-    </div>
-    <div class="msg" id="rem-msg"></div>
-    <button class="link" id="rem-test-weekly">Probar resumen semanal</button>
-  </section>
+      <div class="label" style="margin-top:16px">¿Qué comiste hoy?</div>
+      <div class="chips" id="n-chips"></div>
+    </section>
+  </div>
 
-  <!-- Cuenta -->
-  <section class="card" style="--c:var(--muted)">
-    <h2>Cuenta</h2>
-    <div class="row space">
-      <div style="min-width:0">
+  <div class="two b">
+    <section class="card">
+      <div class="row between" style="flex-wrap:wrap">
+        <div class="label">Últimos 7 días</div>
+        <div class="row" style="gap:14px;font-size:13px">
+          <span><b id="wk-r">0/7</b> <span class="muted">rutina</span></span>
+          <span><b id="wk-n">0/7</b> <span class="muted">plan</span></span>
+          <span><b id="wk-w">—</b> <span class="muted">peso</span></span>
+        </div>
+      </div>
+      <div class="heat" id="wk-strip"></div>
+      <div class="lg"><span><i style="background:var(--rut)"></i>Rutina</span><span><i style="background:var(--nut)"></i>Plan cumplido</span></div>
+    </section>
+    <section class="card">
+      <div class="label">Recordatorios</div>
+      <div class="opt">
+        <div><b>Rutina</b><div class="sub">Solo si ese día aún no la hiciste</div></div>
+        <label class="switch"><input type="checkbox" id="rem-on"><span></span></label>
+      </div>
+      <div class="opt">
+        <div><b>Resumen semanal</b><div class="sub">Los domingos</div></div>
+        <label class="switch"><input type="checkbox" id="rem-weekly"><span></span></label>
+      </div>
+      <div class="opt">
+        <div class="row" style="gap:8px"><span class="sub">Hora</span><input type="time" id="rem-time" value="19:00"></div>
+        <button class="btn sm" id="rem-test">Probar</button>
+      </div>
+      <div class="msg" id="rem-msg"></div>
+      <button class="link" id="rem-test-weekly">Probar resumen semanal</button>
+    </section>
+  </div>
+
+  <section class="card" id="cuenta">
+    <div class="label">Cuenta</div>
+    <div class="acc">
+      <div>
         <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis" id="acc-email"></div>
         <div class="sub">Se vuelve a pedir el inicio de sesión cada 30 días</div>
+        <button class="btn sm" id="acc-logout" style="margin-top:10px">Salir</button>
       </div>
-      <button class="btn" id="acc-logout">Salir</button>
-    </div>
-    <div id="pk-box" hidden style="margin-top:14px">
-      <div class="row space">
-        <div>
-          <div style="font-weight:600">Passkey</div>
-          <div class="sub">Entra con huella o Face ID en vez del código</div>
+      <div id="pk-box" hidden>
+        <div style="font-weight:600">Passkey</div>
+        <div class="sub">Entra con huella o Face ID en vez del código</div>
+        <button class="btn sm" id="pk-add" style="margin-top:10px">Crear passkey</button>
+        <div id="pk-list"></div>
+      </div>
+      <div>
+        <div style="font-weight:600">Clave de USDA</div>
+        <div class="sub">Para buscar alimentos en Nutrición (opcional)</div>
+        <div class="row" style="margin-top:10px;gap:8px">
+          <input type="password" id="usda-key" placeholder="API key de api.data.gov" autocomplete="off">
+          <button class="btn sm" id="usda-save">Guardar</button>
         </div>
-        <button class="btn" id="pk-add">Crear</button>
-      </div>
-      <div id="pk-list"></div>
-    </div>
-    <div style="margin-top:14px">
-      <div style="font-weight:600">Clave de USDA</div>
-      <div class="sub">Para buscar alimentos en Nutrición (opcional)</div>
-      <div class="row" style="margin-top:8px">
-        <input type="password" id="usda-key" placeholder="API key de api.data.gov" autocomplete="off">
-        <button class="btn" id="usda-save">Guardar</button>
       </div>
     </div>
     <div class="msg" id="acc-msg"></div>
   </section>
-</div>
+</main>
 
 <script type="module">
 import { calcBMR, calcTDEE, calcTarget, totalMacros } from './nutricion/calculator.js';
@@ -201,7 +274,12 @@ const isoLocal = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(
 const today = () => isoLocal(new Date());
 const toParent = msg => { if (window.parent !== window) window.parent.postMessage(msg, location.origin); };
 
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = s => pad(Math.floor(s / 60)) + ':' + pad(Math.round(s % 60));
 $('date').textContent = new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' });
+const hr = new Date().getHours();
+const greet = hr < 12 ? 'Buenos días' : hr < 19 ? 'Buenas tardes' : 'Buenas noches';
+$('hello').textContent = greet;
 
 async function api(path, opts = {}) {
   const r = await authFetch(API + path, { ...opts, headers: opts.body ? { 'Content-Type': 'application/json' } : {} });
@@ -216,22 +294,42 @@ function streak(hist) {
   while (set.has(isoLocal(d))) { n++; d.setDate(d.getDate() - 1); }
   return n;
 }
+function bestStreak(hist) {
+  let best = 0, run = 0, prev = null;
+  for (const d of [...new Set(hist)].sort()) {
+    const day = new Date(d + 'T00:00:00');
+    run = prev && Math.round((day - prev) / 864e5) === 1 ? run + 1 : 1;
+    best = Math.max(best, run); prev = day;
+  }
+  return best;
+}
 let rutinaHist = [];
 function paintRutina(r) {
   rutinaHist = r.history || [];
   paintWeek();
   const total = r.total || 15;
-  const done = r.date === today() ? Object.values(r.done || {}).filter(Boolean).length : 0;
+  const done = r.date === today() ? (r.done || {}) : {};
+  const n = Object.values(done).filter(Boolean).length;
   const hist = r.history || [];
   const completed = hist.includes(today());
-  $('r-progress').innerHTML = `${completed ? total : done}<small>/${total}</small>`;
-  $('r-bar').style.width = ((completed ? total : done) / total * 100) + '%';
-  const s = streak(hist);
-  $('r-streak').innerHTML = completed
-    ? `<span class="done-pill">Completada hoy ✓</span> · racha ${s} ${s === 1 ? 'día' : 'días'}`
-    : hist.length ? `Racha: ${s} ${s === 1 ? 'día' : 'días'} · total ${hist.length}` : 'Sin historial todavía';
-  $('r-go').textContent = completed ? 'Ver rutina' : done ? 'Continuar' : 'Empezar';
-  $('r-go').classList.toggle('solid', !completed);
+  $('r-progress').innerHTML = `${n}<small>/ ${total}</small>`;
+  $('r-bar').style.width = (n / total * 100) + '%';
+  const s = streak(hist), best = bestStreak(hist);
+  $('s-num').innerHTML = `${s}<small>${s === 1 ? 'día' : 'días'}</small>`;
+  $('s-sub').textContent = hist.length ? (completed ? 'Hoy completada ✓ · ' : '') + `Mejor: ${best} ${best === 1 ? 'día' : 'días'}` : 'Sin historial todavía';
+  // Siguientes ejercicios de la rutina activa (rutina.html guarda la lista)
+  $('r-name').textContent = r.name || 'Equilibrio + estiramiento';
+  const list = r.list || [];
+  const pending = list.map((x, i) => ({ ...x, i })).filter(x => !done[x.i]);
+  const left = Math.max(1, Math.round(pending.reduce((a, x) => a + x.dur, 0) / 60));
+  $('r-left').hidden = !list.length;
+  $('r-left').className = 'pill' + (pending.length ? '' : ' ok');
+  $('r-left').textContent = pending.length ? `~${left} min restantes` : 'Completada ✓';
+  $('r-next').innerHTML = !list.length ? '<div class="empty">Abre Rutina para empezar.</div>'
+    : !pending.length ? '<div class="empty">Terminaste todos los ejercicios de hoy 🎉</div>'
+    : pending.slice(0, 3).map((x, k) => `<div class="nx"><span class="n${k === 0 ? ' go' : ''}">${k === 0 ? '▶' : x.i + 1}</span>
+        <div class="tx"><b>${esc(x.name)}</b><div class="sub">${esc(x.dose)}</div></div><span class="muted">${fmt(x.dur)}</span></div>`).join('');
+  $('r-go').textContent = list.length && !pending.length ? 'Ver rutina →' : n ? 'Continuar rutina →' : 'Empezar rutina →';
 }
 async function loadRutina() {
   let local = {};
@@ -245,7 +343,18 @@ async function loadRutina() {
     paintRutina(merged);
   } catch {}
 }
-$('r-go').onclick = () => toParent({ type: 'health:tab', tab: 'rutina' });
+const goTab = tab => () => toParent({ type: 'health:tab', tab });
+$('r-go').onclick = goTab('rutina');
+$('k-rut').onclick = goTab('rutina');
+$('k-racha').onclick = goTab('rutina');
+$('k-nut').onclick = goTab('nutricion');
+$('k-peso').onclick = e => { if (!e.target.closest('.wform')) toggleWeight(); };
+$('w-open').onclick = () => toggleWeight(true);
+function toggleWeight(open) {
+  const f = $('w-form'); f.hidden = open ? false : !f.hidden;
+  if (!f.hidden) { $('w-input').focus(); $('k-peso').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+}
+$('w-input').onkeydown = e => { if (e.key === 'Enter') $('w-save').click(); };
 
 /* ---------- Vinculo con Habits: al completar la rutina se marca ese habito ---------- */
 async function loadHabits() {
@@ -283,11 +392,11 @@ function paintWeight() {
   if (prev && prev !== last) {
     const d = +(last.weight - prev.weight).toFixed(1);
     const cls = d > 0 ? 'up' : d < 0 ? 'down' : '';
-    $('w-sub').innerHTML = `Registrado ${when} · <span class="delta ${cls}">${d > 0 ? '+' : ''}${d} kg</span> desde ${new Date(prev.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}`;
+    $('w-sub').innerHTML = `<span class="delta ${cls}">${d < 0 ? '▼' : d > 0 ? '▲' : '='} ${Math.abs(d)} kg</span> <span class="muted">vs ${new Date(prev.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>`;
   } else {
     $('w-sub').textContent = `Registrado ${when}`;
   }
-  if (last.date === today()) $('w-input').placeholder = `Hoy: ${last.weight} kg (corregir)`;
+  if (last.date === today()) $('w-input').placeholder = `Hoy: ${last.weight} (corregir)`;
 }
 async function loadWeight() {
   bm = bLoad(); if (bm) paintWeight(); // sin copia local: el placeholder queda hasta que llegue la nube
@@ -298,6 +407,7 @@ async function loadWeight() {
 }
 $('w-save').onclick = async () => {
   const weight = parseFloat($('w-input').value.replace(',', '.'));
+  $('w-msg').hidden = false;
   if (!weight || weight < 20 || weight > 400) { $('w-msg').textContent = 'Escribe un peso válido'; $('w-msg').className = 'msg err'; return; }
   $('w-save').disabled = true;
   // releer lo ultimo antes de escribir, para no pisar cambios hechos en Metricas
@@ -312,8 +422,9 @@ $('w-save').onclick = async () => {
   bm.lastModified = Date.now();
   bSave(bm);
   await bPush(bm);
-  $('w-input').value = '';
+  $('w-input').value = ''; $('w-form').hidden = true;
   $('w-msg').textContent = 'Guardado ✓'; $('w-msg').className = 'msg';
+  setTimeout(() => { $('w-msg').hidden = true; }, 2500);
   $('w-save').disabled = false;
   paintWeight();
   toParent({ type: 'health:reload', tab: 'metricas' });
@@ -321,28 +432,42 @@ $('w-save').onclick = async () => {
 
 /* ---------- Nutricion (plan activo) ---------- */
 let nState = null, nlog = {};
+function donut(parts) {
+  const tot = parts.reduce((a, [v]) => a + v, 0); let acc = 0;
+  const ring = (len, off, color) => `<circle cx="21" cy="21" r="15.9" fill="none" pathLength="100" stroke-width="5" style="stroke:${color}" stroke-dasharray="${len} ${100 - len}" stroke-dashoffset="${-off}"/>`;
+  $('n-donut').innerHTML = ring(100, 0, 'var(--track)') + (tot ? parts.map(([v, c]) => { const len = v / tot * 100, s = ring(len, acc, c); acc += len; return s; }).join('') : '');
+}
 function paintNutrition(S) {
   nState = S; paintChips();
   const p = S?.profiles?.[S.activeProfile];
-  if (!p) { $('n-kcal').innerHTML = '—<small>kcal</small>'; $('n-sub').textContent = 'Sin plan configurado'; return; }
+  if (!p) {
+    $('n-kcal').innerHTML = '—<small>kcal</small>'; $('n-title').textContent = 'Nutrición · sin plan configurado';
+    ['m-p', 'm-f', 'm-c'].forEach(id => $(id).textContent = '—'); donut([]); return;
+  }
+  if (p.name) $('hello').textContent = `${greet}, ${p.name}`;
   const day = (p.days || []).find(d => d.id === p.activeDay) || (p.days || [])[0] || { meals: [] };
   const m = totalMacros(day.meals || []);
   const t = p.tdee || {};
   let target = 0;
   if (t.weight && t.height && t.age) target = calcTarget(calcTDEE(calcBMR(+t.weight, +t.height, +t.age, t.gender), t.activity), t.goal, t.goalPct);
-  $('n-kcal').innerHTML = `${Math.round(m.calories)}<small>${target ? '/ ' + Math.round(target) + ' kcal' : 'kcal'}</small>`;
-  $('n-sub').textContent = `${p.name} · ${day.label || 'Día'} · ${Math.round(m.protein)} g proteína`;
+  const k = v => Math.round(v).toLocaleString('en');
+  $('n-kcal').innerHTML = `${k(m.calories)}<small>${target ? '/ ' + k(target) : 'kcal'}</small>`;
+  $('n-title').textContent = `Nutrición · ${day.label || 'Día'}`;
   $('n-bar').style.width = target ? Math.min(100, m.calories / target * 100) + '%' : '0';
+  $('m-p').textContent = Math.round(m.protein) + ' g';
+  $('m-f').textContent = Math.round(m.fat) + ' g';
+  $('m-c').textContent = Math.round(m.carbs) + ' g';
+  donut([[m.protein * 4, 'var(--protein)'], [m.fat * 9, 'var(--fat)'], [m.carbs * 4, 'var(--carb)']]);
 }
 async function loadNutrition() {
   const S = nLoad(); if (S) paintNutrition(S);
   const remote = await nPull();
   if (remote && (!S || (remote.lastModified || 0) > (S.lastModified || 0))) paintNutrition(remote);
-  else if (!S && !navigator.onLine) { $('n-kcal').innerHTML = '—<small>kcal</small>'; $('n-sub').textContent = 'Sin conexión: se carga al volver la red'; }
+  else if (!S && !navigator.onLine) { $('n-kcal').innerHTML = '—<small>kcal</small>'; $('n-title').textContent = 'Sin conexión: se carga al volver la red'; }
   else if (!S) paintNutrition(null);
 }
 addEventListener('online', () => { if (!nState) loadNutrition(); });
-$('n-go').onclick = () => toParent({ type: 'health:tab', tab: 'nutricion' });
+$('n-go').onclick = goTab('nutricion');
 
 /* ---------- Que dia del plan se comio hoy (adherencia) ---------- */
 function paintChips() {
@@ -384,19 +509,19 @@ function paintWeek() {
   const isos = days.map(isoLocal);
   const r = isos.filter(d => rutinaHist.includes(d)).length;
   const n = isos.filter(d => nlog[d] && !nlog[d].skipped).length;
-  $('wk-r').innerHTML = `${r}<small>/7</small>`;
-  $('wk-n').innerHTML = `${n}<small>/7</small>`;
+  $('wk-r').textContent = `${r}/7`;
+  $('wk-n').textContent = `${n}/7`;
   const comp = (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
   const last = comp[comp.length - 1];
   if (last) {
     const ref = new Date(last.date + 'T00:00:00'); ref.setDate(ref.getDate() - 7);
     const prev = [...comp].reverse().find(e => e.date <= isoLocal(ref));
     const d = prev ? +(last.weight - prev.weight).toFixed(1) : null;
-    $('wk-w').innerHTML = d == null ? `${last.weight}<small>kg</small>` : `${d > 0 ? '+' : ''}${d}<small>kg</small>`;
+    $('wk-w').textContent = d == null ? `${last.weight} kg` : `${d > 0 ? '+' : ''}${d} kg`;
   } else if (bm) $('wk-w').textContent = '—';
-  const L = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
-  $('wk-strip').innerHTML = days.map((d, i) => `<div><div class="d${i === 6 ? ' today' : ''}">${L[d.getDay()]}</div>
-    <div class="dots"><span class="dot r${rutinaHist.includes(isos[i]) ? ' on' : ''}"></span><span class="dot n${nlog[isos[i]] && !nlog[isos[i]].skipped ? ' on' : ''}"></span></div></div>`).join('');
+  const L = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  $('wk-strip').innerHTML = days.map((d, i) => `<div${i === 6 ? ' class="today"' : ''}>${i === 6 ? 'Hoy' : L[d.getDay()]}
+    <span${rutinaHist.includes(isos[i]) ? ' class="on"' : ''}></span><em${nlog[isos[i]] && !nlog[isos[i]].skipped ? ' class="on"' : ''}></em></div>`).join('');
 }
 
 /* ---------- Recordatorio push ---------- */
@@ -467,7 +592,7 @@ $('acc-email').textContent = currentEmail();
 $('acc-logout').onclick = () => { logout(); toParent({ type: 'health:login' }); };
 async function paintPasskeys() {
   const list = await listPasskeys();
-  $('pk-list').innerHTML = list.map(p => `<div class="row space" style="margin-top:8px;font-size:.9rem">
+  $('pk-list').innerHTML = list.map(p => `<div class="row between" style="margin-top:8px;font-size:13px">
     <span>🔑 ${(p.friendly_name || 'Passkey').replace(/[<>&]/g, '')} <span class="sub">${p.created_at ? new Date(p.created_at).toLocaleDateString('es') : ''}</span></span>
     <button class="link" data-pk="${p.id}">Borrar</button></div>`).join('');
   $('pk-list').querySelectorAll('[data-pk]').forEach(b => b.onclick = async () => {
@@ -503,7 +628,11 @@ loadUsdaKey();
 function loadAll() { loadRutina(); loadWeight(); loadNutrition(); loadLog(); }
 loadAll(); loadReminder(); loadHabits();
 // El shell avisa al volver a esta pestana para refrescar lo que cambio en las otras
-window.addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'health:refresh') loadAll(); });
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin) return;
+  if (e.data?.type === 'health:refresh') loadAll();
+  if (e.data?.type === 'health:account') $('cuenta').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 </script>
 </body>
 </html>

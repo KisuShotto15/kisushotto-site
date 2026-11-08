@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="t-metric">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,7 +25,7 @@
   --bg:#09090d;--surf:#0e0e14;--surf-2:#13131b;
   --border:rgba(255,255,255,0.07);--border-2:rgba(255,255,255,0.12);
   --text:#dddde8;--text-2:#8b8ba7;--text-3:#555570;
-  --green:#00d17a;--red:#f6465d;--accent:#3b82f6;
+  --green:#00d17a;--red:#f6465d;--accent:#a78bfa;
   --r:12px;
 }
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased}
@@ -153,7 +153,7 @@ select.inp{cursor:pointer}
 
 /* ── Boton flotante ── */
 .fab-wrap{position:fixed;right:18px;bottom:18px;z-index:150;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
-.fab{width:56px;height:56px;border-radius:50%;background:var(--h-metric,#3b82f6);color:#fff;font-size:30px;line-height:1;
+.fab{width:56px;height:56px;border-radius:50%;background:var(--h-metric,#a78bfa);color:#fff;font-size:30px;line-height:1;
   box-shadow:0 6px 20px rgba(0,0,0,.45);transition:transform .15s}
 .fab-wrap.open .fab{transform:rotate(45deg)}
 .fab-menu{display:none;flex-direction:column;gap:8px;align-items:flex-end}
@@ -441,13 +441,13 @@ function renderWeightChart(entries) {
   svg.innerHTML = `
     <defs>
       <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.25"/>
-        <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+        <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#a78bfa" stop-opacity="0"/>
       </linearGradient>
     </defs>
     <polygon points="${area}" fill="url(#wg)"/>
-    <polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${x(weights.length-1)}" cy="${y(vals[vals.length-1])}" r="3.5" fill="#3b82f6"/>
+    <polyline points="${pts}" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${x(weights.length-1)}" cy="${y(vals[vals.length-1])}" r="3.5" fill="#a78bfa"/>
   `;
 }
 
@@ -530,7 +530,7 @@ function renderVolChart() {
     const by = H - bh;
     const isThis = i === 11;
     return `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="3"
-      fill="${isThis ? '#3b82f6' : 'rgba(59,130,246,0.3)'}"/>`;
+      fill="${isThis ? '#a78bfa' : 'rgba(167,139,250,0.3)'}"/>`;
   }).join('');
 }
 
