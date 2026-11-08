@@ -59,9 +59,11 @@ input,select{font-family:inherit;outline:none}
 .stat-val.green{color:var(--green)}
 .stat-unit{font-size:13px;font-weight:400;color:var(--text-2);margin-left:2px}
 .stat-delta{font-size:11px;margin-top:4px}
-/* Peso, grasa y cintura: bajar es lo bueno (verde, como en Hoy) */
-.stat-delta.up{color:var(--h-warn,#fbbf24)}
-.stat-delta.down{color:var(--green)}
+/* Verde = hacia el objetivo. Grasa y cintura: bajar. Peso: segun el objetivo del
+   perfil de Nutricion (subir o bajar); si es mantener, sin color. */
+.stat-delta.up,.stat-delta.down{color:var(--text-2)}
+.stat-delta.good{color:var(--green)}
+.stat-delta.bad{color:var(--h-warn,#fbbf24)}
 .chart-axis{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text-3);margin-top:6px}
 .chart-axis b{color:var(--text-2);font-weight:600}
 [hidden]{display:none!important}
@@ -392,6 +394,14 @@ function render() {
   renderExList();
 }
 
+// Objetivo de peso del perfil activo de Nutricion ('surplus' = subir, 'deficit' = bajar)
+function weightGoal() {
+  try {
+    const n = JSON.parse(localStorage.getItem('nutrition_v1'));
+    const goal = n?.profiles?.[n.activeProfile]?.tdee?.goal;
+    return goal === 'surplus' ? 'up' : goal === 'deficit' ? 'down' : null;
+  } catch { return null; }
+}
 function renderComp() {
   const entries = [...S.bodyComp].sort((a, b) => a.date.localeCompare(b.date));
   const last = entries[entries.length - 1];
@@ -401,19 +411,21 @@ function renderComp() {
     document.getElementById(id).innerHTML = val !== undefined && val !== null && val !== ''
       ? val + `<span class="stat-unit">${unit}</span>` : `—<span class="stat-unit">${unit}</span>`;
   }
-  function setDelta(id, cur, prv) {
+  // goodWhen: 'down', 'up' o null (sin color)
+  function setDelta(id, cur, prv, goodWhen = 'down') {
     const el = document.getElementById(id);
     if (cur == null || prv == null) { el.textContent = 'sin historial'; el.className = 'stat-delta neutral'; return; }
     const d = (cur - prv).toFixed(1);
     el.textContent = (d < 0 ? '▼ ' : d > 0 ? '▲ ' : '= ') + Math.abs(d) + ' vs ' + new Date(prev.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
-    el.className = 'stat-delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : 'neutral');
+    const dir = d > 0 ? 'up' : d < 0 ? 'down' : 'neutral';
+    el.className = 'stat-delta ' + dir + (goodWhen && dir !== 'neutral' ? (dir === goodWhen ? ' good' : ' bad') : '');
   }
 
   if (last) {
     setVal('stat-weight', last.weight, 'kg');
     setVal('stat-fat', last.fatPct || '—', '%');
     setVal('stat-waist', last.measurements?.waist || '—', 'cm');
-    setDelta('delta-weight', last.weight, prev?.weight);
+    setDelta('delta-weight', last.weight, prev?.weight, weightGoal());
     setDelta('delta-fat', last.fatPct, prev?.fatPct);
     setDelta('delta-waist', last.measurements?.waist, prev?.measurements?.waist);
 

@@ -39,7 +39,8 @@
   .pill{display:inline-flex;align-items:center;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;white-space:nowrap;
     background:var(--h-rutina-soft);color:var(--rut);}
   .pill.ok{background:var(--h-ok-soft);color:var(--ok);}
-  .delta.down{color:var(--ok);font-weight:600;} .delta.up{color:var(--warn);font-weight:600;}
+  /* El color del cambio de peso depende del objetivo del perfil de Nutricion */
+  .delta{font-weight:600;color:var(--text);} .delta.good{color:var(--ok);} .delta.bad{color:var(--warn);}
 
   /* Indicadores */
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px;}
@@ -410,7 +411,7 @@ function paintWeight() {
   const when = last.date === today() ? 'hoy' : new Date(last.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
   if (prev && prev !== last) {
     const d = +(last.weight - prev.weight).toFixed(1);
-    const cls = d > 0 ? 'up' : d < 0 ? 'down' : '';
+    const cls = deltaClass(d);
     $('w-sub').innerHTML = `<span class="delta ${cls}">${d < 0 ? '▼' : d > 0 ? '▲' : '='} ${Math.abs(d)} kg</span> <span class="muted">vs ${new Date(prev.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>`;
   } else {
     $('w-sub').textContent = `Registrado ${when}`;
@@ -456,6 +457,13 @@ function donut(parts) {
   const ring = (len, off, color) => `<circle cx="21" cy="21" r="15.9" fill="none" pathLength="100" stroke-width="5" style="stroke:${color}" stroke-dasharray="${len} ${100 - len}" stroke-dashoffset="${-off}"/>`;
   $('n-donut').innerHTML = ring(100, 0, 'var(--track)') + (tot ? parts.map(([v, c]) => { const len = v / tot * 100, s = ring(len, acc, c); acc += len; return s; }).join('') : '');
 }
+// Objetivo del perfil activo de Nutricion: 'surplus' (subir), 'deficit' (bajar)
+// o mantener. Sin objetivo de subir o bajar, el cambio de peso no se colorea.
+function deltaClass(d) {
+  const goal = nState?.profiles?.[nState.activeProfile]?.tdee?.goal;
+  const good = goal === 'surplus' ? d > 0 : goal === 'deficit' ? d < 0 : null;
+  return !d || good === null ? '' : good ? 'good' : 'bad';
+}
 function paintNutrition(S) {
   nState = S; paintChips();
   const p = S?.profiles?.[S.activeProfile];
@@ -477,6 +485,7 @@ function paintNutrition(S) {
   $('m-f').textContent = Math.round(m.fat) + ' g';
   $('m-c').textContent = Math.round(m.carbs) + ' g';
   donut([[m.protein * 4, 'var(--protein)'], [m.fat * 9, 'var(--fat)'], [m.carbs * 4, 'var(--carb)']]);
+  if (bm) paintWeight(); // el color del peso depende del objetivo
 }
 async function loadNutrition() {
   const S = nLoad(); if (S) paintNutrition(S);
