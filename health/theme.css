@@ -1,0 +1,65 @@
+/* health/theme.css — estilo comun de todas las pestanas de Health.
+   Define los tokens y re-mapea las variables propias de Nutricion y Metricas
+   (que nacieron como apps aparte) para que todo se vea como una sola app.
+   Se carga despues de los estilos de cada pestana. */
+
+:root {
+  --h-bg:       #0c110f;
+  --h-panel:    #151d19;
+  --h-panel-2:  #1a241f;
+  --h-panel-3:  #202b26;
+  --h-border:   #2b3832;
+  --h-border-2: #3a4a42;
+  --h-text:     #eef5f1;
+  --h-text-2:   #c5d3cc;
+  --h-muted:    #9db0a7;
+  --h-muted-2:  #6f8279;
+  --h-rutina:   #43e68d;
+  --h-nutri:    #c8f135;
+  --h-metric:   #3b82f6;
+  --h-warn:     #f0c04a;
+  --h-danger:   #f87171;
+  --h-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --h-radius: 12px;
+
+  /* Nutricion (style.css) */
+  --bg: var(--h-bg);
+  --surface-1: var(--h-panel);
+  --surface-2: var(--h-panel-2);
+  --surface-3: var(--h-panel-3);
+  --hairline: var(--h-border);
+  --hairline-strong: var(--h-border-2);
+  --text: var(--h-text);
+  --text-2: var(--h-text-2);
+  --muted: var(--h-muted);
+  --muted-2: var(--h-muted-2);
+  --font-sans: var(--h-font);
+  --font-mono: var(--h-font);
+  --font-display: var(--h-font);
+  --card-bg: var(--h-panel);
+  --card-border: 1px solid var(--h-border);
+
+  /* Metricas (inline) */
+  --surf: var(--h-panel);
+  --surf-2: var(--h-panel-2);
+  --border: var(--h-border);
+  --border-2: var(--h-border-2);
+  --text-3: var(--h-muted-2);
+  --r: var(--h-radius);
+
+  /* Hoy y Rutina */
+  --panel: var(--h-panel);
+}
+
+html, body {
+  background: var(--h-bg) !important;
+  color: var(--h-text);
+  font-family: var(--h-font) !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Encabezado comun: titulo grande a la izquierda + subtitulo */
+.h-head { margin: 0 0 18px; }
+.h-head h1 { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: .2px; color: var(--h-text); line-height: 1.2; }
+.h-head p { margin: 3px 0 0; color: var(--h-muted); font-size: .95rem; }
+.h-head p::first-letter { text-transform: uppercase; }

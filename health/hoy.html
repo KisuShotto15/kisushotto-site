@@ -14,9 +14,6 @@
   body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     font-size:16px;line-height:1.45;padding:20px 16px 40px;}
   .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
-  header h1{margin:0;font-size:1.6rem;letter-spacing:.3px;}
-  header p{margin:2px 0 0;color:var(--muted);font-size:.95rem;}
-  header p::first-letter{text-transform:uppercase;}
 
   .card{background:var(--panel);border:1.5px solid var(--border);border-radius:12px;padding:16px;}
   .card h2{margin:0 0 10px;font-size:.8rem;letter-spacing:1.2px;text-transform:uppercase;color:var(--c);display:flex;align-items:center;gap:8px;}
@@ -33,7 +30,7 @@
   .btn:disabled{opacity:.45;cursor:default;}
   .done-pill{color:var(--accent);font-weight:700;}
   .delta.down{color:var(--down);} .delta.up{color:var(--up);}
-  input[type=number],input[type=time]{background:#0c110f;border:1.5px solid var(--border);color:var(--text);font:inherit;
+  input[type=number],input[type=time],input[type=password]{background:#0c110f;border:1.5px solid var(--border);color:var(--text);font:inherit;
     padding:9px 10px;border-radius:9px;width:100%;min-width:0;}
   input:focus{outline:none;border-color:var(--c);}
   .switch{position:relative;width:46px;height:26px;flex-shrink:0;}
@@ -44,6 +41,11 @@
   .switch input:checked+span::before{transform:translateX(20px);}
   .msg{font-size:.85rem;color:var(--muted);margin-top:8px;min-height:1em;}
   .msg.err{color:var(--warn);}
+  /* Placeholder mientras llegan los datos */
+  .sk{display:inline-block;border-radius:6px;color:transparent;background:linear-gradient(90deg,#1a241f 25%,#24302a 50%,#1a241f 75%);
+    background-size:200% 100%;animation:sk 1.2s ease-in-out infinite;}
+  .big .sk{font-size:1.4rem;}
+  @keyframes sk{to{background-position:-200% 0;}}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
   .chip{background:transparent;border:1.5px solid var(--border);color:var(--muted);font:inherit;font-size:.88rem;
     padding:7px 12px;border-radius:16px;cursor:pointer;}
@@ -63,10 +65,12 @@
   .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;}
   .link{background:none;border:0;color:var(--muted);font:inherit;font-size:.85rem;text-decoration:underline;cursor:pointer;padding:0;}
 </style>
+<link rel="stylesheet" href="theme.css">
+<script type="module" src="swipe.js"></script>
 </head>
 <body>
 <div class="wrap">
-  <header>
+  <header class="h-head">
     <h1>Hoy</h1>
     <p id="date"></p>
   </header>
@@ -91,8 +95,8 @@
   <!-- Peso -->
   <section class="card" style="--c:var(--blue)">
     <h2>Peso</h2>
-    <div class="big" id="w-last">—<small>kg</small></div>
-    <div class="sub" id="w-sub">Sin registros todavía</div>
+    <div class="big" id="w-last"><span class="sk">00.0 kg</span></div>
+    <div class="sub" id="w-sub"><span class="sk">Registrado hace unos días</span></div>
     <div class="row" style="margin-top:12px">
       <input type="number" id="w-input" inputmode="decimal" step="0.1" min="20" max="400" placeholder="Peso de hoy (kg)">
       <button class="btn solid" id="w-save">Guardar</button>
@@ -105,8 +109,8 @@
     <h2>Nutrición · plan del día</h2>
     <div class="row space">
       <div>
-        <div class="big" id="n-kcal">—<small>kcal</small></div>
-        <div class="sub" id="n-sub">Cargando…</div>
+        <div class="big" id="n-kcal"><span class="sk">0000 kcal</span></div>
+        <div class="sub" id="n-sub"><span class="sk">Perfil · plan del día</span></div>
       </div>
       <button class="btn" id="n-go">Ver plan</button>
     </div>
@@ -121,7 +125,7 @@
     <div class="week">
       <div><div class="big" id="wk-r">0<small>/7</small></div><div class="sub">Rutina</div></div>
       <div><div class="big" id="wk-n">0<small>/7</small></div><div class="sub">Plan cumplido</div></div>
-      <div><div class="big" id="wk-w">—</div><div class="sub">Peso</div></div>
+      <div><div class="big" id="wk-w"><span class="sk">0.0</span></div><div class="sub">Peso</div></div>
     </div>
     <div class="strip" id="wk-strip"></div>
     <div class="legend"><span><i style="background:var(--accent)"></i>Rutina</span><span><i style="background:var(--lime)"></i>Plan</span></div>
@@ -171,6 +175,14 @@
         <button class="btn" id="pk-add">Crear</button>
       </div>
       <div id="pk-list"></div>
+    </div>
+    <div style="margin-top:14px">
+      <div style="font-weight:600">Clave de USDA</div>
+      <div class="sub">Para buscar alimentos en Nutrición (opcional)</div>
+      <div class="row" style="margin-top:8px">
+        <input type="password" id="usda-key" placeholder="API key de api.data.gov" autocomplete="off">
+        <button class="btn" id="usda-save">Guardar</button>
+      </div>
     </div>
     <div class="msg" id="acc-msg"></div>
   </section>
@@ -278,9 +290,11 @@ function paintWeight() {
   if (last.date === today()) $('w-input').placeholder = `Hoy: ${last.weight} kg (corregir)`;
 }
 async function loadWeight() {
-  bm = bLoad(); paintWeight();
+  bm = bLoad(); if (bm) paintWeight(); // sin copia local: el placeholder queda hasta que llegue la nube
   const remote = await bPull();
-  if (remote && (!bm || (remote.lastModified || 0) > (bm.lastModified || 0))) { bm = remote; bSave(bm); paintWeight(); }
+  if (remote && (!bm || (remote.lastModified || 0) > (bm.lastModified || 0))) { bm = remote; bSave(bm); }
+  bm = bm || { bodyComp: [] };
+  paintWeight();
 }
 $('w-save').onclick = async () => {
   const weight = parseFloat($('w-input').value.replace(',', '.'));
@@ -310,7 +324,7 @@ let nState = null, nlog = {};
 function paintNutrition(S) {
   nState = S; paintChips();
   const p = S?.profiles?.[S.activeProfile];
-  if (!p) { $('n-sub').textContent = 'Sin plan configurado'; return; }
+  if (!p) { $('n-kcal').innerHTML = '—<small>kcal</small>'; $('n-sub').textContent = 'Sin plan configurado'; return; }
   const day = (p.days || []).find(d => d.id === p.activeDay) || (p.days || [])[0] || { meals: [] };
   const m = totalMacros(day.meals || []);
   const t = p.tdee || {};
@@ -321,10 +335,13 @@ function paintNutrition(S) {
   $('n-bar').style.width = target ? Math.min(100, m.calories / target * 100) + '%' : '0';
 }
 async function loadNutrition() {
-  let S = nLoad(); paintNutrition(S);
+  const S = nLoad(); if (S) paintNutrition(S);
   const remote = await nPull();
   if (remote && (!S || (remote.lastModified || 0) > (S.lastModified || 0))) paintNutrition(remote);
+  else if (!S && !navigator.onLine) { $('n-kcal').innerHTML = '—<small>kcal</small>'; $('n-sub').textContent = 'Sin conexión: se carga al volver la red'; }
+  else if (!S) paintNutrition(null);
 }
+addEventListener('online', () => { if (!nState) loadNutrition(); });
 $('n-go').onclick = () => toParent({ type: 'health:tab', tab: 'nutricion' });
 
 /* ---------- Que dia del plan se comio hoy (adherencia) ---------- */
@@ -345,12 +362,21 @@ async function setLog(entry) {
   // conservar solo los ultimos ~4 meses
   nlog = Object.fromEntries(Object.entries(nlog).sort(([a], [b]) => a.localeCompare(b)).slice(-120));
   paintChips(); paintWeek();
-  try { await api('/nutrition_log', { method: 'PUT', body: JSON.stringify(nlog) }); } catch {}
+  await pushLog();
+}
+// Sin conexion el registro queda guardado aqui y se sube al volver la red
+async function pushLog() {
+  try { localStorage.setItem('health_nlog_pending', JSON.stringify(nlog)); } catch {}
+  try { await api('/nutrition_log', { method: 'PUT', body: JSON.stringify(nlog) }); localStorage.removeItem('health_nlog_pending'); } catch {}
 }
 async function loadLog() {
-  try { const { data } = await api('/nutrition_log'); nlog = data || {}; } catch {}
+  let pending = null;
+  try { pending = JSON.parse(localStorage.getItem('health_nlog_pending')); } catch {}
+  if (pending) { nlog = pending; pushLog(); }
+  else { try { const { data } = await api('/nutrition_log'); nlog = data || {}; } catch {} }
   paintChips(); paintWeek();
 }
+addEventListener('online', () => { if (localStorage.getItem('health_nlog_pending')) pushLog(); });
 
 /* ---------- Ultimos 7 dias ---------- */
 function paintWeek() {
@@ -367,7 +393,7 @@ function paintWeek() {
     const prev = [...comp].reverse().find(e => e.date <= isoLocal(ref));
     const d = prev ? +(last.weight - prev.weight).toFixed(1) : null;
     $('wk-w').innerHTML = d == null ? `${last.weight}<small>kg</small>` : `${d > 0 ? '+' : ''}${d}<small>kg</small>`;
-  }
+  } else if (bm) $('wk-w').textContent = '—';
   const L = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
   $('wk-strip').innerHTML = days.map((d, i) => `<div><div class="d${i === 6 ? ' today' : ''}">${L[d.getDay()]}</div>
     <div class="dots"><span class="dot r${rutinaHist.includes(isos[i]) ? ' on' : ''}"></span><span class="dot n${nlog[isos[i]] && !nlog[isos[i]].skipped ? ' on' : ''}"></span></div></div>`).join('');
@@ -454,6 +480,25 @@ $('pk-add').onclick = async () => {
   try { await passkeyRegister(); $('acc-msg').textContent = 'Passkey creada ✓'; paintPasskeys(); }
   catch (e) { $('acc-msg').textContent = e?.name === 'NotAllowedError' ? 'Cancelado' : e.message; $('acc-msg').className = 'msg err'; }
 };
+
+// La clave se guarda por perfil de Nutricion (nutrition_apikey_<perfil>); aqui
+// se aplica a todos los perfiles de la cuenta.
+function nutritionProfiles() {
+  try { return Object.keys(JSON.parse(localStorage.getItem('nutrition_v1'))?.profiles || {}); } catch { return []; }
+}
+function loadUsdaKey() {
+  const ids = nutritionProfiles();
+  $('usda-key').value = ids.map(id => localStorage.getItem('nutrition_apikey_' + id)).find(Boolean) || '';
+}
+$('usda-save').onclick = () => {
+  const ids = nutritionProfiles();
+  const msg = $('acc-msg');
+  if (!ids.length) { msg.textContent = 'Abre Nutrición una vez y vuelve a intentarlo'; msg.className = 'msg err'; return; }
+  const key = $('usda-key').value.trim();
+  ids.forEach(id => key ? localStorage.setItem('nutrition_apikey_' + id, key) : localStorage.removeItem('nutrition_apikey_' + id));
+  msg.textContent = key ? 'Clave de USDA guardada ✓' : 'Clave de USDA borrada'; msg.className = 'msg';
+};
+loadUsdaKey();
 
 function loadAll() { loadRutina(); loadWeight(); loadNutrition(); loadLog(); }
 loadAll(); loadReminder(); loadHabits();

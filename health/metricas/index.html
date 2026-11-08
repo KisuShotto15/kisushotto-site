@@ -19,8 +19,6 @@
 })();
 </script>
 <link rel="icon" type="image/svg+xml" href="/images/bm-favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -152,25 +150,37 @@ select.inp{cursor:pointer}
 /* ── Toast ── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surf-2);border:1px solid var(--border-2);border-radius:10px;padding:10px 20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:all .25s;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── Boton flotante ── */
+.fab-wrap{position:fixed;right:18px;bottom:18px;z-index:150;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.fab{width:56px;height:56px;border-radius:50%;background:var(--h-metric,#3b82f6);color:#fff;font-size:30px;line-height:1;
+  box-shadow:0 6px 20px rgba(0,0,0,.45);transition:transform .15s}
+.fab-wrap.open .fab{transform:rotate(45deg)}
+.fab-menu{display:none;flex-direction:column;gap:8px;align-items:flex-end}
+.fab-wrap.open .fab-menu{display:flex}
+.fab-menu button{background:var(--surf-2);color:var(--text);border:1px solid var(--border-2);padding:11px 16px;border-radius:24px;
+  font-size:14px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.4)}
 </style>
+<link rel="stylesheet" href="../theme.css">
+<script type="module" src="../swipe.js"></script>
 </head>
 <body>
 
-<!-- Topbar -->
-<div class="topbar">
-  <a href="/" class="topbar-back">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
-  </a>
-  <div class="topbar-icon"><img src="/images/bm-icon.svg" onerror="this.style.display='none'"></div>
-  <span class="topbar-title">Body Metrics</span>
-  <div class="topbar-right">
-    <button class="btn btn-primary btn-sm" onclick="openLogComp()">+ Composición</button>
-    <button class="btn btn-ghost btn-sm" onclick="openLogSession()">+ Sesión gym</button>
+<!-- Boton flotante: registrar composicion o sesion de gym -->
+<div class="fab-wrap" id="fab-wrap">
+  <div class="fab-menu">
+    <button onclick="toggleFab(false);openLogComp()">⚖️ Peso y medidas</button>
+    <button onclick="toggleFab(false);openLogSession()">🏋️ Sesión de gym</button>
   </div>
+  <button class="fab" onclick="toggleFab()" aria-label="Registrar">+</button>
 </div>
 
 <!-- Main -->
 <div class="page">
+  <header class="h-head">
+    <h1>Métricas</h1>
+    <p>Peso, medidas y progreso en el gym</p>
+  </header>
   <div class="layout">
 
     <!-- LEFT: Composición corporal -->
@@ -362,6 +372,11 @@ async function init() {
 }
 
 init();
+
+window.toggleFab = function(open) {
+  const w = document.getElementById('fab-wrap');
+  w.classList.toggle('open', open ?? !w.classList.contains('open'));
+};
 
 // ── Render ─────────────────────────────────────────────────────────────────
 function render() {

@@ -8,7 +8,8 @@ export const SB_URL = 'https://fcrqrfpjpuscorbogjho.supabase.co';
 export const SB_KEY = 'sb_publishable_1ru1s3pT8wJ75GEKa2ag5A_jlz0y1GQ';
 const MAX_SESSION_MS = 30 * 24 * 3600 * 1000;
 // Datos locales de un usuario que no deben pasar a otro al cambiar de cuenta
-const USER_LOCAL_KEYS = ['health_rutina_v1', 'nutrition_v1', 'body_metrics_v1'];
+const USER_LOCAL_KEYS = ['health_rutina_v1', 'nutrition_v1', 'body_metrics_v1',
+  'nutrition_v1_dirty', 'body_metrics_v1_dirty', 'health_nlog_pending'];
 
 const get = k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
 const set = (k, v) => { try { localStorage.setItem(k, v); } catch {} };

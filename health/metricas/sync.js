@@ -25,12 +25,25 @@ export async function pull() {
   } catch { return null; }
 }
 
+// Si no hay conexion el cambio queda marcado y se reintenta al volver la red
+// (o la proxima vez que se abra la app). Siempre se sube lo ultimo guardado.
+const DIRTY_KEY = LS_KEY + '_dirty';
 export async function push(state) {
   try {
-    await authFetch(DATA_URL, {
+    const r = await authFetch(DATA_URL, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state)
+      body: JSON.stringify(state),
     });
-  } catch {}
+    if (!r.ok) throw new Error(r.status);
+    localStorage.removeItem(DIRTY_KEY);
+  } catch { try { localStorage.setItem(DIRTY_KEY, '1'); } catch {} }
 }
+
+function retryPending() {
+  if (!navigator.onLine || !localStorage.getItem(DIRTY_KEY)) return;
+  const local = loadLocal();
+  if (local) push(local);
+}
+addEventListener('online', retryPending);
+retryPending();
