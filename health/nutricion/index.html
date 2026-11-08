@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nutrition · KS</title>
+<script>
+// Pestana de Health (se carga en un iframe del shell). Visita directa ->
+// abre Health en esta pestana; embebida (?embed) -> el link al hub sale del iframe.
+(function () {
+  const embed = new URLSearchParams(location.search).has('embed');
+  if (!embed && window.self === window.top) {
+    location.replace('../#nutricion');
+    return;
+  }
+  if (embed) document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('a[href="/"]').forEach(a => { a.href = 'https://kisushotto.com'; a.target = '_top'; });
+  });
+})();
+</script>
+<link rel="icon" type="image/svg+xml" href="/images/nutrition-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ── TOP BAR ──────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <a href="/" class="app-icon-link" title="Volver al hub">
+      <svg width="80" height="80" viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="50" cy="50" r="33" fill="none" stroke="#2a2a32" stroke-width="5"/>
+        <circle cx="50" cy="50" r="33" fill="none" stroke="#c8f135" stroke-width="5" stroke-linecap="round" stroke-dasharray="52 155" stroke-dashoffset="41"/>
+        <circle cx="50" cy="50" r="33" fill="none" stroke="#ff6b4a" stroke-width="5" stroke-linecap="round" stroke-dasharray="40 155" stroke-dashoffset="-11"/>
+        <circle cx="50" cy="50" r="33" fill="none" stroke="#ffb340" stroke-width="5" stroke-linecap="round" stroke-dasharray="32 155" stroke-dashoffset="-51"/>
+        <circle cx="50" cy="50" r="33" fill="none" stroke="#40b4ff" stroke-width="5" stroke-linecap="round" stroke-dasharray="18 155" stroke-dashoffset="-83"/>
+        <text x="50" y="47" fill="#c8f135" font-family="system-ui,sans-serif" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="middle">2000</text>
+        <text x="50" y="57" fill="#666" font-family="system-ui,sans-serif" font-size="6" text-anchor="middle" dominant-baseline="middle">kcal / día</text>
+        <circle cx="20" cy="82" r="4" fill="#ff6b4a" opacity="0.9"/>
+        <circle cx="50" cy="82" r="4" fill="#ffb340" opacity="0.9"/>
+        <circle cx="80" cy="82" r="4" fill="#40b4ff" opacity="0.9"/>
+      </svg>
+    </a>
+    <div class="app-brand-text">
+      <div class="hero-kicker">PROTOCOLO DIARIO</div>
+      <h1 class="hero-title app-brand-title">Nutrition</h1>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="profiles-bar" id="profilesBar"></div>
+    <button class="ghost-btn" onclick="window._openApiKeyModal()" title="USDA API key">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      <span>API key</span>
+    </button>
+  </header>
+
+  <!-- ── HERO DASHBOARD ───────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero-head">
+      <div class="hero-meta" id="heroMeta">
+        <span id="heroDate"></span>
+      </div>
+    </div>
+
+    <div class="days-bar" id="daysBar"></div>
+
+    <div class="summary-bar" id="summaryBar"></div>
+  </section>
+
+  <!-- ── MAIN GRID ────────────────────────────────────────────────── -->
+  <div class="main-grid">
+
+    <!-- LEFT — MEALS COLUMN -->
+    <main class="meals-col">
+      <div class="section-head">
+        <h2 class="section-title">Comidas del día</h2>
+        <button class="ghost-btn ghost-btn--accent" onclick="window._addMeal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          <span>Nueva comida</span>
+        </button>
+      </div>
+      <div class="meals" id="mealsContainer"></div>
+    </main>
+
+    <!-- RIGHT — SIDE COLUMN -->
+    <aside class="side-col">
+
+      <!-- TDEE PANEL -->
+      <div class="panel tdee-panel">
+        <div class="tdee-toggle" onclick="window._toggleTDEE()">
+          <div class="panel-head">
+            <span class="panel-eyebrow">CALCULADORA</span>
+            <h3 class="panel-title">TDEE & Target</h3>
+          </div>
+          <span class="chevron" id="tdeeChevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+        </div>
+        <div class="tdee-body" id="tdeeBody" style="display:none">
+          <div class="tdee-form">
+            <div class="tdee-row">
+              <div class="tdee-field">
+                <label>Peso (kg)</label>
+                <input type="number" id="tdeeWeight" placeholder="75" oninput="window._updateTDEE()">
+              </div>
+              <div class="tdee-field">
+                <label>Altura (cm)</label>
+                <input type="number" id="tdeeHeight" placeholder="175" oninput="window._updateTDEE()">
+              </div>
+              <div class="tdee-field">
+                <label>Edad</label>
+                <input type="number" id="tdeeAge" placeholder="25" oninput="window._updateTDEE()">
+              </div>
+              <div class="tdee-field">
+                <label>Género</label>
+                <select id="tdeeGender" onchange="window._updateTDEE()">
+                  <option value="male">Hombre</option>
+                  <option value="female">Mujer</option>
+                </select>
+              </div>
+            </div>
+            <div class="tdee-row">
+              <div class="tdee-field tdee-field--wide">
+                <label>Nivel de actividad</label>
+                <select id="tdeeActivity" onchange="window._updateTDEE()">
+                  <option value="1.2">Sedentario (sin ejercicio)</option>
+                  <option value="1.375">Ligero (1–3 días/sem)</option>
+                  <option value="1.55">Moderado (3–5 días/sem)</option>
+                  <option value="1.725">Activo (6–7 días/sem)</option>
+                  <option value="1.9">Muy activo (2×/día)</option>
+                </select>
+              </div>
+              <div class="tdee-field">
+                <label>Meta</label>
+                <select id="tdeeGoal" onchange="window._updateTDEE()">
+                  <option value="deficit">Déficit</option>
+                  <option value="maintenance">Mantenimiento</option>
+                  <option value="surplus">Volumen</option>
+                </select>
+              </div>
+              <div class="tdee-field" id="goalPctField">
+                <label>Ajuste (%)</label>
+                <input type="number" id="tdeeGoalPct" value="15" min="5" max="50" oninput="window._updateTDEE()">
+              </div>
+            </div>
+            <div id="tdeeResults"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API HINT -->
+      <div class="api-hint">
+        <div class="api-hint-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        </div>
+        <div class="api-hint-text">
+          La búsqueda USDA requiere una API key gratuita.
+          <button class="link-btn" onclick="window._openApiKeyModal()">Configurar</button>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- ── DISTRIBUCIÓN DE GRASAS ──────────────────────────────────── -->
+  <section class="fat-dist-section">
+    <div class="section-head">
+      <h2 class="section-title">Distribución de grasas</h2>
+      <span class="section-note">Del total de grasas del día</span>
+    </div>
+    <div class="fat-dist-card" id="fat-dist">
+      <span class="fat-dist-empty">Calculando...</span>
+    </div>
+  </section>
+
+  <!-- ── MICRONUTRIENTES ──────────────────────────────────────────── -->
+  <section class="micros-section">
+    <div class="section-head">
+      <h2 class="section-title">Cobertura de micronutrientes</h2>
+      <span class="section-note">Calculado en vivo desde los ingredientes del día</span>
+    </div>
+    <div class="micros-list" id="micros-list">
+      <div class="micros-loading">Calculando cobertura...</div>
+    </div>
+  </section>
+
+  <!-- ── REGLAS ──────────────────────────────────────────────────── -->
+  <section class="rules-section">
+    <div class="section-head">
+      <h2 class="section-title">Reglas del protocolo</h2>
+    </div>
+    <div class="rules-grid">
+      <div class="rule-card"><div class="rule-num">01</div><h4 class="rule-title">Calorías desde grasa, no carbos</h4><p class="rule-text">Para subir calorías sin inflar los carbos, sube primero aceite, aguacate o más huevos.</p></div>
+      <div class="rule-card"><div class="rule-num">02</div><h4 class="rule-title">Muslo &gt; Pechuga</h4><p class="rule-text">El muslo con piel es más económico, más sabroso y más rico en grasa y micronutrientes.</p></div>
+      <div class="rule-card"><div class="rule-num">03</div><h4 class="rule-title">Sardinas: irremplazables</h4><p class="rule-text">Única fuente de Omega-3 EPA/DHA accesible en Venezuela. Mínimo una lata diaria.</p></div>
+      <div class="rule-card"><div class="rule-num">04</div><h4 class="rule-title">Aguacate diario si hay</h4><p class="rule-text">Grasa monoinsaturada + potasio + fibra. Úsalo como sustituto del pan o del arroz.</p></div>
+      <div class="rule-card"><div class="rule-num">05</div><h4 class="rule-title">Especias son libres</h4><p class="rule-text">Curry, cúrcuma, comino, ajo — sin restricción. Antiinflamatorios y hacen la dieta sostenible.</p></div>
+      <div class="rule-card"><div class="rule-num">06</div><h4 class="rule-title">Hidratación con electrolitos</h4><p class="rule-text">Dieta alta en proteína requiere más agua. Añade una pizca de sal o exprime limón.</p></div>
+    </div>
+
+    <div class="gaps-callout">
+      <div class="gaps-eyebrow">GAPS A CONSIDERAR</div>
+      <p>Los únicos dos micronutrientes que este plan no cubre completamente son <strong>Vitamina&nbsp;D</strong> y <strong>Magnesio</strong>. La vitamina&nbsp;D se obtiene con 20–30 min de sol directo. El magnesio con semillas de girasol/ajonjolí o suplemento de óxido/citrato.</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span>Nutrition · protocolo personal</span>
+    <span class="footer-dot">·</span>
+    <span>Datos USDA + lista local</span>
+    <span class="footer-dot">·</span>
+    <span class="app-version">v11</span>
+  </footer>
+
+</div><!-- /app -->
+
+<!-- ── SEARCH MODAL ─────────────────────────────────────────────── -->
+<div class="modal-backdrop hidden" id="searchModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span>Agregar ingrediente</span>
+      <div class="modal-header-actions">
+        <button class="link-btn small" onclick="window._openApiKeyModal()">API key</button>
+        <button class="modal-close" onclick="window._closeSearch()" aria-label="Cerrar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="search-input-wrap">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="searchInput" placeholder="Buscar alimento (USDA o lista local)…"
+               oninput="window._handleSearchInput()" autocomplete="off">
+      </div>
+      <div id="searchResults" class="search-results"></div>
+      <div id="amountWrap" class="amount-wrap hidden">
+        <div id="selectedFoodName" class="selected-food-name"></div>
+        <div class="amount-row">
+          <input type="number" id="ingredientAmount" placeholder="100" min="1" step="any" value="100">
+          <span class="amount-unit">g</span>
+          <button class="btn-accent" onclick="window._confirmIngredient()">Agregar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── API KEY MODAL ────────────────────────────────────────────── -->
+<div class="modal-backdrop hidden" id="apiKeyModal">
+  <div class="modal modal--sm">
+    <div class="modal-header">
+      <span>USDA API Key</span>
+      <button class="modal-close" onclick="window._closeApiKeyModal()" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">API key gratuita en <a href="https://fdc.nal.usda.gov/api-key-signup.html" target="_blank" rel="noopener">fdc.nal.usda.gov</a>. Sin key, la búsqueda usa la lista local.</p>
+      <input type="text" id="apiKeyInput" placeholder="DEMO_KEY o tu key personal" autocomplete="off">
+      <button class="btn-accent" onclick="window._saveApiKey()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONFIRM MODAL ────────────────────────────────────────────── -->
+<div class="modal-backdrop hidden" id="confirmModal" style="z-index: 1000;">
+  <div class="modal modal--sm">
+    <div class="modal-header">
+      <span id="confirm-title">Confirmar</span>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc" id="confirm-msg"></p>
+      <div class="confirm-actions">
+        <button class="btn-ghost" id="confirm-cancel">Cancelar</button>
+        <button class="btn-danger" id="confirm-ok">Eliminar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── HERO DATE ────────────────────────────────────────────────── -->
+<script>
+  (function () {
+    const d = new Date();
+    const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const el = document.getElementById('heroDate');
+    if (el) el.textContent = `${days[d.getDay()]}, ${d.getDate()} de ${months[d.getMonth()]}`;
+  })();
+</script>
+
+<script type="module" src="./main.js"></script>
+
+<!-- ── TWEAKS PANEL (solo en modo editor, embebido en iframe) ────── -->
+<script>
+(function () {
+  if (window.self === window.top) return; // visita normal: sin React/Babel (~500KB)
+  if (new URLSearchParams(location.search).has('embed')) return; // pestana de Health, no editor
+  const babelSrc = (src) => {
+    const s = document.createElement('script');
+    s.type = 'text/babel'; s.src = src;
+    document.body.appendChild(s);
+  };
+  babelSrc('tweaks-panel.jsx');
+  babelSrc('tweaks.jsx');
+  const chain = [
+    ['https://unpkg.com/react@18.3.1/umd/react.development.js', 'sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L'],
+    ['https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js', 'sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm'],
+    ['https://unpkg.com/@babel/standalone@7.29.0/babel.min.js', 'sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y'],
+  ];
+  (function load(i) {
+    if (i >= chain.length) return;
+    const s = document.createElement('script');
+    s.src = chain[i][0];
+    s.integrity = chain[i][1];
+    s.crossOrigin = 'anonymous';
+    s.onload = () => load(i + 1); // Babel al final: transforma los text/babel ya insertados
+    document.body.appendChild(s);
+  })(0);
+})();
+</script>
+
+</body>
+</html>

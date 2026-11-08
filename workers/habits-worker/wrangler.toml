@@ -11,8 +11,13 @@ database_id = "d15b535c-edda-4bf8-8805-1fc3c1c244ea"
 binding = "PUSH_KV"
 id = "183e28e496f3468fae40a58237cb098f"
 
-# Lectura del peso para el resumen semanal de Health (un worker no puede hacer
-# fetch a otro *.workers.dev de la misma cuenta; con service binding si).
+# Importacion unica de los datos viejos de Nutrition y Body Metrics a la cuenta
+# de HEALTH_OWNER (un worker no puede hacer fetch a otro *.workers.dev de la
+# misma cuenta; con service binding si).
+[[services]]
+binding = "NUTRITION"
+service = "nutrition-data-worker"
+
 [[services]]
 binding = "BODY_METRICS"
 service = "body-metrics-worker"
@@ -26,7 +31,7 @@ VAPID_SUBJECT = "mailto:efrenalejandro2010@gmail.com"
 # Health: cuentas del mismo Supabase que Portfolio (URL y publishable key son publicas)
 SUPABASE_URL = "https://fcrqrfpjpuscorbogjho.supabase.co"
 SUPABASE_KEY = "sb_publishable_1ru1s3pT8wJ75GEKa2ag5A_jlz0y1GQ"
-# Duenio de los datos de Health de antes de las cuentas, y de Body Metrics (aun de un solo usuario)
+# Duenio de los datos de Health, Nutrition y Body Metrics de antes de las cuentas
 HEALTH_OWNER = "efrenalejandro2010@gmail.com"
 
 # Set as secrets via:

@@ -1,5 +1,8 @@
-const DATA_URL = 'https://body-metrics-worker.efrenalejandro2010.workers.dev';
-const TOKEN    = '151322';
+// Datos de Metricas (Body Metrics) por cuenta: se guardan en el backend de
+// Health (habits-worker, /health/bodymetrics) con el token del usuario.
+import { authFetch } from '../auth.js';
+
+const DATA_URL = 'https://habits-worker.efrenalejandro2010.workers.dev/health/bodymetrics';
 const LS_KEY   = 'body_metrics_v1';
 
 export function loadLocal() {
@@ -15,9 +18,7 @@ export function saveLocal(state) {
 
 export async function pull() {
   try {
-    const r = await fetch(DATA_URL, {
-      headers: { Authorization: `Bearer ${TOKEN}` }
-    });
+    const r = await authFetch(DATA_URL);
     if (!r.ok) return null;
     const res = await r.json();
     return res.data || null;
@@ -26,9 +27,9 @@ export async function pull() {
 
 export async function push(state) {
   try {
-    await fetch(DATA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+    await authFetch(DATA_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state)
     });
   } catch {}

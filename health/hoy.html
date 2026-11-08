@@ -177,9 +177,9 @@
 </div>
 
 <script type="module">
-import { calcBMR, calcTDEE, calcTarget, totalMacros } from '../nutrition/calculator.js';
-import { loadLocal as nLoad, pull as nPull } from '../nutrition/sync.js';
-import { loadLocal as bLoad, saveLocal as bSave, pull as bPull, push as bPush } from '../body-metrics/sync.js';
+import { calcBMR, calcTDEE, calcTarget, totalMacros } from './nutricion/calculator.js';
+import { loadLocal as nLoad, pull as nPull } from './nutricion/sync.js';
+import { loadLocal as bLoad, saveLocal as bSave, pull as bPull, push as bPush } from './metricas/sync.js';
 import { authFetch, currentEmail, logout, passkeysUsable, passkeyRegister, listPasskeys, deletePasskey } from './auth.js';
 
 const API = 'https://habits-worker.efrenalejandro2010.workers.dev/health';
@@ -288,7 +288,7 @@ $('w-save').onclick = async () => {
   $('w-save').disabled = true;
   // releer lo ultimo antes de escribir, para no pisar cambios hechos en Metricas
   const remote = await bPull();
-  bm = remote && (remote.lastModified || 0) > (bLoad()?.lastModified || 0) ? remote : (bLoad() || remote || { bodyComp: [], exercises: [], sessions: [], lastModified: 0 });
+  bm = remote && (remote.lastModified || 0) > (bLoad()?.lastModified || 0) ? remote : (bLoad() || remote || { bodyComp: [], lastModified: 0 });
   bm.bodyComp = bm.bodyComp || [];
   const date = today();
   const i = bm.bodyComp.findIndex(e => e.date === date);
