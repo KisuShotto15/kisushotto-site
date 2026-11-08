@@ -382,25 +382,6 @@ async function weeklySummary(env, user, today) {
   };
 }
 
-// Nutrition y Body Metrics guardaban un solo bloque (sin cuentas) en sus propios
-// workers. La primera vez que el duenio (HEALTH_OWNER) pide esos datos se copian a
-// su cuenta; se lee por service binding (un worker no puede hacer fetch a otro
-// *.workers.dev de la misma cuenta).
-const LEGACY_SOURCES = { nutrition: 'NUTRITION', bodymetrics: 'BODY_METRICS' };
-async function importLegacy(env, user, key) {
-  const binding = env[LEGACY_SOURCES[key]];
-  if (!binding || user !== (env.HEALTH_OWNER || '').toLowerCase()) return null;
-  if (await healthGet(env, user, 'legacy_' + key)) return null; // ya se importo
-  try {
-    const r = await binding.fetch('https://legacy/', { headers: { Authorization: `Bearer ${env.TOKEN}` } });
-    if (!r.ok) return null;
-    const data = (await r.json())?.data ?? null;
-    if (data != null) await healthSet(env, user, key, data);
-    await healthSet(env, user, 'legacy_' + key, true);
-    return data;
-  } catch (_) { return null; }
-}
-
 async function handleHealth(path, request, env) {
   const method = request.method;
   if (path === '/health/vapid' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null });
@@ -458,11 +439,7 @@ async function handleHealth(path, request, env) {
     return json({ ok: true });
   }
   const m = path.match(/^\/health\/(rutina|reminder|nutrition_log|nutrition|bodymetrics)$/);
-  if (m && method === 'GET') {
-    let data = await healthGet(env, user, m[1]);
-    if (data == null) data = await importLegacy(env, user, m[1]);
-    return json({ data });
-  }
+  if (m && method === 'GET') return json({ data: await healthGet(env, user, m[1]) });
   if (m && method === 'PUT') {
     await healthSet(env, user, m[1], await request.json());
     return json({ ok: true });

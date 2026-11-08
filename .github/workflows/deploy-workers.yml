@@ -9,10 +9,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'workers/body-metrics-worker/**'
       - 'workers/habits-worker/**'
       - 'workers/notes-worker/**'
-      - 'workers/nutrition-worker/**'
       - 'workers/planner-worker/**'
   workflow_dispatch:
     inputs:
@@ -22,10 +20,8 @@ on:
         default: all
         options:
           - all
-          - body-metrics-worker
           - habits-worker
           - notes-worker
-          - nutrition-worker
           - planner-worker
 
 jobs:
@@ -39,7 +35,7 @@ jobs:
           fetch-depth: 0
       - id: pick
         env:
-          ALL: 'body-metrics-worker habits-worker notes-worker nutrition-worker planner-worker'
+          ALL: 'habits-worker notes-worker planner-worker'
           EVENT: ${{ github.event_name }}
           INPUT: ${{ inputs.worker }}
           BEFORE: ${{ github.event.before }}

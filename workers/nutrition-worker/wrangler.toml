@@ -1,7 +1,0 @@
-name = "nutrition-data-worker"
-main = "src/index.js"
-compatibility_date = "2025-04-10"
-
-[[kv_namespaces]]
-binding = "NUTRITION_KV"
-id = "493f838f547840f58417c6e6705731e6"
