@@ -26,8 +26,8 @@ android {
             if (ks) {
                 storeFile file(ks)
                 storePassword System.getenv("KEYSTORE_PASSWORD")
-                // Alias de la llave: la misma de Portfolio sirve (secret ANDROID_KEY_ALIAS si es otra)
-                keyAlias System.getenv("KEY_ALIAS") ?: "portfolio"
+                // Alias de la llave dentro del keystore ("health"; otro con el secret HEALTH_KEY_ALIAS)
+                keyAlias System.getenv("KEY_ALIAS") ?: "health"
                 keyPassword System.getenv("KEYSTORE_PASSWORD")
             }
         }

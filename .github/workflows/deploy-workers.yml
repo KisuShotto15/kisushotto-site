@@ -88,3 +88,16 @@ jobs:
 
       - name: wrangler deploy
         run: npx --yes wrangler@4 deploy
+
+      # App Android de Health: la cuenta de servicio de Firebase vive en el secret
+      # FIREBASE_SERVICE_ACCOUNT de GitHub y se copia al worker en cada despliegue.
+      - name: Firebase secret
+        if: matrix.worker == 'habits-worker'
+        env:
+          FSA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$FSA" ]; then
+            printf '%s' "$FSA" | npx --yes wrangler@4 secret put FIREBASE_SERVICE_ACCOUNT
+          else
+            echo "Sin FIREBASE_SERVICE_ACCOUNT: la app Android no tendra recordatorios"
+          fi

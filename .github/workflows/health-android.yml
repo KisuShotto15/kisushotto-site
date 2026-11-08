@@ -33,11 +33,11 @@ jobs:
       - run: npm ci
       - run: npx cap sync android
 
-      # La llave de firma vive en los secrets, nunca en el repo (puede ser la misma
-      # de Portfolio). Sin ella sale un APK de prueba (firma debug) como artifact.
+      # La llave de firma vive en los secrets, nunca en el repo (keystore propio de
+      # Health, alias "health"). Sin ella sale un APK de prueba (firma debug) como artifact.
       - name: Keystore
         env:
-          KS: ${{ secrets.ANDROID_KEYSTORE }}
+          KS: ${{ secrets.HEALTH_KEYSTORE }}
         run: |
           if [ -n "$KS" ]; then
             echo "$KS" | base64 -d > "$RUNNER_TEMP/release.p12"
@@ -54,8 +54,8 @@ jobs:
       - name: Build
         working-directory: health-app/android
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.HEALTH_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.HEALTH_KEY_ALIAS }}
           VERSION_CODE: ${{ github.run_number }}
         run: ./gradlew assembleRelease --no-daemon
 
