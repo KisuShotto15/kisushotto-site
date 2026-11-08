@@ -61,6 +61,26 @@ public class NativePlugin extends Plugin {
         call.resolve();
     }
 
+    // Hora de fin de la cuenta en curso (0 = ninguna). Ver TimerAlarm.
+    @PluginMethod
+    public void timer(PluginCall call) {
+        Double at = call.getDouble("at", 0d);
+        TimerAlarm.at = at == null ? 0 : at.longValue();
+        TimerAlarm.title = call.getString("title", "Health");
+        TimerAlarm.body = call.getString("body", "");
+        // El aviso necesita el permiso de notificaciones (Android 13+): se pide la primera vez
+        if (TimerAlarm.at > 0 && Build.VERSION.SDK_INT >= 33 && getPermissionState("notifications") != PermissionState.GRANTED) {
+            requestPermissionForAlias("notifications", call, "timerPermCb");
+            return;
+        }
+        call.resolve();
+    }
+
+    @PermissionCallback
+    private void timerPermCb(PluginCall call) {
+        call.resolve();
+    }
+
     // La vibracion del teclado del sistema (anda con el telefono en silencio).
     @PluginMethod
     public void haptic(PluginCall call) {

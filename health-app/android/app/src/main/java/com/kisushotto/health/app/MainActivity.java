@@ -29,6 +29,7 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this, SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT));
         PushService.ensureChannel(this);
+        TimerAlarm.ensureChannel(this);
         pendingUrl = pushUrl(getIntent());
 
         // La web no se dibuja debajo de las barras del sistema: se corre el WebView
@@ -58,6 +59,19 @@ public class MainActivity extends BridgeActivity {
                 else moveTaskToBack(true);
             }
         });
+    }
+
+    // Temporizador de la rutina: aviso del sistema solo mientras la app no se ve
+    @Override
+    public void onStop() {
+        super.onStop();
+        TimerAlarm.schedule(this);
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        TimerAlarm.cancel(this);
     }
 
     private static String pushUrl(Intent intent) {

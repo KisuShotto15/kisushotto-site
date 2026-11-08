@@ -8,7 +8,7 @@ mkdir -p "$OUT/icons" "$OUT/images"
 
 # Toda la app vive en health/: shell, Hoy, Rutina, Nutricion y Metricas.
 # Las rutas son relativas, asi que funciona igual aqui y en kisushotto.com/health/.
-cp health/index.html health/hoy.html health/rutina.html health/auth.js health/theme.css health/swipe.js "$OUT/"
+cp health/index.html health/hoy.html health/rutina.html health/rutina-data.js health/auth.js health/theme.css health/swipe.js "$OUT/"
 cp -r health/nutricion health/metricas "$OUT/"
 # En el subdominio el manifest vive en la raiz
 sed -i 's|href="/manifests/health.json"|href="/manifest.json"|g' "$OUT/index.html"

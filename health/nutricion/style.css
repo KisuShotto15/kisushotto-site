@@ -1409,12 +1409,22 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 760px) {
   body { padding: 20px 16px 64px; }
 
-  .summary-bar { grid-template-columns: 1fr 1fr; }
+  /* Kcal arriba a lo ancho y los 3 macros en una fila, mas compactos */
+  .summary-bar { grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .summary-bar .macro-block:first-child { grid-column: 1 / -1; }
-  .macro-val { font-size: 48px; }
+  .macro-block { padding: 14px 14px 12px; gap: 8px; }
+  .macro-val { font-size: 40px; }
   .macro-block.prot .macro-val,
   .macro-block.fat  .macro-val,
-  .macro-block.carb .macro-val { font-size: 36px; }
+  .macro-block.carb .macro-val { font-size: 28px; }
+  .macro-unit { font-size: 10px; letter-spacing: .1em; }
+  .macro-label { font-size: 12px; }
+  /* Perfiles y dias: una fila cada uno que se desliza de lado */
+  .profiles-bar, .days-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px;
+    padding: 0 16px; }
+  .profiles-bar { margin-bottom: 8px; }
+  .profiles-bar::-webkit-scrollbar, .days-bar::-webkit-scrollbar { display: none; }
+  .profile-pill, .day-tab { flex-shrink: 0; }
 
   .meal-header {
     grid-template-columns: auto 1fr auto auto;

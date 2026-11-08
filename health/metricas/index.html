@@ -52,15 +52,20 @@ input,select{font-family:inherit;outline:none}
 .ptitle{font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:16px}
 
 /* ── Stat cards ── */
-.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat-row{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:10px;margin-bottom:16px}
 .stat-card{background:var(--surf-2);border:1px solid var(--border);border-radius:10px;padding:14px 12px}
 .stat-label{font-size:11px;color:var(--text-2);margin-bottom:6px}
 .stat-val{font-size:22px;font-weight:700;letter-spacing:-0.02em}
 .stat-val.green{color:var(--green)}
 .stat-unit{font-size:13px;font-weight:400;color:var(--text-2);margin-left:2px}
 .stat-delta{font-size:11px;margin-top:4px}
-.stat-delta.up{color:var(--green)}
-.stat-delta.down{color:var(--red)}
+/* Peso, grasa y cintura: bajar es lo bueno (verde, como en Hoy) */
+.stat-delta.up{color:var(--h-warn,#fbbf24)}
+.stat-delta.down{color:var(--green)}
+.chart-axis{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text-3);margin-top:6px}
+.chart-axis b{color:var(--text-2);font-weight:600}
+[hidden]{display:none!important}
+@media(max-width:640px){.page{padding-bottom:120px}}
 .stat-delta.neutral{color:var(--text-3)}
 
 /* ── Weight chart ── */
@@ -193,12 +198,12 @@ select.inp{cursor:pointer}
             <div class="stat-val" id="stat-weight">—<span class="stat-unit">kg</span></div>
             <div class="stat-delta neutral" id="delta-weight">sin datos</div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" id="card-fat">
             <div class="stat-label">Grasa corp.</div>
             <div class="stat-val" id="stat-fat">—<span class="stat-unit">%</span></div>
             <div class="stat-delta neutral" id="delta-fat">sin datos</div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" id="card-waist">
             <div class="stat-label">Cintura</div>
             <div class="stat-val" id="stat-waist">—<span class="stat-unit">cm</span></div>
             <div class="stat-delta neutral" id="delta-waist">sin datos</div>
@@ -209,10 +214,11 @@ select.inp{cursor:pointer}
           <div class="empty" id="chart-empty">Registra tu peso para ver el gráfico</div>
           <svg id="weight-chart" style="display:none"></svg>
         </div>
+        <div class="chart-axis" id="chart-axis" hidden></div>
       </div>
 
       <!-- Medidas adicionales -->
-      <div class="panel" style="margin-top:16px">
+      <div class="panel" style="margin-top:16px" id="panel-meas">
         <div class="ptitle">Medidas</div>
         <div class="meas-grid" id="meas-grid">
           <div class="meas-item"><span class="ml">Pecho</span><span class="mv" id="m-chest">— <small style="color:var(--text-3)">cm</small></span></div>
@@ -399,7 +405,7 @@ function renderComp() {
     const el = document.getElementById(id);
     if (cur == null || prv == null) { el.textContent = 'sin historial'; el.className = 'stat-delta neutral'; return; }
     const d = (cur - prv).toFixed(1);
-    el.textContent = (d > 0 ? '+' : '') + d;
+    el.textContent = (d < 0 ? '▼ ' : d > 0 ? '▲ ' : '= ') + Math.abs(d) + ' vs ' + new Date(prev.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
     el.className = 'stat-delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : 'neutral');
   }
 
@@ -418,6 +424,11 @@ function renderComp() {
     document.getElementById('m-thigh').innerHTML = (m.thigh || '—') + ' <small style="color:var(--text-3)">cm</small>';
   }
 
+  // Lo que nunca se registro no ocupa lugar (se agrega con el boton +)
+  const ever = f => entries.some(f);
+  document.getElementById('card-fat').hidden = !ever(e => e.fatPct);
+  document.getElementById('card-waist').hidden = !ever(e => e.measurements?.waist);
+  document.getElementById('panel-meas').hidden = !ever(e => ['chest', 'arm', 'hip', 'thigh'].some(k => e.measurements?.[k]));
   renderWeightChart(entries);
 }
 
@@ -425,8 +436,14 @@ function renderWeightChart(entries) {
   const svg = document.getElementById('weight-chart');
   const empty = document.getElementById('chart-empty');
   const weights = entries.filter(e => e.weight).slice(-90);
-  if (weights.length < 2) { svg.style.display = 'none'; empty.style.display = ''; return; }
+  const axis = document.getElementById('chart-axis');
+  if (weights.length < 2) { svg.style.display = 'none'; empty.style.display = ''; axis.hidden = true; return; }
   svg.style.display = 'block'; empty.style.display = 'none';
+  // Eje: fechas de punta a punta, y el rango de peso
+  const fd = d => new Date(d + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  const ws = weights.map(e => e.weight);
+  axis.hidden = false;
+  axis.innerHTML = `<span>${fd(weights[0].date)}</span><span>min <b>${Math.min(...ws)}</b> · max <b>${Math.max(...ws)}</b> kg</span><span>${fd(weights[weights.length - 1].date)}</span>`;
 
   const W = 600, H = 100, pad = 10;
   const vals = weights.map(e => e.weight);

@@ -74,3 +74,10 @@ html, body {
 .h-head p { margin: 0 0 3px; color: var(--h-muted); font-size: .92rem; }
 .h-head p::first-letter { text-transform: uppercase; }
 @media (max-width: 640px) { .h-head h1 { font-size: 1.55rem; } }
+
+/* Sensacion de app nativa: sin destello azul al tocar y sin seleccionar texto
+   con pulsacion larga en botones, chips y tarjetas (los campos si se pueden) */
+* { -webkit-tap-highlight-color: transparent; }
+button, .chip, .tile, .kpi, .rchip, .step, .tab, .heat, .nx, .label {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}

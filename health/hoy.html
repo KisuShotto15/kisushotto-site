@@ -45,6 +45,17 @@
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px;}
   .kpi{cursor:pointer;}
   .kpi .icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px;margin-bottom:14px;}
+  /* Boton de cuenta: en el celular la barra superior del shell no se muestra */
+  .me{display:none;position:absolute;right:0;top:0;width:36px;height:36px;border-radius:50%;background:var(--card2);
+    border:1px solid var(--line2);font-weight:700;font-size:14px;text-transform:uppercase;}
+  .top{position:relative;}
+  .wform .step{width:40px;flex-shrink:0;padding:0;font-size:17px;}
+  .wform input{text-align:center;font-weight:600;}
+  .heat div{cursor:pointer;border-radius:10px;}
+  .heat div.sel{color:var(--text);font-weight:600;}
+  .heat div.sel span{box-shadow:0 0 0 2px var(--text) inset;}
+  .dayinfo{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--card2);font-size:13px;color:var(--text2);}
+  .dayinfo b{color:var(--text);}
   .kpi .num{margin-top:2px;}
   .kpi .bar,.kpi .sub{margin-top:12px;}
   .wform{display:flex;gap:8px;margin-top:12px;}
@@ -125,7 +136,14 @@
     .two{gap:10px;margin-bottom:10px;}
     .card{padding:16px;border-radius:16px;}
     .num{font-size:27px;}
-    .kpi .icon{width:30px;height:30px;margin-bottom:10px;}
+    .kpi .kh{display:flex;align-items:center;gap:8px;}
+    .kpi .icon{width:26px;height:26px;border-radius:8px;font-size:13px;margin:0;}
+    .kpi .num{margin-top:6px;}
+    .kpi .bar,.kpi .sub{margin-top:8px;}
+    .me{display:grid;place-items:center;}
+    .top .h-head{padding-right:48px;}
+    .foot{flex-direction:column;align-items:stretch;gap:8px;}
+    .foot select{max-width:100%;width:100%;}
     .heat{gap:5px;} .heat span{height:30px;}
     .donut{gap:16px;}
   }
@@ -137,6 +155,7 @@
 <main>
   <div class="top">
     <header class="h-head"><h1 id="hello">Hola</h1><p id="date"></p></header>
+    <button class="me" id="me" aria-label="Cuenta"></button>
     <div class="actions">
       <button class="btn" id="w-open">＋ Registrar peso</button>
       <button class="btn primary" id="r-go">Empezar rutina →</button>
@@ -145,31 +164,29 @@
 
   <div class="kpis">
     <section class="card kpi" id="k-rut" style="--c:var(--rut)">
-      <div class="icon" style="background:var(--h-rutina-soft)">🏋️</div>
-      <div class="label">Rutina</div>
+      <div class="kh"><div class="icon" style="background:var(--h-rutina-soft)">🏋️</div><div class="label">Rutina</div></div>
       <div class="num" id="r-progress"><span class="sk">0/15</span></div>
       <div class="bar"><i id="r-bar"></i></div>
     </section>
     <section class="card kpi" id="k-peso" style="--c:var(--met)">
-      <div class="icon" style="background:var(--h-metric-soft)">⚖️</div>
-      <div class="label">Peso</div>
+      <div class="kh"><div class="icon" style="background:var(--h-metric-soft)">⚖️</div><div class="label">Peso</div></div>
       <div class="num" id="w-last"><span class="sk">00.0 kg</span></div>
       <div class="sub" id="w-sub"><span class="sk">esta semana</span></div>
       <div class="wform" id="w-form" hidden>
+        <button class="btn sm step" id="w-dn" aria-label="Menos 0.1">−</button>
         <input type="number" id="w-input" inputmode="decimal" step="0.1" min="20" max="400" placeholder="kg">
+        <button class="btn sm step" id="w-up" aria-label="Más 0.1">+</button>
         <button class="btn sm" id="w-save">Guardar</button>
       </div>
       <div class="msg" id="w-msg" hidden></div>
     </section>
     <section class="card kpi" id="k-nut" style="--c:var(--nut)">
-      <div class="icon" style="background:var(--h-nutri-soft)">🍳</div>
-      <div class="label">Calorías del plan</div>
+      <div class="kh"><div class="icon" style="background:var(--h-nutri-soft)">🍳</div><div class="label">Calorías del plan</div></div>
       <div class="num" id="n-kcal"><span class="sk">0000</span></div>
       <div class="bar"><i id="n-bar"></i></div>
     </section>
     <section class="card kpi" id="k-racha" style="--c:var(--warn)">
-      <div class="icon" style="background:var(--h-warn-soft)">🔥</div>
-      <div class="label">Racha</div>
+      <div class="kh"><div class="icon" style="background:var(--h-warn-soft)">🔥</div><div class="label">Racha</div></div>
       <div class="num" id="s-num">0<small>días</small></div>
       <div class="sub" id="s-sub">Sin historial todavía</div>
     </section>
@@ -213,6 +230,7 @@
         </div>
       </div>
       <div class="heat" id="wk-strip"></div>
+      <div class="dayinfo" id="wk-day" hidden></div>
       <div class="lg"><span><i style="background:var(--rut)"></i>Rutina</span><span><i style="background:var(--nut)"></i>Plan cumplido</span></div>
     </section>
     <section class="card">
@@ -248,14 +266,6 @@
         <button class="btn sm" id="pk-add" style="margin-top:10px">Crear passkey</button>
         <div id="pk-list"></div>
       </div>
-      <div>
-        <div style="font-weight:600">Clave de USDA</div>
-        <div class="sub">Para buscar alimentos en Nutrición (opcional)</div>
-        <div class="row" style="margin-top:10px;gap:8px">
-          <input type="password" id="usda-key" placeholder="API key de api.data.gov" autocomplete="off">
-          <button class="btn sm" id="usda-save">Guardar</button>
-        </div>
-      </div>
     </div>
     <div class="msg" id="acc-msg"></div>
   </section>
@@ -265,6 +275,7 @@
 import { calcBMR, calcTDEE, calcTarget, totalMacros } from './nutricion/calculator.js';
 import { loadLocal as nLoad, pull as nPull } from './nutricion/sync.js';
 import { loadLocal as bLoad, saveLocal as bSave, pull as bPull, push as bPush } from './metricas/sync.js';
+import { BUILTIN, listOf } from './rutina-data.js';
 import { authFetch, currentEmail, logout, passkeysUsable, passkeyRegister, listPasskeys, deletePasskey } from './auth.js';
 
 const API = 'https://habits-worker.efrenalejandro2010.workers.dev/health';
@@ -319,7 +330,8 @@ function paintRutina(r) {
   $('s-sub').textContent = hist.length ? (completed ? 'Hoy completada ✓ · ' : '') + `Mejor: ${best} ${best === 1 ? 'día' : 'días'}` : 'Sin historial todavía';
   // Siguientes ejercicios de la rutina activa (rutina.html guarda la lista)
   $('r-name').textContent = r.name || 'Equilibrio + estiramiento';
-  const list = r.list || [];
+  // Sin lista guardada (app recien instalada): la rutina incluida
+  const list = r.list || (!r.routine || r.routine === 'estiramiento' ? listOf(BUILTIN) : []);
   const pending = list.map((x, i) => ({ ...x, i })).filter(x => !done[x.i]);
   const left = Math.max(1, Math.round(pending.reduce((a, x) => a + x.dur, 0) / 60));
   $('r-left').hidden = !list.length;
@@ -352,8 +364,15 @@ $('k-peso').onclick = e => { if (!e.target.closest('.wform')) toggleWeight(); };
 $('w-open').onclick = () => toggleWeight(true);
 function toggleWeight(open) {
   const f = $('w-form'); f.hidden = open ? false : !f.hidden;
-  if (!f.hidden) { $('w-input').focus(); $('k-peso').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  if (f.hidden) return;
+  // arranca en el ultimo peso: casi siempre basta con tocar +/- y Guardar
+  const comp = (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
+  if (!$('w-input').value && comp.length) $('w-input').value = comp[comp.length - 1].weight;
+  $('k-peso').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
+const nudge = d => () => { const v = parseFloat($('w-input').value.replace(',', '.')) || 0; $('w-input').value = Math.round((v + d) * 10) / 10; haptic('tick'); };
+$('w-dn').onclick = nudge(-0.1);
+$('w-up').onclick = nudge(0.1);
 $('w-input').onkeydown = e => { if (e.key === 'Enter') $('w-save').click(); };
 
 /* ---------- Vinculo con Habits: al completar la rutina se marca ese habito ---------- */
@@ -422,7 +441,7 @@ $('w-save').onclick = async () => {
   bm.lastModified = Date.now();
   bSave(bm);
   await bPush(bm);
-  $('w-input').value = ''; $('w-form').hidden = true;
+  $('w-input').value = ''; $('w-form').hidden = true; haptic();
   $('w-msg').textContent = 'Guardado ✓'; $('w-msg').className = 'msg';
   setTimeout(() => { $('w-msg').hidden = true; }, 2500);
   $('w-save').disabled = false;
@@ -483,6 +502,7 @@ function paintChips() {
   chip('No seguí el plan', !!cur?.skipped, 'skip', () => setLog(cur?.skipped ? null : { skipped: true }));
 }
 async function setLog(entry) {
+  haptic();
   if (entry) nlog[today()] = entry; else delete nlog[today()];
   // conservar solo los ultimos ~4 meses
   nlog = Object.fromEntries(Object.entries(nlog).sort(([a], [b]) => a.localeCompare(b)).slice(-120));
@@ -504,6 +524,7 @@ async function loadLog() {
 addEventListener('online', () => { if (localStorage.getItem('health_nlog_pending')) pushLog(); });
 
 /* ---------- Ultimos 7 dias ---------- */
+let selDay = null; // dia tocado en la franja
 function paintWeek() {
   const days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); return d; });
   const isos = days.map(isoLocal);
@@ -520,14 +541,24 @@ function paintWeek() {
     $('wk-w').textContent = d == null ? `${last.weight} kg` : `${d > 0 ? '+' : ''}${d} kg`;
   } else if (bm) $('wk-w').textContent = '—';
   const L = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  $('wk-strip').innerHTML = days.map((d, i) => `<div${i === 6 ? ' class="today"' : ''}>${i === 6 ? 'Hoy' : L[d.getDay()]}
+  $('wk-strip').innerHTML = days.map((d, i) => `<div data-d="${isos[i]}" class="${i === 6 ? 'today' : ''}${isos[i] === selDay ? ' sel' : ''}">${i === 6 ? 'Hoy' : L[d.getDay()]}
     <span${rutinaHist.includes(isos[i]) ? ' class="on"' : ''}></span><em${nlog[isos[i]] && !nlog[isos[i]].skipped ? ' class="on"' : ''}></em></div>`).join('');
+  $('wk-strip').querySelectorAll('[data-d]').forEach(el => el.onclick = () => { selDay = selDay === el.dataset.d ? null : el.dataset.d; haptic('tick'); paintWeek(); });
+  // Detalle del dia tocado: rutina, plan y peso
+  const box = $('wk-day');
+  box.hidden = !selDay;
+  if (!selDay) return;
+  const nl = nlog[selDay], w = comp.find(e => e.date === selDay);
+  const when = new Date(selDay + 'T00:00:00').toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'short' });
+  box.innerHTML = `<b>${when.replace(/^./, c => c.toUpperCase())}</b> · Rutina ${rutinaHist.includes(selDay) ? '✓' : '—'}`
+    + ` · Plan ${nl ? (nl.skipped ? 'no seguido' : esc(nl.label || 'cumplido')) : '—'}` + (w ? ` · ${w.weight} kg` : '');
 }
 
 /* ---------- Recordatorio push ---------- */
 // App Android (Capacitor, health-app/): sus plugins propios; null en la web.
 // Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
 const nativeApp = () => { try { const c = (window.parent !== window && parent.Capacitor) || window.Capacitor; return c?.isNativePlatform?.() && c.Plugins?.Native || null; } catch { return null; } };
+function haptic(k) { const n = nativeApp(); if (n) n.haptic({ kind: k || 'key' }).catch(() => {}); }
 const canPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 function remMsg(t, err) { $('rem-msg').textContent = t; $('rem-msg').className = 'msg' + (err ? ' err' : ''); }
 const b64ToBytes = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
@@ -608,6 +639,8 @@ async function loadReminder() {
 
 /* ---------- Cuenta y passkeys ---------- */
 $('acc-email').textContent = currentEmail();
+$('me').textContent = (currentEmail() || '?')[0];
+$('me').onclick = () => $('cuenta').scrollIntoView({ behavior: 'smooth', block: 'start' });
 $('acc-logout').onclick = () => { logout(); toParent({ type: 'health:login' }); };
 async function paintPasskeys() {
   const list = await listPasskeys();
@@ -625,24 +658,6 @@ $('pk-add').onclick = async () => {
   catch (e) { $('acc-msg').textContent = e?.name === 'NotAllowedError' ? 'Cancelado' : e.message; $('acc-msg').className = 'msg err'; }
 };
 
-// La clave se guarda por perfil de Nutricion (nutrition_apikey_<perfil>); aqui
-// se aplica a todos los perfiles de la cuenta.
-function nutritionProfiles() {
-  try { return Object.keys(JSON.parse(localStorage.getItem('nutrition_v1'))?.profiles || {}); } catch { return []; }
-}
-function loadUsdaKey() {
-  const ids = nutritionProfiles();
-  $('usda-key').value = ids.map(id => localStorage.getItem('nutrition_apikey_' + id)).find(Boolean) || '';
-}
-$('usda-save').onclick = () => {
-  const ids = nutritionProfiles();
-  const msg = $('acc-msg');
-  if (!ids.length) { msg.textContent = 'Abre Nutrición una vez y vuelve a intentarlo'; msg.className = 'msg err'; return; }
-  const key = $('usda-key').value.trim();
-  ids.forEach(id => key ? localStorage.setItem('nutrition_apikey_' + id, key) : localStorage.removeItem('nutrition_apikey_' + id));
-  msg.textContent = key ? 'Clave de USDA guardada ✓' : 'Clave de USDA borrada'; msg.className = 'msg';
-};
-loadUsdaKey();
 
 function loadAll() { loadRutina(); loadWeight(); loadNutrition(); loadLog(); }
 loadAll(); loadReminder(); loadHabits();

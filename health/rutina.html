@@ -22,7 +22,26 @@
 
   .top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px;}
   .top .h-head{margin:0;min-width:0;}
-  .tools{display:flex;gap:8px;flex-shrink:0;}
+  .tools{display:flex;gap:8px;flex-shrink:0;position:relative;}
+  /* Menu de opciones (voz, pitido, auto-avance, pantalla, reiniciar) */
+  .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:var(--card);border:1px solid var(--line2);border-radius:14px;
+    padding:6px;min-width:230px;display:flex;flex-direction:column;box-shadow:0 12px 32px rgba(0,0,0,.45);}
+  .mi{display:flex;align-items:center;justify-content:space-between;gap:12px;background:none;border:0;text-align:left;padding:11px 12px;
+    border-radius:10px;font-size:14px;font-weight:500;color:var(--text2);}
+  .mi:hover{background:var(--card2);}
+  .mi[aria-pressed]::after{content:"";width:34px;height:20px;border-radius:10px;flex-shrink:0;
+    background:radial-gradient(circle 7px at 10px 50%,#fff 96%,transparent) var(--line2);}
+  .mi[aria-pressed="true"]::after{background:radial-gradient(circle 7px at 24px 50%,#fff 96%,transparent) var(--accent);}
+  .mi.sep{border-top:1px solid var(--line);border-radius:0 0 10px 10px;margin-top:4px;color:var(--h-danger);}
+  /* Peso y reps de la serie (rutinas propias) */
+  .adj{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .ad{display:flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:4px;}
+  .ad button{width:36px;height:36px;border-radius:9px;border:0;background:var(--card);font-size:18px;font-weight:600;}
+  .ad span{min-width:64px;text-align:center;font-size:13px;color:var(--muted);}
+  .ad b{font-size:17px;color:var(--text);font-variant-numeric:tabular-nums;}
+  .donerow{grid-column:1/-1;display:flex;align-items:center;gap:10px;justify-content:space-between;background:transparent;
+    border:1px dashed var(--line2);border-radius:14px;padding:11px 14px;color:var(--muted);font-size:13px;font-weight:600;}
+  .donerow b{color:var(--ok);}
   .tbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);background:var(--card);color:var(--muted);
     padding:9px 14px;border-radius:12px;font-weight:600;font-size:13px;white-space:nowrap;}
   .tbtn[aria-pressed="true"]{color:var(--text);border-color:var(--accent);background:var(--soft);}
@@ -154,8 +173,11 @@
   @media (max-width:640px){
     body{padding:18px 16px 40px;}
     .top{flex-direction:column;align-items:stretch;gap:12px;}
-    .tools{overflow-x:auto;margin:0 -16px;padding:0 16px;scrollbar-width:none;}
-    .tools::-webkit-scrollbar{display:none;}
+    .top{position:relative;}
+    .top .h-head{padding-right:52px;}
+    .tools{position:absolute;right:0;bottom:2px;}
+    .tbtn .tx{display:none;}
+    .tbtn{padding:9px 11px;}
     .picker{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px 14px;padding:0 16px;scrollbar-width:none;}
     .sticky{margin:0 -16px 12px;padding:10px 16px;}
     .steps{display:flex;overflow-x:auto;gap:8px;margin:-4px -16px 8px;padding:4px 16px;scrollbar-width:none;}
@@ -178,11 +200,14 @@
   <div class="top">
     <header class="h-head"><h1 id="title">Rutina</h1><p id="meta"></p></header>
     <div class="tools">
-      <button class="tbtn" id="voiceBtn">🔊 Voz</button>
-      <button class="tbtn" id="soundBtn">🔔 Pitido</button>
-      <button class="tbtn" id="autoBtn" title="Al terminar un ejercicio, pasa al siguiente">⏭ Auto-avance</button>
-      <button class="tbtn" id="wakeBtn" title="Mantener la pantalla encendida">💡 Pantalla</button>
-      <button class="tbtn" id="resetBtn">↺ Reiniciar</button>
+      <button class="tbtn" id="optBtn" aria-expanded="false" aria-label="Opciones">⚙<span class="tx"> Opciones</span></button>
+      <div class="menu" id="optMenu" hidden>
+        <button class="mi" id="voiceBtn">🔊 Voz</button>
+        <button class="mi" id="soundBtn">🔔 Pitido</button>
+        <button class="mi" id="autoBtn" title="Al terminar un ejercicio, pasa al siguiente">⏭ Auto-avance</button>
+        <button class="mi" id="wakeBtn" title="Mantener la pantalla encendida">💡 Pantalla</button>
+        <button class="mi sep" id="resetBtn">↺ Reiniciar el día</button>
+      </div>
     </div>
   </div>
   <div class="picker" id="picker"></div>
@@ -226,162 +251,20 @@
   </form>
 </dialog>
 
-<script>
-const DATA=[
-{block:"Bloque 1 — Activación (5 min)",items:[
- {name:"Círculos de cadera",dose:"30 s cada sentido",q:"hip circles exercise standing",
-  phases:[{l:"Sentido horario",s:30},{l:"Sentido antihorario",s:30}],
-  steps:["Pies separados al ancho de los hombros, manos en la cintura.",
-         "Mantén los pies fijos y las rodillas suaves, sin bloquear.",
-         "Dibuja un círculo amplio con la cadera, como si trazaras el borde de un plato grande.",
-         "Movimiento lento y controlado: cada círculo completo debe tomar unos 3 segundos."],
-  watch:"No muevas los hombros ni el torso. Solo la cadera gira."},
-
- {name:"Círculos de hombro",dose:"30 s cada sentido",q:"arm circles shoulder warmup",
-  phases:[{l:"Hacia adelante",s:30},{l:"Hacia atrás",s:30}],
-  steps:["De pie, brazos extendidos a los lados formando una T.",
-         "Comienza con círculos pequeños y agrándalos progresivamente.",
-         "El movimiento nace del hombro, no del codo ni de la muñeca.",
-         "Últimos 10 segundos: círculos lo más amplios que puedas."],
-  watch:"No encojas los hombros hacia las orejas. Mantén el cuello largo."},
-
- {name:"Balanceo de pierna",dose:"30 s cada pierna",q:"leg swings dynamic stretch",
-  phases:[{l:"Pierna derecha",s:30},{l:"Pierna izquierda",s:30}],
-  steps:["Apóyate con una mano en la pared o en el marco de la puerta.",
-         "Balancea la pierna libre hacia adelante y hacia atrás como un péndulo.",
-         "Pierna relajada, no tensa. La gravedad hace la mitad del trabajo.",
-         "Aumenta el rango progresivamente, nunca de golpe."],
-  watch:"Torso erguido. Si te inclinas hacia atrás al subir la pierna, redujiste el rango."},
-
- {name:"World's Greatest Stretch",dose:"1 min cada lado",q:"world's greatest stretch exercise",
-  phases:[{l:"Lado derecho",s:60},{l:"Lado izquierdo",s:60}],
-  steps:["Desde posición de plancha, lleva el pie derecho junto a la mano derecha.",
-         "Baja el codo derecho hacia el piso, cerca del pie. Mantén 2 segundos.",
-         "Sube el brazo derecho rotando el torso, mirando la mano que apunta al techo.",
-         "Regresa y repite el ciclo durante todo el minuto, sin apuro."],
-  watch:"La rodilla trasera estirada y la cadera baja. Ahí está el estiramiento del flexor."},
-
- {name:"Rotación de tobillo",dose:"30 s cada pie",q:"ankle circles mobility exercise",
-  phases:[{l:"Pie derecho",s:30},{l:"Pie izquierdo",s:30}],
-  steps:["Apóyate si lo necesitas y levanta un pie del piso.",
-         "Dibuja círculos amplios con la punta del pie, 15 s en cada sentido.",
-         "Busca el rango máximo en cada dirección, sin forzar.",
-         "Si escuchas chasquidos sin dolor, es normal."],
-  watch:"Mueve solo el tobillo. La rodilla y la pierna se quedan quietas."}
-]},
-
-{block:"Bloque 2 — Equilibrio funcional (10 min)",items:[
- {name:"Balance a una pierna · ojos abiertos",dose:"2 × 30 s cada pierna",q:"single leg balance exercise standing",
-  phases:[{l:"Serie 1 · derecha",s:30},{l:"Serie 1 · izquierda",s:30},{l:"Serie 2 · derecha",s:30},{l:"Serie 2 · izquierda",s:30}],
-  steps:["Párate sobre una pierna, rodilla ligeramente flexionada.",
-         "La otra rodilla sube hasta la altura de la cadera.",
-         "Fija la mirada en un punto de la pared a la altura de los ojos.",
-         "Reparte el peso entre el talón y los dedos. Deja que el pie trabaje."],
-  watch:"Si te tambaleas mucho, el problema es el tobillo, no el equilibrio. Mejora con las semanas."},
-
- {name:"Balance a una pierna · ojos cerrados",dose:"2 × 20 s cada pierna",q:"single leg balance eyes closed",
-  phases:[{l:"Serie 1 · derecha",s:20},{l:"Serie 1 · izquierda",s:20},{l:"Serie 2 · derecha",s:20},{l:"Serie 2 · izquierda",s:20}],
-  steps:["Misma posición que el ejercicio anterior.",
-         "Cierra los ojos por completo antes de que empiece el conteo.",
-         "Sin la vista, el tobillo y el oído interno hacen todo el trabajo.",
-         "Si pierdes el equilibrio, reposiciona y continúa sin detener el reloj."],
-  watch:"Hazlo cerca de una pared. Es normal durar mucho menos que con los ojos abiertos."},
-
- {name:"Single-leg RDL sin peso",dose:"2 × 8 reps cada pierna",q:"single leg romanian deadlift bodyweight",
-  phases:[{l:"Serie 1 · derecha",s:40},{l:"Serie 1 · izquierda",s:40},{l:"Serie 2 · derecha",s:40},{l:"Serie 2 · izquierda",s:40}],
-  steps:["Párate sobre una pierna, la otra extendida hacia atrás.",
-         "Empuja la cadera hacia atrás mientras el torso baja al frente.",
-         "El cuerpo forma una línea recta desde la cabeza hasta el talón trasero.",
-         "Baja hasta tocar el piso con las manos, sube apretando el glúteo."],
-  watch:"Espalda plana, nunca redondeada. La cadera no debe abrirse hacia un lado."},
-
- {name:"Bird dog",dose:"2 × 10 reps cada lado",q:"bird dog exercise form",
-  phases:[{l:"Serie 1 · brazo derecho",s:40},{l:"Serie 1 · brazo izquierdo",s:40},{l:"Serie 2 · brazo derecho",s:40},{l:"Serie 2 · brazo izquierdo",s:40}],
-  steps:["En cuatro apoyos: manos bajo los hombros, rodillas bajo la cadera.",
-         "Extiende brazo derecho y pierna izquierda al mismo tiempo.",
-         "Mantén 2 segundos en la extensión máxima.",
-         "Regresa controlado sin tocar el piso y repite."],
-  watch:"La cadera no debe rotar. Imagina un vaso de agua en tu espalda baja."},
-
- {name:"Búlgara isométrica · sin peso",dose:"2 × 20 s cada pierna",q:"bulgarian split squat isometric hold",
-  phases:[{l:"Serie 1 · derecha",s:20},{l:"Serie 1 · izquierda",s:20},{l:"Serie 2 · derecha",s:20},{l:"Serie 2 · izquierda",s:20}],
-  steps:["Empeine del pie trasero sobre una silla o el borde de la cama.",
-         "Pie delantero suficientemente adelante para que la rodilla no pase los dedos.",
-         "Baja hasta que el muslo delantero quede casi paralelo al piso.",
-         "Mantén esa posición todo el tiempo, sin subir ni bajar."],
-  watch:"Torso vertical. El peso en el talón delantero, no en la punta."}
-]},
-
-{block:"Bloque 3 — Estiramiento estático (5 min)",items:[
- {name:"Pecho en marco de puerta",dose:"45 s cada lado",q:"doorway chest stretch",
-  phases:[{l:"Lado derecho",s:45},{l:"Lado izquierdo",s:45}],
-  steps:["Antebrazo apoyado en el marco, codo a la altura del hombro.",
-         "Da un paso adelante con la pierna del mismo lado.",
-         "Gira el torso lentamente en dirección contraria al brazo apoyado.",
-         "Respira profundo: en cada exhalación cede un poco más."],
-  watch:"Estiramiento en el pecho, no en el hombro. Si duele el hombro, baja el codo."},
-
- {name:"Hombro cruzado",dose:"30 s cada lado",q:"cross body shoulder stretch",
-  phases:[{l:"Lado derecho",s:30},{l:"Lado izquierdo",s:30}],
-  steps:["Cruza el brazo derecho por delante del pecho, bien extendido.",
-         "Con el antebrazo izquierdo, engánchalo y acércalo al cuerpo.",
-         "Mantén el hombro derecho hacia abajo, no lo dejes subir.",
-         "Presión constante, sin rebotes."],
-  watch:"Si no sientes nada, estás subiendo el hombro. Bájalo y aumenta la presión."},
-
- {name:"Flexor de cadera",dose:"45 s cada lado",q:"kneeling hip flexor stretch",
-  phases:[{l:"Lado derecho",s:45},{l:"Lado izquierdo",s:45}],
-  steps:["Rodilla derecha en el piso sobre algo acolchado, pie izquierdo adelante.",
-         "Aprieta el glúteo derecho con fuerza. Esto es lo que activa el estiramiento.",
-         "Empuja la cadera hacia adelante manteniendo el torso vertical.",
-         "Para más intensidad, sube el brazo derecho e inclínate a la izquierda."],
-  watch:"No arquees la espalda baja. El glúteo apretado lo previene."},
-
- {name:"Isquiotibial",dose:"45 s cada lado",q:"standing hamstring stretch",
-  phases:[{l:"Lado derecho",s:45},{l:"Lado izquierdo",s:45}],
-  steps:["Talón derecho apoyado en una silla baja o escalón, pierna extendida.",
-         "Pie en flexión, dedos apuntando hacia arriba.",
-         "Dobla desde la cadera, no desde la espalda, llevando el pecho al muslo.",
-         "Mantén la rodilla casi recta pero sin bloquearla por completo."],
-  watch:"Si redondeas la espalda, estiras la espalda y no el isquiotibial. Baja la altura."},
-
- {name:"Pantorrilla en pared",dose:"30 s cada lado",q:"calf stretch against wall",
-  phases:[{l:"Lado derecho",s:30},{l:"Lado izquierdo",s:30}],
-  steps:["Manos en la pared, pierna derecha atrás bien extendida.",
-         "Talón trasero completamente pegado al piso.",
-         "Empuja la pared mientras acercas la cadera hacia ella.",
-         "Dedos del pie trasero apuntando al frente, no hacia afuera."],
-  watch:"Si el talón se levanta, acerca el pie. Esa es la señal de que fuiste muy lejos."}
-]}];
-
-/* ---------- rutinas: la de estiramiento viene incluida; las demas las crea el usuario ---------- */
-const BLOCK_NAMES=['Activación','Equilibrio funcional','Estiramiento estático'];
-const BUILTIN={id:'estiramiento',name:'Equilibrio + estiramiento',builtin:true,
-  note:'Orden fijo: activación → equilibrio → estático. Nunca estiramiento estático antes de entrenar con pesas.',
-  blocks:DATA.map((b,k)=>({name:BLOCK_NAMES[k]||b.block,items:b.items}))};
-
+<script type="module">
+import {BUILTIN,compile,dur,phasesOf,doseOf} from './rutina-data.js';
+import {loadLocal as bmLoad,saveLocal as bmSave,pull as bmPull,push as bmPush} from './metricas/sync.js';
+// App Android (Capacitor, health-app/): sus plugins propios; null en la web.
+// Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
+const nativeApp=()=>{try{const c=(window.parent!==window&&parent.Capacitor)||window.Capacitor;return c?.isNativePlatform?.()&&c.Plugins?.Native||null;}catch(e){return null;}};
+// Vibracion corta al tocar (la del teclado del sistema, solo en la app)
+const haptic=k=>{const n=nativeApp();if(n)n.haptic({kind:k||'key'}).catch(()=>{});};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
 function fmt(s){return pad(Math.floor(s/60))+':'+pad(s%60);}
 
-// Ejercicio propio: {name,type:'reps'|'time',sets,reps,secs,rest,kg,sides,note}
-function phasesOf(x){
-  const out=[],sides=x.sides?['derecho','izquierdo']:[''];
-  for(let s=1;s<=x.sets;s++){
-    sides.forEach(sd=>out.push({l:`Serie ${s}/${x.sets}`+(sd?' · '+sd:''),s:x.type==='time'?x.secs:0,reps:x.type==='reps'?x.reps:0}));
-    if(x.rest&&s<x.sets)out.push({l:'Descanso',s:x.rest,rest:true});
-  }
-  return out;
-}
-const doseOf=x=>`${x.sets} × ${x.type==='time'?x.secs+' s':x.reps+' reps'}${x.sides?' c/lado':''}${x.kg?' · '+x.kg+' kg':''}`;
-function compile(r){
-  if(r.builtin)return r.blocks.flatMap(b=>b.items.map(it=>({...it,block:b.name})));
-  return (r.items||[]).map(x=>({name:x.name,dose:doseOf(x),phases:phasesOf(x),steps:[],note:x.note||'',q:x.name+' exercise',block:'',sets:x.sets,reps:x.type==='reps'?x.reps:0}));
-}
-// Duracion estimada: las series por repeticiones cuentan ~3 s por rep
-const dur=it=>it.phases.reduce((a,p)=>a+(p.s||p.reps*3),0);
 
 /* ---------- estado y persistencia ---------- */
 const LS_KEY='health_rutina_v1';
@@ -468,13 +351,18 @@ function renderSteps(){
     choose(i);
   });
 }
+let showDone=false; // los ejercicios hechos se pliegan en una fila
 function renderTiles(){
-  const d=done(),cur=current();let last=null;
-  $('tiles').innerHTML=items.map((it,i)=>{
+  const d=done(),cur=current(),nd=nDone();let last=null;
+  const vis=i=>showDone||!d[i]||i===cur;
+  $('tiles').innerHTML=(nd&&nd<items.length?`<button class="donerow" id="doneToggle"><span><b>✓</b> ${nd} ${nd===1?'hecho':'hechos'}</span><span>${showDone?'Ocultar ▴':'Mostrar ▾'}</span></button>`:'')+
+    items.map((it,i)=>{
+    if(!vis(i)&&nd<items.length)return '';
     const h=it.block&&it.block!==last?`<div class="bh">${esc(it.block)}</div>`:'';last=it.block;
     return h+`<div class="tile${d[i]?' done':''}${i===cur&&!d[i]?' now':''}" data-i="${i}">
       <button class="tb" data-k="${i}" aria-label="${d[i]?'Desmarcar':'Marcar hecho'}">${d[i]?'✓':i===T.i?'▶':i+1}</button>
       <div class="tt"><b>${esc(it.name)}</b><small>${esc(it.dose)}</small></div><span class="muted">${fmt(dur(it))}</span></div>`;}).join('');
+  if($('doneToggle'))$('doneToggle').onclick=()=>{showDone=!showDone;renderTiles();};
   $('tiles').querySelectorAll('.tile').forEach(t=>t.onclick=e=>{
     const i=+t.dataset.i;
     if(e.target.closest('.tb'))setDone(i,!done()[i]);
@@ -501,7 +389,9 @@ function renderHero(){
   const head=it.block?`${label} · ${esc(it.block)}`:label;
   let ctrl;
   if(!run)ctrl=`<button class="btn blue" id="hStart">▶ Iniciar</button><button class="btn" id="hDone">${d?'↺ Desmarcar':'✓ Hecho'}</button>`;
-  else if(ph.reps)ctrl=`<button class="btn green" id="hSet">✓ Serie hecha</button><button class="btn" id="hStop" aria-label="Detener">■</button>`;
+  else if(ph.reps)ctrl=(it.src!==undefined?`<div class="adj"><div class="ad"><button data-a="r" data-d="-1" aria-label="Menos reps">−</button><span><b id="aReps">${T.reps}</b> reps</span><button data-a="r" data-d="1" aria-label="Más reps">+</button></div>
+      <div class="ad"><button data-a="k" data-d="-2.5" aria-label="Menos peso">−</button><span><b id="aKg">${T.kg||0}</b> kg</span><button data-a="k" data-d="2.5" aria-label="Más peso">+</button></div></div>`:'')+
+    `<button class="btn green" id="hSet">✓ Serie hecha</button><button class="btn" id="hStop" aria-label="Detener">■</button>`;
   else ctrl=`<button class="btn blue" id="hPause">${T.paused?'▶ Seguir':'❚❚ Pausar'}</button><button class="btn" id="hSkip">Saltar ›</button><button class="btn" id="hStop" aria-label="Detener">■</button>`;
   el.innerHTML=`<div class="clock">
       <div class="ring" id="ring"><svg viewBox="0 0 120 120"><circle class="trk" cx="60" cy="60" r="52"/>
@@ -526,6 +416,11 @@ function renderHero(){
   on('hPause',togglePause);
   on('hSkip',()=>nextPhase());
   on('hStop',stopAll);
+  el.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
+    const d=+b.dataset.d;haptic('tick');
+    if(b.dataset.a==='r')T.reps=Math.max(0,T.reps+d);else T.kg=Math.max(0,Math.round(((T.kg||0)+d)*10)/10);
+    $('aReps').textContent=T.reps;$('aKg').textContent=T.kg||0;drawTime();
+  });
   drawTime();
   heroObs.disconnect();heroObs.observe($('ring'));
 }
@@ -538,12 +433,13 @@ function drawTime(){
     if(!run){
       big=it.reps?`${it.sets}×${it.reps}`:fmt(dur(it));
       small=it.reps?'series × reps':'duración';
-    }else if(ph.reps){big=ph.reps;small='reps · '+ph.l;}
+    }else if(ph.reps){big=T.reps;small='reps · '+ph.l;}
     else{big=fmt(Math.max(T.left,0));frac=Math.max(T.left,0)/ph.s;
       small=ph.rest?'Descanso · luego '+(it.phases[T.p+1]?.l||''):ph.l;}
     $('cBig').textContent=big;$('cSmall').textContent=small;
     $('ring').className='ring'+(run?'':' idle')+(ph&&ph.rest?' rest':'');
     $('arc').style.strokeDashoffset=C*(1-frac);
+    $('arc').style.strokeLinecap=frac>=.999?'butt':'round'; // lleno: sin muesca arriba
   }
   // barra fija: progreso siempre; el mini reloj solo si el grande no se ve
   const n=nDone(),started=n>0||T.i!==null;
@@ -555,7 +451,7 @@ function drawTime(){
     const ph=items[T.i].phases[T.p];
     mini.classList.toggle('rest',!!ph.rest);
     $('mName').textContent=items[T.i].name+' · '+ph.l;
-    $('mTime').textContent=ph.reps?ph.reps+' reps':fmt(Math.max(T.left,0));
+    $('mTime').textContent=ph.reps?T.reps+' reps':fmt(Math.max(T.left,0));
     $('mBtn').textContent=ph.reps?'✓ Serie':T.paused?'▶':'❚❚';
     $('mBtn').onclick=ph.reps?()=>nextPhase():togglePause;
   }
@@ -566,6 +462,7 @@ function renderAll(){renderHead();renderSteps();renderHero();renderTiles();paint
 
 /* ---------- marcar y cambiar de rutina ---------- */
 function setDone(i,v){
+  haptic(v?'key':'tick');
   if(v)done()[i]=true;else delete done()[i];
   if(!v&&sel===null)sel=i;
   if(v&&sel===i)sel=null;
@@ -580,40 +477,59 @@ function pick(id){
 
 /* ---------- temporizador ---------- */
 const spoken=l=>l.replace(/(\d+)\/(\d+)/,'$1 de $2').replace(' · ',', ');
+// El reloj va por hora de fin (T.end): si el navegador frena los timers con la
+// pantalla apagada o la app en segundo plano, al volver marca el tiempo real.
 function start(i,p){
   clearInterval(T.id);clearTimeout(T.to);
   const it=items[i],ph=it.phases[p];
-  T={i,p,left:ph.s,paused:false,id:null,to:null};sel=i;
+  const kg=T.i===i?T.kg:it.kg; // el peso ajustado sigue en las series siguientes
+  T={i,p,left:ph.s,end:ph.s?Date.now()+ph.s*1000:0,paused:false,id:null,to:null,kg,reps:ph.reps||0};sel=i;
   wakeOn(true); // la pantalla no se apaga mientras corre el temporizador
   const pre=p===0?it.name+'. ':'';
   if(ph.rest)say('Descanso. '+ph.s+' segundos.');
   else if(ph.reps)say(pre+spoken(ph.l)+'. '+ph.reps+' repeticiones.');
   else say(pre+spoken(ph.l)+'. Comienza.');
-  if(ph.s)T.id=setInterval(tick,1000);
+  if(ph.s)T.id=setInterval(tick,250);
+  nativeTimer();
   renderAll();
   if(p===0&&innerWidth<=900)$('hero').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function tick(){
-  if(T.paused)return;
-  T.left--;drawTime();
-  if(T.left===3)beep(1);
-  if(T.left<=0)nextPhase();
+  if(T.paused||!T.end)return;
+  const left=Math.ceil((T.end-Date.now())/1000);
+  if(left===T.left)return;
+  const prev=T.left;T.left=left;drawTime();
+  if(prev>3&&left<=3&&left>0)beep(1);
+  if(left<=0)nextPhase();
 }
 function togglePause(){
-  T.paused=!T.paused;say(T.paused?'Pausa':'Seguimos');renderHero();drawTime();
+  T.paused=!T.paused;haptic();
+  if(T.paused)T.end=0;else T.end=Date.now()+T.left*1000;
+  say(T.paused?'Pausa':'Seguimos');nativeTimer();renderHero();drawTime();
+}
+// App: aviso del sistema al terminar la cuenta, por si la app esta en segundo
+// plano (la app lo programa al ocultarse y lo cancela al volver).
+function nativeTimer(){
+  const n=nativeApp();if(!n?.timer)return;
+  if(T.i===null||T.paused||!T.end){n.timer({at:0}).catch(()=>{});return;}
+  const it=items[T.i],ph=it.phases[T.p],nx=it.phases[T.p+1];
+  n.timer({at:T.end,title:ph.rest?'Descanso terminado':it.name,
+    body:ph.rest?`${it.name} · ${nx?.l||'sigue'}`:`Terminó ${ph.l}`+(nx?` · sigue ${nx.l}`:'')}).catch(()=>{});
 }
 function nextPhase(){
   if(T.i===null)return;
   clearInterval(T.id);
   const i=T.i,it=items[i],ph=it.phases[T.p],next=T.p+1;
   if(!ph.reps){beep(2);if(navigator.vibrate)navigator.vibrate([220,110,220]);}
+  else{haptic();logSet(it,T.kg,T.reps);}
   if(next<it.phases.length){
     if(ph.reps)start(i,next);
-    else{T.left=0;drawTime();T.to=setTimeout(()=>start(i,next),1200);}
+    else{T.left=0;T.end=0;nativeTimer();drawTime();T.to=setTimeout(()=>start(i,next),1200);}
     return;
   }
+  rememberKg(it,T.kg);
   say('Ejercicio completado.');
-  T={i:null,p:0,left:0,paused:false,id:null,to:null};
+  T={i:null,p:0,left:0,paused:false,id:null,to:null};nativeTimer();
   sel=null;
   if(!done()[i])setDone(i,true);else renderAll();
   if(!state.auto){sel=i;renderAll();}
@@ -621,18 +537,45 @@ function nextPhase(){
 }
 function stopAll(){
   clearInterval(T.id);clearTimeout(T.to);
-  T={i:null,p:0,left:0,paused:false,id:null,to:null};
+  T={i:null,p:0,left:0,paused:false,id:null,to:null};nativeTimer();
   if(autoWake)wakeOff();
   renderAll();
 }
+/* ---------- series hechas -> Metricas (PRs y volumen) ---------- */
+// Cada "Serie hecha" con peso queda en la sesion de hoy de Metricas.
+let bm=null;
+bmPull().then(r=>{const l=bmLoad();bm=r&&(r.lastModified||0)>(l?.lastModified||0)?r:(l||r);}).catch(()=>{});
+// Los mismos ejercicios por defecto que Metricas (si la lista aun esta vacia)
+const BM_DEFAULT=[['squat','Sentadilla'],['bench','Press Banca'],['deadlift','Peso Muerto'],['ohp','Press Militar'],['row','Remo Barra'],['pullup','Dominadas']]
+  .map(([id,name])=>({id,name,custom:false}));
+const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+let bmTimer=null;
+function logSet(it,kg,reps){
+  if(it.src===undefined||!(kg>0)||!(reps>0))return;
+  bm=bm||bmLoad()||{bodyComp:[],sessions:[],exercises:[],lastModified:0};
+  bm.exercises=bm.exercises?.length?bm.exercises:[...BM_DEFAULT];
+  bm.sessions=bm.sessions||[];
+  let ex=bm.exercises.find(e=>norm(e.name)===norm(it.name));
+  if(!ex){ex={id:'r_'+Date.now().toString(36),name:it.name,custom:true};bm.exercises.push(ex);}
+  let s=bm.sessions.find(x=>x.date===today()&&x.from==='rutina');
+  if(!s){s={id:'s'+Date.now().toString(36),date:today(),sets:[],from:'rutina'};bm.sessions.push(s);
+    bm.sessions.sort((a,b)=>a.date.localeCompare(b.date));}
+  s.sets.push({exerciseId:ex.id,weight:kg,reps});
+  bm.lastModified=Date.now();bmSave(bm);
+  clearTimeout(bmTimer);
+  bmTimer=setTimeout(()=>{bmPush(bm);if(window.parent!==window)parent.postMessage({type:'health:reload',tab:'metricas'},location.origin);},1500);
+}
+// El peso que usaste queda como el de la proxima vez
+function rememberKg(it,kg){
+  const r=getR();
+  if(r.builtin||it.src===undefined||!r.items[it.src]||(r.items[it.src].kg||0)===(kg||0))return;
+  r.items[it.src].kg=kg||null;load();save();
+}
+
 $('resetBtn').onclick=()=>{
   if(!confirm('¿Reiniciar el progreso de hoy? Se desmarcan los '+items.length+' ejercicios.'))return;
-  stopAll();doneBy[active]={};sel=null;save();renderAll();window.scrollTo({top:0,behavior:'smooth'});
+  menu(false);stopAll();doneBy[active]={};sel=null;save();renderAll();window.scrollTo({top:0,behavior:'smooth'});
 };
-
-// App Android (Capacitor, health-app/): sus plugins propios; null en la web.
-// Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
-const nativeApp=()=>{try{const c=(window.parent!==window&&parent.Capacitor)||window.Capacitor;return c?.isNativePlatform?.()&&c.Plugins?.Native||null;}catch(e){return null;}};
 
 /* ---------- voz ---------- */
 let esVoice=null;
@@ -682,6 +625,11 @@ function beep(n){
     });
   }catch(e){}
 }
+
+/* ---------- menu de opciones ---------- */
+function menu(open){$('optMenu').hidden=!open;$('optBtn').setAttribute('aria-expanded',open);}
+$('optBtn').onclick=e=>{e.stopPropagation();menu($('optMenu').hidden);};
+document.addEventListener('click',e=>{if(!e.target.closest('.tools'))menu(false);});
 
 /* ---------- botones de preferencias ---------- */
 function paintTools(){

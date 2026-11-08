@@ -25,6 +25,9 @@
 
         </activity>
 
+        <!-- Aviso de fin de descanso con la app en segundo plano (TimerAlarm). -->
+        <receiver android:name=".TimerAlarm" android:exported="false" />
+
         <!-- Recordatorios por FCM (cron de habits-worker). -->
         <service
             android:name=".PushService"
@@ -46,4 +49,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Alarma exacta para el fin del descanso: en Android 13+ USE_EXACT_ALARM
+         (app de temporizador, se instala fuera de Play); antes, SCHEDULE_EXACT_ALARM. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 </manifest>
