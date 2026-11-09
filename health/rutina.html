@@ -435,7 +435,7 @@ function drawTime(){
       small=it.reps?'series × reps':'duración';
     }else if(ph.reps){big=T.reps;small='reps · '+ph.l;}
     else{big=fmt(Math.max(T.left,0));frac=Math.max(T.left,0)/ph.s;
-      small=ph.rest?'Descanso · luego '+(it.phases[T.p+1]?.l||''):ph.l;}
+      small=ph.rest?'Descanso · luego '+(it.phases[T.p+1]?.l||''):T.ready?ph.l:'Prepárate · '+ph.l;}
     $('cBig').textContent=big;$('cSmall').textContent=small;
     $('ring').className='ring'+(run?'':' idle')+(ph&&ph.rest?' rest':'');
     $('arc').style.strokeDashoffset=C*(1-frac);
@@ -483,12 +483,22 @@ function start(i,p){
   clearInterval(T.id);clearTimeout(T.to);
   const it=items[i],ph=it.phases[p];
   const kg=T.i===i?T.kg:it.kg; // el peso ajustado sigue en las series siguientes
-  T={i,p,left:ph.s,end:ph.s?Date.now()+ph.s*1000:0,paused:false,id:null,to:null,kg,reps:ph.reps||0};sel=i;
+  // Fase con tiempo: primero se anuncia y la cuenta arranca cuando la voz termina
+  // (T.end=0 mientras habla). El descanso arranca de una.
+  const waitVoice=ph.s&&!ph.rest&&state.voice;
+  T={i,p,left:ph.s,end:ph.s&&!waitVoice?Date.now()+ph.s*1000:0,ready:!waitVoice,cue:0,paused:false,id:null,to:null,kg,reps:ph.reps||0};sel=i;
+  const run=T;
   wakeOn(true); // la pantalla no se apaga mientras corre el temporizador
   const pre=p===0?it.name+'. ':'';
-  if(ph.rest)say('Descanso. '+ph.s+' segundos.');
-  else if(ph.reps)say(pre+spoken(ph.l)+'. '+ph.reps+' repeticiones.');
-  else say(pre+spoken(ph.l)+'. Comienza.');
+  let spoken_;
+  if(ph.rest)spoken_=say('Descanso. '+ph.s+' segundos.');
+  else if(ph.reps)spoken_=say(pre+spoken(ph.l)+'. '+ph.reps+' repeticiones.');
+  else spoken_=say(pre+spoken(ph.l)+'. Comienza.');
+  if(waitVoice)spoken_.then(()=>{
+    if(T!==run||T.ready)return; // se salto, detuvo o ya se reanudo a mano
+    T.ready=true;
+    if(!T.paused){T.end=Date.now()+T.left*1000;beep(1);nativeTimer();drawTime();}
+  });
   if(ph.s)T.id=setInterval(tick,250);
   nativeTimer();
   renderAll();
@@ -496,6 +506,10 @@ function start(i,p){
 }
 function tick(){
   if(T.paused||!T.end)return;
+  // avisos dentro de la fase (p. ej. "Cambia de sentido" a los 15 s)
+  const ph=items[T.i].phases[T.p],el=(Date.now()-(T.end-ph.s*1000))/1000;
+  const cue=ph.cues?.[T.cue];
+  if(cue&&el>=cue.t){T.cue++;beep(1);if(navigator.vibrate)navigator.vibrate(150);haptic();say(cue.say);}
   const left=Math.ceil((T.end-Date.now())/1000);
   if(left===T.left)return;
   const prev=T.left;T.left=left;drawTime();
@@ -504,7 +518,7 @@ function tick(){
 }
 function togglePause(){
   T.paused=!T.paused;haptic();
-  if(T.paused)T.end=0;else T.end=Date.now()+T.left*1000;
+  if(T.paused)T.end=0;else{T.end=Date.now()+T.left*1000;T.ready=true;}
   say(T.paused?'Pausa':'Seguimos');nativeTimer();renderHero();drawTime();
 }
 // App: aviso del sistema al terminar la cuenta, por si la app esta en segundo
@@ -524,7 +538,7 @@ function nextPhase(){
   else{haptic();logSet(it,T.kg,T.reps);}
   if(next<it.phases.length){
     if(ph.reps)start(i,next);
-    else{T.left=0;T.end=0;nativeTimer();drawTime();T.to=setTimeout(()=>start(i,next),1200);}
+    else{T.left=0;T.end=0;nativeTimer();drawTime();T.to=setTimeout(()=>start(i,next),700);}
     return;
   }
   rememberKg(it,T.kg);
@@ -585,18 +599,26 @@ function pickVoice(){
          || vs.find(v=>/^es/i.test(v.lang)) || null;
 }
 if('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
+// Devuelve una promesa que se cumple cuando la voz termina de hablar. Si el motor
+// no avisa (o es la app vieja, que responde al instante), se estima por palabras.
 function say(txt){
-  if(!state.voice)return;
+  if(!state.voice)return Promise.resolve();
+  const est=Math.min(7000,900+txt.split(/\s+/).length*380);
+  const guess=ms=>new Promise(r=>setTimeout(r,ms));
   const n=nativeApp(); // el WebView de la app no trae speechSynthesis
-  if(n){n.say({text:txt}).catch(()=>{});return;}
-  if(!('speechSynthesis' in window))return;
-  try{
-    speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(txt);
-    u.lang='es-419'; u.rate=1.05; u.pitch=1;
-    if(esVoice)u.voice=esVoice;
-    speechSynthesis.speak(u);
-  }catch(e){}
+  if(n)return n.say({text:txt}).then(r=>r&&r.done?null:guess(est)).catch(()=>guess(est));
+  if(!('speechSynthesis' in window))return Promise.resolve();
+  return new Promise(res=>{
+    const t=setTimeout(res,est+2500);
+    try{
+      speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(txt);
+      u.lang='es-419'; u.rate=1.05; u.pitch=1;
+      if(esVoice)u.voice=esVoice;
+      u.onend=u.onerror=()=>{clearTimeout(t);res();};
+      speechSynthesis.speak(u);
+    }catch(e){clearTimeout(t);res();}
+  });
 }
 
 /* ---------- pitido ---------- */

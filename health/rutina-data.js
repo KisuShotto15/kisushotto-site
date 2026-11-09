@@ -1,5 +1,6 @@
 // health/rutina-data.js — la rutina de estiramiento incluida y como se arma
 // cualquier rutina (fases, dosis, duracion). Lo usan Rutina y Hoy.
+// cues: avisos por voz dentro de una fase ({t: segundos desde el inicio, say}).
 export const DATA=[
 {block:"Bloque 1 — Activación (5 min)",items:[
  {name:"Círculos de cadera",dose:"30 s cada sentido",q:"hip circles exercise standing",
@@ -11,7 +12,7 @@ export const DATA=[
   watch:"No muevas los hombros ni el torso. Solo la cadera gira."},
 
  {name:"Círculos de hombro",dose:"30 s cada sentido",q:"arm circles shoulder warmup",
-  phases:[{l:"Hacia adelante",s:30},{l:"Hacia atrás",s:30}],
+  phases:[{l:"Hacia adelante",s:30,cues:[{t:20,say:"Últimos 10 segundos, círculos amplios"}]},{l:"Hacia atrás",s:30,cues:[{t:20,say:"Últimos 10 segundos, círculos amplios"}]}],
   steps:["De pie, brazos extendidos a los lados formando una T.",
          "Comienza con círculos pequeños y agrándalos progresivamente.",
          "El movimiento nace del hombro, no del codo ni de la muñeca.",
@@ -35,7 +36,7 @@ export const DATA=[
   watch:"La rodilla trasera estirada y la cadera baja. Ahí está el estiramiento del flexor."},
 
  {name:"Rotación de tobillo",dose:"30 s cada pie",q:"ankle circles mobility exercise",
-  phases:[{l:"Pie derecho",s:30},{l:"Pie izquierdo",s:30}],
+  phases:[{l:"Pie derecho",s:30,cues:[{t:15,say:"Cambia de sentido"}]},{l:"Pie izquierdo",s:30,cues:[{t:15,say:"Cambia de sentido"}]}],
   steps:["Apóyate si lo necesitas y levanta un pie del piso.",
          "Dibuja círculos amplios con la punta del pie, 15 s en cada sentido.",
          "Busca el rango máximo en cada dirección, sin forzar.",

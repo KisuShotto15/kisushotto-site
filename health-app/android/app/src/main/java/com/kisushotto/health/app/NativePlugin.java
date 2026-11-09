@@ -14,7 +14,10 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import com.google.firebase.messaging.FirebaseMessaging;
+import android.speech.tts.UtteranceProgressListener;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 // window.Capacitor.Plugins.Native en la web (nativeApp() en health/).
 @CapacitorPlugin(name = "Native", permissions = @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS }))
@@ -23,6 +26,20 @@ public class NativePlugin extends Plugin {
     // ── Voz: el WebView de Android no trae speechSynthesis ──────────────────
     private TextToSpeech tts;
     private boolean ttsReady = false;
+    // Llamadas a say() que esperan a que la voz termine (la rutina arranca la
+    // cuenta recien entonces). Una frase nueva corta la anterior: tambien se cumple.
+    private final Map<String, PluginCall> speaking = new HashMap<>();
+    private int nextId = 0;
+
+    private void spoke(String id) {
+        PluginCall c;
+        synchronized (speaking) { c = speaking.remove(id); }
+        if (c == null) return;
+        JSObject r = new JSObject();
+        r.put("ok", true);
+        r.put("done", true);
+        c.resolve(r);
+    }
 
     @Override
     public void load() {
@@ -32,6 +49,12 @@ public class NativePlugin extends Plugin {
             if (tts.isLanguageAvailable(es) < TextToSpeech.LANG_AVAILABLE) es = new Locale("es");
             tts.setLanguage(es);
             tts.setSpeechRate(1.05f);
+            tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                @Override public void onStart(String id) {}
+                @Override public void onDone(String id) { spoke(id); }
+                @Override public void onError(String id) { spoke(id); }
+                @Override public void onStop(String id, boolean interrupted) { spoke(id); }
+            });
             ttsReady = true;
         });
     }
@@ -44,10 +67,15 @@ public class NativePlugin extends Plugin {
     @PluginMethod
     public void say(PluginCall call) {
         String text = call.getString("text", "");
-        if (ttsReady && !text.isEmpty()) tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "health");
-        JSObject r = new JSObject();
-        r.put("ok", ttsReady);
-        call.resolve(r);
+        if (!ttsReady || text.isEmpty()) {
+            JSObject r = new JSObject();
+            r.put("ok", false);
+            call.resolve(r);
+            return;
+        }
+        String id = "h" + (nextId++);
+        synchronized (speaking) { speaking.put(id, call); }
+        if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) spoke(id);
     }
 
     // ── Pantalla encendida mientras corre el temporizador (sin Wake Lock en el WebView) ──
