@@ -59,7 +59,12 @@
   .dayinfo b{color:var(--text);}
   .kpi .num{margin-top:2px;}
   .kpi .bar,.kpi .sub{margin-top:12px;}
-  .wform{display:flex;gap:8px;margin-top:12px;}
+  /* Registro de peso: el campo a lo ancho, − y + debajo y Guardar al final, para que
+     quepa en la tarjeta angosta del celular sin salirse */
+  .wform{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+  .wform input,.wform #w-save{grid-column:1/-1;}
+  .wform input{order:-1;}
+  .wform .step{width:auto!important;}
 
   .two{display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:16px;}
   .two.b{grid-template-columns:2fr 1fr;}
