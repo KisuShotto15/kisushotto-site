@@ -40,6 +40,9 @@
   .ad span{min-width:64px;text-align:center;font-size:13px;color:var(--muted);}
   .ad b{font-size:17px;color:var(--text);font-variant-numeric:tabular-nums;}
   .last{margin-top:6px;font-size:13px;color:var(--text2);}
+  .last .up{display:block;margin-top:4px;color:var(--ok);font-weight:600;}
+  .tpl{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px dashed var(--line2);border-radius:14px;}
+  .tpl .row2{display:flex;gap:8px;flex-wrap:wrap;}
   .last b{color:var(--text);font-weight:600;}
   .rb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);white-space:nowrap;}
   .rb input{width:76px!important;}
@@ -208,7 +211,7 @@
       <div class="menu" id="optMenu" hidden>
         <button class="mi" id="voiceBtn">🔊 Voz</button>
         <button class="mi" id="soundBtn">🔔 Pitido</button>
-        <button class="mi" id="autoBtn" title="Al terminar un ejercicio, muestra el siguiente (no lo inicia)">⏭ Pasar al siguiente</button>
+        <button class="mi" id="autoBtn" title="Al terminar un ejercicio, empieza solo el siguiente">⏭ Auto-avance</button>
         <button class="mi" id="wakeBtn" title="Mantener la pantalla encendida">💡 Pantalla</button>
         <button class="mi sep" id="resetBtn">↺ Reiniciar el día</button>
       </div>
@@ -234,7 +237,16 @@
       <button class="x" value="cancel" aria-label="Cerrar">✕</button>
     </div>
     <div class="edb">
+      <div class="tpl" id="edTpl">
+        <div class="hint">Plantillas</div>
+        <div class="row2">
+          <button type="button" class="btn blue" data-tpl="AB">Día A + Día B (alternadas)</button>
+          <button type="button" class="btn" data-tpl="A">Solo Día A</button>
+          <button type="button" class="btn" data-tpl="B">Solo Día B</button>
+        </div>
+      </div>
       <label class="rb">Descanso entre ejercicios <input id="edRest" type="number" min="0" inputmode="numeric"> s</label>
+      <label class="rb">Después sigue <select id="edNext"></select></label>
       <div id="edList" style="display:flex;flex-direction:column;gap:10px"></div>
       <div class="edrow">
         <button type="button" class="btn" id="edAdd">＋ Ejercicio</button>
@@ -257,7 +269,7 @@
 </dialog>
 
 <script type="module">
-import {BUILTIN,compile,dur,phasesOf,doseOf} from './rutina-data.js';
+import {BUILTIN,compile,dur,phasesOf,doseOf,listOf,TEMPLATES} from './rutina-data.js';
 import {loadLocal as bmLoad,saveLocal as bmSave,pull as bmPull,push as bmPush} from './metricas/sync.js';
 // App Android (Capacitor, health-app/): sus plugins propios; null en la web.
 // Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
@@ -282,6 +294,14 @@ let curDate=today();
 // done por rutina; el formato viejo solo tenia "done" de la de estiramiento
 const doneByOf=r=>r.date===today()?(r.doneBy||(r.done?{[r.routine||'estiramiento']:r.done}:{})):{};
 let doneBy=doneByOf(saved);
+// Alternancia (A-B-A-B): si el ultimo dia se completo una rutina con "Despues
+// sigue", hoy toca esa. Si no se completo, se repite la misma.
+function rotated(s){
+  if(!s?.date||s.date===today())return s?.routine;
+  const r=(s.routines||[]).find(x=>x.id===s.routine),d=s.doneBy?.[s.routine];
+  return r?.next&&d&&compile(r).every((_,i)=>d[i])?r.next:s.routine;
+}
+active=rotated(saved)||active;
 const state={voice:true,sound:true,auto:true,wake:null};
 if(saved.prefs)['voice','sound','auto'].forEach(k=>{if(typeof saved.prefs[k]==='boolean')state[k]=saved.prefs[k];});
 
@@ -303,7 +323,9 @@ let syncTimer=null,syncPending=false;
 function snapshot(){
   // list: para que Hoy muestre los siguientes ejercicios sin conocer la rutina
   const list=items.map(it=>({name:it.name,dose:it.dose,dur:dur(it)}));
-  return {date:today(),routine:active,name:getR().name,doneBy,done:done(),total:items.length,list,routines:custom,
+  const r=getR(),nx=nDone()===items.length&&r.next&&routines().find(x=>x.id===r.next)||r;
+  const nextDay={name:nx.name,list:listOf(nx)};
+  return {date:today(),routine:active,name:getR().name,doneBy,done:done(),total:items.length,list,nextDay,routines:custom,
     prefs:{voice:state.voice,sound:state.sound,auto:state.auto},history:hist,updated:saved.updated||0};
 }
 function writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(snapshot()));}catch(e){}}
@@ -375,6 +397,7 @@ function renderTiles(){
   });
 }
 function choose(i){
+  clearTimeout(autoNext);
   if(T.i!==null&&T.i!==i){if(!confirm('¿Detener el ejercicio en curso?'))return;stopAll();}
   sel=i;renderAll();
   if(innerWidth<=900)$('hero').scrollIntoView({behavior:'smooth',block:'start'});
@@ -488,7 +511,7 @@ const spoken=l=>l.replace(/(\d+)\/(\d+)/,'$1 de $2').replace(' · ',', ');
 // El reloj va por hora de fin (T.end): si el navegador frena los timers con la
 // pantalla apagada o la app en segundo plano, al volver marca el tiempo real.
 function start(i,p){
-  clearInterval(T.id);clearTimeout(T.to);
+  clearInterval(T.id);clearTimeout(T.to);clearTimeout(autoNext);
   const it=items[i],ph=it.phases[p];
   const kg=T.i===i?T.kg:it.kg; // el peso ajustado sigue en las series siguientes
   // Fase con tiempo: primero se anuncia y la cuenta arranca cuando la voz termina
@@ -499,8 +522,9 @@ function start(i,p){
   wakeOn(true); // la pantalla no se apaga mientras corre el temporizador
   const pre=p===0?it.name+'. ':'';
   let spoken_;
-  if(ph.between)spoken_=say('Descanso. '+ph.s+' segundos. Sigue '+(items[i+1]?.name||'')+'.');
-  else if(ph.rest)spoken_=say('Descanso. '+ph.s+' segundos.');
+  const hint=hintNext;hintNext='';
+  if(ph.between)spoken_=say(hint+'Descanso. '+ph.s+' segundos. Sigue '+(items[i+1]?.name||'')+'.');
+  else if(ph.rest)spoken_=say(hint+'Descanso. '+ph.s+' segundos.');
   else if(ph.reps)spoken_=say(pre+spoken(ph.l)+'. '+ph.reps+' repeticiones.');
   else spoken_=say(pre+spoken(ph.l)+'. Comienza.');
   if(waitVoice)spoken_.then(()=>{
@@ -551,11 +575,13 @@ function nextPhase(){
     return;
   }
   rememberKg(it,T.kg);
-  say(ph.between&&items[i+1]?'Descanso terminado. Siguiente: '+items[i+1].name+'.':'Ejercicio completado.');
   T={i:null,p:0,left:0,paused:false,id:null,to:null};nativeTimer();
   sel=null;
   if(!done()[i])setDone(i,true);else renderAll();
-  if(!state.auto){sel=i;renderAll();}
+  // Auto-avance: empieza solo el siguiente pendiente (sin pausas para pensarlo)
+  const nx=state.auto?firstPending():-1;
+  if(nx>=0){say('Siguiente.').then(()=>{autoNext=setTimeout(()=>{if(T.i===null&&firstPending()===nx)start(nx,0);},300);});}
+  else{say('Ejercicio completado.');if(!state.auto){sel=i;renderAll();}}
   if(nDone()===items.length&&autoWake)wakeOff();
 }
 // Descanso: sumar o restar 15 s sin pausar
@@ -566,8 +592,9 @@ function addRest(d){
   T.total=Math.max(T.total+d,T.left);
   haptic('tick');nativeTimer();drawTime();
 }
+let autoNext=null;
 function stopAll(){
-  clearInterval(T.id);clearTimeout(T.to);
+  clearInterval(T.id);clearTimeout(T.to);clearTimeout(autoNext);
   T={i:null,p:0,left:0,paused:false,id:null,to:null};nativeTimer();
   if(autoWake)wakeOff();
   renderAll();
@@ -584,15 +611,19 @@ function lastTime(it){
   const s=[...(b.sessions||[])].reverse().find(x=>x.date<today()&&x.sets.some(z=>z.exerciseId===ex.id));
   if(!s)return '';
   const when=new Date(s.date+'T00:00:00').toLocaleDateString('es',{day:'numeric',month:'short'});
-  return `<div class="last">La vez pasada (${when}): <b>${s.sets.filter(z=>z.exerciseId===ex.id).map(z=>z.weight+'×'+z.reps).join(' · ')}</b></div>`;
+  const sets=s.sets.filter(z=>z.exerciseId===ex.id);
+  const up=sets.some(z=>z.reps>=15)?'<span class="up">↑ Llegaste a 15+ reps: hazlo más difícil</span>':'';
+  return `<div class="last">La vez pasada (${when}): <b>${sets.map(z=>z.weight?z.weight+'×'+z.reps:z.reps+' reps').join(' · ')}</b>${up}</div>`;
 }
 // Los mismos ejercicios por defecto que Metricas (si la lista aun esta vacia)
 const BM_DEFAULT=[['squat','Sentadilla'],['bench','Press Banca'],['deadlift','Peso Muerto'],['ohp','Press Militar'],['row','Remo Barra'],['pullup','Dominadas']]
   .map(([id,name])=>({id,name,custom:false}));
 const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
-let bmTimer=null;
+let bmTimer=null,hintNext='';
 function logSet(it,kg,reps){
-  if(it.src===undefined||!(kg>0)||!(reps>0))return;
+  if(it.src===undefined||!(reps>0))return; // sin peso (peso corporal) tambien cuenta
+  kg=kg>0?kg:0;
+  if(reps>=15)hintNext='Quince o más repeticiones: la próxima vez, hazlo más difícil. ';
   bm=bm||bmLoad()||{bodyComp:[],sessions:[],exercises:[],lastModified:0};
   bm.exercises=bm.exercises?.length?bm.exercises:[...BM_DEFAULT];
   bm.sessions=bm.sessions||[];
@@ -750,6 +781,11 @@ function openEditor(id){
   const r=id&&custom.find(x=>x.id===id);
   $('edName').value=r?r.name:'';
   $('edRest').value=r?(r.restBetween||0):90;
+  $('edTpl').hidden=!!r;
+  // Alternancia: al completar esta rutina, el dia siguiente toca la elegida aqui
+  $('edNext').innerHTML='<option value="">— (repetir esta)</option>'+custom.filter(x=>x.id!==id)
+    .map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  $('edNext').value=r?.next||'';
   draft=r?r.items.map(x=>({...x})):[blank()];
   $('edDel').hidden=!r;$('edPaste').hidden=true;$('edMsg').textContent='';
   renderDraft();$('ed').showModal();
@@ -785,7 +821,7 @@ function collect(){
     const q=c=>row.querySelector(c),type=q('.et').value,prev=draft[j]||blank(),v=Math.max(1,Math.round(num(q('.erp').value,10)));
     return {name:q('.en').value.trim(),type,sets:Math.min(20,Math.max(1,Math.round(num(q('.es').value,3)))),
       reps:type==='reps'?v:prev.reps,secs:type==='time'?v:prev.secs,rest:Math.max(0,Math.round(num(q('.ere').value,0))),
-      kg:q('.ek').value===''?null:num(q('.ek').value,null),sides:q('.esd').checked,note:q('.eno').value.trim()};
+      kg:q('.ek').value===''?null:num(q('.ek').value,null),sides:q('.esd').checked,note:q('.eno').value.trim(),fail:!!prev.fail};
   });
 }
 // "Sentadilla 4x8 60kg desc 120", "Plancha 3x45s", "Zancadas 3x12 c/l"
@@ -809,6 +845,19 @@ $('edParse').onclick=()=>{
   draft=collect().filter(x=>x.name);draft.push(...add);
   $('edText').value='';$('edPaste').hidden=true;$('edMsg').textContent='';renderDraft();
 };
+// Plantillas: llenan el editor, o crean Dia A y Dia B ya alternadas
+const uidR=k=>'r'+Date.now().toString(36)+k;
+document.querySelectorAll('[data-tpl]').forEach(b=>b.onclick=()=>{
+  const k=b.dataset.tpl,copy=tp=>({name:tp.name,restBetween:tp.restBetween,items:tp.items.map(x=>({...x}))});
+  if(k==='AB'){
+    if(T.i!==null)stopAll();
+    const a={id:uidR('a'),...copy(TEMPLATES[0])},bb={id:uidR('b'),...copy(TEMPLATES[1])};
+    a.next=bb.id;bb.next=a.id;custom.push(a,bb);active=a.id;
+    sel=null;load();save();renderAll();$('ed').close();return;
+  }
+  const tp=copy(TEMPLATES.find(x=>x.key===k));
+  $('edName').value=tp.name;$('edRest').value=tp.restBetween;draft=tp.items;renderDraft();
+});
 $('edSave').onclick=()=>{
   const name=$('edName').value.trim(),list=collect().filter(x=>x.name);
   const restBetween=Math.max(0,Math.round(num($('edRest').value,0)));
@@ -819,10 +868,10 @@ $('edSave').onclick=()=>{
     const r=custom.find(x=>x.id===editing);
     // si cambiaron los ejercicios, el avance de hoy de esta rutina ya no corresponde
     if(JSON.stringify(r.items.map(x=>x.name))!==JSON.stringify(list.map(x=>x.name)))delete doneBy[editing];
-    r.name=name;r.items=list;r.restBetween=restBetween;
+    r.name=name;r.items=list;r.restBetween=restBetween;r.next=$('edNext').value||null;
   }else{
     const id='r'+Date.now().toString(36);
-    custom.push({id,name,items:list,restBetween});active=id;
+    custom.push({id,name,items:list,restBetween,next:$('edNext').value||null});active=id;
   }
   sel=null;load();save();renderAll();$('ed').close();
 };
@@ -850,7 +899,7 @@ window.addEventListener('load',()=>window.healthFetch(SYNC_URL).then(r=>r.ok?r.j
   if((r.updated||0)>(saved.updated||0)&&T.i===null){
     // la nube es mas reciente: adoptar sus rutinas, progreso del dia y preferencias
     if(Array.isArray(r.routines))custom=r.routines;
-    if(r.routine)active=r.routine;
+    if(r.routine)active=rotated(r)||r.routine;
     doneBy=doneByOf(r);
     if(r.prefs)['voice','sound','auto'].forEach(k=>{if(typeof r.prefs[k]==='boolean')state[k]=r.prefs[k];});
     saved.updated=r.updated;

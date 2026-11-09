@@ -504,7 +504,7 @@ function renderPRs() {
       : `<span class="pr-delta same">—</span>`;
     return `<div class="pr-row">
       <span class="pr-name">${exName}</span>
-      <span class="pr-val">${pr.weight}<span class="pr-unit">kg × ${pr.reps}</span></span>
+      <span class="pr-val">${pr.weight ? `${pr.weight}<span class="pr-unit">kg × ${pr.reps}</span>` : `${pr.reps}<span class="pr-unit"> reps</span>`}</span>
       ${deltaHtml}
     </div>`;
   }).join('');
@@ -670,10 +670,11 @@ function renderSessions() {
   document.getElementById('sess-list').innerHTML = list.map(s => {
     const names = [...new Set(s.sets.map(z => exName(z.exerciseId)))];
     const vol = s.sets.reduce((a, z) => a + z.weight * z.reps, 0);
+    const reps = s.sets.reduce((a, z) => a + z.reps, 0);
     return `<button class="sess-row" onclick="openLogSession('${s.id}')">
       <span class="sd">${new Date(s.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>
       <span class="sx">${esc(names.join(', '))}</span>
-      <span class="sv">${s.sets.length} series · ${Math.round(vol).toLocaleString('en')} kg</span></button>`;
+      <span class="sv">${s.sets.length} series · ${vol ? Math.round(vol).toLocaleString('en') + ' kg' : reps + ' reps'}</span></button>`;
   }).join('');
 }
 
@@ -705,7 +706,7 @@ window.saveSession = function() {
     const ex = row.querySelector('.set-ex').value;
     const kg = parseFloat(row.querySelector('.set-kg').value);
     const reps = parseInt(row.querySelector('.set-reps').value);
-    if (ex && kg > 0 && reps > 0) sets.push({ exerciseId: ex, weight: kg, reps });
+    if (ex && reps > 0) sets.push({ exerciseId: ex, weight: kg > 0 ? kg : 0, reps }); // sin peso = peso corporal
   });
 
   if (!sets.length) { toast('Agrega al menos un set válido'); return; }

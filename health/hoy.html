@@ -318,6 +318,8 @@ function bestStreak(hist) {
 let rutinaHist = [];
 function paintRutina(r) {
   rutinaHist = r.history || [];
+  // Dia nuevo: la rutina que toca (alternancia A-B), guardada como nextDay
+  if (r.date !== today() && r.nextDay) r = { ...r, name: r.nextDay.name, list: r.nextDay.list, total: r.nextDay.list.length };
   paintWeek();
   const total = r.total || 15;
   const done = r.date === today() ? (r.done || {}) : {};

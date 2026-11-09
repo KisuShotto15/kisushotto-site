@@ -380,11 +380,13 @@ async function sendHealthPush(env, user, payload) {
   return sent;
 }
 
-// El aviso nombra la rutina que el usuario tiene elegida en Rutina
-function rutinaPush(rutina) {
+// El aviso nombra la rutina que toca hoy: en un dia nuevo, la siguiente de la
+// alternancia (nextDay, la guarda Rutina) o la misma de antes
+function rutinaPush(rutina, date) {
+  const name = rutina?.date !== date && rutina?.nextDay?.name ? rutina.nextDay.name : rutina?.name;
   return {
     title: 'Rutina de hoy',
-    body:  `${rutina?.name || 'Tu rutina'} te espera. No pierdas la racha.`,
+    body:  `${name || 'Tu rutina'} te espera. No pierdas la racha.`,
     tag:   'health-rutina',
     url:   '/#rutina',
   };
@@ -456,7 +458,7 @@ async function handleHealth(path, request, env) {
   if (path === '/health/test-push' && method === 'POST') {
     const b = await request.json().catch(() => ({}));
     const r = await healthGet(env, user, 'reminder');
-    const payload = b?.kind === 'weekly' ? await weeklySummary(env, user, localParts(r?.tz).date) : rutinaPush(await healthGet(env, user, 'rutina'));
+    const payload = b?.kind === 'weekly' ? await weeklySummary(env, user, localParts(r?.tz).date) : rutinaPush(await healthGet(env, user, 'rutina'), localParts(r?.tz).date);
     return json({ sent: await sendHealthPush(env, user, payload), payload });
   }
   // Habitos del usuario que se pueden vincular a la rutina
@@ -514,7 +516,7 @@ async function dispatchHealthReminder(env) {
     if (r.enabled && (await healthGet(env, user, 'reminder_sent')) !== date) {
       await healthSet(env, user, 'reminder_sent', date);
       const rutina = await healthGet(env, user, 'rutina');
-      if (!rutina?.history?.includes(date)) await sendHealthPush(env, user, rutinaPush(rutina)); // si ya la hizo, no avisa
+      if (!rutina?.history?.includes(date)) await sendHealthPush(env, user, rutinaPush(rutina, date)); // si ya la hizo, no avisa
     }
     // Resumen semanal: los domingos a la misma hora del recordatorio
     const sunday = new Date(date + 'T00:00:00Z').getUTCDay() === 0;

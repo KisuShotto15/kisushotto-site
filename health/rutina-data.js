@@ -143,7 +143,7 @@ export function phasesOf(x){
   }
   return out;
 }
-export const doseOf=x=>`${x.sets} × ${x.type==='time'?x.secs+' s':x.reps+' reps'}${x.sides?' c/lado':''}${x.kg?' · '+x.kg+' kg':''}`;
+export const doseOf=x=>`${x.sets} × ${x.fail?'al fallo':x.type==='time'?x.secs+' s':x.reps+' reps'}${x.sides?' c/lado':''}${x.kg?' · '+x.kg+' kg':''}`;
 export function compile(r){
   if(r.builtin)return r.blocks.flatMap(b=>b.items.map(it=>({...it,block:b.name})));
   // restBetween: descanso entre un ejercicio y el siguiente (ultima fase del ejercicio)
@@ -156,3 +156,16 @@ export const dur=it=>it.phases.reduce((a,p)=>a+(p.s||p.reps*3),0);
 
 // Lista corta (nombre, dosis, duracion) para Hoy
 export const listOf=r=>compile(r).map(it=>({name:it.name,dose:it.dose,dur:dur(it)}));
+
+// Plantillas para "+ Nueva rutina". Al fallo con peso corporal: la meta son 6-12
+// reps; con 15+ en una serie toca hacer el ejercicio mas dificil.
+const FALLO='Al fallo (o a 1-2 reps del fallo). Meta: 6-12 reps; si haces 15+ en una serie, hazlo más difícil: pies más elevados, bajada de 3 s o pausa abajo.';
+const ex=(name,o={})=>({name,type:'reps',sets:3,reps:12,secs:30,rest:150,kg:null,sides:false,fail:true,note:FALLO,...o});
+export const TEMPLATES=[
+  {key:'A',name:'Día A · Empuje + piernas',restBetween:150,items:[
+    ex('Flexiones diamante'),ex('Flexiones pike (pies elevados)'),
+    ex('Sentadilla búlgara',{sides:true}),ex('Elevación de talón a una pierna',{sides:true})]},
+  {key:'B',name:'Día B · Jalón + core',restBetween:150,items:[
+    ex('Dominadas'),ex('Dominadas supinas (chin-ups)'),
+    ex('Curl nórdico'),ex('Rueda abdominal (o bodysaw)')]},
+];
