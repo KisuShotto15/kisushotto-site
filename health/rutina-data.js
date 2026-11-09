@@ -146,7 +146,10 @@ export function phasesOf(x){
 export const doseOf=x=>`${x.sets} × ${x.type==='time'?x.secs+' s':x.reps+' reps'}${x.sides?' c/lado':''}${x.kg?' · '+x.kg+' kg':''}`;
 export function compile(r){
   if(r.builtin)return r.blocks.flatMap(b=>b.items.map(it=>({...it,block:b.name})));
-  return (r.items||[]).map((x,j)=>({src:j,kg:x.kg||null,name:x.name,dose:doseOf(x),phases:phasesOf(x),steps:[],note:x.note||'',q:x.name+' exercise',block:'',sets:x.sets,reps:x.type==='reps'?x.reps:0}));
+  // restBetween: descanso entre un ejercicio y el siguiente (ultima fase del ejercicio)
+  const n=(r.items||[]).length,between=x=>({l:'Descanso',s:r.restBetween,rest:true,between:true});
+  return (r.items||[]).map((x,j)=>({src:j,kg:x.kg||null,name:x.name,dose:doseOf(x),
+    phases:r.restBetween>0&&j<n-1?[...phasesOf(x),between(x)]:phasesOf(x),steps:[],note:x.note||'',q:x.name+' exercise',block:'',sets:x.sets,reps:x.type==='reps'?x.reps:0}));
 }
 // Duracion estimada: las series por repeticiones cuentan ~3 s por rep
 export const dur=it=>it.phases.reduce((a,p)=>a+(p.s||p.reps*3),0);

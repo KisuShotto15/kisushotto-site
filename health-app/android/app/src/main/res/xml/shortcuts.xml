@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Atajos al mantener presionado el icono. La url va como extra, igual que en
+     las notificaciones (MainActivity.pushUrl): la web cambia de pestana. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="rutina"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_rutina"
+        android:shortcutShortLabel="@string/sc_rutina">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.kisushotto.health.app"
+            android:targetClass="com.kisushotto.health.app.MainActivity">
+            <extra android:name="url" android:value="/#rutina" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="peso"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_peso"
+        android:shortcutShortLabel="@string/sc_peso">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.kisushotto.health.app"
+            android:targetClass="com.kisushotto.health.app.MainActivity">
+            <extra android:name="url" android:value="/#peso" />
+        </intent>
+    </shortcut>
+</shortcuts>

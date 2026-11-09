@@ -674,6 +674,7 @@ loadAll(); loadReminder(); loadHabits();
 window.addEventListener('message', e => {
   if (e.origin !== location.origin) return;
   if (e.data?.type === 'health:refresh') loadAll();
+  if (e.data?.type === 'health:weight') { toggleWeight(true); $('w-input').focus(); }
   if (e.data?.type === 'health:account') $('cuenta').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 </script>

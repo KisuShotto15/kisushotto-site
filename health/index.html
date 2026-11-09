@@ -155,7 +155,15 @@ import { hasSession, requestCode, verifyCode, passkeysUsable, passkeyLogin, curr
   // history: 'push' (el usuario cambio de pestana: el boton atras vuelve a la
   // anterior), 'replace' (arranque) o 'none' (ya viene de atras/adelante).
   let current = null;
+  // #peso (atajo del icono de la app): Hoy con el registro de peso abierto
+  function openWeight() {
+    const f = document.getElementById('f-hoy');
+    const send = () => f.contentWindow?.postMessage({ type: 'health:weight' }, location.origin);
+    if (f.src && !f.classList.contains('loading')) send();
+    else f.addEventListener('load', () => setTimeout(send, 300), { once: true });
+  }
   function show(tab, history_ = 'push') {
+    if (tab === 'peso') { show('hoy', 'replace'); openWeight(); return; }
     if (!TABS.includes(tab)) tab = 'hoy';
     TABS.forEach(t => {
       const f = document.getElementById('f-' + t);

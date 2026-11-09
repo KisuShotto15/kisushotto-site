@@ -39,6 +39,10 @@
   .ad button{width:36px;height:36px;border-radius:9px;border:0;background:var(--card);font-size:18px;font-weight:600;}
   .ad span{min-width:64px;text-align:center;font-size:13px;color:var(--muted);}
   .ad b{font-size:17px;color:var(--text);font-variant-numeric:tabular-nums;}
+  .last{margin-top:6px;font-size:13px;color:var(--text2);}
+  .last b{color:var(--text);font-weight:600;}
+  .rb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);white-space:nowrap;}
+  .rb input{width:76px!important;}
   .donerow{grid-column:1/-1;display:flex;align-items:center;gap:10px;justify-content:space-between;background:transparent;
     border:1px dashed var(--line2);border-radius:14px;padding:11px 14px;color:var(--muted);font-size:13px;font-weight:600;}
   .donerow b{color:var(--ok);}
@@ -204,7 +208,7 @@
       <div class="menu" id="optMenu" hidden>
         <button class="mi" id="voiceBtn">🔊 Voz</button>
         <button class="mi" id="soundBtn">🔔 Pitido</button>
-        <button class="mi" id="autoBtn" title="Al terminar un ejercicio, pasa al siguiente">⏭ Auto-avance</button>
+        <button class="mi" id="autoBtn" title="Al terminar un ejercicio, muestra el siguiente (no lo inicia)">⏭ Pasar al siguiente</button>
         <button class="mi" id="wakeBtn" title="Mantener la pantalla encendida">💡 Pantalla</button>
         <button class="mi sep" id="resetBtn">↺ Reiniciar el día</button>
       </div>
@@ -230,6 +234,7 @@
       <button class="x" value="cancel" aria-label="Cerrar">✕</button>
     </div>
     <div class="edb">
+      <label class="rb">Descanso entre ejercicios <input id="edRest" type="number" min="0" inputmode="numeric"> s</label>
       <div id="edList" style="display:flex;flex-direction:column;gap:10px"></div>
       <div class="edrow">
         <button type="button" class="btn" id="edAdd">＋ Ejercicio</button>
@@ -392,7 +397,8 @@ function renderHero(){
   else if(ph.reps)ctrl=(it.src!==undefined?`<div class="adj"><div class="ad"><button data-a="r" data-d="-1" aria-label="Menos reps">−</button><span><b id="aReps">${T.reps}</b> reps</span><button data-a="r" data-d="1" aria-label="Más reps">+</button></div>
       <div class="ad"><button data-a="k" data-d="-2.5" aria-label="Menos peso">−</button><span><b id="aKg">${T.kg||0}</b> kg</span><button data-a="k" data-d="2.5" aria-label="Más peso">+</button></div></div>`:'')+
     `<button class="btn green" id="hSet">✓ Serie hecha</button><button class="btn" id="hStop" aria-label="Detener">■</button>`;
-  else ctrl=`<button class="btn blue" id="hPause">${T.paused?'▶ Seguir':'❚❚ Pausar'}</button><button class="btn" id="hSkip">Saltar ›</button><button class="btn" id="hStop" aria-label="Detener">■</button>`;
+  else ctrl=(ph.rest?`<div class="adj"><div class="ad"><button data-r="-15" aria-label="15 segundos menos">−</button><span><b>15</b> s</span><button data-r="15" aria-label="15 segundos más">+</button></div></div>`:'')+
+    `<button class="btn blue" id="hPause">${T.paused?'▶ Seguir':'❚❚ Pausar'}</button><button class="btn" id="hSkip">Saltar ›</button><button class="btn" id="hStop" aria-label="Detener">■</button>`;
   el.innerHTML=`<div class="clock">
       <div class="ring" id="ring"><svg viewBox="0 0 120 120"><circle class="trk" cx="60" cy="60" r="52"/>
         <circle class="arc" id="arc" cx="60" cy="60" r="52" stroke-dasharray="${C}" stroke-dashoffset="0"/></svg>
@@ -403,6 +409,7 @@ function renderHero(){
       <div class="label">${head}</div>
       <h2>${esc(it.name)}</h2>
       <div class="sub">${esc(it.dose)} · ${fmt(dur(it))}</div>
+      ${lastTime(it)}
       <div class="ph">${work.map(o=>`<span class="${run&&o.j===T.p?'on':run&&o.j<T.p?'past':''}">${esc(o.p.l)}${o.p.s?' · '+o.p.s+'s':''}</span>`).join('')}</div>
       ${it.steps.length?`<ol class="st">${it.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>`:''}
       ${it.watch?`<div class="tip">⚠ ${esc(it.watch)}</div>`:''}
@@ -416,6 +423,7 @@ function renderHero(){
   on('hPause',togglePause);
   on('hSkip',()=>nextPhase());
   on('hStop',stopAll);
+  el.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>addRest(+b.dataset.r));
   el.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
     const d=+b.dataset.d;haptic('tick');
     if(b.dataset.a==='r')T.reps=Math.max(0,T.reps+d);else T.kg=Math.max(0,Math.round(((T.kg||0)+d)*10)/10);
@@ -434,8 +442,8 @@ function drawTime(){
       big=it.reps?`${it.sets}×${it.reps}`:fmt(dur(it));
       small=it.reps?'series × reps':'duración';
     }else if(ph.reps){big=T.reps;small='reps · '+ph.l;}
-    else{big=fmt(Math.max(T.left,0));frac=Math.max(T.left,0)/ph.s;
-      small=ph.rest?'Descanso · luego '+(it.phases[T.p+1]?.l||''):T.ready?ph.l:'Prepárate · '+ph.l;}
+    else{big=fmt(Math.max(T.left,0));frac=Math.min(1,Math.max(T.left,0)/T.total);
+      small=ph.between?'Descanso · sigue '+(items[i+1]?.name||''):ph.rest?'Descanso · luego '+(it.phases[T.p+1]?.l||''):T.ready?ph.l:'Prepárate · '+ph.l;}
     $('cBig').textContent=big;$('cSmall').textContent=small;
     $('ring').className='ring'+(run?'':' idle')+(ph&&ph.rest?' rest':'');
     $('arc').style.strokeDashoffset=C*(1-frac);
@@ -486,12 +494,13 @@ function start(i,p){
   // Fase con tiempo: primero se anuncia y la cuenta arranca cuando la voz termina
   // (T.end=0 mientras habla). El descanso arranca de una.
   const waitVoice=ph.s&&!ph.rest&&state.voice;
-  T={i,p,left:ph.s,end:ph.s&&!waitVoice?Date.now()+ph.s*1000:0,ready:!waitVoice,cue:0,paused:false,id:null,to:null,kg,reps:ph.reps||0};sel=i;
+  T={i,p,left:ph.s,total:ph.s,end:ph.s&&!waitVoice?Date.now()+ph.s*1000:0,ready:!waitVoice,cue:0,paused:false,id:null,to:null,kg,reps:ph.reps||0};sel=i;
   const run=T;
   wakeOn(true); // la pantalla no se apaga mientras corre el temporizador
   const pre=p===0?it.name+'. ':'';
   let spoken_;
-  if(ph.rest)spoken_=say('Descanso. '+ph.s+' segundos.');
+  if(ph.between)spoken_=say('Descanso. '+ph.s+' segundos. Sigue '+(items[i+1]?.name||'')+'.');
+  else if(ph.rest)spoken_=say('Descanso. '+ph.s+' segundos.');
   else if(ph.reps)spoken_=say(pre+spoken(ph.l)+'. '+ph.reps+' repeticiones.');
   else spoken_=say(pre+spoken(ph.l)+'. Comienza.');
   if(waitVoice)spoken_.then(()=>{
@@ -507,7 +516,7 @@ function start(i,p){
 function tick(){
   if(T.paused||!T.end)return;
   // avisos dentro de la fase (p. ej. "Cambia de sentido" a los 15 s)
-  const ph=items[T.i].phases[T.p],el=(Date.now()-(T.end-ph.s*1000))/1000;
+  const ph=items[T.i].phases[T.p],el=(Date.now()-(T.end-T.total*1000))/1000;
   const cue=ph.cues?.[T.cue];
   if(cue&&el>=cue.t){T.cue++;beep(1);if(navigator.vibrate)navigator.vibrate(150);haptic();say(cue.say);}
   const left=Math.ceil((T.end-Date.now())/1000);
@@ -528,7 +537,7 @@ function nativeTimer(){
   if(T.i===null||T.paused||!T.end){n.timer({at:0}).catch(()=>{});return;}
   const it=items[T.i],ph=it.phases[T.p],nx=it.phases[T.p+1];
   n.timer({at:T.end,title:ph.rest?'Descanso terminado':it.name,
-    body:ph.rest?`${it.name} · ${nx?.l||'sigue'}`:`Terminó ${ph.l}`+(nx?` · sigue ${nx.l}`:'')}).catch(()=>{});
+    body:ph.between?`Sigue: ${items[T.i+1]?.name||''}`:ph.rest?`${it.name} · ${nx?.l||'sigue'}`:`Terminó ${ph.l}`+(nx?` · sigue ${nx.l}`:'')}).catch(()=>{});
 }
 function nextPhase(){
   if(T.i===null)return;
@@ -542,12 +551,20 @@ function nextPhase(){
     return;
   }
   rememberKg(it,T.kg);
-  say('Ejercicio completado.');
+  say(ph.between&&items[i+1]?'Descanso terminado. Siguiente: '+items[i+1].name+'.':'Ejercicio completado.');
   T={i:null,p:0,left:0,paused:false,id:null,to:null};nativeTimer();
   sel=null;
   if(!done()[i])setDone(i,true);else renderAll();
   if(!state.auto){sel=i;renderAll();}
   if(nDone()===items.length&&autoWake)wakeOff();
+}
+// Descanso: sumar o restar 15 s sin pausar
+function addRest(d){
+  if(T.i===null)return;
+  if(T.paused||!T.end)T.left=Math.max(1,T.left+d);
+  else{T.end=Math.max(Date.now()+1000,T.end+d*1000);T.left=Math.ceil((T.end-Date.now())/1000);}
+  T.total=Math.max(T.total+d,T.left);
+  haptic('tick');nativeTimer();drawTime();
 }
 function stopAll(){
   clearInterval(T.id);clearTimeout(T.to);
@@ -558,7 +575,17 @@ function stopAll(){
 /* ---------- series hechas -> Metricas (PRs y volumen) ---------- */
 // Cada "Serie hecha" con peso queda en la sesion de hoy de Metricas.
 let bm=null;
-bmPull().then(r=>{const l=bmLoad();bm=r&&(r.lastModified||0)>(l?.lastModified||0)?r:(l||r);}).catch(()=>{});
+bmPull().then(r=>{const l=bmLoad();bm=r&&(r.lastModified||0)>(l?.lastModified||0)?r:(l||r);if(ready)renderHero();}).catch(()=>{});
+// "La vez pasada": las series de la ultima sesion (antes de hoy) con este ejercicio
+function lastTime(it){
+  const b=bm||bmLoad();
+  const ex=b?.exercises?.find(e=>norm(e.name)===norm(it.name));
+  if(!ex)return '';
+  const s=[...(b.sessions||[])].reverse().find(x=>x.date<today()&&x.sets.some(z=>z.exerciseId===ex.id));
+  if(!s)return '';
+  const when=new Date(s.date+'T00:00:00').toLocaleDateString('es',{day:'numeric',month:'short'});
+  return `<div class="last">La vez pasada (${when}): <b>${s.sets.filter(z=>z.exerciseId===ex.id).map(z=>z.weight+'×'+z.reps).join(' · ')}</b></div>`;
+}
 // Los mismos ejercicios por defecto que Metricas (si la lista aun esta vacia)
 const BM_DEFAULT=[['squat','Sentadilla'],['bench','Press Banca'],['deadlift','Peso Muerto'],['ohp','Press Militar'],['row','Remo Barra'],['pullup','Dominadas']]
   .map(([id,name])=>({id,name,custom:false}));
@@ -722,6 +749,7 @@ function openEditor(id){
   editing=id;
   const r=id&&custom.find(x=>x.id===id);
   $('edName').value=r?r.name:'';
+  $('edRest').value=r?(r.restBetween||0):90;
   draft=r?r.items.map(x=>({...x})):[blank()];
   $('edDel').hidden=!r;$('edPaste').hidden=true;$('edMsg').textContent='';
   renderDraft();$('ed').showModal();
@@ -783,6 +811,7 @@ $('edParse').onclick=()=>{
 };
 $('edSave').onclick=()=>{
   const name=$('edName').value.trim(),list=collect().filter(x=>x.name);
+  const restBetween=Math.max(0,Math.round(num($('edRest').value,0)));
   if(!name){$('edMsg').textContent='Ponle un nombre a la rutina';$('edName').focus();return;}
   if(!list.length){$('edMsg').textContent='Agrega al menos un ejercicio';return;}
   if(T.i!==null)stopAll();
@@ -790,10 +819,10 @@ $('edSave').onclick=()=>{
     const r=custom.find(x=>x.id===editing);
     // si cambiaron los ejercicios, el avance de hoy de esta rutina ya no corresponde
     if(JSON.stringify(r.items.map(x=>x.name))!==JSON.stringify(list.map(x=>x.name)))delete doneBy[editing];
-    r.name=name;r.items=list;
+    r.name=name;r.items=list;r.restBetween=restBetween;
   }else{
     const id='r'+Date.now().toString(36);
-    custom.push({id,name,items:list});active=id;
+    custom.push({id,name,items:list,restBetween});active=id;
   }
   sel=null;load();save();renderAll();$('ed').close();
 };

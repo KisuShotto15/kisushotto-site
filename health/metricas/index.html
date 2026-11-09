@@ -82,6 +82,11 @@ input,select{font-family:inherit;outline:none}
 
 /* ── PRs table ── */
 .pr-list{display:flex;flex-direction:column;gap:6px}
+.sess-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:10px 12px;background:var(--surf-2);border:1px solid var(--border);
+  border-radius:10px;color:var(--text);margin-bottom:6px}
+.sess-row .sd{font-size:12px;color:var(--text-2);min-width:56px}
+.sess-row .sx{flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sess-row .sv{font-size:12px;color:var(--text-2);white-space:nowrap}
 .pr-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf-2);border:1px solid var(--border);border-radius:8px}
 .pr-name{flex:1;font-size:13px;font-weight:500}
 .pr-val{font-size:14px;font-weight:700;color:var(--text)}
@@ -240,6 +245,11 @@ select.inp{cursor:pointer}
         </div>
       </div>
 
+      <div class="panel" style="margin-top:16px" id="panel-sess" hidden>
+        <div class="ptitle">Sesiones</div>
+        <div id="sess-list"></div>
+      </div>
+
       <div class="panel" style="margin-top:16px">
         <div class="ptitle">Volumen semanal</div>
         <div class="vol-row">
@@ -317,7 +327,7 @@ select.inp{cursor:pointer}
 <div class="modal-bg" id="modal-session">
   <div class="modal">
     <div class="modal-title">
-      Registrar sesión
+      <span id="sess-title">Registrar sesión</span>
       <span class="modal-close" onclick="closeModal('modal-session')">×</span>
     </div>
     <div class="form-group">
@@ -330,6 +340,7 @@ select.inp{cursor:pointer}
     <div id="sets-container"></div>
     <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:16px" onclick="addSetRow()">+ Añadir set</button>
     <button class="btn btn-primary" style="width:100%" onclick="saveSession()">Guardar sesión</button>
+    <button class="btn btn-ghost" id="sess-del" style="width:100%;margin-top:8px;color:var(--red)" onclick="deleteSession()" hidden>Eliminar sesión</button>
   </div>
 </div>
 
@@ -391,6 +402,7 @@ function render() {
   renderComp();
   renderPRs();
   renderVolume();
+  renderSessions();
   renderExList();
 }
 
@@ -630,14 +642,42 @@ window.saveComp = function() {
 };
 
 // ── Modal: Log sesión ──────────────────────────────────────────────────────
-window.openLogSession = function() {
-  document.getElementById('sess-date').value = today();
+// Sin id: sesion nueva. Con id: editar esa sesion (tambien las que anota Rutina).
+let editingSession = null;
+window.openLogSession = function(id) {
+  const s = id && S.sessions.find(x => x.id === id);
+  editingSession = s || null;
+  document.getElementById('sess-title').textContent = s ? 'Editar sesión' : 'Registrar sesión';
+  document.getElementById('sess-del').hidden = !s;
+  document.getElementById('sess-date').value = s ? s.date : today();
   document.getElementById('sets-container').innerHTML = '';
-  addSetRow(); addSetRow();
+  if (s) s.sets.forEach(addSetRow); else { addSetRow(); addSetRow(); }
   openModal('modal-session');
 };
+window.deleteSession = function() {
+  if (!editingSession || !confirm('¿Eliminar esta sesión?')) return;
+  S.sessions = S.sessions.filter(x => x !== editingSession);
+  editingSession = null;
+  save(); closeModal('modal-session'); renderPRs(); renderVolume(); renderSessions();
+  toast('Sesión eliminada');
+};
 
-window.addSetRow = function() {
+function renderSessions() {
+  const list = [...S.sessions].reverse().slice(0, 12);
+  document.getElementById('panel-sess').hidden = !list.length;
+  const exName = id => S.exercises.find(e => e.id === id)?.name || id;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  document.getElementById('sess-list').innerHTML = list.map(s => {
+    const names = [...new Set(s.sets.map(z => exName(z.exerciseId)))];
+    const vol = s.sets.reduce((a, z) => a + z.weight * z.reps, 0);
+    return `<button class="sess-row" onclick="openLogSession('${s.id}')">
+      <span class="sd">${new Date(s.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>
+      <span class="sx">${esc(names.join(', '))}</span>
+      <span class="sv">${s.sets.length} series · ${Math.round(vol).toLocaleString('en')} kg</span></button>`;
+  }).join('');
+}
+
+window.addSetRow = function(set) {
   const c = document.getElementById('sets-container');
   const row = document.createElement('div');
   row.className = 'set-row';
@@ -648,6 +688,11 @@ window.addSetRow = function() {
     <input type="number" class="inp set-reps" placeholder="5" min="1">
     <span class="set-del" onclick="this.parentElement.remove()">×</span>`;
   c.appendChild(row);
+  if (set?.exerciseId) {
+    row.querySelector('.set-ex').value = set.exerciseId;
+    row.querySelector('.set-kg').value = set.weight;
+    row.querySelector('.set-reps').value = set.reps;
+  }
 };
 
 window.saveSession = function() {
@@ -665,15 +710,17 @@ window.saveSession = function() {
 
   if (!sets.length) { toast('Agrega al menos un set válido'); return; }
 
-  S.sessions.push({ id: uid(), date, sets });
+  if (editingSession) Object.assign(editingSession, { date, sets });
+  else S.sessions.push({ id: uid(), date, sets });
   S.sessions.sort((a, b) => a.date.localeCompare(b.date));
+  editingSession = null;
 
-  save(); closeModal('modal-session'); renderPRs(); renderVolume();
+  save(); closeModal('modal-session'); renderPRs(); renderVolume(); renderSessions();
   toast('Sesión guardada');
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-function today() { return new Date().toISOString().slice(0, 10); }
+function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 window.closeModal = function(id) { document.getElementById(id).classList.remove('open'); };
