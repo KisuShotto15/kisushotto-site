@@ -12,6 +12,7 @@ mkdir -p "$OUT/icons" "$OUT/images"
 cp p2p-monitor/index.html            "$OUT/index.html"
 cp public/p2p-monitor/style.css      "$OUT/style.css"
 cp public/p2p-monitor/main.js        "$OUT/main.js"
+mkdir -p "$OUT/vendor" && cp public/p2p-monitor/vendor/* "$OUT/vendor/"
 
 # Rewrite manifest path: subdomain serves manifest.json at root
 sed -i 's|href="/manifests/p2p-monitor.json"|href="/manifest.json"|g' "$OUT/index.html"

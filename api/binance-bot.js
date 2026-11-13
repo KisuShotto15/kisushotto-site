@@ -11,6 +11,8 @@ import { fifoMatch, fifoShort, summarize, lotsSince, spreadCurve, timeBudget, sp
 
 // La unica serie de mercado global (grafico ya poblado para cualquier usuario).
 const GLOBAL_KEY = 'BancoDeVenezuela';
+// Volumen del grafico: igual para todos y caro de calcular (ver /monitor-vol).
+const VOL_CACHE = { at: 0, rows: null };
 
 // Llaves de OKX del usuario, descifradas (null si no conecto OKX).
 async function okxCreds(uid) {
@@ -385,7 +387,7 @@ export default async function handler(req, res) {
   }
 
   // Control del monitor server-side (alertas Telegram 24/7). No requiere creds Binance.
-  if (path === '/monitor-enable' || path === '/monitor-disable' || path === '/monitor-state' || path === '/monitor-heartbeat' || path === '/monitor-history') {
+  if (path === '/monitor-enable' || path === '/monitor-disable' || path === '/monitor-state' || path === '/monitor-heartbeat' || path === '/monitor-history' || path === '/monitor-vol') {
     try {
       await ensureSchema();
       if (path === '/monitor-enable') {
@@ -435,31 +437,41 @@ export default async function handler(req, res) {
       }
       if (path === '/monitor-history') {
         // Serie GLOBAL: mismo mercado, mismo grafico para todos (y ya poblado para
-        // un usuario nuevo). El cliente deriva las velas al vuelo (ver hxVisibleOhlc).
+        // un usuario nuevo). El cliente deriva las velas al vuelo.
         // Otros mercados (otra moneda u otro metodo) no tienen serie global: se usa la
         // que va grabando el monitor 24/7 del propio usuario, bajo la misma clave.
+        // since/since24 (ms): el cliente guarda las series en cache y solo pide lo nuevo; el
+        // filtro corre en Postgres, asi que el egress es de unos pocos puntos y no de
+        // la serie entera (megas, y creciendo) en cada apertura del grafico.
         const key = (params && params.key) || GLOBAL_KEY;
-        if (key !== GLOBAL_KEY) {
-          const own = await sql`SELECT hist_long -> ${key}::text AS l, hist24 -> ${key}::text AS d
-            FROM monitor_state WHERE user_id = ${user.uid}`;
-          const o = own[0] || {};
-          return res.status(200).json({ hist_long: { [key]: o.l || [] }, hist24: { [key]: o.d || [] }, vol: [] });
-        }
-        await ensureMarketHist();
-        const rows = await sql`SELECT hist_long, hist24 FROM market_hist WHERE pay = ${GLOBAL_KEY}`;
-        // Serie de volumen. Vive aparte, en market_snapshots: no toca hist_long/hist24.
-        // Es volumen ABSORBIDO, no inventario: may_avail5 es cuanto USDT hay parado en
+        const since = Math.max(0, Number(params && params.since) || 0);
+        const since24 = Math.max(0, Number(params && params.since24) || 0);
+        // jsonb_path_query_array con since=0 devuelve la serie entera.
+        const rows = key !== GLOBAL_KEY
+          ? await sql`SELECT
+              jsonb_path_query_array(COALESCE(hist_long -> ${key}::text, '[]'::jsonb), '$[*] ? (@.ts > $s)', jsonb_build_object('s', ${since}::bigint)) AS l,
+              jsonb_path_query_array(COALESCE(hist24 -> ${key}::text, '[]'::jsonb), '$[*] ? (@.ts > $s)', jsonb_build_object('s', ${since24}::bigint)) AS d
+              FROM monitor_state WHERE user_id = ${user.uid}`
+          : (await ensureMarketHist(), await sql`SELECT
+              jsonb_path_query_array(COALESCE(hist_long -> ${key}::text, '[]'::jsonb), '$[*] ? (@.ts > $s)', jsonb_build_object('s', ${since}::bigint)) AS l,
+              jsonb_path_query_array(COALESCE(hist24 -> ${key}::text, '[]'::jsonb), '$[*] ? (@.ts > $s)', jsonb_build_object('s', ${since24}::bigint)) AS d
+              FROM market_hist WHERE pay = ${GLOBAL_KEY}`);
+        const o = rows[0] || {};
+        return res.status(200).json({ hist_long: { [key]: o.l || [] }, hist24: { [key]: o.d || [] } });
+      }
+      if (path === '/monitor-vol') {
+        // Volumen ABSORBIDO, no inventario: may_avail5 es cuanto USDT hay parado en
         // el top 5 (un stock, casi plano de un cubo a otro y por eso ilegible como
         // barras). Lo que interesa es el flujo — cuanto se consumio entre dos muestras
         // consecutivas — asi que se suman las bajadas de disponible (las subidas son
         // reposicion, no operaciones). Se descartan los saltos con hueco temporal: si
         // el muestreo se corto, la caida acumulada no ocurrio en ese cubo.
         // Es por usuario (cada uno muestrea con su propio filtro de VES), asi que se
-        // suma dentro del usuario y se promedia entre usuarios por cubo de 30 min (el
-        // mismo paso de hist_long) para que las barras alineen con las velas.
-        let vol = [];
-        try {
-          vol = await sql`
+        // suma dentro del usuario y se promedia entre usuarios por cubo de 30 min.
+        // Es igual para todos y la consulta recorre 60 dias de snapshots: se cachea
+        // 10 min por instancia y el grafico la pide aparte, sin bloquear el precio.
+        if (!VOL_CACHE.rows || Date.now() - VOL_CACHE.at > 10 * 60000) {
+          VOL_CACHE.rows = await sql`
             WITH d AS (
               SELECT user_id, ts, may_avail5, rec_avail5,
                      LAG(ts)          OVER (PARTITION BY user_id ORDER BY ts) prev_ts,
@@ -480,8 +492,9 @@ export default async function handler(req, res) {
             )
             SELECT (bucket * 1000)::bigint ts, avg(may_s)::float may, avg(rec_s)::float rec
             FROM b GROUP BY 1 ORDER BY 1`;
-        } catch (e) { vol = []; }
-        return res.status(200).json({ ...(rows[0] || { hist_long: [], hist24: [] }), vol });
+          VOL_CACHE.at = Date.now();
+        }
+        return res.status(200).json({ vol: VOL_CACHE.rows });
       }
       await ensureMarketHist();
       // Sparkline: serie global para BDV, la del monitor del usuario para el resto.

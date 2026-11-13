@@ -437,12 +437,13 @@
           <div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">Máximo</div><div id="hx-max" style="font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--green)">—</div></div>
         </div>
         <div id="hx-ranges" style="display:flex;gap:6px;margin:4px 0 12px;flex-wrap:wrap;flex-shrink:0"></div>
-        <!-- flex:1: el canvas se come todo el alto que sobra en vez de quedarse fijo
+        <!-- flex:1: el grafico se come todo el alto que sobra en vez de quedarse fijo
              en 60vh, que en pantallas de escritorio dejaba una franja negra sin usar
              debajo de las fechas. min-height: piso para no aplastarse en un viewport
              bajo (ventana chica, teclado en movil). -->
-        <canvas id="hx-chart" style="display:block;width:100%;flex:1;min-height:280px"></canvas>
+        <div id="hx-chart" style="position:relative;width:100%;flex:1;min-height:280px"></div>
         <div id="hx-msg" style="display:none;flex:1;align-items:center;justify-content:center;color:var(--text-3);font-size:14px;padding:40px 8px;text-align:center"></div>
+        <div style="flex-shrink:0;margin-top:6px;font-size:11px;color:var(--text-3)">Toque largo para ver precios · pellizca o arrastra la escala para hacer zoom</div>
       </div>
 
       <span id="hero-small-lbl" style="display:none"></span>
@@ -753,7 +754,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=139"></script>
+<script src="/p2p-monitor/main.js?v=140"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

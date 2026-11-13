@@ -5352,19 +5352,20 @@ function renderSparkline() {
     '<span style="color:' + col + '">' + fmt(close) + fiatSuf() + ' (' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%)</span>' +
     ' <span style="color:var(--text-3);font-weight:400">· ' + fmt(min.price) + '–' + fmt(max.price) + '</span>';
 }
-window.addEventListener('resize', function() { try { renderSparkline(); } catch(e) {} try { if (HX.open) hxDraw(); } catch(e) {} });
+window.addEventListener('resize', function() { try { renderSparkline(); } catch(e) {} try { hxDrawOverlay(); } catch(e) {} });
 
 // ── Historial completo (overlay pantalla completa) ──────────────
-// Modelo de la vista, estilo TradingView: el timeframe fija el tamano de vela
-// (ya no lo elige el codigo solo segun el rango) y la ventana visible se guarda
-// como "cuantas velas entran en pantalla" (viewCount) + "hasta que instante
-// llega el borde derecho" (viewEndT). Panear mueve viewEndT; hacer zoom cambia
-// viewCount; cambiar de timeframe deja los dos igual, asi que el ancla (mismo
-// numero de velas, mismo borde derecho) se mantiene y el rango que cubre se
-// reescala solo. Todo el historial sigue siendo el mismo array de puntos ya
-// cargado — nada de esto pide datos nuevos al servidor.
-var HX = { open: false, series: [], vol: [], mode: 'candles', tf: '1h', viewCount: null, viewEndT: null,
-  drawMode: false, lines: [], linesRev: 0 };
+// Grafico con TradingView Lightweight Charts (Apache 2.0, vendorizada en vendor/):
+// paneo y zoom libres, escala de precio arrastrable y cruz que sigue el dedo en
+// movil (toque largo). Se carga recien en un momento ocioso tras abrir la app o al
+// abrir el grafico, asi que no pesa en el arranque.
+// Las velas se derivan al vuelo de la serie de puntos (hist_long + hist24) al
+// tamano del timeframe elegido; el servidor no precalcula velas.
+// Velocidad: las series viven en cache (IndexedDB). Al abrir se dibuja al instante
+// lo cacheado y al servidor solo se le piden los puntos posteriores al ultimo.
+var HX = { open: false, key: null, long: null, d24: [], series: [], vol: [], volAt: 0, syncAt: 0, syncP: null,
+  mode: 'candles', tf: '1h', drawMode: false, lines: [], drawing: null,
+  chart: null, main: null, mainMode: null, volS: null, ov: null, cs: [] };
 try { HX.mode = localStorage.getItem('p2p_hx_mode') || 'candles'; } catch(e) {}
 try { HX.tf = localStorage.getItem('p2p_hx_tf') || '1h'; } catch(e) {}
 var HX_TIMEFRAMES = [
@@ -5374,37 +5375,62 @@ var HX_TIMEFRAMES = [
   { id: '1d',  label: '1D',  ms: 24 * 3600000 },
   { id: '1w',  label: '1S',  ms: 7 * 24 * 3600000 }
 ];
-var HX_DEFAULT_CANDLES = 90, HX_MIN_CANDLES = 8, HX_MAX_CANDLES = 500;
+var HX_DEFAULT_CANDLES = 90;
+// La libreria trabaja en UTC: se corren los tiempos a la hora local para que ejes,
+// cruz y velas diarias (que arrancan a medianoche local) coincidan con el reloj.
+var HX_TZ = -new Date().getTimezoneOffset() * 60000;
+// Relativa a main.js: en kisushotto.com vive en /p2p-monitor/, en la PWA en la raiz.
+var HX_LIB = (function() {
+  try { var s = document.currentScript && document.currentScript.src; if (s) return s.replace(/[^\/]*$/, '') + 'vendor/lightweight-charts-4.2.3.js'; } catch (e) {}
+  return '/p2p-monitor/vendor/lightweight-charts-4.2.3.js';
+})();
 function hxTf() {
   for (var i = 0; i < HX_TIMEFRAMES.length; i++) if (HX_TIMEFRAMES[i].id === HX.tf) return HX_TIMEFRAMES[i];
   return HX_TIMEFRAMES[1];
 }
-function openHistory() {
-  HX.open = true;
-  HX.hoverX = null;
-  var hp = document.getElementById('hx-pay');
-  if (hp) hp.textContent = ' · ' + payLabel(ACTIVE_PAY);
-  document.getElementById('hx-overlay').style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-  // Entrada en el historial del navegador: el boton atras (movil) cierra el grafico
-  // en vez de salir de la app.
-  try { history.pushState({ hxOpen: true }, ''); } catch (e) {}
-  hxBindPointer();
-  hxRenderRanges();
-  hxLoad();
+
+var hxLibP = null;
+function hxLoadLib() {
+  if (window.LightweightCharts) return Promise.resolve();
+  if (!hxLibP) hxLibP = new Promise(function(res, rej) {
+    var s = document.createElement('script');
+    s.src = HX_LIB; s.async = true;
+    s.onload = res;
+    s.onerror = function() { hxLibP = null; rej(new Error('No se pudo cargar el gráfico')); };
+    document.head.appendChild(s);
+  });
+  return hxLibP;
 }
-function closeHistory(fromPop) {
-  if (!HX.open) return;
-  HX.open = false;
-  document.getElementById('hx-overlay').style.display = 'none';
-  document.body.style.overflow = '';
-  // Cierre por la UI (X): retroceder para consumir el estado que empujamos.
-  // Si vino del boton atras, el navegador ya lo consumio.
-  if (!fromPop) { try { history.back(); } catch (e) {} }
+
+// ── Cache (IndexedDB: la serie larga no cabe con holgura en localStorage) ──
+var hxDbP = null;
+function hxIdb() {
+  if (!hxDbP) hxDbP = new Promise(function(res) {
+    try {
+      var r = indexedDB.open('p2p-hx', 1);
+      r.onupgradeneeded = function() { r.result.createObjectStore('kv'); };
+      r.onsuccess = function() { res(r.result); };
+      r.onerror = function() { res(null); };
+    } catch (e) { res(null); }
+  });
+  return hxDbP;
 }
-window.addEventListener('popstate', function() {
-  if (HX.open) closeHistory(true);
-});
+function hxCacheGet(k) {
+  return hxIdb().then(function(db) {
+    if (!db) return null;
+    return new Promise(function(res) {
+      try {
+        var q = db.transaction('kv').objectStore('kv').get(k);
+        q.onsuccess = function() { res(q.result || null); };
+        q.onerror = function() { res(null); };
+      } catch (e) { res(null); }
+    });
+  });
+}
+function hxCachePut(k, v) {
+  hxIdb().then(function(db) { try { if (db) db.transaction('kv', 'readwrite').objectStore('kv').put(v, k); } catch (e) {} });
+}
+
 function hxMerge(histLong, hist24) {
   var byTs = {};
   [histLong, hist24].forEach(function(arr) {
@@ -5413,29 +5439,81 @@ function hxMerge(histLong, hist24) {
   return Object.keys(byTs).map(function(ts) { return { ts: +ts, price: byTs[ts] }; })
     .sort(function(a, b) { return a.ts - b.ts; });
 }
+// Pide solo lo posterior al ultimo punto conocido de cada serie y lo guarda en cache.
+// Una sola peticion en vuelo (el prefetch y la apertura pueden coincidir).
+function hxSync(key) {
+  if (HX.syncP && HX.syncKey === key) return HX.syncP;
+  HX.syncKey = key;
+  HX.syncP = (async function() {
+    if (HX.key !== key || !HX.long) {
+      var c = (await hxCacheGet('s:' + key)) || {};
+      HX.key = key; HX.long = c.long || []; HX.d24 = c.d24 || []; HX.syncAt = c.at || 0;
+      HX.series = hxMerge(HX.long, HX.d24);
+    }
+    var sL = HX.long.length ? HX.long[HX.long.length - 1].ts : 0;
+    var s24 = HX.d24.length ? HX.d24[HX.d24.length - 1].ts : 0;
+    var d = await botCallWorker('/monitor-history', { key: key, since: sL, since24: s24 });
+    var ok = function(s) { return function(p) { return p && p.price && p.ts > s; }; };
+    var nl = histByPay(d && d.hist_long, key).filter(ok(sL));
+    var n24 = histByPay(d && d.hist24, key).filter(ok(s24));
+    var cut = Date.now() - 25 * 3600e3;
+    HX.long = HX.long.concat(nl);
+    HX.d24 = HX.d24.concat(n24).filter(function(p) { return p.ts >= cut; });
+    HX.series = hxMerge(HX.long, HX.d24);
+    HX.syncAt = Date.now();
+    hxCachePut('s:' + key, { long: HX.long, d24: HX.d24, at: HX.syncAt });
+    return nl.length + n24.length;
+  })();
+  HX.syncP.then(function() { HX.syncP = null; }, function() { HX.syncP = null; });
+  return HX.syncP;
+}
+// Tras abrir la app, en un momento ocioso: libreria + puesta al dia de la cache,
+// como mucho una vez cada 30 min. Asi el grafico abre al instante.
+function hxPrefetch() {
+  if (!SESSION.token) return;
+  hxLoadLib().catch(function() {});
+  var key = marketKey();
+  hxCacheGet('s:' + key).then(function(c) {
+    if (!c || Date.now() - (c.at || 0) > 30 * 60000) hxSync(key).catch(function() {});
+  });
+}
+
+function openHistory() {
+  HX.open = true;
+  var hp = document.getElementById('hx-pay');
+  if (hp) hp.textContent = ' · ' + payLabel(ACTIVE_PAY);
+  document.getElementById('hx-overlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  // Entrada en el historial del navegador: el boton atras (movil) cierra el grafico
+  // en vez de salir de la app.
+  try { history.pushState({ hxOpen: true }, ''); } catch (e) {}
+  hxRenderRanges();
+  hxLoad();
+}
+function closeHistory(fromPop) {
+  if (!HX.open) return;
+  HX.open = false;
+  document.getElementById('hx-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+  if (!fromPop) { try { history.back(); } catch (e) {} }
+}
+window.addEventListener('popstate', function() {
+  if (HX.open) closeHistory(true);
+});
 function hxMsg(t) {
   var m = document.getElementById('hx-msg'), c = document.getElementById('hx-chart');
   if (t) { m.textContent = t; m.style.display = 'flex'; c.style.display = 'none'; }
   else { m.style.display = 'none'; c.style.display = ''; }
 }
-function hxTimeLabel(ts, spanMs) {
-  var d = new Date(ts), p2 = function(n) { return (n < 10 ? '0' : '') + n; };
-  if (spanMs <= 36 * 3600e3) return p2(d.getHours()) + ':' + p2(d.getMinutes());
-  return p2(d.getDate()) + '/' + p2(d.getMonth() + 1);
+function hxFullLabel(ts) {
+  return new Date(ts).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
-// Acepta puntos {price} (modo linea) o velas {o,h,l,c} (modo velas): un solo
-// lugar para pintar Actual/Cambio/Minimo/Maximo sin duplicar el calculo.
+// Acepta velas {o,h,l,c}: Actual/Cambio/Minimo/Maximo de lo que esta a la vista.
 function hxStats(arr) {
   var ids = ['hx-cur', 'hx-chg', 'hx-min', 'hx-max'];
   if (!arr.length) { ids.forEach(function(i) { document.getElementById(i).textContent = '—'; }); return; }
-  var isCandle = arr[0].o !== undefined;
-  var open = isCandle ? arr[0].o : arr[0].price;
-  var close = isCandle ? arr[arr.length - 1].c : arr[arr.length - 1].price;
-  var min = isCandle ? arr[0].l : arr[0].price, max = isCandle ? arr[0].h : arr[0].price;
-  arr.forEach(function(x) {
-    var lo = isCandle ? x.l : x.price, hi = isCandle ? x.h : x.price;
-    if (lo < min) min = lo; if (hi > max) max = hi;
-  });
+  var open = arr[0].o, close = arr[arr.length - 1].c, min = arr[0].l, max = arr[0].h;
+  arr.forEach(function(x) { if (x.l < min) min = x.l; if (x.h > max) max = x.h; });
   var chg = open ? (close - open) / open * 100 : 0;
   document.getElementById('hx-cur').textContent = fmt(close) + fiatSuf();
   var chgEl = document.getElementById('hx-chg');
@@ -5444,6 +5522,12 @@ function hxStats(arr) {
   document.getElementById('hx-min').textContent = fmt(min) + fiatSuf();
   document.getElementById('hx-max').textContent = fmt(max) + fiatSuf();
 }
+function hxUpdateStats() {
+  if (!HX.chart || !HX.cs.length) { hxStats([]); return; }
+  var r = HX.chart.timeScale().getVisibleLogicalRange(), n = HX.cs.length;
+  var a = r ? Math.max(0, Math.ceil(r.from)) : 0, b = r ? Math.min(n - 1, Math.floor(r.to)) : n - 1;
+  hxStats(a <= b ? HX.cs.slice(a, b + 1) : []);
+}
 function hxBtnCss(active) {
   return 'border-radius:8px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:600;border:1px solid ' +
     (active ? 'var(--gold);background:var(--gold);color:#000' : 'var(--border);background:var(--surf-2);color:var(--text-3)');
@@ -5451,153 +5535,208 @@ function hxBtnCss(active) {
 function hxRenderRanges() {
   var wrap = document.getElementById('hx-ranges');
   wrap.innerHTML = '';
-  HX_TIMEFRAMES.forEach(function(r) {
+  var add = function(label, title, active, onclick, extra) {
     var b = document.createElement('button');
-    b.textContent = r.label;
-    b.style.cssText = hxBtnCss(r.id === HX.tf);
-    // El timeframe cambia el tamano de vela; viewCount/viewEndT NO se tocan, asi
-    // que la cantidad de velas en pantalla y el borde derecho se mantienen y el
-    // zoom se reescala solo (hxClampView lo acomoda si ya no calza con los datos).
-    b.onclick = function() {
+    b.textContent = label; if (title) b.title = title;
+    b.style.cssText = hxBtnCss(active) + (extra || '');
+    b.onclick = onclick;
+    wrap.appendChild(b);
+  };
+  HX_TIMEFRAMES.forEach(function(r) {
+    // Cambiar el timeframe conserva el rango de tiempo a la vista.
+    add(r.label, null, r.id === HX.tf, function() {
       HX.tf = r.id;
       try { localStorage.setItem('p2p_hx_tf', r.id); } catch(e) {}
-      hxClampView(); HX.hoverX = null; hxRenderRanges(); hxDraw();
-    };
-    wrap.appendChild(b);
+      hxRenderRanges(); if (HX.chart && HX.series.length) hxRender('keep');
+    });
   });
-  var latest = document.createElement('button');
-  latest.textContent = '⏭'; latest.title = 'Ir a lo último';
-  latest.style.cssText = hxBtnCss(false) + ';padding:6px 11px';
-  latest.onclick = function() { hxResetView(); hxDraw(); };
-  wrap.appendChild(latest);
-  // Lineas rectas: boton para activar/desactivar el modo dibujo (arrastrar traza
-  // una linea; tocar una linea existente sin arrastrar la borra) y otro para
-  // borrarlas todas de un tiro.
-  var drawBtn = document.createElement('button');
-  drawBtn.textContent = '📏'; drawBtn.title = 'Dibujar línea (toca una línea para borrarla)';
-  drawBtn.style.cssText = hxBtnCss(HX.drawMode) + ';padding:6px 11px';
-  drawBtn.onclick = function() {
-    HX.drawMode = !HX.drawMode;
-    var cv = document.getElementById('hx-chart');
-    if (cv) cv.style.cursor = HX.drawMode ? 'crosshair' : 'grab';
-    HX.hoverX = null; hxRenderRanges(); hxDraw();
-  };
-  wrap.appendChild(drawBtn);
-  if (HX.lines.length) {
-    var clearBtn = document.createElement('button');
-    clearBtn.textContent = '🗑'; clearBtn.title = 'Borrar todas las líneas';
-    clearBtn.style.cssText = hxBtnCss(false) + ';padding:6px 11px';
-    clearBtn.onclick = function() { HX.lines = []; HX.linesRev++; hxRenderRanges(); hxDraw(); };
-    wrap.appendChild(clearBtn);
-  }
+  add('⏭', 'Ir a lo último', false, function() { if (HX.chart) HX.chart.timeScale().scrollToRealTime(); }, ';padding:6px 11px');
+  add('📏', 'Dibujar línea (toca una línea para borrarla)', HX.drawMode, function() {
+    HX.drawMode = !HX.drawMode; hxSetDrawMode(); hxRenderRanges();
+  }, ';padding:6px 11px');
+  if (HX.lines.length) add('🗑', 'Borrar todas las líneas', false, function() { HX.lines = []; hxRenderRanges(); hxDrawOverlay(); }, ';padding:6px 11px');
   var sep = document.createElement('span');
   sep.style.cssText = 'flex:1';
   wrap.appendChild(sep);
   [['line', '📈 Línea'], ['candles', '🕯 Velas']].forEach(function(m) {
-    var b = document.createElement('button');
-    b.textContent = m[1];
-    b.style.cssText = hxBtnCss(HX.mode === m[0]);
-    b.onclick = function() {
+    add(m[1], null, HX.mode === m[0], function() {
       HX.mode = m[0];
       try { localStorage.setItem('p2p_hx_mode', m[0]); } catch(e) {}
-      HX.hoverX = null; hxRenderRanges(); hxDraw();
-    };
-    wrap.appendChild(b);
+      hxRenderRanges(); if (HX.chart && HX.series.length) hxRender('keep');
+    });
   });
 }
-// Velas de TODO el historial cargado, al tamano fijo del timeframe elegido —
-// derivadas al vuelo de hist24+hist_long, igual que antes; el servidor no
-// precalcula velas. Se cachean: solo se recalculan si cambia el timeframe o
-// llega data nueva, asi que panear/hacer zoom (que llama hxDraw en cada tick)
-// no reconstruye el array completo cada vez.
-function hxAllCandles() {
-  if (HX.cs && HX.csTf === HX.tf && HX.csSeriesLen === HX.series.length) return HX.cs;
-  var bMs = hxTf().ms, pts = HX.series, buckets = {};
+// Velas del timeframe (en hora local corrida, ver HX_TZ). La serie viene ordenada.
+function hxCandles() {
+  var bMs = hxTf().ms, pts = HX.series, out = [], cur = null;
   for (var i = 0; i < pts.length; i++) {
-    var t = Math.floor(pts[i].ts / bMs) * bMs, p = pts[i].price;
-    var b = buckets[t];
-    if (!b) buckets[t] = { t: t, o: p, h: p, l: p, c: p };
-    else { b.c = p; if (p > b.h) b.h = p; if (p < b.l) b.l = p; }
+    var t = Math.floor((pts[i].ts + HX_TZ) / bMs) * bMs, p = pts[i].price;
+    if (!cur || cur.t !== t) { cur = { t: t, o: p, h: p, l: p, c: p }; out.push(cur); }
+    else { cur.c = p; if (p > cur.h) cur.h = p; if (p < cur.l) cur.l = p; }
   }
-  var cs = Object.keys(buckets).map(function(k) { return buckets[k]; }).sort(function(a, b) { return a.t - b.t; });
-  HX.cs = cs; HX.csTf = HX.tf; HX.csSeriesLen = pts.length;
-  return cs;
+  return out;
 }
-// Ventana visible actual, en tiempo: [viewEndT - viewCount*tf, viewEndT].
-function hxViewT0() { return HX.viewEndT - HX.viewCount * hxTf().ms; }
-function hxVisibleCandles() {
-  var cs = hxAllCandles();
-  if (HX.viewEndT == null) return cs;
-  var bMs = hxTf().ms, t0 = hxViewT0(), t1 = HX.viewEndT;
-  return cs.filter(function(c) { return c.t + bMs > t0 && c.t < t1; });
+function hxEnsureChart() {
+  if (HX.chart) return;
+  var LC = window.LightweightCharts, el = document.getElementById('hx-chart');
+  HX.chart = LC.createChart(el, {
+    autoSize: true,
+    layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#8b949e', fontSize: 12 },
+    grid: { vertLines: { color: 'rgba(255,255,255,.04)' }, horzLines: { color: 'rgba(255,255,255,.05)' } },
+    rightPriceScale: { borderColor: '#262c36', scaleMargins: { top: 0.08, bottom: 0.2 } },
+    timeScale: { borderColor: '#262c36', timeVisible: true, secondsVisible: false, rightOffset: 4 },
+    crosshair: { mode: LC.CrosshairMode.Normal },
+    localization: { locale: 'es-VE', priceFormatter: function(p) { return fmtP(p); } },
+    kineticScroll: { touch: true, mouse: false },
+    // Movil: toque largo activa la cruz y sigue al dedo; el siguiente toque la suelta.
+    trackingMode: { exitMode: LC.TrackingModeExitMode.OnNextTap }
+  });
+  HX.volS = HX.chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
+  HX.chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
+  HX.chart.timeScale().subscribeVisibleLogicalRangeChange(function() { hxUpdateStats(); hxDrawOverlay(); });
+  HX.chart.subscribeCrosshairMove(function() { hxDrawOverlay(); });
+  // Capa de lineas dibujadas encima del grafico (la libreria no trae herramientas).
+  var ov = HX.ov = document.createElement('canvas');
+  ov.style.cssText = 'position:absolute;inset:0;z-index:3;pointer-events:none;touch-action:none';
+  el.appendChild(ov);
+  // Arrastrar la escala de precio no mueve el rango de tiempo: redibujar igual.
+  ['pointermove', 'wheel', 'touchmove'].forEach(function(ev) {
+    el.addEventListener(ev, function() { requestAnimationFrame(hxDrawOverlay); }, { passive: true });
+  });
+  hxBindDraw();
 }
-function hxVisiblePts() {
-  if (HX.viewEndT == null) return HX.series;
-  var t0 = hxViewT0(), t1 = HX.viewEndT;
-  return HX.series.filter(function(p) { return p.ts >= t0 && p.ts <= t1; });
-}
-// Vista por defecto: las ultimas HX_DEFAULT_CANDLES velas del timeframe activo
-// (menos si no hay tantos datos todavia).
-function hxResetView() {
-  var cs = hxAllCandles(), bMs = hxTf().ms;
-  if (cs.length) {
-    HX.viewEndT = cs[cs.length - 1].t + bMs;
-    HX.viewCount = Math.min(HX_DEFAULT_CANDLES, Math.max(HX_MIN_CANDLES, cs.length));
-  } else {
-    HX.viewEndT = Date.now();
-    HX.viewCount = HX_DEFAULT_CANDLES;
+function hxRender(how) {
+  hxEnsureChart();
+  var LC = window.LightweightCharts, ts = HX.chart.timeScale();
+  var prevN = HX.cs.length, prevL = ts.getVisibleLogicalRange(), prevT = ts.getVisibleRange();
+  HX.cs = hxCandles();
+  if (!HX.main || HX.mainMode !== HX.mode) {
+    if (HX.main) HX.chart.removeSeries(HX.main);
+    var dec = fiatMeta().dec, pf = { type: 'price', precision: dec, minMove: Math.pow(10, -dec) };
+    HX.main = HX.mode === 'line'
+      ? HX.chart.addAreaSeries({ lineColor: '#F0B90B', topColor: 'rgba(240,185,11,.22)', bottomColor: 'rgba(240,185,11,0)', lineWidth: 2, priceFormat: pf })
+      : HX.chart.addCandlestickSeries({ upColor: '#2ebd85', downColor: '#f6465d', borderVisible: false, wickUpColor: '#2ebd85', wickDownColor: '#f6465d', priceFormat: pf });
+    HX.mainMode = HX.mode;
   }
+  HX.main.setData(HX.mode === 'line'
+    ? HX.cs.map(function(c) { return { time: c.t / 1000, value: c.c }; })
+    : HX.cs.map(function(c) { return { time: c.t / 1000, open: c.o, high: c.h, low: c.l, close: c.c }; }));
+  hxRenderVol();
+  var n = HX.cs.length;
+  if (how === 'keep' && prevT) ts.setVisibleRange(prevT);                     // timeframe/modo: mismo rango de tiempo
+  else if (how === 'append' && prevL && prevL.to < prevN - 1.5) ts.setVisibleLogicalRange(prevL); // mirando el pasado: no mover
+  else if (how === 'append') ts.scrollToRealTime();                           // en el borde: seguir lo ultimo
+  else ts.setVisibleLogicalRange({ from: n - HX_DEFAULT_CANDLES, to: n + 3 });
+  var cov = document.getElementById('hx-coverage');
+  if (cov) cov.textContent = HX.series.length ? '· desde ' + hxFullLabel(HX.series[0].ts) : '';
+  hxUpdateStats(); hxDrawOverlay();
 }
-// No dejar panear/zoomear mas alla de lo que hay: ni antes del primer dato, ni
-// mostrando menos de HX_MIN_CANDLES ni mas que todo el historial disponible.
-function hxClampView() {
-  var cs = hxAllCandles(), bMs = hxTf().ms;
-  if (HX.viewEndT == null || !cs.length) { hxResetView(); return; }
-  HX.viewCount = Math.max(HX_MIN_CANDLES, Math.min(HX_MAX_CANDLES, Math.round(HX.viewCount)));
-  var firstT = cs[0].t, lastEdge = cs[cs.length - 1].t + bMs;
-  var totalCandles = Math.max(HX_MIN_CANDLES, Math.round((lastEdge - firstT) / bMs) + 2);
-  if (HX.viewCount > totalCandles) HX.viewCount = totalCandles;
-  var span = HX.viewCount * bMs;
-  // Aire a la derecha del ultimo dato: la mitad de las velas en pantalla (minimo
-  // 15), asi que siempre hay hueco de sobra para proyectar una linea de tendencia
-  // hacia el futuro, y escala con el zoom (mas cerca = mas hueco en pantalla,
-  // pero medido en velas es proporcional siempre).
-  var minEndT = firstT + span, maxEndT = lastEdge + Math.max(HX.viewCount * 0.5, 15) * bMs;
-  if (HX.viewEndT < minEndT) HX.viewEndT = minEndT;
-  if (HX.viewEndT > maxEndT) HX.viewEndT = maxEndT;
+// Volumen absorbido sumado en los cubos de las velas (es un flujo). Solo existe para
+// la serie global; se pide aparte y con cache, sin frenar el dibujo del precio.
+function hxRenderVol() {
+  if (!HX.volS) return;
+  if (HX.key !== 'BancoDeVenezuela' || !HX.vol.length) { HX.volS.setData([]); return; }
+  var bMs = hxTf().ms, at = {}, have = {};
+  HX.cs.forEach(function(c) { have[c.t] = 1; });
+  HX.vol.forEach(function(v) {
+    if (!v || v.ts == null) return;
+    var t = Math.floor((v.ts + HX_TZ) / bMs) * bMs;
+    if (have[t]) at[t] = (at[t] || 0) + (v.may || 0) + (v.rec || 0);
+  });
+  HX.volS.setData(Object.keys(at).map(Number).sort(function(a, b) { return a - b; })
+    .map(function(t) { return { time: t / 1000, value: at[t], color: 'rgba(240,185,11,.18)' }; }));
 }
-// Cambia cuantas velas entran en pantalla manteniendo fijo pivotTs (el punto
-// bajo el cursor, o el centro si viene de un boton +/-).
-function hxZoomStep(pivotTs, factor) {
-  if (HX.viewEndT == null) return;
-  var bMs = hxTf().ms;
-  var oldSpan = HX.viewCount * bMs, oldT0 = HX.viewEndT - oldSpan;
-  var rel = oldSpan > 0 ? (pivotTs - oldT0) / oldSpan : 1;
-  var newCount = Math.max(HX_MIN_CANDLES, Math.min(HX_MAX_CANDLES, Math.round(HX.viewCount * factor)));
-  HX.viewCount = newCount;
-  var newSpan = HX.viewCount * bMs;
-  HX.viewEndT = pivotTs + (1 - rel) * newSpan;
-  hxClampView();
+function hxLoadVol() {
+  if (HX.vol.length && Date.now() - HX.volAt < 30 * 60000) return;
+  hxCacheGet('vol').then(function(c) {
+    if (c && Date.now() - c.at < 30 * 60000) { HX.vol = c.rows || []; HX.volAt = c.at; hxRenderVol(); return; }
+    return botCallWorker('/monitor-vol').then(function(d) {
+      HX.vol = (d && d.vol) || []; HX.volAt = Date.now();
+      hxCachePut('vol', { rows: HX.vol, at: HX.volAt });
+      hxRenderVol();
+    });
+  }).catch(function() {});
 }
-// Traduce un pixel del canvas al instante que representa, usando la ultima
-// escala dibujada (HX.px). Lo usan el wheel-zoom y el pinch para anclar el
-// punto bajo el cursor/los dedos.
-function hxPxToTs(px) {
-  if (!HX.px) return Date.now();
-  var clamped = Math.max(HX.px.padL, Math.min(HX.px.padL + HX.px.W, px));
-  return HX.px.t0 + (clamped - HX.px.padL) / HX.px.W * HX.px.dt;
-}
-function hxPxToPrice(py) {
-  if (!HX.px) return 0;
-  var clamped = Math.max(HX.px.padT, Math.min(HX.px.padT + HX.px.H, py));
-  return HX.px.lo + (1 - (clamped - HX.px.padT) / HX.px.H) * HX.px.dp;
+async function hxLoad() {
+  if (!SESSION.token) { hxMsg('Inicia sesión primero.'); return; }
+  var key = marketKey(), libP = hxLoadLib();
+  try {
+    // 1) Lo que haya en memoria o cache, al instante.
+    if (HX.key !== key || !HX.long) {
+      var c = await hxCacheGet('s:' + key);
+      HX.key = key; HX.long = (c && c.long) || []; HX.d24 = (c && c.d24) || []; HX.syncAt = (c && c.at) || 0;
+      HX.series = hxMerge(HX.long, HX.d24);
+    }
+    var shown = false;
+    if (HX.series.length) { await libP; hxMsg(''); hxRender(); shown = true; }
+    else hxMsg('Cargando historial...');
+    hxLoadVol();
+    // 2) Solo lo nuevo desde el servidor (nada si se sincronizo hace menos de 1 min).
+    var added = Date.now() - HX.syncAt > 60000 ? await hxSync(key) : 0;
+    await libP;
+    if (!HX.series.length) { hxMsg('Aún no hay datos. El historial se acumula con el tiempo.'); return; }
+    if (!shown) { hxMsg(''); hxRender(); }
+    else if (added) hxRender('append');
+  } catch (e) {
+    if (!HX.series.length) hxMsg('Error: ' + e.message);
+  }
 }
 
 // ── Lineas rectas ────────────────────────────────────
-// Herramienta minima: arrastrar traza una linea blanca (en coordenadas
-// tiempo/precio, asi que se mantiene en su sitio al panear o hacer zoom);
-// tocar una linea existente sin arrastrar la borra. Viven solo en memoria
-// (HX.lines) mientras la pagina sigue cargada, nada se manda al servidor.
+// Modo 📏: arrastrar traza una linea blanca (en tiempo/precio, asi que acompana al
+// paneo y al zoom); tocar una linea sin arrastrar la borra. Solo en memoria.
+function hxTimeToX(t) {
+  var cs = HX.cs, n = cs.length, bMs = hxTf().ms;
+  if (!n) return null;
+  var lo = 0, hi = n - 1;
+  if (t <= cs[0].t) return HX.chart.timeScale().logicalToCoordinate((t - cs[0].t) / bMs);
+  while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (cs[mid].t <= t) lo = mid; else hi = mid - 1; }
+  var span = lo < n - 1 ? cs[lo + 1].t - cs[lo].t : bMs;
+  return HX.chart.timeScale().logicalToCoordinate(lo + (t - cs[lo].t) / span);
+}
+function hxXToTime(x) {
+  var cs = HX.cs, n = cs.length, bMs = hxTf().ms;
+  var l = HX.chart.timeScale().coordinateToLogical(x);
+  if (l == null || !n) return null;
+  if (l < 0) return cs[0].t + l * bMs;
+  if (l >= n - 1) return cs[n - 1].t + (l - (n - 1)) * bMs;
+  var i = Math.floor(l);
+  return cs[i].t + (l - i) * (cs[i + 1].t - cs[i].t);
+}
+function hxLineXY(l) {
+  var x1 = hxTimeToX(l.t1), x2 = hxTimeToX(l.t2), y1 = HX.main.priceToCoordinate(l.p1), y2 = HX.main.priceToCoordinate(l.p2);
+  return (x1 == null || x2 == null || y1 == null || y2 == null) ? null : [x1, y1, x2, y2];
+}
+function hxDrawOverlay() {
+  var cv = HX.ov;
+  if (!cv || !HX.main || !HX.open) return;
+  var el = cv.parentNode, w = el.clientWidth, h = el.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  }
+  var ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  var all = HX.drawing ? HX.lines.concat([HX.drawing]) : HX.lines;
+  if (!all.length) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, w - HX.chart.priceScale('right').width(), h - HX.chart.timeScale().height());
+  ctx.clip();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+  all.forEach(function(l) {
+    var p = hxLineXY(l);
+    if (!p) return;
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[2], p[3]); ctx.stroke();
+  });
+  ctx.restore();
+}
+function hxSetDrawMode() {
+  if (!HX.ov) return;
+  HX.ov.style.pointerEvents = HX.drawMode ? 'auto' : 'none';
+  HX.ov.style.cursor = HX.drawMode ? 'crosshair' : '';
+}
 function hxDistToSeg(px, py, x1, y1, x2, y2) {
   var dx = x2 - x1, dy = y2 - y1, len2 = dx * dx + dy * dy;
   var t = len2 ? ((px - x1) * dx + (py - y1) * dy) / len2 : 0;
@@ -5605,482 +5744,42 @@ function hxDistToSeg(px, py, x1, y1, x2, y2) {
   var ex = px - (x1 + t * dx), ey = py - (y1 + t * dy);
   return Math.sqrt(ex * ex + ey * ey);
 }
-var HX_LINE_PX = 6; // radio de tolerancia para "tocaste esta linea"
-function hxLineIndexNear(px, py) {
-  if (!HX.px || !HX.lines.length) return -1;
-  var padL = HX.px.padL, padT = HX.px.padT, W = HX.px.W, H = HX.px.H, t0 = HX.px.t0, dt = HX.px.dt, lo = HX.px.lo, dp = HX.px.dp;
-  function X(ts) { return padL + (ts - t0) / dt * W; }
-  function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
-  var best = -1, bestD = HX_LINE_PX;
-  for (var i = 0; i < HX.lines.length; i++) {
-    var l = HX.lines[i], d = hxDistToSeg(px, py, X(l.t1), Y(l.p1), X(l.t2), Y(l.p2));
-    if (d < bestD) { bestD = d; best = i; }
-  }
-  return best;
-}
-function hxRemoveLineNear(px, py) {
-  var idx = hxLineIndexNear(px, py);
-  if (idx < 0) return false;
-  HX.lines.splice(idx, 1); HX.linesRev++;
-  return true;
-}
-// Se dibujan como parte del frame base (mismo X/Y que usa cada modo), recortadas
-// al area del grafico para que no se salgan sobre la escala de precio.
-function hxDrawLines(ctx, X, Y, padL, padT, W, H) {
-  if (!HX.lines.length) return;
-  ctx.save();
-  ctx.beginPath(); ctx.rect(padL, padT, W, H); ctx.clip();
-  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  HX.lines.forEach(function(l) { ctx.moveTo(X(l.t1), Y(l.p1)); ctx.lineTo(X(l.t2), Y(l.p2)); });
-  ctx.stroke();
-  ctx.restore();
-}
-// Volumen absorbido agrupado en los mismos cubos que las velas. Se SUMA (no se
-// promedia): es un flujo, asi que una vela de 4h vale lo operado en esas 4h,
-// igual que las barras de volumen de cualquier grafico de trading.
-// Devuelve { at: {t: {may, rec}}, max } — max sirve para escalar la banda.
-function hxVolBuckets(bMs) {
-  var at = {}, max = 0;
-  var src = HX.vol || [];
-  for (var i = 0; i < src.length; i++) {
-    var v = src[i];
-    if (!v || v.ts == null) continue;
-    var t = Math.floor(v.ts / bMs) * bMs;
-    var a = at[t] || (at[t] = { may: 0, rec: 0 });
-    a.may += (v.may || 0); a.rec += (v.rec || 0);
-    if (a.may + a.rec > max) max = a.may + a.rec;
-  }
-  return { at: at, max: max };
-}
-
-// Frame base en modo VELAS (grilla/ejes compartidos con el modo linea)
-function hxDrawBaseCandles(cs, cssW, cssH, dpr) {
-  var base = HX.base || (HX.base = document.createElement('canvas'));
-  base.width = Math.round(cssW * dpr); base.height = Math.round(cssH * dpr);
-  var ctx = base.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssW, cssH);
-  // Escala de precio a la DERECHA (como en los graficos de trading): el ultimo precio
-  // queda pegado a su eje. De ahi que padR sea el ancho y padL solo un margen.
-  var padL = 14, padR = 62, padT = 14, padB = 26, W = cssW - padL - padR;
-  var bMs = hxTf().ms;
-  // Banda de volumen abajo (solo si hay serie): le quita alto al precio en vez de
-  // superponerse, para no ensuciar la lectura de las velas.
-  var vol = hxVolBuckets(bMs);
-  var volH = vol.max > 0 ? Math.round((cssH - padT - padB) * 0.18) : 0;
-  var H = cssH - padT - padB - volH;
-  // t0/t1 son la VENTANA (pan/zoom), no el primer/ultimo dato: asi el mapeo de
-  // pixeles es continuo mientras se arrastra, con velas parciales en los bordes
-  // como en cualquier grafico de trading real.
-  var t0 = hxViewT0(), t1 = HX.viewEndT, dt = (t1 - t0) || 1;
-  // Escala Y de lo visible; si el pan cayo en un hueco sin velas, se usa el
-  // rango de todo el historial para no romper la escala.
-  var scaleSrc = cs.length ? cs : hxAllCandles();
-  var min = scaleSrc.length ? scaleSrc[0].l : 0, max = scaleSrc.length ? scaleSrc[0].h : 1;
-  scaleSrc.forEach(function(k) { if (k.l < min) min = k.l; if (k.h > max) max = k.h; });
-  var span = (max - min) || 1, lo = min - span * 0.08, hi = max + span * 0.08, dp = hi - lo;
-  function X(ts) { return padL + (ts - t0) / dt * W; }
-  function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
-  var up = cs.length ? cs[cs.length - 1].c >= cs[0].o : true;
-  HX.px = { padL: padL, padR: padR, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, volH: volH, col: up ? '#2ebd85' : '#f6465d' };
-  ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
-  for (var i = 0; i <= 5; i++) {
-    var val = lo + (hi - lo) * i / 5, y = Y(val);
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + W, y); ctx.stroke();
-    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'left'; ctx.fillText(fmt(val), padL + W + 8, y);
-  }
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  // Fijo en 6 (no ligado a cuantas velas hay dato): la ventana es de tamano
-  // constante en tiempo, asi que los rotulos del eje X deben repartirse parejo
-  // aunque el tramo visible este parcialmente vacio (un hueco nocturno, etc).
-  var ticks = 6;
-  for (var k2 = 0; k2 <= ticks; k2++) {
-    var ts = t0 + dt * k2 / ticks;
-    ctx.fillStyle = '#8b93a7';
-    ctx.fillText(hxTimeLabel(ts, dt), Math.max(padL + 14, Math.min(padL + W - 14, X(ts))), padT + H + volH + 7);
-  }
-  // Ancho por RANURA de tiempo, no por vela dibujada: si hay huecos (buckets sin dato)
-  // cs.length es menor que las ranuras del rango y las velas salian mas anchas que su
-  // propio intervalo, pisandose entre si.
-  var slots = Math.max(1, Math.round(dt / bMs));
-  var cw = Math.max(2, Math.min(14, (W / slots) * 0.7));
-  for (var q = 0; q < cs.length; q++) {
-    var c = cs[q], cx = X(c.t + bMs / 2), colq = c.c >= c.o ? '#2ebd85' : '#f6465d';
-    ctx.strokeStyle = colq; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(cx, Y(c.h)); ctx.lineTo(cx, Y(c.l)); ctx.stroke();
-    var yTop = Y(Math.max(c.o, c.c)), yBot = Y(Math.min(c.o, c.c));
-    ctx.fillStyle = colq;
-    ctx.fillRect(cx - cw / 2, yTop, cw, Math.max(1, yBot - yTop));
-  }
-  hxDrawLines(ctx, X, Y, padL, padT, W, H);
-  // Banda de volumen absorbido: barra apilada por vela — mayoristas (presion de
-  // venta, rojo) sobre recompra (presion de compra, violeta), colores del libro.
-  if (volH > 0) {
-    var vBase = padT + H + volH;
-    for (var r = 0; r < cs.length; r++) {
-      var vb = vol.at[cs[r].t];
-      if (!vb) continue;
-      var vx = X(cs[r].t + bMs / 2);
-      var hMay = (vb.may / vol.max) * volH;
-      var hRec = (vb.rec / vol.max) * volH;
-      ctx.fillStyle = 'rgba(246,70,93,.45)';
-      ctx.fillRect(vx - cw / 2, vBase - hMay, cw, Math.max(1, hMay));
-      ctx.fillStyle = 'rgba(199,146,234,.45)';
-      ctx.fillRect(vx - cw / 2, vBase - hMay - hRec, cw, Math.max(1, hRec));
-    }
-    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText('Volumen absorbido (USDT) · mayoristas / recompra', padL + 2, padT + H + 3);
-  }
-}
-// Dibuja el frame base (grilla, ejes, area, linea) en un canvas offscreen. Se
-// regenera solo cuando cambia la data/rango/tamano; el mousemove solo lo blitea.
-function hxDrawBase(pts, cssW, cssH, dpr) {
-  var base = HX.base || (HX.base = document.createElement('canvas'));
-  base.width = Math.round(cssW * dpr); base.height = Math.round(cssH * dpr);
-  var ctx = base.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssW, cssH);
-  var padL = 14, padR = 62, padT = 14, padB = 26, W = cssW - padL - padR, H = cssH - padT - padB;
-  // t0/t1 = la ventana (pan/zoom), no el primer/ultimo punto: mismo criterio que
-  // el modo velas, asi el mapeo de pixeles no salta al cambiar de modo.
-  var t0 = hxViewT0(), t1 = HX.viewEndT, dt = (t1 - t0) || 1;
-  var min = pts[0].price, max = pts[0].price;
-  pts.forEach(function(p) { if (p.price < min) min = p.price; if (p.price > max) max = p.price; });
-  var span = (max - min) || 1, lo = min - span * 0.08, hi = max + span * 0.08, dp = hi - lo;
-  function X(ts) { return padL + (ts - t0) / dt * W; }
-  function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
-  var open = pts[0].price, close = pts[pts.length - 1].price, col = close >= open ? '#2ebd85' : '#f6465d';
-  HX.px = { padL: padL, padR: padR, padT: padT, W: W, H: H, t0: t0, dt: dt, lo: lo, dp: dp, volH: 0, col: col }; // para el crosshair
-  ctx.font = '11px -apple-system, sans-serif'; ctx.textBaseline = 'middle';
-  for (var i = 0; i <= 5; i++) {
-    var val = lo + (hi - lo) * i / 5, y = Y(val);
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + W, y); ctx.stroke();
-    ctx.fillStyle = '#8b93a7'; ctx.textAlign = 'left'; ctx.fillText(fmt(val), padL + W + 8, y);
-  }
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  var ticks = 6;
-  for (var k = 0; k <= ticks; k++) {
-    var ts = t0 + dt * k / ticks, x = X(ts);
-    ctx.fillStyle = '#8b93a7';
-    ctx.fillText(hxTimeLabel(ts, dt), Math.max(padL + 14, Math.min(padL + W - 14, x)), padT + H + 7);
-  }
-  var grad = ctx.createLinearGradient(0, padT, 0, padT + H);
-  grad.addColorStop(0, col + '44'); grad.addColorStop(1, col + '00');
-  ctx.beginPath(); ctx.moveTo(X(pts[0].ts), Y(pts[0].price));
-  for (var a = 1; a < pts.length; a++) ctx.lineTo(X(pts[a].ts), Y(pts[a].price));
-  ctx.lineTo(X(t1), padT + H); ctx.lineTo(X(t0), padT + H); ctx.closePath();
-  ctx.fillStyle = grad; ctx.fill();
-  ctx.beginPath(); ctx.moveTo(X(pts[0].ts), Y(pts[0].price));
-  for (var b = 1; b < pts.length; b++) ctx.lineTo(X(pts[b].ts), Y(pts[b].price));
-  ctx.strokeStyle = col; ctx.lineWidth = 1.7; ctx.lineJoin = 'round'; ctx.stroke();
-  ctx.beginPath(); ctx.arc(X(t1), Y(close), 3.2, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
-  hxDrawLines(ctx, X, Y, padL, padT, W, H);
-}
-function hxDraw() {
-  if (HX.viewEndT == null) hxResetView();
-  var candles = HX.mode === 'candles';
-  var cs = candles ? hxVisibleCandles() : [];
-  var pts = candles ? [] : hxVisiblePts();
-  // Si la ventana actual no tiene con que dibujar (por ejemplo, se acaba de
-  // cambiar de timeframe con un zoom muy cerrado, o recien se abre el grafico
-  // sin datos todavia), volver a la vista por defecto en vez de quedar en blanco.
-  if ((candles ? cs.length : pts.length) < 2) {
-    hxResetView();
-    cs = candles ? hxVisibleCandles() : [];
-    pts = candles ? [] : hxVisiblePts();
-  }
-  // En velas, si aun asi no hay al menos 2 en pantalla caemos a linea (dataset muy chico).
-  if (candles && cs.length < 2) { candles = false; pts = hxVisiblePts(); }
-  hxStats(candles ? cs : pts);
-  if ((candles ? cs.length : pts.length) < 2) { hxMsg('Aún no hay suficientes datos. El historial se acumula con el tiempo.'); return; }
-  hxMsg('');
-  var canvas = document.getElementById('hx-chart');
-  var dpr = window.devicePixelRatio || 1, cssW = canvas.clientWidth, cssH = canvas.clientHeight;
-  // Regenerar el base solo si cambio modo/timeframe/ventana/tamano (no en cada mousemove).
-  var key = (candles ? 'c' : 'l') + '|' + ACTIVE_PAY + '|' + HX.tf + '|' + Math.round(HX.viewEndT) + '|' + HX.viewCount + '|' + cssW + 'x' + cssH + '|' + dpr + '|' + HX.linesRev;
-  if (HX.baseKey !== key) {
-    if (candles) hxDrawBaseCandles(cs, cssW, cssH, dpr); else hxDrawBase(pts, cssW, cssH, dpr);
-    HX.baseKey = key;
-  }
-  var bw = Math.round(cssW * dpr), bh = Math.round(cssH * dpr);
-  if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
-  var ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssW, cssH);
-  ctx.drawImage(HX.base, 0, 0, cssW, cssH);
-  var padL = HX.px.padL, padT = HX.px.padT, W = HX.px.W, H = HX.px.H;
-  var t0 = HX.px.t0, dt = HX.px.dt, lo = HX.px.lo, dp = HX.px.dp, col = HX.px.col;
-  function X(ts) { return padL + (ts - t0) / dt * W; }
-  function Y(p)  { return padT + (1 - (p - lo) / dp) * H; }
-
-  // Linea que se esta arrastrando ahora mismo (aun no soltada): se pinta en la
-  // capa de arriba, igual que el crosshair, para no invalidar el base en cada
-  // tick del arrastre.
-  if (HX_DRAWING.active) {
-    ctx.save();
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(X(HX_DRAWING.t1), Y(HX_DRAWING.p1)); ctx.lineTo(X(HX_DRAWING.t2), Y(HX_DRAWING.p2)); ctx.stroke();
-    ctx.restore();
-  }
-
-  // Vela/punto de referencia para la leyenda de arriba a la izquierda: el que
-  // esta bajo el cursor si hay hover, si no el mas reciente — asi la leyenda
-  // nunca queda vacia, igual que en cualquier grafico de trading.
-  var hoverTs = (HX.hoverX != null && (candles ? cs.length : pts.length) > 0)
-    ? t0 + ((HX.hoverX - padL) / W) * dt : null;
-  var refCandle = null, refPoint = null, refCol = col, refX = null;
-  var bMs = hxTf().ms;
-  if (candles && cs.length) {
-    if (hoverTs != null) {
-      refCandle = cs[0];
-      var bd = Infinity;
-      for (var q = 0; q < cs.length; q++) { var dd = Math.abs((cs[q].t + bMs / 2) - hoverTs); if (dd < bd) { bd = dd; refCandle = cs[q]; } }
-    } else {
-      refCandle = cs[cs.length - 1];
-    }
-    refCol = refCandle.c >= refCandle.o ? '#2ebd85' : '#f6465d';
-    refX = X(refCandle.t + bMs / 2);
-  } else if (!candles && pts.length) {
-    if (hoverTs != null) {
-      refPoint = pts[0];
-      var bd2 = Infinity;
-      for (var q2 = 0; q2 < pts.length; q2++) { var dd2 = Math.abs(pts[q2].ts - hoverTs); if (dd2 < bd2) { bd2 = dd2; refPoint = pts[q2]; } }
-    } else {
-      refPoint = pts[pts.length - 1];
-    }
-    refX = X(refPoint.ts);
-  }
-  // Leyenda OHLC (o precio, en modo Linea) fija arriba a la izquierda: no sigue
-  // al cursor, se lee siempre en el mismo sitio.
-  if (refCandle || refPoint) {
-    ctx.save();
-    ctx.font = '600 12px -apple-system, sans-serif';
-    var legend = refCandle
-      ? 'A ' + fmt(refCandle.o) + '  H ' + fmt(refCandle.h) + '  L ' + fmt(refCandle.l) + '  C ' + fmt(refCandle.c)
-      : fmt(refPoint.price) + fiatSuf();
-    var lw = ctx.measureText(legend).width + 14;
-    ctx.fillStyle = 'rgba(10,13,18,.78)';
-    ctx.fillRect(padL + 4, padT + 4, lw, 20);
-    ctx.fillStyle = refCol; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(legend, padL + 11, padT + 14);
-    ctx.restore();
-  }
-
-  // Crosshair estilo TradingView: las lineas siguen al CURSOR (libre); el marcador,
-  // la etiqueta de precio (eje derecho) y la de fecha (eje inferior) enganchan al
-  // dato mas cercano (la misma referencia de la leyenda de arriba).
-  if (hoverTs != null) {
-    var cx = HX.hoverX, cy = HX.hoverY;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, padT + H); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(padL, cy); ctx.lineTo(padL + W, cy); ctx.stroke();
-    ctx.setLineDash([]);
-    var refTs, refY;
-    if (refCandle) { refTs = refCandle.t; refY = Y(refCandle.c); col = refCol; }
-    else { refTs = refPoint.ts; refY = Y(refPoint.price); }
-    ctx.beginPath(); ctx.arc(refX, refY, 4, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
-    // Etiqueta de precio sobre el eje Y (a la derecha) a la altura del cursor.
-    var curPrice = lo + (1 - (cy - padT) / H) * dp;
-    ctx.font = '600 11px -apple-system, sans-serif';
-    ctx.fillStyle = col; ctx.fillRect(padL + W + 4, cy - 9, HX.px.padR - 4, 18);
-    ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(fmt(curPrice), padL + W + 8, cy);
-    // Etiqueta de fecha/hora sobre el eje X (abajo), pegada al dato enganchado.
-    var dateStr = hxFullLabel(refTs);
-    ctx.font = '600 11px -apple-system, sans-serif';
-    var dtw = ctx.measureText(dateStr).width + 12;
-    var axisY = padT + H + (HX.px.volH || 0);
-    var dtx = Math.max(padL, Math.min(padL + W - dtw, refX - dtw / 2));
-    ctx.fillStyle = col; ctx.fillRect(dtx, axisY + 2, dtw, 16);
-    ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(dateStr, dtx + 6, axisY + 10);
-    ctx.restore();
-  }
-}
-function hxFullLabel(ts) {
-  var d = new Date(ts), p2 = function(n) { return (n < 10 ? '0' : '') + n; };
-  return p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
-}
-function hxPointer(e) {
-  // Arrastrando o dibujando: ese gesto ya redibuja, no pelear por el mismo frame.
-  if (!HX.px || HX_DRAG.active || HX.drawMode) return;
-  var cv = document.getElementById('hx-chart'), rect = cv.getBoundingClientRect();
-  var t = (e.touches && e.touches[0]) ? e.touches[0] : e;
-  var px = t.clientX - rect.left, py = t.clientY - rect.top;
-  HX.hoverX = Math.max(HX.px.padL, Math.min(HX.px.padL + HX.px.W, px));
-  HX.hoverY = Math.max(HX.px.padT, Math.min(HX.px.padT + HX.px.H, py));
-  hxDraw();
-}
-// Arrastrar con el mouse = panear (no crosshair): se distingue por HX_DRAG.active,
-// que hxPointer respeta para no pelearse por el mismo redraw.
-var HX_DRAG = { active: false, startX: 0, startEndT: 0 };
-// Linea en curso (modo dibujo): t1/p1 el punto donde se apreto, t2/p2 el punto
-// actual mientras se arrastra.
-var HX_DRAWING = { active: false, startPx: 0, startPy: 0, t1: 0, p1: 0, t2: 0, p2: 0 };
-var HX_TAP_PX = 4; // por debajo de esto, un "arrastre" cuenta como toque (borrar, no dibujar)
-function hxPanTo(clientX) {
-  if (!HX.px) return;
-  var span = HX.viewCount * hxTf().ms;
-  var dt = -(clientX - HX_DRAG.startX) / HX.px.W * span;
-  HX.viewEndT = HX_DRAG.startEndT + dt;
-  hxClampView();
-  HX.hoverX = null;
-  hxDraw();
-}
-function hxTouchDist(touches) {
-  var dx = touches[0].clientX - touches[1].clientX, dy = touches[0].clientY - touches[1].clientY;
-  return Math.sqrt(dx * dx + dy * dy) || 1;
-}
-function hxDrawStart(px, py) {
-  HX_DRAWING.active = true;
-  HX_DRAWING.startPx = px; HX_DRAWING.startPy = py;
-  HX_DRAWING.t1 = hxPxToTs(px); HX_DRAWING.p1 = hxPxToPrice(py);
-  HX_DRAWING.t2 = HX_DRAWING.t1; HX_DRAWING.p2 = HX_DRAWING.p1;
-}
-function hxDrawMove(px, py) {
-  HX_DRAWING.t2 = hxPxToTs(px); HX_DRAWING.p2 = hxPxToPrice(py);
-  hxDraw();
-}
-function hxDrawEnd(px, py) {
-  HX_DRAWING.active = false;
-  var moved = Math.hypot(px - HX_DRAWING.startPx, py - HX_DRAWING.startPy);
-  if (moved < HX_TAP_PX) {
-    hxRemoveLineNear(px, py);
-  } else {
-    HX.lines.push({ t1: HX_DRAWING.t1, p1: HX_DRAWING.p1, t2: hxPxToTs(px), p2: hxPxToPrice(py) });
-    HX.linesRev++;
-  }
-  hxRenderRanges(); // el boton de borrar todo aparece/desaparece segun haya lineas
-  hxDraw();
-}
-function hxBindPointer() {
-  if (HX.bound) return;
-  HX.bound = true;
-  var cv = document.getElementById('hx-chart');
-  cv.style.cursor = 'grab';
-  cv.style.touchAction = 'none'; // el gesto lo maneja el canvas (pan/pinch/dibujo), no el scroll de la pagina
-
-  cv.addEventListener('mousemove', hxPointer);
-  cv.addEventListener('mouseleave', function() { HX.hoverX = null; hxDraw(); });
-  cv.addEventListener('mousedown', function(e) {
-    if (!HX.px) return;
-    var rect = cv.getBoundingClientRect();
-    if (HX.drawMode) { hxDrawStart(e.clientX - rect.left, e.clientY - rect.top); return; }
-    HX_DRAG.active = true; HX_DRAG.startX = e.clientX; HX_DRAG.startEndT = HX.viewEndT;
-    cv.style.cursor = 'grabbing';
-  });
-  window.addEventListener('mousemove', function(e) {
-    if (HX_DRAWING.active) {
-      var rect = cv.getBoundingClientRect();
-      hxDrawMove(e.clientX - rect.left, e.clientY - rect.top);
-    } else if (HX_DRAG.active) {
-      hxPanTo(e.clientX);
-    }
-  });
-  window.addEventListener('mouseup', function(e) {
-    if (HX_DRAWING.active) {
-      var rect = cv.getBoundingClientRect();
-      hxDrawEnd(e.clientX - rect.left, e.clientY - rect.top);
-    } else if (HX_DRAG.active) {
-      HX_DRAG.active = false; cv.style.cursor = 'grab';
-    }
-  });
-  // Zoom con la rueda, anclado al instante bajo el cursor (no al centro).
-  cv.addEventListener('wheel', function(e) {
-    if (!HX.px) return;
+function hxBindDraw() {
+  var ov = HX.ov, start = null;
+  var pos = function(e) { var r = ov.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  var pt = function(xy) { return { t: hxXToTime(xy[0]), p: HX.main.coordinateToPrice(xy[1]) }; };
+  ov.addEventListener('pointerdown', function(e) {
+    if (!HX.drawMode || !HX.main) return;
     e.preventDefault();
-    var rect = cv.getBoundingClientRect();
-    var pivotTs = hxPxToTs(e.clientX - rect.left);
-    hxZoomStep(pivotTs, e.deltaY > 0 ? 1.15 : 0.87);
-    HX.hoverX = null;
-    hxDraw();
-  }, { passive: false });
-
-  // Tactil: 1 dedo = panear (o dibujar, si esta activo el modo linea) y muestra
-  // el crosshair al tocar; 2 dedos = pinch-zoom (deshabilitado en modo dibujo).
-  var pinch = { active: false, startDist: 0, startCount: 0, midTs: 0, startEndT: 0 };
-  cv.addEventListener('touchstart', function(e) {
-    var rect = cv.getBoundingClientRect();
-    if (HX.drawMode) {
-      if (e.touches.length === 1 && HX.px) hxDrawStart(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
-      return;
-    }
-    if (e.touches.length === 1) {
-      HX_DRAG.active = true; HX_DRAG.startX = e.touches[0].clientX; HX_DRAG.startEndT = HX.viewEndT;
-      pinch.active = false;
-      hxPointer(e);
-    } else if (e.touches.length === 2 && HX.px) {
-      HX_DRAG.active = false;
-      pinch.active = true;
-      pinch.startDist = hxTouchDist(e.touches);
-      pinch.startCount = HX.viewCount;
-      pinch.startEndT = HX.viewEndT;
-      var midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-      pinch.midTs = hxPxToTs(midX);
-    }
-  }, { passive: true });
-  cv.addEventListener('touchmove', function(e) {
-    if (HX_DRAWING.active && e.touches.length === 1) {
-      e.preventDefault();
-      var rect = cv.getBoundingClientRect();
-      hxDrawMove(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
-    } else if (pinch.active && e.touches.length === 2) {
-      e.preventDefault();
-      var bMs = hxTf().ms;
-      var oldSpan = pinch.startCount * bMs, oldT0 = pinch.startEndT - oldSpan;
-      var rel = oldSpan > 0 ? (pinch.midTs - oldT0) / oldSpan : 1;
-      var scale = hxTouchDist(e.touches) / pinch.startDist; // dedos separandose = acercar
-      HX.viewCount = Math.max(HX_MIN_CANDLES, Math.min(HX_MAX_CANDLES, Math.round(pinch.startCount / scale)));
-      var newSpan = HX.viewCount * bMs;
-      HX.viewEndT = pinch.midTs + (1 - rel) * newSpan;
-      hxClampView();
-      HX.hoverX = null;
-      hxDraw();
-    } else if (HX_DRAG.active && e.touches.length === 1) {
-      e.preventDefault();
-      hxPanTo(e.touches[0].clientX);
-    }
-  }, { passive: false });
-  cv.addEventListener('touchend', function(e) {
-    if (HX_DRAWING.active) {
-      var t = e.changedTouches && e.changedTouches[0];
-      if (t) {
-        var rect = cv.getBoundingClientRect();
-        hxDrawEnd(t.clientX - rect.left, t.clientY - rect.top);
-      } else {
-        HX_DRAWING.active = false;
-      }
-    }
-    if (e.touches.length < 2) pinch.active = false;
-    if (e.touches.length < 1) HX_DRAG.active = false;
+    try { ov.setPointerCapture(e.pointerId); } catch (er) {}
+    start = pos(e);
+    var a = pt(start);
+    if (a.t == null || a.p == null) { start = null; return; }
+    HX.drawing = { t1: a.t, p1: a.p, t2: a.t, p2: a.p };
   });
-}
-async function hxLoad() {
-  if (!SESSION.token) { hxMsg('Inicia sesión primero.'); return; }
-  hxMsg('Cargando historial...');
-  try {
-    var key = marketKey();
-    var d = await botCallWorker('/monitor-history', { key: key });
-    HX.series = hxMerge(histByPay(d && d.hist_long, key), histByPay(d && d.hist24, key));
-    // Serie de volumen aparte (puede venir vacia: se acumula desde que se empezo
-    // a grabar, igual que paso con el precio). No afecta al dibujo del precio.
-    HX.vol = (d && d.vol) || [];
-    var cov = document.getElementById('hx-coverage');
-    if (cov) cov.textContent = HX.series.length
-      ? '· ' + HX.series.length + ' puntos desde ' + hxFullLabel(HX.series[0].ts)
-      : '';
-    if (!HX.series.length) { hxMsg('Aún no hay datos. El historial se acumula con el tiempo.'); return; }
-    // Primera carga: arranca mirando lo mas reciente. Si ya se habia abierto antes
-    // (HX.viewEndT ya seteado), se respeta donde el usuario habia dejado el pan/zoom
-    // y solo se reacota por si la data nueva movio los bordes.
-    if (HX.viewEndT == null) hxResetView(); else hxClampView();
-    hxDraw();
-  } catch (e) { hxMsg('Error: ' + e.message); }
+  ov.addEventListener('pointermove', function(e) {
+    if (!start || !HX.drawing) return;
+    var b = pt(pos(e));
+    if (b.t == null || b.p == null) return;
+    HX.drawing.t2 = b.t; HX.drawing.p2 = b.p;
+    hxDrawOverlay();
+  });
+  var end = function(e) {
+    if (!start) return;
+    var xy = pos(e), moved = Math.hypot(xy[0] - start[0], xy[1] - start[1]);
+    if (moved < 6) {
+      // Toque sin arrastre: borrar la linea mas cercana (si hay una a menos de 8 px)
+      var best = -1, bestD = 8;
+      HX.lines.forEach(function(l, i) { var p = hxLineXY(l); if (!p) return; var d = hxDistToSeg(xy[0], xy[1], p[0], p[1], p[2], p[3]); if (d < bestD) { bestD = d; best = i; } });
+      if (best >= 0) HX.lines.splice(best, 1);
+    } else if (HX.drawing) {
+      HX.lines.push(HX.drawing);
+    }
+    start = null; HX.drawing = null;
+    hxRenderRanges(); hxDrawOverlay();
+  };
+  ov.addEventListener('pointerup', end);
+  ov.addEventListener('pointercancel', function() { start = null; HX.drawing = null; hxDrawOverlay(); });
 }
 // Refresca la serie de 24h desde el servidor (max 1 vez cada 5 min, alineado con el latido).
 // Al cambiar de mercado: pedir ya la serie de 24h del par nuevo (el throttle de
@@ -6370,6 +6069,8 @@ function initBuySection() {
 }
 
 loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); applyHeroFold(); okxRenderBot(); applyExchangeTabs(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
+// Grafico: libreria y cache al dia en un momento ocioso, para que abra al instante.
+setTimeout(function() { try { hxPrefetch(); } catch (e) {} }, 4000);
 initBuySection();
 // Enlaces de email (verify/reset) tienen prioridad; si no, valida sesion normal.
 handleAuthLinks().then(function(handled){ if (!handled) initAuth(); });
