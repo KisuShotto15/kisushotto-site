@@ -11,6 +11,19 @@ migrations_dir = "migrations"
 # TOKEN va como secret (wrangler secret put TOKEN), no como var:
 # en [vars] queda en texto plano dentro del repo.
 
+# Terminal de ejecucion: un Durable Object con ubicacion fija (ver src/gateway.js).
+# Secret obligatorio para cifrar las API keys: wrangler secret put KEYS_SECRET
+[[durable_objects.bindings]]
+name = "GATEWAY"
+class_name = "ExchangeGateway"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ExchangeGateway"]
+
+# Region por defecto: weur. Para cambiarla, secret/var GATEWAY_REGION (no se
+# declara [vars] aqui para no pisar variables puestas en el dashboard).
+
 [triggers]
 # Cada minuto: espejo de posiciones abiertas (el fetch a Bybit solo funciona
 # desde el cron, no desde el colo del usuario). Cada 15: sync de cerrados.

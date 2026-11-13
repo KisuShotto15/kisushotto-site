@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Terminal · Trade Journal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="/images/tj-favicon.svg">
+<link rel="manifest" href="/manifests/trade-journal.json">
+<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./terminal.css">
+</head>
+<body>
+<div class="container">
+
+  <nav class="left-nav">
+    <a href="/" class="left-nav-back" title="Hub">
+      <img src="/images/tj-icon.svg" style="width:36px;height:36px;border-radius:9px;object-fit:cover;display:block">
+    </a>
+    <div class="left-nav-divider"></div>
+    <a href="./index.html" class="left-nav-item" title="Dashboard">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+    </a>
+    <a href="./terminal.html" class="left-nav-item active" title="Terminal">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>
+    </a>
+    <a href="./trades.html" class="left-nav-item" title="Trades">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+    </a>
+    <a href="./analytics.html" class="left-nav-item" title="Analytics">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+    </a>
+    <a href="./insights.html" class="left-nav-item" title="Insights">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18h6M10 22h4M12 2a7 7 0 017 7c0 3-1.5 5-4 6.5V17a1 1 0 01-1 1h-4a1 1 0 01-1-1v-1.5C6.5 14 5 12 5 9a7 7 0 017-7z"/></svg>
+    </a>
+  </nav>
+
+  <nav class="tm-mobile-nav">
+    <a href="./index.html">Dashboard</a><a href="./terminal.html" class="active">Terminal</a><a href="./trades.html">Trades</a><a href="./analytics.html">Analytics</a>
+  </nav>
+
+  <header class="tm-header">
+    <div>
+      <div class="page-header-label">// ejecucion con reglas</div>
+      <h1 class="dash-title">TERMINAL <span>VWAP</span></h1>
+      <div class="dash-subtitle"><span id="nyClock">—</span> · Binance · Bitget</div>
+    </div>
+    <div class="tm-verdict" id="verdict">
+      <div class="tm-verdict-label" id="verdictLabel">Cargando…</div>
+      <div class="tm-verdict-sub" id="verdictSub"></div>
+    </div>
+  </header>
+
+  <div class="tm-blocks hidden" id="blocks"></div>
+
+  <section class="tm-status">
+    <div class="tm-card">
+      <div class="tm-card-title">VENTANA</div>
+      <div class="tm-big" id="winBig">—</div>
+      <div class="tm-sub" id="winSub">—</div>
+    </div>
+    <div class="tm-card">
+      <div class="tm-card-title">NOTICIAS HOY</div>
+      <div class="tm-big" id="newsBig">—</div>
+      <div class="tm-sub" id="newsSub">—</div>
+      <button class="btn btn-sm hidden" id="newsConfirm" onclick="confirmNews()">Revise el calendario: hoy no hay noticias</button>
+    </div>
+    <div class="tm-card">
+      <div class="tm-card-title">DIA</div>
+      <div class="tm-big" id="dayBig">—</div>
+      <div class="tm-meter"><div class="tm-meter-fill" id="dayMeter"></div></div>
+      <div class="tm-sub" id="daySub">—</div>
+    </div>
+    <div class="tm-card">
+      <div class="tm-card-title">RIESGO DISPONIBLE</div>
+      <div class="tm-big" id="riskBig">—</div>
+      <div class="tm-sub" id="riskSub">—</div>
+    </div>
+    <div class="tm-card">
+      <div class="tm-card-title">SEMANA</div>
+      <div class="tm-big" id="weekBig">—</div>
+      <div class="tm-meter"><div class="tm-meter-fill" id="weekMeter"></div></div>
+      <div class="tm-sub" id="weekSub">—</div>
+    </div>
+  </section>
+
+  <div class="tm-main">
+    <!-- Ticket -->
+    <section class="tm-panel tm-ticket">
+      <div class="tm-panel-head">
+        <span>NUEVA OPERACION</span>
+        <span class="tm-mode" id="ticketMode">—</span>
+      </div>
+
+      <div class="form-row three">
+        <div class="form-field"><label>Exchange</label><select id="tExchange" onchange="loadMarket()"></select></div>
+        <div class="form-field"><label>Mercado</label>
+          <select id="tMarket" onchange="onMarketChange()"><option value="futures">Futuros USDT-M</option><option value="spot">Spot</option></select>
+        </div>
+        <div class="form-field"><label>Simbolo</label><input id="tSymbol" value="BTCUSDT" autocomplete="off" onchange="loadMarket()"></div>
+      </div>
+
+      <div class="tm-ind" id="ind">
+        <div class="tm-ind-head">
+          <select id="tInterval" onchange="loadMarket()"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option></select>
+          <select id="tAnchor" onchange="loadMarket()"><option value="utc">VWAP 00:00 UTC</option><option value="ny">VWAP apertura NY</option></select>
+          <button class="btn btn-sm" onclick="loadMarket()">↻</button>
+          <span class="tm-ind-stamp" id="indStamp"></span>
+        </div>
+        <div class="tm-bands" id="bands"><div class="tm-sub">Elige un simbolo</div></div>
+        <div class="tm-osc" id="osc"></div>
+      </div>
+
+      <div class="tm-sides">
+        <button class="tm-side long active" data-side="long" onclick="setSide('long')">LONG</button>
+        <button class="tm-side short" data-side="short" onclick="setSide('short')">SHORT</button>
+      </div>
+
+      <div class="form-row three">
+        <div class="form-field"><label>Entrada</label>
+          <select id="tType" onchange="onTypeChange()"><option value="market">Mercado</option><option value="limit">Limite</option></select>
+        </div>
+        <div class="form-field"><label>Precio limite</label><input id="tEntry" type="number" step="any" disabled oninput="schedulePreview()"></div>
+        <div class="form-field"><label>Setup</label>
+          <select id="tSetup">
+            <option>VWAP 3σ reversion</option><option>VWAP 2σ reversion</option><option>Rechazo en VWAP</option><option>Ruptura y retest de banda</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Stop loss <b class="tm-req">obligatorio</b></label><input id="tStop" type="number" step="any" oninput="schedulePreview()"></div>
+        <div class="form-field"><label>Take profit <b class="tm-req">obligatorio</b></label><input id="tTp" type="number" step="any" oninput="schedulePreview()"></div>
+      </div>
+
+      <div class="tm-preview" id="preview"><div class="tm-sub">Pon stop y objetivo para ver el tamano</div></div>
+
+      <div class="tm-checklist">
+        <div class="tm-card-title">CHECKLIST · todos obligatorios</div>
+        <div id="checklist"></div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-field"><label>Estado emocional</label>
+          <select id="tEmotion"><option value="">—</option><option>Tranquilo</option><option>Confiado</option><option>Ansioso</option><option>Impaciente</option><option>Cansado</option></select>
+        </div>
+        <div class="form-field"><label>Por que esta operacion</label><input id="tNotes" placeholder="Ej: toque de -3σ con RSI6 en 12 y cruce del estocastico"></div>
+      </div>
+
+      <button class="tm-exec" id="execBtn" disabled onclick="execute()">Revisa las reglas</button>
+    </section>
+
+    <!-- Posiciones -->
+    <section class="tm-col">
+      <div class="tm-panel">
+        <div class="tm-panel-head"><span>POSICIONES ABIERTAS · FUTUROS</span><span class="tm-sub" id="posStamp"></span></div>
+        <div id="positions"><div class="tm-sub">—</div></div>
+      </div>
+      <div class="tm-panel">
+        <div class="tm-panel-head"><span>ORDENES PENDIENTES</span></div>
+        <div id="pending"><div class="tm-sub">Sin ordenes limite pendientes</div></div>
+      </div>
+      <div class="tm-panel">
+        <div class="tm-panel-head"><span>SPOT</span><span class="tm-sub" id="spotTotal"></span></div>
+        <div id="spot"><div class="tm-sub">—</div></div>
+      </div>
+      <div class="tm-panel">
+        <div class="tm-panel-head"><span>BITACORA</span><button class="btn btn-sm" onclick="loadEvents()">↻</button></div>
+        <div id="events" class="tm-events"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Reglas -->
+  <details class="tm-panel tm-details" id="rulesPanel">
+    <summary>REGLAS DEL SISTEMA <span class="tm-sub" id="rulesPendingTag"></span></summary>
+    <div class="tm-note">Endurecer una regla aplica al instante. Aflojarla queda en espera <b>24 horas</b>: una decision tomada en caliente no tiene efecto ese dia. Los limites duros (riesgo maximo 2%) no se pueden pasar.</div>
+    <div id="rulesPending"></div>
+    <div class="tm-rules" id="rulesForm"></div>
+    <div class="form-field"><label>Simbolos permitidos (vacio = todos)</label><input id="rSymbols" placeholder="BTCUSDT, ETHUSDT, SOLUSDT"></div>
+    <div class="form-field"><label>Checklist (uno por linea)</label><textarea id="rChecklist" rows="8"></textarea></div>
+    <div class="tm-row">
+      <button class="btn btn-accent" onclick="saveRules()">Guardar reglas</button>
+      <button class="btn btn-danger" onclick="selfLock()">Bloquearme por hoy</button>
+    </div>
+  </details>
+
+  <!-- Noticias -->
+  <details class="tm-panel tm-details">
+    <summary>CALENDARIO ECONOMICO</summary>
+    <div class="tm-note">Se descarga solo cada 6 horas (eventos de alto impacto en USD). Puedes agregar dias a mano; quitar no se puede.</div>
+    <div id="newsList"></div>
+    <div class="form-row three">
+      <div class="form-field"><label>Fecha</label><input id="nDate" type="date"></div>
+      <div class="form-field"><label>Evento</label><input id="nTitle" placeholder="FOMC, CPI…"></div>
+      <div class="form-field"><label>&nbsp;</label><button class="btn" onclick="addNews()">Agregar dia de noticias</button></div>
+    </div>
+  </details>
+
+  <!-- Cuentas -->
+  <details class="tm-panel tm-details" id="accountsPanel">
+    <summary>CUENTAS CONECTADAS</summary>
+    <div class="tm-note">
+      Crea la API key con permiso de <b>lectura + trading (spot y futuros)</b> y <b>sin permiso de retiro</b>. Usa una subcuenta dedicada solo a este sistema.
+      Las llaves se guardan cifradas. Cada cuenta empieza en <b>simulacion</b>: el terminal calcula todo pero no envia ordenes ni el guardian corrige.
+    </div>
+    <div id="accounts"></div>
+    <div class="tm-connect">
+      <div class="form-row three">
+        <div class="form-field"><label>Exchange</label><select id="aExchange" onchange="onAccExchange()"><option value="binance">Binance</option><option value="bitget">Bitget</option></select></div>
+        <div class="form-field" id="aEnvField"><label>Entorno</label><select id="aEnv"><option value="live">Real</option><option value="demo">Demo (testnet futuros)</option></select></div>
+        <div class="form-field hidden" id="aPassField"><label>Passphrase</label><input id="aPass" type="password" autocomplete="off"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>API key</label><input id="aKey" type="password" autocomplete="off"></div>
+        <div class="form-field"><label>API secret</label><input id="aSecret" type="password" autocomplete="off"></div>
+      </div>
+      <div class="tm-row">
+        <button class="btn btn-accent" onclick="connectAccount()">Probar y conectar</button>
+        <button class="btn" onclick="runDiag()">Diagnostico de conexion</button>
+      </div>
+      <pre class="tm-diag hidden" id="diag"></pre>
+    </div>
+  </details>
+
+  <!-- Proceso -->
+  <details class="tm-panel tm-details">
+    <summary>EL PROCESO</summary>
+    <div class="tm-process">
+      <h3>Antes de la sesion</h3>
+      <ol>
+        <li>Duerme y come. Si estas cansado, enfermo o alterado, pulsa "Bloquearme por hoy".</li>
+        <li>Revisa que el dia no tenga noticias (el sistema ya lo bloquea) y marca los niveles: VWAP y sus 3 desviaciones.</li>
+        <li>Define 2–3 simbolos para la sesion. Menos pantallas, menos impulsos.</li>
+      </ol>
+      <h3>Durante</h3>
+      <ol>
+        <li>Solo entras si el checklist esta completo. Si dudas en un punto, no se cumple.</li>
+        <li>El tamano lo calcula el sistema. Tu decides entrada, stop y objetivo; nunca la cantidad.</li>
+        <li>El stop se mueve solo a favor. No se promedia, no se piramida, no se cambia de idea a mitad.</li>
+        <li>Despues de una perdida hay pausa obligatoria. Levantate de la silla.</li>
+        <li>Dos perdidas seguidas o el limite diario: se acabo el dia, aunque "veas" la siguiente.</li>
+      </ol>
+      <h3>Despues</h3>
+      <ol>
+        <li>Revisa cada operacion en el journal: ¿segui el plan? La nota es al proceso, no al resultado.</li>
+        <li>Una operacion perdedora con el plan cumplido es una buena operacion. Una ganadora rompiendo reglas es una mala.</li>
+        <li>Cada fin de semana: expectativa en R, % de operaciones con checklist completo y errores repetidos.</li>
+      </ol>
+      <h3>Por que el sistema es asi</h3>
+      <ul>
+        <li><b>Riesgo base = el menor capital del dia.</b> Ganar en la manana no agranda el riesgo de la tarde.</li>
+        <li><b>Presupuesto:</b> si todos tus stops saltan a la vez, no puedes pasar el limite diario. La siguiente operacion se recorta sola.</li>
+        <li><b>Aflojar tarda 24h.</b> La disciplina se rompe en caliente; el retraso hace que esa decision no cuente ese dia.</li>
+        <li><b>Guardian cada minuto:</b> si abres por fuera, alejas el stop o agregas tamano desde la app del exchange, lo corrige o cierra.</li>
+        <li><b>Margen aislado y el menor apalancamiento posible:</b> el apalancamiento no cambia el riesgo (lo fija el stop), solo acerca la liquidacion.</li>
+      </ul>
+      <h3>Lo que el sistema no puede impedir</h3>
+      <ul>
+        <li>Que operes desde otra cuenta o exchange no conectado. Conecta solo cuentas dedicadas y no tengas saldo de trading en otras.</li>
+        <li>Los ~60 s entre revisiones del guardian. Desinstala la app del exchange del telefono en horario de sesion.</li>
+        <li>Que borres las llaves o edites la base de datos a mano. Esa friccion es intencional: si llegas a eso, el problema no es tecnico.</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div class="modal-backdrop hidden" id="confirmModal">
+  <div class="modal">
+    <div class="modal-header"><span>Confirmar operacion</span><button class="modal-close" onclick="closeConfirm()">×</button></div>
+    <div class="modal-body">
+      <div id="confirmBody"></div>
+      <div class="tm-row">
+        <button class="btn" onclick="closeConfirm()">Cancelar</button>
+        <button class="btn btn-accent" id="confirmGo" onclick="confirmExecute()">Enviar orden</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script type="module" src="./terminal.js"></script>
+<script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
+</body>
+</html>

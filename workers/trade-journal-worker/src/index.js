@@ -3,6 +3,18 @@ import { generateInsights } from './insights.js';
 import { fetchBybitFutures, fetchBybitSpot, fetchBinanceFutures, fetchBinanceSpot, fetchBybitPositions, fetchBybitBalance, fetchBybitExecutions,
          buildPositionWindows, attachOpenTimes, parseBybitCSV } from './ingestion.js';
 
+export { ExchangeGateway } from './gateway.js';
+
+// Todo lo de ejecucion pasa por un unico Durable Object ubicado fuera de EE. UU.
+// (Binance responde 451 a IPs de alli). GATEWAY_REGION cambia la ubicacion:
+// weur, eeur, apac, oc, afr, me. Cambiarla crea un objeto nuevo (el estado
+// vive en D1, asi que no se pierde nada).
+function gateway(env) {
+  const region = env.GATEWAY_REGION || 'weur';
+  const id = env.GATEWAY.idFromName(`gateway-${region}`);
+  return env.GATEWAY.get(id, { locationHint: region });
+}
+
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -133,6 +145,13 @@ export default {
     // El snapshot va primero: guarda el stop de lo que sigue abierto antes de
     // que el sync traiga esos mismos trades ya cerrados.
     try { await snapshotPositions(env); } catch (e) { console.error('cron snapshot failed:', e); }
+    // Guardian de riesgo: revisa stops, tamanos y posiciones fuera de regla
+    if (env.GATEWAY && event.cron === '* * * * *') {
+      try {
+        const res = await gateway(env).fetch('https://gateway/exec/guardian', { method: 'POST', body: '{}' });
+        if (!res.ok) console.error('guardian', res.status, await res.text());
+      } catch (e) { console.error('cron guardian failed:', e); }
+    }
     // El sync completo es pesado, solo cada 15 min
     if (event.cron !== '* * * * *') {
       try { await runSync(env); }         catch (e) { console.error('cron sync failed:', e); }
@@ -154,6 +173,16 @@ export default {
       if (path === '/health/audit') return await audit(env);
       if (path === '/config' && method === 'GET')  return await getConfig(env);
       if (path === '/config' && method === 'POST') return await setConfig(request, env);
+
+      // ── Terminal de ejecucion (Durable Object) ──────────────────────────────
+      if (path.startsWith('/exec/')) {
+        if (path === '/exec/guardian') return json({ error: 'Solo el cron ejecuta el guardian' }, 403);
+        const res = await gateway(env).fetch(new Request(`https://gateway${path}${url.search}`, {
+          method, headers: { 'Content-Type': 'application/json' },
+          body: method === 'POST' ? await request.text() : undefined,
+        }));
+        return new Response(res.body, { status: res.status, headers: { 'Content-Type': 'application/json', ...CORS } });
+      }
 
       // ── Trades ──────────────────────────────────────────────────────────────
       if (path === '/trades' && method === 'GET')    return await listTrades(url, env);

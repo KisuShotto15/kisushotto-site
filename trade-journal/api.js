@@ -97,3 +97,25 @@ export const ingestCSV          = (b) => api('/ingest/csv',           { method: 
 export const getSyncConfig      = ()  => api('/sync/config');
 export const setSyncConfig      = (b) => api('/sync/config', { method: 'POST', body: JSON.stringify(b) });
 export const runSync            = ()  => api('/sync/run',    { method: 'POST' });
+
+// ── Terminal de ejecucion ─────────────────────────────────────────────────────
+const post = (b) => ({ method: 'POST', body: JSON.stringify(b || {}) });
+export const exec = {
+  status:        (fresh) => api(`/exec/status${fresh ? '?fresh=1' : ''}`),
+  market:        (p)     => api(`/exec/market${qs(p)}`),
+  preview:       (b)     => api('/exec/preview', post(b)),
+  order:         (b)     => api('/exec/order', post(b)),
+  stop:          (b)     => api('/exec/stop', post(b)),
+  close:         (b)     => api('/exec/close', post(b)),
+  cancel:        (b)     => api('/exec/cancel', post(b)),
+  rules:         (b)     => api('/exec/rules', post(b)),
+  cancelPending: ()      => api('/exec/rules/cancel-pending', post()),
+  lock:          (b)     => api('/exec/lock', post(b)),
+  newsConfirm:   ()      => api('/exec/news/confirm', post()),
+  newsAdd:       (b)     => api('/exec/news/add', post(b)),
+  saveAccount:   (b)     => api('/exec/accounts', post(b)),
+  accountMode:   (b)     => api('/exec/accounts/mode', post(b)),
+  deleteAccount: (b)     => api('/exec/accounts/delete', post(b)),
+  diag:          ()      => api('/exec/diag'),
+  events:        (n)     => api(`/exec/events?limit=${n || 60}`),
+};
