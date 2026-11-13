@@ -470,8 +470,9 @@ export default async function handler(req, res) {
         // suma dentro del usuario y se promedia entre usuarios por cubo de 30 min.
         // Es igual para todos y la consulta recorre 60 dias de snapshots: se cachea
         // 10 min por instancia y el grafico la pide aparte, sin bloquear el precio.
+        // Es opcional: si la consulta falla, el grafico sigue sin barras (no se cachea el fallo).
         if (!VOL_CACHE.rows || Date.now() - VOL_CACHE.at > 10 * 60000) {
-          VOL_CACHE.rows = await sql`
+          const rows = await sql`
             WITH d AS (
               SELECT user_id, ts, may_avail5, rec_avail5,
                      LAG(ts)          OVER (PARTITION BY user_id ORDER BY ts) prev_ts,
@@ -491,8 +492,9 @@ export default async function handler(req, res) {
               FROM f GROUP BY 1, 2
             )
             SELECT (bucket * 1000)::bigint ts, avg(may_s)::float may, avg(rec_s)::float rec
-            FROM b GROUP BY 1 ORDER BY 1`;
-          VOL_CACHE.at = Date.now();
+            FROM b GROUP BY 1 ORDER BY 1`.catch(() => null);
+          if (!rows) return res.status(200).json({ vol: [] });
+          VOL_CACHE.rows = rows; VOL_CACHE.at = Date.now();
         }
         return res.status(200).json({ vol: VOL_CACHE.rows });
       }

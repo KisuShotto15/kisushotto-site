@@ -5670,9 +5670,15 @@ async function hxLoad() {
     var shown = false;
     if (HX.series.length) { await libP; hxMsg(''); hxRender(); shown = true; }
     else hxMsg('Cargando historial...');
-    hxLoadVol();
     // 2) Solo lo nuevo desde el servidor (nada si se sincronizo hace menos de 1 min).
-    var added = Date.now() - HX.syncAt > 60000 ? await hxSync(key) : 0;
+    // Un reintento: el pooler de Supabase a veces corta la conexion (CONNECTION_DESTROYED).
+    var added = 0;
+    if (Date.now() - HX.syncAt > 60000) {
+      try { added = await hxSync(key); }
+      catch (e1) { await new Promise(function(r) { setTimeout(r, 1500); }); added = await hxSync(key); }
+    }
+    // El volumen despues del precio, no en paralelo: comparten la unica conexion a la base.
+    hxLoadVol();
     await libP;
     if (!HX.series.length) { hxMsg('Aún no hay datos. El historial se acumula con el tiempo.'); return; }
     if (!shown) { hxMsg(''); hxRender(); }
