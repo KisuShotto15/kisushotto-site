@@ -612,6 +612,18 @@ export class ExchangeGateway {
 
   async setMode(b) {
     const live = b.dry_run === false;
+    if (live) {
+      // Lo que ya estaba abierto al pasar a real se adopta en vez de cerrarse:
+      // no es una entrada nueva fuera de regla. Igual queda obligado a tener
+      // stop y a no pasar el riesgo maximo.
+      const ctx = await this.context(true);
+      const key = x => `${x.exchange}|${x.symbol}|${x.side}`;
+      const known = new Set(ctx.ledger.filter(t => t.status === 'open' || t.status === 'pending').map(key));
+      for (const p of ctx.positions.filter(p => p.exchange === b.exchange && !known.has(key(p)))) {
+        await this.adopt(p, ctx);
+        await this.log('guardian', `${p.symbol}: posicion previa al modo real adoptada; queda bajo las reglas de stop y riesgo`, 'warn');
+      }
+    }
     await this.db.prepare('UPDATE exec_accounts SET dry_run = ?, updated_at = ? WHERE exchange = ?').bind(live ? 0 : 1, nowSec(), b.exchange).run();
     await this.log('account', `${b.exchange}: ${live ? 'MODO REAL activado (envia ordenes y el guardian corrige)' : 'modo simulacion'}`, live ? 'warn' : 'info');
     this.ctxCache = null;
@@ -697,9 +709,9 @@ export class ExchangeGateway {
     await this.db.prepare(`INSERT INTO exec_trades (id, exchange, market, symbol, side, order_type, status, qty, entry, stop, initial_stop,
       risk_usd, risk_pct, equity_base, leverage, external, opened_at, notes)
       VALUES (?,?,?,?,?,'external','open',?,?,?,?,?,?,?,?,1,?,?)`)
-      .bind(rid(), p.exchange, 'futures', p.symbol, p.side, p.size, p.entry, p.stop, p.stop, risk,
+      .bind(rid(), p.exchange, 'futures', p.symbol, p.side, p.size, p.entry, p.stop ?? null, p.stop ?? null, risk,
             risk && ctx.gates.base_equity ? risk / ctx.gates.base_equity * 100 : null, ctx.gates.base_equity,
-            p.leverage, nowSec(), 'Abierta fuera del terminal').run();
+            p.leverage ?? null, nowSec(), 'Abierta fuera del terminal').run();
   }
 
   async checkPending(t, ex, cancel) {

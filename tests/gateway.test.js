@@ -88,8 +88,24 @@ test('cuenta: se guarda cifrada y arranca en simulacion', async () => {
   assert.equal(st.calls.length, 0);
 });
 
+test('al pasar a real, una posicion previa se adopta en vez de cerrarse', async () => {
+  st.positions.push({ exchange: 'bitget', market: 'futures', symbol: 'ADAUSDT', side: 'long', size: 10, entry: 100, stop: 99.5, stop_refs: [] });
+  const m = await call('/accounts/mode', { exchange: 'bitget', dry_run: false });
+  assert.equal(m.ok, true, JSON.stringify(m));
+  const t = DB.raw.prepare("SELECT * FROM exec_trades WHERE symbol='ADAUSDT'").get();
+  assert.equal(t.status, 'open');
+  assert.equal(t.external, 1);
+  st.positions = [];
+  clock += 120000;
+  await call('/guardian', {});
+  assert.equal(DB.raw.prepare("SELECT status FROM exec_trades WHERE symbol='ADAUSDT'").get().status, 'closed');
+  // la adoptada cerro con perdida: limpiar para que no afecte las pruebas siguientes
+  DB.raw.exec("DELETE FROM exec_trades WHERE symbol='ADAUSDT'");
+  DB.raw.exec("DELETE FROM trades WHERE symbol='ADAUSDT'");
+  st.calls.length = 0;
+});
+
 test('orden real: tamano por riesgo, stop puesto, registrada en el libro', async () => {
-  await call('/accounts/mode', { exchange: 'bitget', dry_run: false });
   const pre = await call('/preview', order());
   assert.equal(pre.ok, true, pre.errors?.join());
   assert.ok(pre.plan.risk_usd <= 10 && pre.plan.risk_usd > 9);
