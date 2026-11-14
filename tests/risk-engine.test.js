@@ -34,7 +34,9 @@ test('aflojar espera, endurecer aplica ya', () => {
   // pasar de lista de simbolos a "todos" afloja
   const withSyms = { ...R, symbols: ['BTCUSDT'] };
   assert.ok(splitChange(withSyms, { ...withSyms, symbols: [] }).looser.symbols);
-  assert.ok(splitChange(R, withSyms).tighter.symbols);
+  assert.ok(splitChange({ ...R, symbols: [] }, withSyms).tighter.symbols);
+  // agregar otro simbolo a la lista tambien afloja
+  assert.ok(splitChange(withSyms, { ...withSyms, symbols: ['BTCUSDT', 'ETHUSDT'] }).looser.symbols);
 });
 
 test('ventana: 1h antes de la apertura hasta 1h despues del cierre, en hora NY', () => {
@@ -199,6 +201,13 @@ test('guardian: posicion por encima del tope de margen se recorta', () => {
   const a = plan([pos({ size: 80, stop: 99.9 })], [led({ qty: 80, stop: 99.9 })]);
   assert.equal(a[0].type, 'reduce');
   assert.match(a[0].reason, /margen/);
+});
+
+test('guardian: posicion externa en un simbolo fuera de la estrategia se cierra', () => {
+  const a = plan([pos({ symbol: 'ETHUSDT' })], [], true);
+  assert.equal(a[0].type, 'close');
+  assert.match(a[0].reason, /no esta en tu estrategia/);
+  assert.deepEqual(R.symbols, ['BTCUSDT']);
 });
 
 test('guardian: riesgo mayor al 2% se recorta', () => {

@@ -1,0 +1,30 @@
+name: Trade Journal Status
+
+# Solo lectura: estado del guardian, cuentas conectadas (sin llaves) y la
+# bitacora reciente. Sirve para revisar el terminal sin entrar a la app.
+on:
+  workflow_dispatch:
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: workers/trade-journal-worker
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: estado
+        run: |
+          q() { npx --yes wrangler@4 d1 execute trade-journal-db --remote --json --command "$1" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const r of JSON.parse(s))console.table(r.results)})'; }
+          q "SELECT unixepoch() - guardian_at AS guardian_hace_seg, guardian_error, day, day_start_equity, equity_now, lock_until, lock_reason FROM risk_state"
+          q "SELECT exchange, env, mode, dry_run, enabled, last_error, updated_at FROM exec_accounts"
+          q "SELECT json_extract(rules,'$.symbols') AS simbolos, json_extract(rules,'$.leverage') AS lev, json_extract(rules,'$.max_margin_pct') AS margen, pending FROM risk_rules"
+          q "SELECT datetime(ts,'unixepoch') AS utc, severity, kind, substr(message,1,160) AS mensaje FROM risk_events ORDER BY id DESC LIMIT 20"
+          q "SELECT id, exchange, symbol, side, status, qty, entry, stop, risk_usd FROM exec_trades ORDER BY opened_at DESC LIMIT 10"

@@ -75,6 +75,10 @@ function render() {
   blocks.classList.toggle('hidden', g.ok);
   blocks.innerHTML = g.blocks.map(b => `<div class="tm-block tm-block-${esc(b.code)}">${esc(b.msg)}</div>`).join('');
 
+  // Con un solo simbolo permitido el ticket queda fijo en ese simbolo
+  const only = S.rules.symbols.length === 1 ? S.rules.symbols[0] : null;
+  if (only && $('tSymbol').value !== only) { $('tSymbol').value = only; loadMarket(); }
+  $('tSymbol').readOnly = !!only;
   renderWindow();
   renderNews();
   renderDay();

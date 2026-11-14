@@ -54,7 +54,7 @@ export const DEFAULT_RULES = {
   pre_open_min: 60,
   post_close_min: 60,
   block_news: true,
-  symbols: [],                 // vacio = cualquiera
+  symbols: ['BTCUSDT'],        // la estrategia VWAP a 51x es solo para Bitcoin
   checklist: DEFAULT_CHECKLIST,
 };
 
@@ -385,6 +385,10 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
     const crossed = s => s > 0 && p.mark > 0 && (long ? p.mark <= s : p.mark >= s);
 
     if (!t) {
+      if (rules.symbols.length && !rules.symbols.includes(p.symbol)) {
+        actions.push({ type: 'close', pos: p, reason: `${p.symbol} no esta en tu estrategia (solo ${rules.symbols.join(', ')})` });
+        continue;
+      }
       if (!tradingAllowed.ok) {
         actions.push({ type: 'close', pos: p, reason: `Posicion abierta fuera del sistema mientras no se podia operar (${tradingAllowed.reason})` });
         continue;

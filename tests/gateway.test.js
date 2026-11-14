@@ -66,6 +66,8 @@ const realFetch = globalThis.fetch;
 globalThis.fetch = async (u, ...r) => String(u).includes('faireconomy') ? realFetch(u, ...r)
   : new Response(String(u).includes('trace') ? 'colo=AMS\nloc=NL\n' : '{}', { status: 200 });
 const DB = d1();
+// Estas pruebas usan varios simbolos; la regla de solo BTC tiene su propia prueba
+DB.raw.prepare("INSERT INTO risk_rules (id, rules, updated_at) VALUES ('main', ?, 0)").run(JSON.stringify({ ...DEFAULT_RULES, symbols: [] }));
 const gw = new ExchangeGateway({}, { DB, KEYS_SECRET: 'test-secret-1234567890', ADAPTER: () => api, DETECT_MODE: async () => 'classic' });
 const call = async (path, body, method = body ? 'POST' : 'GET') => {
   const res = await gw.fetch(new Request(`https://gw/exec${path}`, { method, body: body ? JSON.stringify(body) : undefined }));
