@@ -2,7 +2,7 @@
 // Desde dic-2025 los STOP_MARKET/TAKE_PROFIT_MARKET de futuros van por el
 // Algo Service (/fapi/v1/algoOrder); el endpoint normal devuelve -4120.
 
-import { hmacRaw, hex, fmt, num, STABLES, sleep, listOf } from './common.js';
+import { hmacRaw, hex, fmt, num, STABLES, sleep, listOf, xfetch } from './common.js';
 import { floorStep, roundTick } from '../risk.js';
 
 const HOSTS = {
@@ -24,7 +24,7 @@ export function binance({ key, secret, env = 'live' }) {
       q.set('timestamp', String(Date.now()));
       q.set('signature', hex(await hmacRaw(secret, q.toString())));
     }
-    const res = await fetch(`${base}${path}?${q}`, { method, headers: signed ? { 'X-MBX-APIKEY': key } : {} });
+    const res = await xfetch(`${base}${path}?${q}`, { method, headers: signed ? { 'X-MBX-APIKEY': key } : {} });
     const text = await res.text();
     let d; try { d = JSON.parse(text); } catch { d = text; }
     if (!res.ok || (d && typeof d === 'object' && !Array.isArray(d) && d.code < 0)) {

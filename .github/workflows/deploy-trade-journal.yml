@@ -56,6 +56,7 @@ jobs:
       # Binance/Bitget responden ahi.
       - name: verificar guardian
         run: |
+          npx --yes wrangler@4 d1 execute trade-journal-db --remote --command "UPDATE risk_state SET egress_at = 0"
           sleep 150
           npx --yes wrangler@4 d1 execute trade-journal-db --remote --json \
             --command "SELECT guardian_at, unixepoch() - guardian_at AS hace_seg, guardian_error, egress FROM risk_state; SELECT * FROM news_meta;"

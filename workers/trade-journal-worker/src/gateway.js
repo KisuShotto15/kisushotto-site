@@ -16,7 +16,10 @@ import {
 import { snapshot, utcAnchor, nyOpenAnchor } from './indicators.js';
 import { adapter, detectBitgetMode } from './exchanges/index.js';
 import { seal, open as unseal } from './vault.js';
-import { sleep } from './exchanges/common.js';
+import { sleep, xfetch, useRelay } from './exchanges/common.js';
+
+// Binance y Bitget rechazan las IPs de Cloudflare: las llamadas salen por Vercel
+const RELAY_URL = 'https://kisushotto-site.vercel.app/api/exchange-relay';
 
 const CAL_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 const CAL_TTL = 6 * 3600;
@@ -37,6 +40,7 @@ export class ExchangeGateway {
     // Inyectable para las pruebas (tests/gateway.test.js)
     this.adapter = env.ADAPTER || adapter;
     this.detectMode = env.DETECT_MODE || detectBitgetMode;
+    if (env.JWT_SECRET && !env.ADAPTER && env.RELAY !== 'off') useRelay(env.RELAY_URL || RELAY_URL, env.JWT_SECRET);
   }
 
   // Serializa todo lo que cambia algo en el exchange o en el estado
@@ -528,7 +532,7 @@ export class ExchangeGateway {
     const meta = await this.db.prepare('SELECT * FROM news_meta WHERE id = ?').bind('ff').first();
     if (!force && meta?.fetched_at && nowSec() - meta.fetched_at < CAL_TTL && !meta.error) return { skipped: true };
     try {
-      const res = await fetch(CAL_URL, { headers: { 'User-Agent': 'trade-journal/1.0' } });
+      const res = await xfetch(CAL_URL, { headers: { 'User-Agent': 'trade-journal/1.0' } });
       if (!res.ok) throw new Error(`calendario ${res.status}`);
       const { events, coverage } = parseCalendar(await res.json());
       if (!coverage) throw new Error('calendario vacio');
@@ -769,7 +773,7 @@ export class ExchangeGateway {
   async probeEgress() {
     const trace = await fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).catch(e => e.message);
     const info = Object.fromEntries(String(trace).split('\n').filter(Boolean).map(l => l.split('=')));
-    const hit = url => fetch(url).then(async r => ({ status: r.status, body: (await r.text()).slice(0, 120) })).catch(e => ({ error: e.message }));
+    const hit = url => xfetch(url).then(async r => ({ status: r.status, body: (await r.text()).slice(0, 120) })).catch(e => ({ error: e.message }));
     const [bnF, bnS, bg] = await Promise.all([
       hit('https://fapi.binance.com/fapi/v1/time'), hit('https://api.binance.com/api/v3/time'), hit('https://api.bitget.com/api/v2/public/time'),
     ]);

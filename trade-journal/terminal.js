@@ -540,7 +540,7 @@ function tickClock() {
 let poll = null;
 function startPolling() {
   clearInterval(poll);
-  poll = setInterval(() => { if (document.visibilityState === 'visible') loadStatus(); }, 15000);
+  poll = setInterval(() => { if (document.visibilityState === 'visible') loadStatus(); }, 20000);
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadStatus(); });
 

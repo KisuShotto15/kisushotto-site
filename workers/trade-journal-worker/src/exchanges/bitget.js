@@ -4,7 +4,7 @@
 // El modo se detecta al conectar con /api/v3/account/settings.
 // Los datos publicos (instrumentos, velas, precios) van siempre por v3.
 
-import { hmacRaw, base64, fmt, num, STABLES, sleep, listOf } from './common.js';
+import { hmacRaw, base64, fmt, num, STABLES, sleep, listOf, xfetch } from './common.js';
 import { floorStep, roundTick } from '../risk.js';
 
 const BASE = 'https://api.bitget.com';
@@ -22,7 +22,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
       headers['ACCESS-TIMESTAMP'] = ts;
       headers['ACCESS-SIGN'] = base64(await hmacRaw(secret, ts + method + path + (qs === '?' ? '' : qs) + payload));
     }
-    const res = await fetch(BASE + path + (qs === '?' ? '' : qs), { method, headers, body: payload || undefined });
+    const res = await xfetch(BASE + path + (qs === '?' ? '' : qs), { method, headers, body: payload || undefined });
     const text = await res.text();
     let d; try { d = JSON.parse(text); } catch { d = { msg: text.slice(0, 200) }; }
     if (!res.ok || (d.code && d.code !== '00000')) {
@@ -376,7 +376,7 @@ export async function detectBitgetMode(creds) {
   const ts = String(Date.now());
   const path = '/api/v3/account/settings';
   const sign = base64(await hmacRaw(creds.secret, ts + 'GET' + path));
-  const res = await fetch(BASE + path, { headers: {
+  const res = await xfetch(BASE + path, { headers: {
     'ACCESS-KEY': creds.key, 'ACCESS-PASSPHRASE': creds.passphrase, 'ACCESS-TIMESTAMP': ts,
     'ACCESS-SIGN': sign, 'Content-Type': 'application/json', locale: 'en-US',
   } });
