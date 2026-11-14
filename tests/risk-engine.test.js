@@ -11,10 +11,12 @@ const R = normalizeRules(DEFAULT_RULES);
 const ny = (h, m = 0, day = 10) => Date.UTC(2026, 10, day, h + 5, m);
 
 test('los limites duros no se pueden superar', () => {
-  const r = normalizeRules({ risk_pct: 5, max_open_risk_pct: 10, max_leverage: 100, cooldown_min: 0, pre_open_min: 180 });
+  const r = normalizeRules({ risk_pct: 5, max_open_risk_pct: 10, leverage: 100, max_margin_pct: 50, cooldown_min: 0, pre_open_min: 180 });
   assert.equal(r.risk_pct, 2);
   assert.equal(r.max_open_risk_pct, 2);
-  assert.equal(r.max_leverage, 20);
+  assert.equal(r.leverage, 51);
+  assert.equal(r.max_margin_pct, 10);
+  assert.equal(normalizeRules({ max_leverage: 10 }).max_leverage, undefined);
   assert.equal(r.cooldown_min, 15);
   assert.equal(r.pre_open_min, 60);
   // el riesgo por operacion no supera el riesgo total
@@ -141,10 +143,24 @@ test('tamano: sale del riesgo, incluye comisiones y redondea hacia abajo', () =>
   assert.match(sizeOrder({ risk_usd: 1, entry: 60000, stop: 59000, step: 0.001, min_qty: 0.001 }).error, /minimo/);
 });
 
-test('apalancamiento minimo y liquidacion mas lejos que el stop', () => {
-  assert.equal(chooseLeverage({ notional: 2000, available: 1000, max_leverage: 10, stop_dist_pct: 1 }).leverage, 3);
-  assert.match(chooseLeverage({ notional: 20000, available: 1000, max_leverage: 10, stop_dist_pct: 0.5 }).error, /maximo/);
-  assert.match(chooseLeverage({ notional: 8000, available: 1000, max_leverage: 20, stop_dist_pct: 9 }).error, /liquidacion/);
+test('tope de margen: con stop corto manda el 10% a 51x y se arriesga menos', () => {
+  // riesgo 10 USDT, stop a 0.05%: por riesgo serian ~0.08 BTC; el tope 5100/60000 = 0.085
+  const wide = sizeOrder({ risk_usd: 10, entry: 60000, stop: 59700, step: 0.001, fee_rate: 0.0006, max_notional: 5100 });
+  assert.equal(wide.capped_by_margin, false);
+  const tight = sizeOrder({ risk_usd: 20, entry: 60000, stop: 59950, step: 0.001, fee_rate: 0, slippage: 0, max_notional: 5100 });
+  assert.equal(tight.capped_by_margin, true);
+  assert.ok(tight.notional <= 5100);
+  assert.ok(tight.risk_usd < 20);
+});
+
+test('apalancamiento fijo, margen disponible y liquidacion mas lejos que el stop', () => {
+  // ejemplo del usuario: cuenta 1000, 10% a 51x = 5100 de posicion, margen 100
+  const l = chooseLeverage({ notional: 5100, available: 1000, leverage: 51, stop_dist_pct: 0.3 });
+  assert.equal(l.leverage, 51);
+  assert.equal(l.margin, 100);
+  assert.match(chooseLeverage({ notional: 5100, available: 50, leverage: 51, stop_dist_pct: 0.3 }).error, /margen/);
+  // a 51x la liquidacion queda a ~1.46%: un stop de 1.5% no es valido
+  assert.match(chooseLeverage({ notional: 5100, available: 1000, leverage: 51, stop_dist_pct: 1.5 }).error, /liquidacion/);
 });
 
 const pos = (o = {}) => ({ exchange: 'binance', market: 'futures', symbol: 'BTCUSDT', side: 'long', size: 1, entry: 100, mark: 101, stop: 99, ...o });
@@ -176,6 +192,13 @@ test('guardian: posicion externa se cierra si no se podia operar, si no se adopt
   const a = plan([pos({ stop: null })], [], true);
   assert.equal(a[1].type, 'set_stop');
   assert.equal(a[1].stop, 90);   // 1% de 1000 = 10 USDT / 1 unidad
+});
+
+test('guardian: posicion por encima del tope de margen se recorta', () => {
+  // cuenta 1000: tope 5100 de valor. 80 unidades a 100 = 8000
+  const a = plan([pos({ size: 80, stop: 99.9 })], [led({ qty: 80, stop: 99.9 })]);
+  assert.equal(a[0].type, 'reduce');
+  assert.match(a[0].reason, /margen/);
 });
 
 test('guardian: riesgo mayor al 2% se recorta', () => {

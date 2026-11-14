@@ -175,3 +175,6 @@
   .tm-big { font-size: 18px; }
 }
 .tm-details:not([open]) { gap: 0; }
+.tm-link { color: var(--accent); text-decoration: none; }
+.tm-link:hover { text-decoration: underline; }
+.tm-preview .warn { color: var(--amber); }

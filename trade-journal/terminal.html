@@ -47,7 +47,7 @@
     <div>
       <div class="page-header-label">// ejecucion con reglas</div>
       <h1 class="dash-title">TERMINAL <span>VWAP</span></h1>
-      <div class="dash-subtitle"><span id="nyClock">—</span> · Binance · Bitget</div>
+      <div class="dash-subtitle"><span id="nyClock">—</span> · Binance · Bitget · <a href="#accountsPanel" onclick="openAccounts();return false" class="tm-link">Cuentas</a></div>
     </div>
     <div class="tm-verdict" id="verdict">
       <div class="tm-verdict-label" id="verdictLabel">Cargando…</div>
@@ -256,7 +256,8 @@
         <li><b>Presupuesto:</b> si todos tus stops saltan a la vez, no puedes pasar el limite diario. La siguiente operacion se recorta sola.</li>
         <li><b>Aflojar tarda 24h.</b> La disciplina se rompe en caliente; el retraso hace que esa decision no cuente ese dia.</li>
         <li><b>Guardian cada minuto:</b> si abres por fuera, alejas el stop o agregas tamano desde la app del exchange, lo corrige o cierra.</li>
-        <li><b>Margen aislado y el menor apalancamiento posible:</b> el apalancamiento no cambia el riesgo (lo fija el stop), solo acerca la liquidacion.</li>
+        <li><b>51x aislado con margen maximo del 10%:</b> el apalancamiento no cambia el riesgo (lo fija el stop). El 10% de margen a 51x es el tamano maximo; si el stop es corto, el tamano lo limita ese tope y arriesgas menos.</li>
+        <li><b>Las comisiones cuentan:</b> a 51x una posicion grande paga comision sobre todo el valor. El sistema la incluye en el tamano para que la perdida real no pase tu riesgo.</li>
       </ul>
       <h3>Lo que el sistema no puede impedir</h3>
       <ul>

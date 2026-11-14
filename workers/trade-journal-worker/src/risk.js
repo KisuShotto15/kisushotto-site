@@ -15,7 +15,8 @@ export const HARD = {
   max_consec_losses: { min: 1,   max: 3 },
   cooldown_min:      { min: 15,  max: 240 },  // pausa obligatoria tras una perdida
   min_rr:            { min: 1,   max: 10 },
-  max_leverage:      { min: 1,   max: 20 },
+  leverage:          { min: 1,   max: 51 },   // apalancamiento fijo de la estrategia
+  max_margin_pct:    { min: 1,   max: 10 },   // margen maximo por operacion, % de la cuenta
   max_positions:     { min: 1,   max: 3 },
   pre_open_min:      { min: 0,   max: 60 },   // ventana: 1h antes de la apertura como maximo
   post_close_min:    { min: 0,   max: 60 },   // ventana: 1h despues del cierre como maximo
@@ -25,7 +26,7 @@ export const HARD = {
 const LOOSER = {
   risk_pct: 'up', max_open_risk_pct: 'up', daily_loss_pct: 'up', weekly_loss_pct: 'up',
   max_trades_day: 'up', max_consec_losses: 'up', cooldown_min: 'down', min_rr: 'down',
-  max_leverage: 'up', max_positions: 'up', pre_open_min: 'up', post_close_min: 'up',
+  leverage: 'up', max_margin_pct: 'up', max_positions: 'up', pre_open_min: 'up', post_close_min: 'up',
 };
 
 export const DEFAULT_CHECKLIST = [
@@ -47,7 +48,8 @@ export const DEFAULT_RULES = {
   max_consec_losses: 2,
   cooldown_min: 30,
   min_rr: 1.5,
-  max_leverage: 10,
+  leverage: 51,
+  max_margin_pct: 10,
   max_positions: 2,
   pre_open_min: 60,
   post_close_min: 60,
@@ -68,10 +70,11 @@ export function normalizeRules(input = {}, base = DEFAULT_RULES) {
     if (Number.isFinite(v)) out[k] = clamp(v, HARD[k]);
     else out[k] = clamp(parseFloat(base[k] ?? DEFAULT_RULES[k]), HARD[k]);
   }
-  for (const k of ['max_trades_day', 'max_consec_losses', 'cooldown_min', 'max_leverage',
+  for (const k of ['max_trades_day', 'max_consec_losses', 'cooldown_min', 'leverage',
                    'max_positions', 'pre_open_min', 'post_close_min']) {
     out[k] = Math.floor(out[k]);
   }
+  delete out.max_leverage;   // regla vieja, reemplazada por leverage fijo
   // el riesgo por operacion nunca puede superar el riesgo total permitido
   out.risk_pct = Math.min(out.risk_pct, out.max_open_risk_pct);
   out.block_news = input.block_news === undefined ? base.block_news !== false : !!input.block_news;
@@ -325,10 +328,15 @@ export function roundTick(v, tick) {
 // El usuario no elige la cantidad: sale del riesgo y la distancia al stop.
 // Se descuentan comisiones de entrada y salida y un margen de deslizamiento,
 // asi que la perdida real si salta el stop queda por debajo del riesgo.
-export function sizeOrder({ risk_usd, entry, stop, step, min_qty = 0, min_notional = 0, fee_rate = 0.0006, slippage = 0.0005 }) {
+// max_notional: tope por margen (10% de la cuenta x apalancamiento). Con un stop
+// amplio manda el riesgo; con uno muy corto manda el tope y se arriesga menos.
+export function sizeOrder({ risk_usd, entry, stop, step, min_qty = 0, min_notional = 0, fee_rate = 0.0006, slippage = 0.0005, max_notional = Infinity }) {
   const perUnit = Math.abs(entry - stop) + (entry + stop) * fee_rate + stop * slippage;
   if (!(perUnit > 0) || !(risk_usd > 0)) return { qty: 0, error: 'Riesgo o stop invalido' };
-  const qty = floorStep(risk_usd / perUnit, step);
+  const byRisk = risk_usd / perUnit;
+  const byMargin = max_notional / entry;
+  const capped = byMargin < byRisk;
+  const qty = floorStep(Math.min(byRisk, byMargin), step);
   const notional = qty * entry;
   if (!(qty > 0) || qty < min_qty) {
     return { qty: 0, error: `Con ${risk_usd.toFixed(2)} USDT de riesgo y ese stop la cantidad (${(risk_usd / perUnit).toPrecision(4)}) no llega al minimo del exchange (${min_qty}). Acerca el stop o no operes este setup.` };
@@ -336,23 +344,23 @@ export function sizeOrder({ risk_usd, entry, stop, step, min_qty = 0, min_notion
   if (notional < min_notional) {
     return { qty: 0, error: `Valor de la orden ${notional.toFixed(2)} por debajo del minimo ${min_notional} del exchange` };
   }
-  return { qty, notional, risk_usd: qty * perUnit, stop_dist_pct: Math.abs(entry - stop) / entry * 100 };
+  return { qty, notional, risk_usd: qty * perUnit, stop_dist_pct: Math.abs(entry - stop) / entry * 100, capped_by_margin: capped };
 }
 
-// Apalancamiento minimo que permite abrir con el margen disponible. Se usa
-// margen aislado: si algo falla, solo se pierde el margen de esa posicion.
-// Ademas la liquidacion tiene que quedar mas lejos que el stop.
-export function chooseLeverage({ notional, available, max_leverage, stop_dist_pct, mmr = 0.005 }) {
+// Apalancamiento fijo de la estrategia, margen aislado: si algo falla solo se
+// pierde el margen de esa posicion. La liquidacion debe quedar mas lejos que el stop.
+export function chooseLeverage({ notional, available, leverage, stop_dist_pct, mmr = 0.005 }) {
   if (!(available > 0)) return { error: 'Sin margen disponible en esa cuenta' };
-  const lev = Math.max(1, Math.ceil(notional / (available * 0.8)));
-  if (lev > max_leverage) {
-    return { error: `Hace falta ${lev}x y tu maximo es ${max_leverage}x: transfiere margen a futuros o achica el riesgo` };
+  const lev = Math.max(1, Math.floor(leverage));
+  const margin = notional / lev;
+  if (margin > available * 0.95) {
+    return { error: `El margen (${margin.toFixed(2)} USDT a ${lev}x) supera lo disponible en futuros (${available.toFixed(2)})` };
   }
   const liqDistPct = (1 / lev - mmr) * 100;
   if (stop_dist_pct >= liqDistPct * 0.8) {
     return { error: `Con ${lev}x la liquidacion (~${liqDistPct.toFixed(2)}%) queda muy cerca del stop (${stop_dist_pct.toFixed(2)}%)` };
   }
-  return { leverage: lev, liq_dist_pct: liqDistPct };
+  return { leverage: lev, margin, liq_dist_pct: liqDistPct };
 }
 
 // ── Guardian ─────────────────────────────────────────────────────────────────
@@ -400,6 +408,12 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
     }
     if (t?.qty && p.size > t.qty * 1.01) {
       actions.push({ type: 'reduce', pos: p, qty: p.size - t.qty, reason: 'Agregaste tamano a la posicion: se recorta a lo aprobado' });
+      continue;
+    }
+    const capNotional = baseEquity * rules.max_margin_pct / 100 * rules.leverage;
+    if (p.size * p.entry > capNotional * 1.05) {
+      actions.push({ type: 'reduce', pos: p, qty: p.size - capNotional / p.entry,
+                     reason: `Posicion mayor al ${rules.max_margin_pct}% de margen a ${rules.leverage}x: se recorta` });
       continue;
     }
     const risk = Math.abs(p.entry - p.stop) * p.size;

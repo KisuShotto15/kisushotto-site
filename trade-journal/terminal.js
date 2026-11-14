@@ -40,7 +40,8 @@ const RULE_LABELS = {
   risk_pct: 'Riesgo por operacion (%)', max_open_risk_pct: 'Riesgo abierto maximo (%)',
   daily_loss_pct: 'Perdida maxima diaria (%)', weekly_loss_pct: 'Perdida maxima semanal (%)',
   max_trades_day: 'Operaciones por dia', max_consec_losses: 'Perdidas seguidas que cierran el dia',
-  cooldown_min: 'Pausa tras una perdida (min)', min_rr: 'R:R minimo', max_leverage: 'Apalancamiento maximo',
+  cooldown_min: 'Pausa tras una perdida (min)', min_rr: 'R:R minimo', leverage: 'Apalancamiento (fijo, futuros)',
+  max_margin_pct: 'Margen maximo por operacion (% cuenta)',
   max_positions: 'Posiciones simultaneas', pre_open_min: 'Minutos antes de la apertura NY',
   post_close_min: 'Minutos despues del cierre NY',
 };
@@ -85,7 +86,9 @@ function render() {
   renderRules();
   fillExchanges();
   const acc = S.accounts.find(a => a.exchange === $('tExchange').value);
-  $('ticketMode').textContent = !acc ? 'sin cuenta' : acc.dry_run ? 'SIMULACION' : 'REAL';
+  $('ticketMode').textContent = !acc ? 'sin cuenta · conectar' : acc.dry_run ? 'SIMULACION' : 'REAL';
+  $('ticketMode').onclick = acc ? null : openAccounts;
+  $('ticketMode').style.cursor = acc ? '' : 'pointer';
   $('ticketMode').className = `tm-mode ${acc && !acc.dry_run ? 'live' : ''}`;
   updateExecButton();
 }
@@ -324,11 +327,15 @@ function renderPreview(r) {
       <div><span>Cantidad</span><b>${fmt(p.qty, 4)}</b></div>
       <div><span>Valor</span><b>${fmt(p.notional)} USDT</b></div>
       <div><span>Apalancamiento</span><b>${p.leverage ? p.leverage + 'x aislado' : '—'}</b></div>
+      <div><span>Margen</span><b>${fmt(p.margin)} USDT · ${fmt(p.margin_pct)}%</b></div>
+      <div><span>Comisiones ida y vuelta</span><b>${fmt(p.fees_round_trip)} USDT</b></div>
+      <div><span>Liquidacion aprox.</span><b>${p.liq_dist_pct ? fmt(p.liq_dist_pct) + '% de la entrada' : '—'}</b></div>
       <div><span>R:R</span><b>${p.rr ? p.rr.toFixed(2) : '—'}</b></div>
       <div><span>Si salta el stop</span><b class="neg">-${fmt(p.loss_if_stop)} USDT · ${fmt(p.risk_pct)}%</b></div>
       <div><span>Si llega al objetivo</span><b class="pos">+${fmt(p.gain_if_tp)} USDT</b></div>
     </div>
     <div class="tm-sub">Precio ${px(p.price)} · entrada ${px(p.entry)} · comision ${(p.fee * 100).toFixed(3)}% incluida en el tamano</div>
+    ${p.capped_by_margin ? `<div class="tm-sub warn">Tamano limitado por el margen maximo (${S.rules.max_margin_pct}% a ${p.leverage}x): arriesgas menos que tu presupuesto.</div>` : ''}
     ${r.errors.length ? `<ul class="tm-errs">${r.errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="tm-ok">Cumple todas las reglas</div>'}`;
 }
 
@@ -487,6 +494,13 @@ function renderAccounts() {
     </div>`).join('') : '<div class="tm-sub">Ninguna cuenta conectada</div>';
   if (S.errors?.length) $('accounts').insertAdjacentHTML('beforeend', `<div class="tm-err">${S.errors.map(esc).join('<br>')}</div>`);
 }
+
+function openAccounts() {
+  const panel = $('accountsPanel');
+  panel.open = true;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.openAccounts = openAccounts;
 
 window.onAccExchange = () => {
   const bg = $('aExchange').value === 'bitget';

@@ -309,13 +309,16 @@ export class ExchangeGateway {
 
     let size = null, lev = null;
     if (!v.errs.length && ctx.gates.risk_usd > 0) {
+      // Tope de margen: max_margin_pct de la cuenta, apalancado. En spot no hay apalancamiento.
+      const useLev = o.market === 'futures' ? Math.min(ctx.rules.leverage, inst.max_leverage || Infinity) : 1;
+      const maxNotional = ctx.gates.base_equity * ctx.rules.max_margin_pct / 100 * useLev;
       size = sizeOrder({ risk_usd: ctx.gates.risk_usd, entry, stop: o.stop, step: inst.step,
-                         min_qty: inst.min_qty, min_notional: inst.min_notional, fee_rate: inst.fee });
+                         min_qty: inst.min_qty, min_notional: inst.min_notional, fee_rate: inst.fee, max_notional: maxNotional });
       if (size.error) errors.push(size.error);
       else if (o.market === 'futures') {
         const accEq = ctx.live.find(l => l.acc.exchange === o.exchange)?.eq;
         lev = chooseLeverage({ notional: size.notional, available: accEq?.futures_available || 0,
-          max_leverage: Math.min(ctx.rules.max_leverage, inst.max_leverage || Infinity), stop_dist_pct: size.stop_dist_pct });
+          leverage: useLev, stop_dist_pct: size.stop_dist_pct });
         if (lev.error) errors.push(lev.error);
       } else {
         const usdt = ctx.spot.find(h => h.exchange === o.exchange && h.asset === 'USDT')?.free || 0;
@@ -328,6 +331,10 @@ export class ExchangeGateway {
       risk_usd: size?.risk_usd || 0, risk_pct: ctx.gates.base_equity ? (size?.risk_usd || 0) / ctx.gates.base_equity * 100 : 0,
       risk_budget_pct: ctx.gates.risk_pct, base_equity: ctx.gates.base_equity,
       leverage: lev?.leverage || (o.market === 'spot' ? 1 : null), liq_dist_pct: lev?.liq_dist_pct || null,
+      margin: lev?.margin ?? (o.market === 'spot' ? size?.notional || 0 : 0),
+      margin_pct: ctx.gates.base_equity ? (lev?.margin ?? (o.market === 'spot' ? size?.notional || 0 : 0)) / ctx.gates.base_equity * 100 : 0,
+      capped_by_margin: !!size?.capped_by_margin,
+      fees_round_trip: size?.qty ? (entry + o.tp) * inst.fee * size.qty : 0,
       rr: v.rr, fee: inst.fee, dry_run: acc.dry_run,
       loss_if_stop: size?.risk_usd || 0,
       gain_if_tp: size?.qty ? Math.abs(o.tp - entry) * size.qty - (entry + o.tp) * inst.fee * size.qty : 0,

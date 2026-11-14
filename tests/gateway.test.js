@@ -72,7 +72,7 @@ const call = async (path, body, method = body ? 'POST' : 'GET') => {
   return res.json();
 };
 const order = (o = {}) => ({ exchange: 'bitget', market: 'futures', symbol: 'BTCUSDT', side: 'long', type: 'market',
-                              stop: 98, tp: 104, checklist: DEFAULT_RULES.checklist, setup: 'VWAP -2σ', ...o });
+                              stop: 99.7, tp: 100.6, checklist: DEFAULT_RULES.checklist, setup: 'VWAP -2σ', ...o });
 
 test('cuenta: se guarda cifrada y arranca en simulacion', async () => {
   const r = await call('/accounts', { exchange: 'bitget', key: 'k', secret: 's', passphrase: 'p' });
@@ -91,10 +91,12 @@ test('orden real: tamano por riesgo, stop puesto, registrada en el libro', async
   const pre = await call('/preview', order());
   assert.equal(pre.ok, true, pre.errors?.join());
   assert.ok(pre.plan.risk_usd <= 10 && pre.plan.risk_usd > 9);
+  assert.equal(pre.plan.leverage, 50);   // 51x pedido, el simbolo admite 50x
+  assert.ok(pre.plan.margin_pct <= 10);
   const r = await call('/order', order());
   assert.equal(r.ok, true, r.errors?.join());
   assert.equal(st.positions.length, 1);
-  assert.equal(st.positions[0].stop, 98);
+  assert.equal(st.positions[0].stop, 99.7);
   const t = DB.raw.prepare("SELECT * FROM exec_trades WHERE status='open'").get();
   assert.equal(t.symbol, 'BTCUSDT');
   assert.ok(t.risk_usd <= 10);
@@ -107,9 +109,9 @@ test('no se promedia: segunda orden en el mismo simbolo se rechaza', async () =>
 });
 
 test('el stop no se puede alejar desde el terminal', async () => {
-  const r = await call('/stop', { exchange: 'bitget', symbol: 'BTCUSDT', side: 'long', stop: 95 });
+  const r = await call('/stop', { exchange: 'bitget', symbol: 'BTCUSDT', side: 'long', stop: 99.5 });
   assert.match(r.error, /solo se puede mover a favor/);
-  const ok = await call('/stop', { exchange: 'bitget', symbol: 'BTCUSDT', side: 'long', stop: 99 });
+  const ok = await call('/stop', { exchange: 'bitget', symbol: 'BTCUSDT', side: 'long', stop: 99.8 });
   assert.equal(ok.ok, true);
 });
 
@@ -117,8 +119,8 @@ test('guardian: si alejas el stop en la app del exchange, lo devuelve', async ()
   st.positions[0].stop = 90;
   clock += 120000;
   await call('/guardian', {});
-  assert.equal(st.positions[0].stop, 99);
-  assert.deepEqual(st.calls.at(-1), ['stop', 99]);
+  assert.equal(st.positions[0].stop, 99.8);
+  assert.deepEqual(st.calls.at(-1), ['stop', 99.8]);
 });
 
 test('guardian: al cerrarse, pasa al journal en R y activa la pausa', async () => {
@@ -131,7 +133,7 @@ test('guardian: al cerrarse, pasa al journal en R y activa la pausa', async () =
   assert.ok(t.r < -0.9);
   const j = DB.raw.prepare("SELECT * FROM trades WHERE exchange_id = ?").get(`tj:${t.id}`);
   assert.equal(j.pnl, -10);
-  assert.equal(j.stop_price, 98);
+  assert.equal(j.stop_price, 99.7);
   assert.equal(j.strategy_tag, 'VWAP');
   const r = await call('/preview', order({ symbol: 'ETHUSDT' }));
   assert.match(r.errors.join(), /Pausa tras perdida/);
