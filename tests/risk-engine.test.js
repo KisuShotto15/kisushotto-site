@@ -289,3 +289,23 @@ test('insight: operaciones fuera del terminal', () => {
   assert.equal(r[0].severity, 'critical');
   assert.match(r[0].title, /1 operacion fuera/);
 });
+
+test('guardian: si no se pudo leer el stop, no actua (ni stop de emergencia ni cierre)', () => {
+  const a = guardianPlan({ positions: [pos({ stop: null, stop_unknown: true, mark: 50 })], ledger: [led()],
+    tradingAllowed: { ok: true }, rules: R, baseEquity: 1000, now: 1e12 });
+  assert.deepEqual(a, []);
+});
+
+test('guardian: una posicion previa al modo real sin stop y con el nivel cruzado avisa, no cierra', () => {
+  const a = guardianPlan({ positions: [pos({ stop: null, mark: 50 })], ledger: [led({ stop: null, external: 2 })],
+    tradingAllowed: { ok: true }, rules: R, baseEquity: 1000, now: 1e12 });
+  assert.equal(a[0].type, 'alert');
+});
+
+test('guardian: una posicion que se dio por cerrada y reaparece se reabre, no se trata como externa', () => {
+  const closed = led({ status: 'closed', closed_at: 1e9, entry: 100 });
+  const a = guardianPlan({ positions: [pos()], ledger: [], recent: [closed],
+    tradingAllowed: { ok: false, reason: 'fuera de ventana' }, rules: R, baseEquity: 1000, now: 1e12 });
+  assert.equal(a[0].type, 'reopen');
+  assert.ok(!a.some(x => x.type === 'close'));
+});

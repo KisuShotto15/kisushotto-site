@@ -197,6 +197,18 @@ test('dia de noticias: no se opera', async () => {
   assert.match(r.errors.join(), /noticias/);
 });
 
+test('una lectura vacia no da por cerrada una operacion si el exchange no confirma el cierre', async () => {
+  clock = Date.UTC(2026, 10, 12, 16, 0);
+  DB.raw.exec("INSERT INTO exec_trades (id, exchange, market, symbol, side, order_type, status, qty, entry, stop, risk_usd, opened_at, strategy) VALUES ('ghost','bitget','futures','XRPUSDT','long','market','open',1,100,99,1,1794400000,'vwap')");
+  const prev = api.closedPnl;
+  api.closedPnl = async () => null;   // el historial no muestra cierre
+  st.positions = [];
+  await call('/guardian', {});
+  assert.equal(DB.raw.prepare("SELECT status FROM exec_trades WHERE id='ghost'").get().status, 'open');
+  api.closedPnl = prev;
+  DB.raw.exec("DELETE FROM exec_trades WHERE id='ghost'");
+});
+
 test('historial: entran las operaciones hechas por fuera, sin duplicar las del terminal', async () => {
   const btc = DB.raw.prepare("SELECT * FROM exec_trades WHERE symbol='BTCUSDT' AND status='closed'").get();
   const row = (o) => ({ category: 'linear', entry_price: 100, exit_price: 101, size: 1, pnl: 1, fees: 0.1,

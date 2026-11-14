@@ -475,7 +475,9 @@ export function chooseLeverage({ notional, available, leverage, stop_dist_pct, m
 // onCrossed: que hacer si el stop que corresponde ya quedo del otro lado del
 // precio. 'close' (VWAP, intradia) cierra; 'alert' (swing) solo avisa, porque
 // cerrar a mercado un swing heredado puede realizar una perdida grande.
-export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEquity, now, onCrossed = 'close' }) {
+// recent: operaciones cerradas hace poco. Si una "reaparece" (una lectura vacia
+// del exchange la dio por cerrada), se reabre en vez de tratarla como externa.
+export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEquity, now, onCrossed = 'close', recent = [] }) {
   const actions = [];
   const key = x => `${x.exchange}|${x.market}|${x.symbol}|${x.side}`;
   const open = new Map(ledger.filter(t => t.status === 'open' || t.status === 'pending').map(t => [key(t), t]));
@@ -489,10 +491,19 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
     const base = p.size * unit;
     const k = key(p);
     seen.add(k);
-    const t = open.get(k);
+    let t = open.get(k);
     const long = p.side === 'long';
     const crossed = s => s > 0 && p.mark > 0 && (long ? p.mark <= s : p.mark >= s);
-    const onCross = (reason) => actions.push(onCrossed === 'close'
+    if (!t) {
+      const back = recent.find(r => key(r) === k && r.entry > 0 && Math.abs(r.entry - p.entry) / p.entry < 0.002);
+      if (back) {
+        actions.push({ type: 'reopen', pos: p, trade: back, reason: 'La posicion sigue abierta: se habia dado por cerrada por una lectura incompleta' });
+        t = back;
+      }
+    }
+    // Una posicion que ya estaba abierta al activar el modo real nunca se cierra sola
+    const mode = t?.external === 2 ? 'alert' : onCrossed;
+    const onCross = (reason) => actions.push(mode === 'close'
       ? { type: 'close', pos: p, reason }
       : { type: 'alert', pos: p, reason: `${reason}. No se cierra solo: decide tu el cierre o el stop` });
 
@@ -509,6 +520,8 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
     } else if (t.status === 'pending') {
       actions.push({ type: 'filled', pos: p, trade: t });
     }
+    // Sin poder leer los stops no se sabe si esta protegida: no se toca esta vuelta
+    if (p.stop_unknown) continue;
 
     const want = t?.stop || null;
     if (!(p.stop > 0)) {

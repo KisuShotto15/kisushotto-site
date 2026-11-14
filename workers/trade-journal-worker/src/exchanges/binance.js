@@ -103,10 +103,11 @@ export function binance({ key, secret, env = 'live' }) {
   async function coinm() {
     const [acct, rows, legacy, algo] = await Promise.all([
       D('GET', '/dapi/v1/account'), D('GET', '/dapi/v1/positionRisk'),
-      D('GET', '/dapi/v1/openOrders').catch(() => []), D('GET', '/dapi/v1/openAlgoOrders').catch(() => []),
+      D('GET', '/dapi/v1/openOrders').catch(() => []), D('GET', '/dapi/v1/openAlgoOrders').catch(() => null),
     ]);
+    const stopUnknown = algo === null;
     const orders = [
-      ...listOf(algo).map(o => ({ symbol: o.symbol, side: o.side, type: o.orderType || o.type, stopPrice: o.triggerPrice, ref: { algoId: o.algoId } })),
+      ...listOf(algo || []).map(o => ({ symbol: o.symbol, side: o.side, type: o.orderType || o.type, stopPrice: o.triggerPrice, ref: { algoId: o.algoId } })),
       ...(Array.isArray(legacy) ? legacy : []).map(o => ({ ...o, ref: { orderId: o.orderId } })),
     ];
     const assets = (acct.assets || []).filter(a => num(a.marginBalance) > 0);
@@ -128,7 +129,7 @@ export function binance({ key, secret, env = 'live' }) {
         entry: num(p.entryPrice), mark, upnl: upnlCoin * mark, upnl_coin: upnlCoin, settle_coin: coin,
         leverage: num(p.leverage) || null, liq: num(p.liquidationPrice) || null,
         notional: Math.abs(amt) * (coin === 'BTC' ? 100 : 10),
-        stop: sl || null, tp: tp ? num(tp.stopPrice) : null, stop_refs: slOrders.map(o => o.ref),
+        stop: sl || null, tp: tp ? num(tp.stopPrice) : null, stop_refs: slOrders.map(o => o.ref), stop_unknown: stopUnknown,
         position_side: p.positionSide,
         opened_at: p.updateTime ? Math.floor(p.updateTime / 1000) : null,
       };
@@ -140,6 +141,8 @@ export function binance({ key, secret, env = 'live' }) {
     // Algo Service + ordenes viejas que aun vivan en el libro normal
     const [algo, legacy] = await Promise.allSettled([F('GET', '/fapi/v1/openAlgoOrders'), F('GET', '/fapi/v1/openOrders')]);
     const out = [];
+    // Los stops viven en el Algo Service: si esa lectura fallo, no se sabe si hay stop
+    out.unknown = algo.status === 'rejected';
     for (const o of algo.status === 'fulfilled' ? listOf(algo.value) : []) {
       out.push({ symbol: o.symbol, kind: o.orderType || o.type, side: o.side, positionSide: o.positionSide,
                  price: num(o.triggerPrice), ref: { algoId: o.algoId } });
@@ -173,7 +176,7 @@ export function binance({ key, secret, env = 'live' }) {
         size: Math.abs(amt), entry: num(p.entryPrice), mark: num(p.markPrice),
         upnl: num(p.unRealizedProfit), liq: num(p.liquidationPrice) || null,
         leverage: im > 0 ? Math.round(notional / im) : null, notional,
-        stop: best?.price || null, stop_refs: sl.map(s => s.ref),
+        stop: best?.price || null, stop_refs: sl.map(s => s.ref), stop_unknown: !!stops.unknown,
         tp: tp[0]?.price || null, opened_at: p.updateTime ? Math.floor(p.updateTime / 1000) : null,
       };
     });
@@ -286,13 +289,30 @@ export function binance({ key, secret, env = 'live' }) {
     const market = pos.market === 'coinm' ? 'coinm' : 'futures';
     const { X, v } = fx(market);
     const inst = await instrument(market, pos.symbol);
-    await placeStopAlgo(market, pos.symbol, pos.side, pos.position_side, 'STOP_MARKET', stop, inst.tick);
-    for (const ref of pos.stop_refs || []) {
-      try {
-        if (ref.algoId) await X('DELETE', `${v}/algoOrder`, { algoId: ref.algoId });
-        else await X('DELETE', `${v}/order`, { symbol: pos.symbol, orderId: ref.orderId });
-      } catch (e) { console.error('cancel old stop', e.message); }
+    const cancelOld = async () => {
+      for (const ref of pos.stop_refs || []) {
+        try {
+          if (ref.algoId) await X('DELETE', `${v}/algoOrder`, { algoId: ref.algoId });
+          else await X('DELETE', `${v}/order`, { symbol: pos.symbol, orderId: ref.orderId });
+        } catch (e) { console.error('cancel old stop', e.message); }
+      }
+    };
+    const place = price => placeStopAlgo(market, pos.symbol, pos.side, pos.position_side, 'STOP_MARKET', price, inst.tick);
+    try {
+      await place(stop);
+    } catch (e) {
+      // Binance solo admite un stop de cierre total por direccion (-4130): hay que
+      // quitar el viejo antes. Si el nuevo falla, se repone el anterior.
+      if (e.code !== -4130 || !pos.stop_refs?.length) throw e;
+      await cancelOld();
+      try { await place(stop); }
+      catch (e2) {
+        if (pos.stop) await place(pos.stop).catch(e3 => console.error('restore stop', e3.message));
+        throw e2;
+      }
+      return;
     }
+    await cancelOld();
   }
 
   async function reduce(pos, qty) {
@@ -301,7 +321,7 @@ export function binance({ key, secret, env = 'live' }) {
     const inst = await instrument(market, pos.symbol);
     const hedge = pos.position_side && pos.position_side !== 'BOTH';
     const q = floorStep(Math.min(qty, pos.size), inst.step);
-    if (!(q > 0)) return null;
+    if (!(q > 0) || q < (inst.min_qty || 0)) return null;   // menor al minimo del exchange: no se envia
     return X('POST', `${v}/order`, {
       symbol: pos.symbol, side: pos.side === 'long' ? 'SELL' : 'BUY',
       positionSide: hedge ? pos.position_side : undefined,

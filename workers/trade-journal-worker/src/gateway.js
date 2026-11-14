@@ -38,6 +38,7 @@ export class ExchangeGateway {
     this.db = env.DB;
     this.queue = Promise.resolve();
     this.ctxCache = null;
+    this.missing = new Map();   // revisiones seguidas en que una operacion del libro no aparece
     // Inyectable para las pruebas (tests/gateway.test.js)
     this.adapter = env.ADAPTER || adapter;
     this.detectMode = env.DETECT_MODE || detectBitgetMode;
@@ -437,8 +438,12 @@ export class ExchangeGateway {
                                  leverage: plan.leverage, cid, inst })
         : await ex.openSpot({ symbol: o.symbol, qty: plan.qty, stop: o.stop, tp: o.tp, cid, inst, ref_price: plan.price });
     } catch (e) {
-      await upd({ status: 'rejected', error: e.message });
-      await this.log('order_error', `${o.symbol}: el exchange rechazo la orden: ${e.message}`, 'error', { plan });
+      // Con un rechazo explicito del exchange la orden no existe. Con un error de red
+      // (timeout, relay) pudo haberse ejecutado: queda pendiente y el guardian la
+      // concilia por su id; si se marcara rechazada, apareceria luego como externa.
+      const explicit = e.code != null && e.code !== '' && e.status !== 502;
+      await upd({ status: explicit ? 'rejected' : 'pending', error: e.message });
+      await this.log('order_error', `${o.symbol}: ${explicit ? 'el exchange rechazo la orden' : 'sin respuesta clara del exchange, se verificara'}: ${e.message}`, 'error', { plan });
       return { ok: false, errors: [`Exchange: ${e.message}`], plan };
     }
     await upd({ order_id: res.order_id });
@@ -476,7 +481,9 @@ export class ExchangeGateway {
       await this.log('warn', `${o.symbol}: la orden se envio pero la posicion aun no aparece; el guardian la revisara`, 'warn');
       return { ok: true, id, plan, result: res, warning: 'Posicion aun no visible' };
     }
-    if (!(pos.stop > 0)) {
+    if (pos.stop_unknown) {
+      await this.log('warn', `${o.symbol}: no se pudo leer el stop tras entrar; el guardian lo verificara`, 'warn');
+    } else if (!(pos.stop > 0)) {
       try { await ex.setStop(pos, o.stop); }
       catch (e) {
         await ex.closePosition(pos).catch(err => console.error(err));
@@ -511,7 +518,11 @@ export class ExchangeGateway {
     if (!pos) throw bad('Posicion no encontrada');
     const stop = +b.stop;
     const long = pos.side === 'long';
-    const cur = pos.stop;
+    if (pos.stop_unknown) throw bad('No se pudo leer el stop actual en el exchange: intenta de nuevo en un momento');
+    // Referencia: el stop del exchange o, si no aparece, el registrado en el libro
+    const led = await this.db.prepare("SELECT stop FROM exec_trades WHERE status = 'open' AND exchange = ? AND market = ? AND symbol = ? AND side = ?")
+      .bind(pos.exchange, pos.market || 'futures', pos.symbol, pos.side).first();
+    const cur = pos.stop || led?.stop || null;
     if (!(stop > 0)) throw bad('Stop invalido');
     if (cur && (long ? stop < cur : stop > cur)) {
       await this.log('rejected', `${pos.symbol}: intento de alejar el stop de ${cur} a ${stop}`, 'warn');
@@ -688,6 +699,9 @@ export class ExchangeGateway {
       const key = x => `${x.exchange}|${x.symbol}|${x.side}`;
       const known = new Set(ctx.ledger.filter(t => t.status === 'open' || t.status === 'pending').map(key));
       const swing = !ctx.rules.vwap_exchanges.includes(b.exchange);
+      // Lo que el guardian adopto mientras la cuenta estaba en simulacion tambien
+      // estaba abierto antes del modo real: no se recorta ni se cierra solo
+      await this.db.prepare("UPDATE exec_trades SET external = 2 WHERE exchange = ? AND status = 'open' AND external = 1").bind(b.exchange).run();
       for (const p of (swing ? ctx.swingPositions : ctx.positions).filter(p => p.exchange === b.exchange && !known.has(key(p)))) {
         await this.adopt(p, ctx, swing ? 'swing' : 'vwap', 2);
         await this.log('guardian', `${p.symbol}: posicion previa al modo real adoptada; queda bajo las reglas de stop y riesgo`, 'warn');
@@ -733,7 +747,8 @@ export class ExchangeGateway {
     // respondio, sus posiciones no "desaparecieron", simplemente no se ven.
     const readable = new Set(ctx.vwapLive.map(l => l.acc.exchange));
 
-    const vwapPlan = guardianPlan({ positions: ctx.positions,
+    const recent = ctx.ledger.filter(t => t.status === 'closed' && t.closed_at > nowSec() - 3600 && t.market !== 'spot');
+    const vwapPlan = guardianPlan({ positions: ctx.positions, recent: recent.filter(t => (t.strategy || 'vwap') === 'vwap'),
       ledger: ctx.ledger.filter(t => readable.has(t.exchange) && (t.strategy || 'vwap') === 'vwap'), tradingAllowed, rules: ctx.rules,
       baseEquity: ctx.gates.base_equity || ctx.equity.now, now: ctx.now }).map(a => ({ ...a, strategy: 'vwap' }));
     // Swing: stop obligatorio y riesgo maximo, sin ventana ni noticias. Si el
@@ -742,6 +757,7 @@ export class ExchangeGateway {
     const swingPlan = ctx.swingEquity > 0 ? guardianPlan({ positions: ctx.swingPositions,
       ledger: ctx.ledger.filter(t => swingReadable.has(t.exchange) && t.strategy === 'swing'),
       tradingAllowed: { ok: true }, rules: ctx.rules.swing, baseEquity: ctx.swingEquity, now: ctx.now, onCrossed: 'alert',
+      recent: recent.filter(t => t.strategy === 'swing'),
     }).map(a => ({ ...a, strategy: 'swing' })) : [];
     const plan = [...vwapPlan, ...swingPlan];
     const accOf = ex => ctx.accounts.find(a => a.exchange === ex);
@@ -770,7 +786,21 @@ export class ExchangeGateway {
           await this.log('fill', `${sym}: la limite se lleno @ ${a.pos.entry}`);
           continue;
         }
-        if (a.type === 'closed') { await this.settle(a.trade, ex); acted.push('closed'); continue; }
+        if (a.type === 'reopen') {
+          await this.db.prepare("UPDATE exec_trades SET status='open', closed_at=NULL, exit_price=NULL, pnl=NULL, r=NULL WHERE id=?").bind(a.trade.id).run();
+          await this.db.prepare('DELETE FROM trades WHERE exchange_id = ?').bind(`tj:${a.trade.id}`).run();
+          await this.log('guardian', `${sym}: ${a.reason}`, 'warn');
+          continue;
+        }
+        if (a.type === 'closed') {
+          // Solo se da por cerrada si el exchange confirma el cierre en su historial,
+          // o si lleva 10 revisiones seguidas sin aparecer. Una lectura vacia suelta
+          // no basta: cerrarla en el libro la haria pasar por externa despues.
+          const miss = (this.missing.get(a.trade.id) || 0) + 1;
+          this.missing.set(a.trade.id, miss);
+          if (await this.settle(a.trade, ex, miss >= 10)) { this.missing.delete(a.trade.id); acted.push('closed'); }
+          continue;
+        }
         if (a.type === 'check_pending') { await this.checkPending(a.trade, ex, a.cancel); continue; }
 
         // Acciones que tocan el exchange: en simulacion solo se avisan
@@ -847,13 +877,15 @@ export class ExchangeGateway {
   }
 
   // Cierra en el libro y en el journal una operacion que ya no esta en el exchange
-  async settle(t, ex) {
+  async settle(t, ex, force = true) {
     let res = null;
     try {
       res = t.market !== 'spot'
         ? await ex.closedPnl(t.symbol, t.side, t.opened_at * 1000, t.market)
         : await ex.spotPnl(t.symbol, t.opened_at * 1000, (t.entry || 0) * (t.qty || 0));
     } catch (e) { console.error('pnl', e.message); }
+    const confirmed = t.market === 'spot' || (res && (res.exit_price != null || res.closed_at != null));
+    if (!confirmed && !force) return false;
     if (t.market !== 'spot') await ex.cleanup(t.symbol, t.market);
     const pnl = res?.pnl ?? null;
     const r = rOf(pnl, t.risk_usd);
@@ -863,6 +895,7 @@ export class ExchangeGateway {
     await this.toJournal({ ...t, closed_at: closedAt, exit_price: res?.exit_price ?? null, pnl, r });
     await this.log('closed', `${t.symbol} ${t.side} cerrada: ${pnl == null ? 'PnL pendiente' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT`}${r != null ? ` (${r.toFixed(2)}R)` : ''}`,
       pnl != null && pnl < 0 ? 'warn' : 'info', { id: t.id });
+    return true;
   }
 
   async toJournal(t) {
