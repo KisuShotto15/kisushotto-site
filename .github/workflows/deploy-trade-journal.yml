@@ -39,3 +39,23 @@ jobs:
 
       - name: wrangler deploy
         run: npx --yes wrangler@4 deploy
+
+      # Llave con la que el worker cifra las API keys de los exchanges. Se crea
+      # una sola vez con un valor aleatorio que nadie conoce; nunca se pisa,
+      # porque cambiarla dejaria ilegibles las llaves ya guardadas.
+      - name: KEYS_SECRET (solo si no existe)
+        run: |
+          if npx --yes wrangler@4 secret list 2>/dev/null | grep -q 'KEYS_SECRET'; then
+            echo "KEYS_SECRET ya existe, no se toca"
+          else
+            openssl rand -base64 48 | tr -d '\n' | npx --yes wrangler@4 secret put KEYS_SECRET
+          fi
+
+      # El cron llama al guardian cada minuto: si corrio, el Durable Object, D1
+      # y la salida a internet funcionan. egress dice desde donde sale y si
+      # Binance/Bitget responden ahi.
+      - name: verificar guardian
+        run: |
+          sleep 150
+          npx --yes wrangler@4 d1 execute trade-journal-db --remote --json \
+            --command "SELECT guardian_at, unixepoch() - guardian_at AS hace_seg, guardian_error, egress FROM risk_state; SELECT * FROM news_meta;"

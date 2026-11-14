@@ -49,7 +49,7 @@ HEADERS
 # Sin _redirects a proposito: Pages ya sirve /trades desde trades.html y
 # redirige /trades.html -> /trades. Agregar reglas propias crea un bucle.
 # Los enlaces internos apuntan directo a la URL limpia para evitar el salto.
-sed -i -E 's#href="\./(trades|analytics|insights)\.html"#href="./\1"#g' "$OUT"/*.html
+sed -i -E 's#href="\./(trades|analytics|insights|terminal)\.html"#href="./\1"#g' "$OUT"/*.html
 sed -i -E 's#href="\./index\.html"#href="./"#g' "$OUT"/*.html
 
 echo "$OUT/ built OK (build ${BUILD_ID})"

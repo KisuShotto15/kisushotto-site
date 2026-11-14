@@ -245,6 +245,7 @@ export class ExchangeGateway {
       spot: ctx.spot,
       open_trades: ctx.ledger.filter(t => t.status === 'open' || t.status === 'pending'),
       guardian_at: ctx.state.guardian_at, guardian_error: ctx.state.guardian_error,
+      egress: ctx.state.egress ? JSON.parse(ctx.state.egress) : null,
     };
   }
 
@@ -664,7 +665,12 @@ export class ExchangeGateway {
     }
 
     await this.guardSpot(ctx).catch(e => this.log('guardian_error', `spot: ${e.message}`, 'error'));
-    await this.patchState({ guardian_at: nowSec(), guardian_error: ctx.errors.join(' | ') || null });
+    const patch = { guardian_at: nowSec(), guardian_error: ctx.errors.join(' | ') || null };
+    if (!ctx.state.egress_at || nowSec() - ctx.state.egress_at > 1800) {
+      patch.egress = JSON.stringify(await this.probeEgress().catch(e => ({ error: e.message })));
+      patch.egress_at = nowSec();
+    }
+    await this.patchState(patch);
     this.ctxCache = null;
     return { ok: true, actions: plan.length, acted, errors: ctx.errors };
   }
@@ -758,17 +764,25 @@ export class ExchangeGateway {
     return { trades: results };
   }
 
-  async diag() {
+  // Desde donde sale el trafico y si los exchanges responden (sin llaves).
+  // Binance responde 451 desde ubicaciones restringidas.
+  async probeEgress() {
     const trace = await fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).catch(e => e.message);
     const info = Object.fromEntries(String(trace).split('\n').filter(Boolean).map(l => l.split('=')));
+    const hit = url => fetch(url).then(async r => ({ status: r.status, body: (await r.text()).slice(0, 120) })).catch(e => ({ error: e.message }));
+    const [bnF, bnS, bg] = await Promise.all([
+      hit('https://fapi.binance.com/fapi/v1/time'), hit('https://api.binance.com/api/v3/time'), hit('https://api.bitget.com/api/v2/public/time'),
+    ]);
+    return { colo: info.colo, loc: info.loc, binance_futures: bnF, binance_spot: bnS, bitget: bg, keys_secret: !!this.env.KEYS_SECRET };
+  }
+
+  async diag() {
     const accounts = await this.loadAccounts();
     const checks = {};
     for (const a of accounts) {
       try { checks[a.exchange] = await this.adapter(a).diag(); } catch (e) { checks[a.exchange] = { error: e.message }; }
     }
-    // Binance responde 451 desde ubicaciones restringidas: se prueba sin llaves
-    const pub = await fetch('https://fapi.binance.com/fapi/v1/time').then(async r => ({ status: r.status, body: (await r.text()).slice(0, 160) })).catch(e => ({ error: e.message }));
-    return { colo: info.colo, loc: info.loc, ip: info.ip, binance_public: pub, accounts: checks, keys_secret: !!this.env.KEYS_SECRET };
+    return { ...(await this.probeEgress()), accounts: checks };
   }
 }
 

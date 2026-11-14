@@ -12,7 +12,7 @@ const W = new URL('../workers/trade-journal-worker/', import.meta.url);
 function d1() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('schema.sql', W), 'utf8'));
-  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution']) {
+  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution', '0010_egress']) {
     db.exec(readFileSync(new URL(`migrations/${f}.sql`, W), 'utf8'));
   }
   const stmt = (sql, args = []) => ({
@@ -62,6 +62,9 @@ globalThis.fetch = async () => new Response(JSON.stringify([
 ]), { status: 200 });
 
 const { st, api } = fakeExchange();
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (u, ...r) => String(u).includes('faireconomy') ? realFetch(u, ...r)
+  : new Response(String(u).includes('trace') ? 'colo=AMS\nloc=NL\n' : '{}', { status: 200 });
 const DB = d1();
 const gw = new ExchangeGateway({}, { DB, KEYS_SECRET: 'test-secret-1234567890', ADAPTER: () => api, DETECT_MODE: async () => 'classic' });
 const call = async (path, body, method = body ? 'POST' : 'GET') => {
