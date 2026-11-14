@@ -363,20 +363,20 @@ function renderTDEEResults() {
     <div class="tdee-chips">
       <div class="tdee-chip">
         <div class="tdee-chip-val">${bmr}</div>
-        <div class="tdee-chip-label">BMR</div>
+        <div class="tdee-chip-label">Basal</div>
       </div>
       <div class="tdee-chip">
         <div class="tdee-chip-val">${tdee}</div>
-        <div class="tdee-chip-label">TDEE</div>
+        <div class="tdee-chip-label">Gasto diario</div>
       </div>
       <div class="tdee-chip tdee-chip--accent">
         <div class="tdee-chip-val">${target}</div>
-        <div class="tdee-chip-label">Target · ${label}</div>
+        <div class="tdee-chip-label">Meta · ${label}</div>
       </div>
     </div>
     <div class="bmi-block" data-bmi="${bmiStatus}">
       <div class="bmi-head">
-        <span class="bmi-label">BMI</span>
+        <span class="bmi-label">IMC</span>
         <span class="bmi-val">${bmi.toFixed(1)}</span>
         <span class="bmi-cat">${bmiCat}</span>
       </div>
@@ -447,9 +447,8 @@ async function renderMicros() {
   if (!el) return;
   const apiKey = getApiKey(S.activeProfile);
   if (!apiKey) {
-    el.innerHTML = `<div class="micros-loading">Micronutrientes requieren una
-      <button class="link-btn" onclick="window._openApiKeyModal()">API key USDA</button>
-      para calcular cobertura real.</div>`;
+    el.innerHTML = `<div class="micros-loading">Para ver vitaminas y minerales, activa la búsqueda USDA (gratis).
+      <button class="link-btn" onclick="window._openApiKeyModal()">Configurar</button></div>`;
     renderFatTypes(day().meals);
     return;
   }
@@ -510,9 +509,11 @@ function renderFatTypes(meals) {
   const { sat, mono, poly } = totalFatTypes(meals, S.microCache);
   const known = sat + mono + poly;
   if (known === 0) {
-    el.innerHTML = '<span class="fat-dist-empty">Sin datos de composicion de grasas aun.</span>';
+    el.innerHTML = '';
+    document.getElementById('fatSection').hidden = true;
     return;
   }
+  document.getElementById('fatSection').hidden = false;
   const pSat  = Math.round(sat  / known * 100);
   const pMono = Math.round(mono / known * 100);
   const pPoly = 100 - pSat - pMono;
@@ -559,7 +560,7 @@ function renderSummary() {
     <div class="macro-block cal">
       <div class="macro-val">${fmt(m.calories)}</div>
       <div class="macro-unit">KCAL / DÍA</div>
-      ${pct !== null ? `<div class="macro-progress"><div class="macro-progress-bar" style="width:${pct}%"></div></div><div class="macro-label">${pct}% del target</div>` : '<div class="macro-label">Total</div>'}
+      ${pct !== null ? `<div class="macro-progress"><div class="macro-progress-bar" style="width:${pct}%"></div></div><div class="macro-label">${pct}% de tu meta (${fmt(targetKcal)})</div>` : '<div class="macro-label">Total</div>'}
     </div>
     <div class="macro-block prot">
       <div class="macro-val">${fmt(m.protein)}<span class="macro-val-unit">g</span></div>
@@ -573,10 +574,25 @@ function renderSummary() {
     </div>
     <div class="macro-block carb">
       <div class="macro-val">${fmt(m.carbs)}<span class="macro-val-unit">g</span></div>
-      <div class="macro-unit">CARBS</div>
+      <div class="macro-unit">CARBOS</div>
       <div class="macro-label">${m.calories ? fmt(m.carbs * 4 / m.calories * 100) : 0}% kcal</div>
     </div>`;
+  // Cuanto falta (o sobra) para la meta, con ideas baratas para completar
+  const gap = document.getElementById('kcalGap');
+  const diff = targetKcal ? Math.round((targetKcal - m.calories) / 50) * 50 : 0;
+  if (gap) {
+    gap.hidden = Math.abs(diff) < 150;
+    gap.className = 'kcal-gap' + (diff < 0 ? ' over' : '');
+    gap.innerHTML = diff > 0 ? `Te faltan <b>~${diff} kcal</b> para tu meta. ${cheapFill(diff)}`
+      : `Te pasas <b>~${-diff} kcal</b> de tu meta.`;
+  }
   renderMicros();
+}
+const FILLERS = [['2 cdas de aceite', 240], ['50 g de maní', 290], ['1 taza de avena con leche', 300], ['1 plátano', 120], ['2 huevos', 150], ['1 taza de arroz', 200]];
+function cheapFill(kcal) {
+  const pick = []; let left = kcal;
+  for (const [n, k] of FILLERS) { if (left <= 60) break; if (k <= left + 80) { pick.push(n); left -= k; } }
+  return pick.length ? 'Por ejemplo: ' + pick.join(' + ') + '.' : '';
 }
 
 // ── Meals ─────────────────────────────────────────────────────────────────────
@@ -600,14 +616,14 @@ function renderMealCard(meal, idx, total) {
       <div class="meal-left">
         <div class="meal-number">${String(idx+1).padStart(2,'0')}</div>
         <div class="meal-info">
-          <h3 class="editable" onclick="event.stopPropagation(); window._editField('${meal.id}','name',this)">${esc(meal.name)}</h3>
+          <h3 class="editable" onclick="event.stopPropagation(); window._editField('${meal.id}','name',this)">${esc(meal.name || 'Comida ' + (idx + 1))}</h3>
           <div class="meal-time editable" onclick="event.stopPropagation(); window._editField('${meal.id}','time',this)">${esc(meal.time)}</div>
         </div>
       </div>
       <div class="meal-macros">
         <div class="meal-macro-item"><div class="meal-macro-val p">${fmt(m.protein)}g</div><div class="meal-macro-label">Prot</div></div>
-        <div class="meal-macro-item"><div class="meal-macro-val f">${fmt(m.fat)}g</div><div class="meal-macro-label">Fat</div></div>
-        <div class="meal-macro-item"><div class="meal-macro-val c">${fmt(m.carbs)}g</div><div class="meal-macro-label">Carb</div></div>
+        <div class="meal-macro-item"><div class="meal-macro-val f">${fmt(m.fat)}g</div><div class="meal-macro-label">Grasa</div></div>
+        <div class="meal-macro-item"><div class="meal-macro-val c">${fmt(m.carbs)}g</div><div class="meal-macro-label">Carbo</div></div>
         <div class="meal-macro-item"><div class="meal-macro-val k">${fmt(m.calories)}</div><div class="meal-macro-label">kcal</div></div>
       </div>
       <div class="meal-controls" onclick="event.stopPropagation()">

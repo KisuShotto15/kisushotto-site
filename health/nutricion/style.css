@@ -424,6 +424,17 @@ a { color: inherit; text-decoration: none; }
   margin-bottom: 16px;
 }
 .section-head .ghost-btn { margin-left: auto; }
+/* Calorias que faltan para la meta (bulk) */
+.kcal-gap { margin-top: 10px; padding: 12px 14px; border-radius: 12px; background: var(--h-nutri-soft); color: var(--text-2); font-size: 13.5px; line-height: 1.45; }
+.kcal-gap b { color: var(--accent); }
+.kcal-gap.over { background: var(--h-warn-soft); }
+.kcal-gap.over b { color: var(--h-warn); }
+/* Reglas plegables */
+details.rules-section > summary { list-style: none; cursor: pointer; }
+details.rules-section > summary::-webkit-details-marker { display: none; }
+details.rules-section > summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .2s; }
+details.rules-section[open] > summary::after { transform: rotate(180deg); }
+details.rules-section:not([open]) > summary { margin-bottom: 0; }
 .section-title {
   font-family: var(--font-sans);
   font-weight: 600;
@@ -1433,9 +1444,13 @@ a { color: inherit; text-decoration: none; }
   .meal-info { flex-direction: column; align-items: flex-start; gap: 2px; }
   .meal-controls .icon-btn:not(.icon-btn--danger),
   .meal-controls .icon-btn-placeholder { display: none; }
-  .meal-macros { gap: 8px; }
-  .meal-macro-val { font-size: 12px; }
-  .meal-macro-label { font-size: 9px; }
+  /* Macros de la comida en su propia fila, legibles */
+  .meal-header { grid-template-columns: auto 1fr auto auto; row-gap: 12px; }
+  .meal-macros { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; gap: 8px;
+    padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+  .meal-macro-item { align-items: center; }
+  .meal-macro-val { font-size: 15px; font-weight: 600; }
+  .meal-macro-label { font-size: 10px; letter-spacing: .08em; }
 
   .ing-macros { display: none; }
   .ingredient-item { grid-template-columns: 1fr auto 24px 24px; }
