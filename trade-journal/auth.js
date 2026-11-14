@@ -53,7 +53,7 @@ export function showLogin(msg = '') {
 
       <div class="tj-login-msg" id="tj-login-msg">${msg}</div>
       <div class="tj-login-foot">
-        <a href="${AUTH_BASE}/api/auth/forgot-password" id="tj-forgot">¿Olvidaste la contraseña?</a>
+        <a href="#" id="tj-forgot">¿Olvidaste la contraseña?</a>
       </div>
     </div>`;
   document.body.appendChild(el);
@@ -65,6 +65,23 @@ export function showLogin(msg = '') {
 
   mail.value = session.email();
   (mail.value ? el.querySelector('#tj-pass') : mail).focus();
+
+  // Recuperar contrasena: el servidor manda un enlace al correo. La cuenta es la
+  // misma de todo el sitio; el enlace abre p2p.kisushotto.com para elegir la nueva.
+  el.querySelector('#tj-forgot').onclick = async e => {
+    e.preventDefault();
+    const email = mail.value.trim().toLowerCase();
+    out.className = 'tj-login-msg';
+    if (!email) { out.className = 'tj-login-msg err'; out.textContent = 'Escribe tu email arriba y vuelve a tocar el enlace.'; mail.focus(); return; }
+    out.textContent = 'Enviando…';
+    try {
+      await post('/api/auth/forgot-password', { email });
+      out.textContent = `Si ${email} tiene cuenta, te llego un correo para elegir una contraseña nueva (revisa spam). Despues entra aqui con ella.`;
+    } catch (err) {
+      out.className = 'tj-login-msg err';
+      out.textContent = err.message;
+    }
+  };
 
   form.onsubmit = async e => {
     e.preventDefault();
