@@ -167,4 +167,29 @@ public class NativePlugin extends Plugin {
         MainActivity.pendingUrl = null;
         call.resolve(r);
     }
+
+    // Version de lo nativo: la web la manda al registrar el token (v2 = notificaciones
+    // solo-data con botones; ver PushService).
+    @PluginMethod
+    public void appInfo(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("v", 2);
+        call.resolve(r);
+    }
+
+    // Datos del widget (HealthWidget): los manda Hoy cada vez que se pinta.
+    @PluginMethod
+    public void widget(PluginCall call) {
+        getContext().getSharedPreferences(HealthWidget.PREFS, android.content.Context.MODE_PRIVATE).edit()
+            .putString("day", new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date()))
+            .putString("title", call.getString("title", "Tu rutina"))
+            .putInt("ring", call.getInt("ring", 0))
+            .putBoolean("rut", call.getBoolean("rut", false))
+            .putBoolean("food", call.getBoolean("food", false))
+            .putBoolean("weight", call.getBoolean("weight", false))
+            .putInt("streak", call.getInt("streak", 0))
+            .apply();
+        HealthWidget.refresh(getContext());
+        call.resolve();
+    }
 }

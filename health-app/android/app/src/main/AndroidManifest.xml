@@ -29,6 +29,17 @@
         <!-- Aviso de fin de descanso con la app en segundo plano (TimerAlarm). -->
         <receiver android:name=".TimerAlarm" android:exported="false" />
 
+        <!-- Botones Si / Mas o menos / No del check-in de la noche. -->
+        <receiver android:name=".QuickReply" android:exported="false" />
+
+        <!-- Widget de la pantalla de inicio. -->
+        <receiver android:name=".HealthWidget" android:exported="false" android:label="Health · Hoy">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_health" />
+        </receiver>
+
         <!-- Recordatorios por FCM (cron de habits-worker). -->
         <service
             android:name=".PushService"

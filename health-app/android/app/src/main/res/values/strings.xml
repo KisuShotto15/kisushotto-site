@@ -6,4 +6,5 @@
     <string name="custom_url_scheme">com.kisushotto.health.app</string>
     <string name="sc_rutina">Empezar rutina</string>
     <string name="sc_peso">Registrar peso</string>
+    <string name="widget_desc">Hoy toca, día completo y racha</string>
 </resources>
