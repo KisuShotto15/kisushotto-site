@@ -144,12 +144,20 @@ export function phasesOf(x){
   return out;
 }
 export const doseOf=x=>`${x.sets} × ${x.fail?'al fallo':x.type==='time'?x.secs+' s':x.reps+' reps'}${x.sides?' c/lado':''}${x.kg?' · '+x.kg+' kg':''}`;
-export function compile(r){
-  if(r.builtin)return r.blocks.flatMap(b=>b.items.map(it=>({...it,block:b.name})));
+// mini: "modo minimo" para dias malos (~10 min que igual cuentan): la incluida con
+// la mitad del tiempo por fase; las propias, 1 serie por ejercicio y descansos cortos.
+export function compile(r,mini=false){
+  if(r.builtin){
+    const its=r.blocks.flatMap(b=>b.items.map(it=>({...it,block:b.name})));
+    return mini?its.map(it=>({...it,phases:it.phases.map(p=>({...p,s:Math.max(15,Math.round(p.s/2)),
+      cues:p.cues?.map(c=>({...c,t:Math.round(c.t/2)}))}))})):its;
+  }
   // restBetween: descanso entre un ejercicio y el siguiente (ultima fase del ejercicio)
-  const n=(r.items||[]).length,between=x=>({l:'Descanso',s:r.restBetween,rest:true,between:true});
-  return (r.items||[]).map((x,j)=>({src:j,kg:x.kg||null,name:x.name,dose:doseOf(x),
-    phases:r.restBetween>0&&j<n-1?[...phasesOf(x),between(x)]:phasesOf(x),steps:[],note:x.note||'',q:x.name+' exercise',block:'',sets:x.sets,reps:x.type==='reps'?x.reps:0}));
+  const rb=mini?Math.min(r.restBetween||0,60):r.restBetween;
+  const n=(r.items||[]).length,between=x=>({l:'Descanso',s:rb,rest:true,between:true});
+  const one=x=>mini?{...x,sets:1}:x;
+  return (r.items||[]).map((x,j)=>({src:j,kg:x.kg||null,name:x.name,dose:doseOf(one(x)),
+    phases:rb>0&&j<n-1?[...phasesOf(one(x)),between(x)]:phasesOf(one(x)),steps:[],note:x.note||'',q:x.name+' exercise',block:'',sets:x.sets,reps:x.type==='reps'?x.reps:0}));
 }
 // Duracion estimada: las series por repeticiones cuentan ~3 s por rep
 export const dur=it=>it.phases.reduce((a,p)=>a+(p.s||p.reps*3),0);

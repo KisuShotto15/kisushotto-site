@@ -64,6 +64,14 @@ input,select{font-family:inherit;outline:none}
 .stat-delta.up,.stat-delta.down{color:var(--text-2)}
 .stat-delta.good{color:var(--green)}
 .stat-delta.bad{color:var(--h-warn,#fbbf24)}
+.ph-cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.ph-cmp figure{margin:0;display:flex;flex-direction:column;gap:6px}
+.ph-cmp img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:12px;background:var(--surf-2);border:1px solid var(--border)}
+.ph-cmp select{background:var(--surf-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 8px;font-size:12px}
+.ph-empty{grid-column:1/-1;text-align:center;color:var(--text-3);font-size:13px;padding:22px 10px;border:1px dashed var(--border-2);border-radius:12px}
+.ph-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ph-add{cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.ph-msg{font-size:12px;color:var(--text-3)}
 .chart-axis{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text-3);margin-top:6px}
 .chart-axis b{color:var(--text-2);font-weight:600}
 [hidden]{display:none!important}
@@ -234,6 +242,16 @@ select.inp{cursor:pointer}
           <div class="meas-item"><span class="ml">Muslo</span><span class="mv" id="m-thigh">— <small style="color:var(--text-3)">cm</small></span></div>
         </div>
       </div>
+
+      <!-- Fotos de progreso: una por mes, solo las ve la cuenta -->
+      <div class="panel" style="margin-top:16px">
+        <div class="ptitle">Fotos de progreso</div>
+        <div id="ph-cmp" class="ph-cmp"></div>
+        <div class="ph-row">
+          <label class="btn btn-primary btn-sm ph-add">📷 <span id="ph-add-t">Foto de este mes</span><input type="file" accept="image/*" id="ph-file" hidden></label>
+          <span class="ph-msg" id="ph-msg">Solo tú las ves</span>
+        </div>
+      </div>
     </div>
 
     <!-- RIGHT: Rendimiento -->
@@ -349,6 +367,61 @@ select.inp{cursor:pointer}
 
 <script type="module">
 import { loadLocal, saveLocal, pull, push } from './sync.js';
+import { authFetch } from '../auth.js';
+
+// ── Fotos de progreso (habits-worker /health/photo, una por mes) ─────────────
+const PHOTO_API = 'https://habits-worker.efrenalejandro2010.workers.dev/health';
+let phMonths = [];
+const phCache = {};
+const localMonth = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+const monthName = m => new Date(m + '-01T00:00:00').toLocaleDateString('es', { month: 'long', year: 'numeric' });
+async function phGet(m) {
+  if (!phCache[m]) phCache[m] = authFetch(`${PHOTO_API}/photo?m=${m}`).then(r => r.ok ? r.json() : {}).then(j => j.data || '');
+  return phCache[m];
+}
+async function loadPhotos() {
+  try { const r = await authFetch(PHOTO_API + '/photos'); phMonths = r.ok ? ((await r.json()).months || []).sort() : []; } catch { phMonths = []; }
+  renderPhotos();
+}
+let phA = null, phB = null;
+async function renderPhotos() {
+  const box = document.getElementById('ph-cmp'), cur = localMonth();
+  document.getElementById('ph-add-t').textContent = phMonths.includes(cur) ? 'Cambiar la de este mes' : 'Foto de este mes';
+  if (!phMonths.length) { box.innerHTML = '<div class="ph-empty">📸 Una foto al mes, con la misma luz y postura.<br>En un bulk el cambio se ve antes en fotos que en la báscula.</div>'; return; }
+  phA = phMonths.includes(phA) ? phA : phMonths[0];
+  phB = phMonths.includes(phB) ? phB : phMonths[phMonths.length - 1];
+  const sel = (id, v) => `<select id="${id}">${phMonths.map(m => `<option value="${m}"${m === v ? ' selected' : ''}>${monthName(m)}</option>`).join('')}</select>`;
+  const one = phMonths.length === 1;
+  box.innerHTML = `<figure><img id="ph-ia" alt="">${sel('ph-sa', phA)}</figure>` +
+    (one ? '<div class="ph-empty" style="grid-column:auto">El próximo mes podrás compararlas lado a lado.</div>' : `<figure><img id="ph-ib" alt="">${sel('ph-sb', phB)}</figure>`);
+  document.getElementById('ph-sa').onchange = e => { phA = e.target.value; renderPhotos(); };
+  if (!one) document.getElementById('ph-sb').onchange = e => { phB = e.target.value; renderPhotos(); };
+  document.getElementById('ph-ia').src = await phGet(phA);
+  if (!one) document.getElementById('ph-ib').src = await phGet(phB);
+}
+// Se achica en el telefono (1080 px, JPEG) antes de subirla
+async function compress(file) {
+  const img = await createImageBitmap(file);
+  const k = Math.min(1, 1080 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.8);
+}
+document.getElementById('ph-file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const msg = document.getElementById('ph-msg'); msg.textContent = 'Subiendo…';
+  try {
+    const data = await compress(f), m = localMonth();
+    const r = await authFetch(`${PHOTO_API}/photo?m=${m}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) });
+    if (!r.ok) throw new Error(r.status);
+    phCache[m] = Promise.resolve(data);
+    if (!phMonths.includes(m)) phMonths.push(m);
+    phB = m; msg.textContent = 'Guardada ✓ · solo tú las ves';
+    renderPhotos();
+  } catch { msg.textContent = 'No se pudo subir. Intenta de nuevo.'; }
+};
+loadPhotos();
 
 // ── State ──────────────────────────────────────────────────────────────────
 const DEFAULT_EXERCISES = [
@@ -471,7 +544,11 @@ function renderWeightChart(entries) {
 
   const W = 600, H = 100, pad = 10;
   const vals = weights.map(e => e.weight);
-  const min = Math.min(...vals) - 1, max = Math.max(...vals) + 1;
+  // Meta (se pone en Hoy): linea punteada si queda cerca del rango; si no, solo el texto
+  const goal = S.goal?.weight;
+  const near = goal && goal > Math.min(...vals) - 4 && goal < Math.max(...vals) + 4;
+  const min = Math.min(...vals, near ? goal : Infinity) - 1, max = Math.max(...vals, near ? goal : -Infinity) + 1;
+  if (goal) axis.innerHTML = axis.innerHTML.replace('</b> kg</span>', `</b> kg · meta <b>${goal}</b></span>`);
   const x = i => pad + (i / (weights.length - 1)) * (W - 2 * pad);
   const y = v => H - pad - ((v - min) / (max - min)) * (H - 2 * pad);
 
@@ -489,6 +566,7 @@ function renderWeightChart(entries) {
     <polygon points="${area}" fill="url(#wg)"/>
     <polyline points="${pts}" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     <circle cx="${x(weights.length-1)}" cy="${y(vals[vals.length-1])}" r="3.5" fill="#a78bfa"/>
+    ${near ? `<line x1="${pad}" x2="${W - pad}" y1="${y(goal)}" y2="${y(goal)}" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5 5" opacity=".8"/>` : ''}
   `;
 }
 

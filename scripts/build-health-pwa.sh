@@ -83,12 +83,22 @@ self.addEventListener('push', e => {
     tag: d.tag || 'health',
     icon: '/icons/health-192.png',
     badge: '/icons/health-192.png',
-    data: { url: d.url || '/#rutina' },
+    // "¿Seguiste el plan?": Si / Mas o menos / No se responden sin abrir la app
+    actions: (d.actions || []).slice(0, 3),
+    data: { url: d.url || '/#rutina', quick: d.quick || '' },
   }));
 });
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const q = e.notification.data?.quick;
+  if (e.action && q) {
+    e.waitUntil(fetch(q + '&v=' + encodeURIComponent(e.action), { method: 'POST' })
+      .then(r => r.json()).then(j => self.registration.showNotification('Guardado ✓', {
+        body: j.label || '', tag: e.notification.tag, icon: '/icons/health-192.png', badge: '/icons/health-192.png',
+      })).catch(() => {}));
+    return;
+  }
   const url = new URL(e.notification.data?.url || '/#rutina', self.location.origin).href;
   e.waitUntil((async () => {
     const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true });

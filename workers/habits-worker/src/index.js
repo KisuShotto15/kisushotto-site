@@ -355,19 +355,22 @@ async function fcmAccessToken(sa) {
 }
 // channel_id y el icono existen en el APK (PushService / ic_stat_notify); url va en
 // data: al tocar la notificacion la app abre esa pestana.
-async function sendFcm(env, token, p) {
+// v >= 2 (app nueva): mensaje solo de datos, la app arma la notificacion (con los
+// botones para responder). Las apps viejas reciben la notificacion de siempre.
+async function sendFcm(env, token, p, v = 1) {
   const sa = serviceAccount(env);
   if (!sa) return false;
+  const data = { url: p.url || '/', tag: p.tag || 'health' };
+  const message = v >= 2
+    ? { token, data: { ...data, title: p.title, body: p.body, kind: p.kind || '', quick: p.quick || '', actions: JSON.stringify(p.actions || []) },
+        android: { priority: 'HIGH' } }
+    : { token, notification: { title: p.title, body: p.body }, data,
+        android: { priority: 'HIGH', notification: { channel_id: 'reminders', tag: p.tag || 'health', icon: 'ic_stat_notify', color: '#4F86FF' } } };
   try {
     const r = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(sa.project_id)}/messages:send`, {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + await fcmAccessToken(sa), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: {
-        token,
-        notification: { title: p.title, body: p.body },
-        data: { url: p.url || '/', tag: p.tag || 'health' },
-        android: { priority: 'HIGH', notification: { channel_id: 'reminders', tag: p.tag || 'health', icon: 'ic_stat_notify', color: '#4F86FF' } },
-      } }),
+      body: JSON.stringify({ message }),
     });
     return r.ok;
   } catch { return false; }
@@ -376,9 +379,57 @@ async function sendFcm(env, token, p) {
 async function sendHealthPush(env, user, payload) {
   const subs = (await healthGet(env, user, 'push')) || [];
   let sent = 0;
-  for (const s of subs) if (await (s.fcm ? sendFcm(env, s.fcm, payload) : sendWebPush(env, s, payload))) sent++;
+  for (const s of subs) if (await (s.fcm ? sendFcm(env, s.fcm, payload, s.v) : sendWebPush(env, s, payload))) sent++;
   return sent;
 }
+
+// ── Respuesta desde la notificacion: "¿Seguiste el plan?" Si / Mas o menos / No ──
+// El enlace va firmado (HMAC de usuario + fecha), asi no hace falta la sesion: la
+// app o el service worker lo llaman directo al tocar el boton.
+async function quickSig(env, user, date) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('health-quick|' + (env.VAPID_PRIVATE_JWK || env.SUPABASE_KEY)),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return b64urlBytes(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(user + '|' + date))).slice(0, 32);
+}
+async function checkinPush(env, user, date) {
+  const s = await quickSig(env, user, date);
+  return {
+    title: '¿Seguiste el plan hoy?',
+    body:  'Responde aquí mismo: Sí, Más o menos o No.',
+    tag:   'health-checkin',
+    url:   '/#hoy',
+    kind:  'checkin',
+    actions: [{ action: 'si', title: 'Sí' }, { action: 'parcial', title: 'Más o menos' }, { action: 'no', title: 'No' }],
+    quick: `https://habits-worker.efrenalejandro2010.workers.dev/health/quick?u=${encodeURIComponent(user)}&d=${date}&s=${s}`,
+  };
+}
+async function quickLog(url, env) {
+  const u = url.searchParams.get('u') || '', d = url.searchParams.get('d') || '', v = url.searchParams.get('v') || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !['si', 'parcial', 'no'].includes(v)) return err('bad request');
+  if (url.searchParams.get('s') !== await quickSig(env, u, d)) return err('firma invalida', 403);
+  const n = await healthGet(env, u, 'nutrition');
+  const p = n?.profiles?.[n.activeProfile];
+  const day = (p?.days || []).find(x => x.id === p.activeDay) || (p?.days || [])[0];
+  const base = day ? { dayId: day.id, label: day.label, profile: p.name } : {};
+  const nlog = (await healthGet(env, u, 'nutrition_log')) || {};
+  nlog[d] = v === 'no' ? { skipped: true } : v === 'parcial' ? { ...base, partial: true } : base;
+  await healthSet(env, u, 'nutrition_log', nlog);
+  return json({ ok: true, label: v === 'no' ? 'No seguiste el plan' : v === 'parcial' ? 'Más o menos' : 'Plan cumplido' });
+}
+// Segundo aviso, 2 h despues, si la rutina sigue sin hacerse
+function rutinaPush2(rutina, date) {
+  const name = rutina?.date !== date && rutina?.nextDay?.name ? rutina.nextDay.name : rutina?.name;
+  const set = new Set(rutina?.history || []);
+  let n = 0;
+  for (let d = shiftISO(date, -1); set.has(d); d = shiftISO(d, -1)) n++;
+  return {
+    title: `${name || 'Tu rutina'} te espera`,
+    body:  n ? `Llevas ${n} ${n === 1 ? 'día' : 'días'} seguidos. Aunque sea el modo mínimo (10 min): cuenta.` : 'Aunque sea el modo mínimo (10 min): cuenta para la racha.',
+    tag:   'health-rutina',
+    url:   '/#rutina',
+  };
+}
+const addMin = (hhmm, m) => { const t = (+hhmm.slice(0, 2) * 60 + +hhmm.slice(3) + m) % 1440; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
 
 // El aviso nombra la rutina que toca hoy: en un dia nuevo, la siguiente de la
 // alternancia (nextDay, la guarda Rutina) o la misma de antes
@@ -435,17 +486,36 @@ async function weeklySummary(env, user, today) {
     title: 'Tu semana en Health',
     body:  parts.join(' · '),
     tag:   'health-weekly',
-    url:   '/#hoy',
+    url:   '/#resumen',
   };
 }
 
 async function handleHealth(path, request, env) {
   const method = request.method;
   if (path === '/health/vapid' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null, fcm: !!serviceAccount(env) });
+  if (path === '/health/quick' && method === 'POST') return quickLog(new URL(request.url), env);
   const user = await healthUser(request, env);
   if (!user) return err('Sesion invalida', 401);
 
   if (path === '/health/me' && method === 'GET') return json({ email: user });
+  // Fotos de progreso: una por mes, en KV (privadas por cuenta)
+  if (path === '/health/photos' && method === 'GET') {
+    const { keys } = await env.PUSH_KV.list({ prefix: `photo:${user}|` });
+    return json({ months: keys.map(k => k.name.split('|').pop()) });
+  }
+  if (path === '/health/photo') {
+    const m = new URL(request.url).searchParams.get('m') || '';
+    if (!/^\d{4}-\d{2}$/.test(m)) return err('mes invalido');
+    const key = `photo:${user}|${m}`;
+    if (method === 'GET') return json({ data: await env.PUSH_KV.get(key) });
+    if (method === 'DELETE') { await env.PUSH_KV.delete(key); return json({ ok: true }); }
+    if (method === 'PUT') {
+      const { data } = await request.json().catch(() => ({}));
+      if (typeof data !== 'string' || !data.startsWith('data:image/jpeg;base64,') || data.length > 3_000_000) return err('foto invalida');
+      await env.PUSH_KV.put(key, data);
+      return json({ ok: true });
+    }
+  }
   if (path === '/health/push' && method === 'POST') {
     // Web Push ({endpoint, keys}) o la app Android ({fcm: token})
     const sub = await request.json();
@@ -458,7 +528,10 @@ async function handleHealth(path, request, env) {
   if (path === '/health/test-push' && method === 'POST') {
     const b = await request.json().catch(() => ({}));
     const r = await healthGet(env, user, 'reminder');
-    const payload = b?.kind === 'weekly' ? await weeklySummary(env, user, localParts(r?.tz).date) : rutinaPush(await healthGet(env, user, 'rutina'), localParts(r?.tz).date);
+    const date = localParts(r?.tz).date;
+    const payload = b?.kind === 'weekly' ? await weeklySummary(env, user, date)
+      : b?.kind === 'checkin' ? await checkinPush(env, user, date)
+      : rutinaPush(await healthGet(env, user, 'rutina'), date);
     return json({ sent: await sendHealthPush(env, user, payload), payload });
   }
   // Habitos del usuario que se pueden vincular a la rutina
@@ -512,6 +585,18 @@ async function dispatchHealthReminder(env) {
     let r; try { r = JSON.parse(row.v); } catch { continue; }
     if (!r?.time) continue;
     const { date, hhmm } = localParts(r.tz);
+    // Pregunta de la noche (solo si ese dia aun no se registro la comida)
+    if (r.checkin && hhmm === (r.checkinTime || '21:30') && (await healthGet(env, user, 'checkin_sent')) !== date) {
+      await healthSet(env, user, 'checkin_sent', date);
+      const nlog = (await healthGet(env, user, 'nutrition_log')) || {};
+      if (!nlog[date]) await sendHealthPush(env, user, await checkinPush(env, user, date));
+    }
+    // Segundo aviso de la rutina, 2 h despues, si sigue sin hacerse
+    if (r.enabled && hhmm === addMin(r.time, 120) && (await healthGet(env, user, 'reminder2_sent')) !== date) {
+      await healthSet(env, user, 'reminder2_sent', date);
+      const rutina = await healthGet(env, user, 'rutina');
+      if (!rutina?.history?.includes(date)) await sendHealthPush(env, user, rutinaPush2(rutina, date));
+    }
     if (hhmm !== r.time) continue;
     if (r.enabled && (await healthGet(env, user, 'reminder_sent')) !== date) {
       await healthSet(env, user, 'reminder_sent', date);

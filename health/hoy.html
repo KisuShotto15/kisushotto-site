@@ -17,14 +17,18 @@
   main{max-width:1240px;margin:0 auto;}
   button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 
-  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;}
+  .top{position:relative;margin-bottom:18px;}
   .top .h-head{margin:0;}
-  .actions{display:flex;gap:10px;}
+  .mood{margin-top:6px;color:var(--text2);font-size:14px;min-height:1.4em;}
+  .me{display:none;position:absolute;right:0;top:0;width:36px;height:36px;border-radius:50%;background:var(--card2);
+    border:1px solid var(--line2);font-weight:700;font-size:14px;text-transform:uppercase;}
+
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line2);background:var(--card);
     padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;white-space:nowrap;}
   .btn.primary{background:var(--text);border-color:var(--text);color:var(--h-bg);}
   .btn.sm{padding:8px 12px;font-size:13px;}
   .btn:disabled{opacity:.45;cursor:default;}
+  .link{background:none;border:0;color:var(--muted);font-size:13px;text-decoration:underline;padding:0;}
 
   .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;min-width:0;}
   .label{font-size:13px;font-weight:600;color:var(--muted);}
@@ -35,40 +39,68 @@
   .row{display:flex;align-items:center;gap:12px;}
   .between{justify-content:space-between;}
   .bar{height:6px;background:var(--track);border-radius:3px;overflow:hidden;}
-  .bar>i{display:block;height:100%;width:0;border-radius:3px;background:var(--c);transition:width .3s;}
+  .bar>i{display:block;height:100%;width:0;border-radius:3px;background:var(--c);transition:width .8s cubic-bezier(.2,.8,.2,1);}
   .pill{display:inline-flex;align-items:center;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;white-space:nowrap;
     background:var(--h-rutina-soft);color:var(--rut);}
   .pill.ok{background:var(--h-ok-soft);color:var(--ok);}
   /* El color del cambio de peso depende del objetivo del perfil de Nutricion */
   .delta{font-weight:600;color:var(--text);} .delta.good{color:var(--ok);} .delta.bad{color:var(--warn);}
 
-  /* Indicadores */
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px;}
-  .kpi{cursor:pointer;}
-  .kpi .icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px;margin-bottom:14px;}
-  /* Boton de cuenta: en el celular la barra superior del shell no se muestra */
-  .me{display:none;position:absolute;right:0;top:0;width:36px;height:36px;border-radius:50%;background:var(--card2);
-    border:1px solid var(--line2);font-weight:700;font-size:14px;text-transform:uppercase;}
-  .top{position:relative;}
-  .wform .step{width:40px;flex-shrink:0;padding:0;font-size:17px;}
-  .wform input{text-align:center;font-weight:600;}
-  .heat div{cursor:pointer;border-radius:10px;}
-  .heat div.sel{color:var(--text);font-weight:600;}
-  .heat div.sel span{box-shadow:0 0 0 2px var(--text) inset;}
-  .dayinfo{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--card2);font-size:13px;color:var(--text2);}
-  .dayinfo b{color:var(--text);}
-  .kpi .num{margin-top:2px;}
-  .kpi .bar,.kpi .sub{margin-top:12px;}
-  /* Registro de peso: el campo a lo ancho, − y + debajo y Guardar al final, para que
-     quepa en la tarjeta angosta del celular sin salirse */
-  .wform{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
-  .wform input,.wform #w-save{grid-column:1/-1;}
-  .wform input{order:-1;}
-  .wform .step{width:auto!important;}
+  /* ---- Tarjeta principal: anillo del dia + lo que toca + las 3 tareas ---- */
+  .hero{display:grid;grid-template-columns:170px 1fr 1.25fr;gap:28px;align-items:center;margin-bottom:16px;
+    background:radial-gradient(120% 140% at 0% 0%,rgba(79,134,255,.10),transparent 55%),var(--card);}
+  .ringbox{position:relative;width:170px;height:170px;}
+  .dring{width:100%;height:100%;transform:rotate(-90deg);transition:filter .6s;}
+  .dring circle{fill:none;stroke-width:9;stroke-linecap:round;}
+  .dring .tr{stroke:var(--track);}
+  .dring .fl{stroke-dasharray:0 300;opacity:0;transition:stroke-dasharray .9s cubic-bezier(.2,.8,.2,1),opacity .2s;}
+  .dring.full{filter:drop-shadow(0 0 12px rgba(52,211,153,.45));}
+  .rc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+  .rc b{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1;}
+  .rc span{font-size:12px;color:var(--muted);margin-top:4px;}
+  .rc.full b{color:var(--ok);font-size:38px;}
+  .hinfo h2{margin:2px 0 4px;font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1.15;}
+  .hinfo .go{margin-top:14px;background:var(--rut);border-color:var(--rut);color:#fff;padding:12px 20px;font-size:15px;}
+  .hinfo .go.done{background:var(--h-ok-soft);border-color:transparent;color:var(--ok);}
+  .checks{display:flex;flex-direction:column;gap:10px;}
+  .ck{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;
+    background:var(--card2);border:1px solid var(--line);}
+  .ck>div b{display:block;font-weight:600;font-size:14px;}
+  .ck>div span{font-size:12.5px;color:var(--muted);}
+  .ck .tick{width:28px;height:28px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;transition:.3s;}
+  .ck .tick svg{width:15px;height:15px;stroke:#fff;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;
+    stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .45s .1s ease;}
+  .ck.done .tick{background:var(--c);border-color:var(--c);}
+  .ck.done .tick svg{stroke-dashoffset:0;}
+  .ck.food{grid-template-columns:28px 1fr;}
+  .ck.food .seg3{grid-column:1/-1;}
+  .seg3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+  .seg3 button{border:1px solid var(--line2);background:var(--card);border-radius:10px;padding:8px 6px;font-size:13px;font-weight:600;color:var(--text2);}
+  .seg3 button.on{background:var(--h-nutri-soft);border-color:transparent;color:var(--nut);}
+  .seg3 button.on.no{background:var(--h-warn-soft);color:var(--warn);}
+  .days{display:flex;gap:6px;flex-wrap:wrap;grid-column:1/-1;}
+  .days button{border:1px dashed var(--line2);background:none;border-radius:999px;padding:4px 10px;font-size:12px;color:var(--muted);}
+  .days button.on{border-style:solid;color:var(--nut);border-color:rgba(251,146,60,.4);}
 
   .two{display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:16px;}
   .two.b{grid-template-columns:2fr 1fr;}
-  .ttl{font-size:19px;font-weight:700;margin-top:2px;letter-spacing:-.01em;}
+  .two.c{grid-template-columns:1fr 1fr;}
+
+  /* Peso y meta */
+  .goal{margin-top:14px;}
+  .goal .gl{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:12px;color:var(--muted);}
+  .goal .gl b{color:var(--text2);font-weight:600;}
+  .eta{margin-top:8px;font-size:13px;color:var(--text2);}
+  .wform,.gform{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+  .wform input,.wform #w-save,.gform input,.gform button{grid-column:1/-1;}
+  .wform input{order:-1;}
+  .wform input,.gform input{text-align:center;font-weight:600;}
+
+  /* Racha de dias completos */
+  .dots{display:flex;gap:6px;margin-top:14px;}
+  .dots i{flex:1;height:8px;border-radius:4px;background:var(--track);transition:background .4s;}
+  .dots i.on{background:var(--ok);}
+  .dots i.today{outline:1.5px dashed var(--line2);outline-offset:2px;}
 
   /* Siguientes ejercicios */
   .nx{display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--line);}
@@ -76,32 +108,49 @@
   .nx .n{width:28px;height:28px;border-radius:8px;background:var(--card2);display:grid;place-items:center;font-weight:700;font-size:12px;color:var(--muted);flex-shrink:0;}
   .nx .n.go{background:var(--rut);color:#fff;}
   .nx .tx{flex:1;min-width:0;} .nx b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .empty{color:var(--muted);padding:14px 0;}
   .foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding-top:14px;border-top:1px solid var(--line);}
+  /* Estados vacios amables */
+  .empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:18px 8px;color:var(--muted);}
+  .empty .e{font-size:28px;}
+  .empty b{color:var(--text);font-weight:600;}
 
   /* Nutricion */
   .donut{display:flex;align-items:center;gap:22px;margin-top:14px;}
-  .donut svg{width:104px;height:104px;flex-shrink:0;transform:rotate(-90deg);}
+  .donut svg{width:96px;height:96px;flex-shrink:0;transform:rotate(-90deg);}
   .legend{display:flex;flex-direction:column;gap:7px;font-size:13px;min-width:150px;}
   .legend div{display:flex;align-items:center;gap:8px;}
   .legend i{width:9px;height:9px;border-radius:3px;display:inline-block;}
   .legend b{margin-left:auto;padding-left:16px;font-variant-numeric:tabular-nums;}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
-  .chip{background:transparent;border:1px solid var(--line2);color:var(--text2);font-size:13px;padding:7px 13px;border-radius:999px;}
-  .chip.on{background:var(--h-nutri-soft);border-color:transparent;color:var(--nut);font-weight:600;}
-  .chip.skip.on{background:var(--h-warn-soft);color:var(--warn);}
+  .kcal{margin-top:10px;font-size:14px;color:var(--text2);}
+  .kcal b{font-size:20px;color:var(--text);font-variant-numeric:tabular-nums;}
 
   /* Ultimos 7 dias */
   .heat{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:14px;}
-  .heat div{text-align:center;font-size:12px;color:var(--muted);}
+  .heat div{text-align:center;font-size:12px;color:var(--muted);cursor:pointer;border-radius:10px;}
   .heat div.today{color:var(--text);font-weight:600;}
+  .heat div.sel{color:var(--text);font-weight:600;}
+  .heat div.sel span{box-shadow:0 0 0 2px var(--text) inset;}
   .heat span{display:block;height:34px;border-radius:9px;margin-top:6px;background:var(--track);}
   .heat span.on{background:var(--rut);}
+  .heat span.full{background:linear-gradient(180deg,var(--rut),#3b6fe0);box-shadow:0 0 0 2px var(--ok) inset;}
   .heat em{display:block;height:8px;border-radius:4px;margin-top:4px;background:var(--track);}
-  .heat em.on{background:var(--nut);}
+  .heat em.on{background:var(--nut);} .heat em.half{background:var(--nut);opacity:.45;}
   .heat .today span:not(.on){background:var(--h-rutina-soft);outline:1.5px dashed var(--rut);outline-offset:-1.5px;}
-  .lg{display:flex;gap:14px;margin-top:12px;font-size:12px;color:var(--muted);}
+  .lg{display:flex;gap:14px;margin-top:12px;font-size:12px;color:var(--muted);flex-wrap:wrap;}
   .lg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+  .dayinfo{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--card2);font-size:13px;color:var(--text2);}
+  .dayinfo b{color:var(--text);}
+
+  /* Resumen de la semana */
+  dialog{background:var(--card);color:var(--text);border:1px solid var(--line2);border-radius:20px;padding:0;width:min(520px,94vw);}
+  dialog::backdrop{background:rgba(0,0,0,.6);}
+  .wk{padding:24px;}
+  .wk h2{margin:4px 0 6px;font-size:24px;letter-spacing:-.02em;}
+  .wkg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0;}
+  .wkg div{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:12px;}
+  .wkg b{display:block;font-size:22px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+  .wkg span{font-size:12px;color:var(--muted);}
+  .wk .msgw{font-size:14px;color:var(--text2);margin-bottom:16px;}
 
   /* Formularios */
   input[type=number],input[type=time],input[type=password]{background:var(--h-bg);border:1px solid var(--line2);color:var(--text);font:inherit;
@@ -119,9 +168,16 @@
   .opt b{font-weight:600;}
   .msg{font-size:13px;color:var(--muted);margin-top:10px;min-height:1em;}
   .msg.err{color:var(--warn);}
-  .link{background:none;border:0;color:var(--muted);font-size:13px;text-decoration:underline;padding:0;}
   .acc{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:12px;}
   .acc>div{min-width:0;}
+
+  /* Entrada suave de las tarjetas y celebracion del dia completo */
+  .rise{animation:rise .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0s);}
+  @keyframes rise{from{opacity:0;transform:translateY(8px);}}
+  .burst{position:absolute;left:50%;top:50%;pointer-events:none;}
+  .burst i{position:absolute;width:7px;height:11px;border-radius:2px;animation:burst 1s ease-out forwards;}
+  @keyframes burst{to{transform:translate(var(--x),var(--y)) rotate(420deg);opacity:0;}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 
   /* Placeholder mientras llegan los datos */
   .sk{display:inline-block;border-radius:6px;color:transparent!important;background:linear-gradient(90deg,var(--card2) 25%,var(--track) 50%,var(--card2) 75%);
@@ -129,29 +185,34 @@
   .num .sk{font-size:22px;}
   @keyframes sk{to{background-position:-200% 0;}}
 
+  @media (max-width:1000px){
+    .hero{grid-template-columns:130px 1fr;}
+    .ringbox{width:130px;height:130px;}
+    .rc b{font-size:28px;}
+    .checks{grid-column:1/-1;}
+  }
   @media (max-width:900px){
-    .kpis{grid-template-columns:1fr 1fr;}
-    .two,.two.b{grid-template-columns:1fr;}
+    .two,.two.b,.two.c{grid-template-columns:1fr;}
     .acc{grid-template-columns:1fr;gap:16px;}
   }
   @media (max-width:640px){
     body{padding:18px 16px 32px;}
-    .top{flex-direction:column;align-items:stretch;margin-bottom:16px;}
-    .actions .btn{flex:1;padding:11px 10px;}
-    .kpis{gap:10px;margin-bottom:10px;}
     .two{gap:10px;margin-bottom:10px;}
+    .two.c{grid-template-columns:1fr 1fr;}
     .card{padding:16px;border-radius:16px;}
+    .hero{gap:16px 18px;margin-bottom:10px;}
+    .ringbox{width:112px;height:112px;}
+    .rc b{font-size:24px;} .rc.full b{font-size:28px;}
+    .hinfo h2{font-size:20px;}
+    .hinfo .go{padding:10px 16px;font-size:14px;margin-top:10px;}
     .num{font-size:27px;}
-    .kpi .kh{display:flex;align-items:center;gap:8px;}
-    .kpi .icon{width:26px;height:26px;border-radius:8px;font-size:13px;margin:0;}
-    .kpi .num{margin-top:6px;}
-    .kpi .bar,.kpi .sub{margin-top:8px;}
     .me{display:grid;place-items:center;}
     .top .h-head{padding-right:48px;}
     .foot{flex-direction:column;align-items:stretch;gap:8px;}
     .foot select{max-width:100%;width:100%;}
     .heat{gap:5px;} .heat span{height:30px;}
     .donut{gap:16px;}
+    .wkg{grid-template-columns:repeat(2,1fr);}
   }
 </style>
 <link rel="stylesheet" href="theme.css">
@@ -161,23 +222,65 @@
 <main>
   <div class="top">
     <header class="h-head"><h1 id="hello">Hola</h1><p id="date"></p></header>
+    <div class="mood" id="mood"></div>
     <button class="me" id="me" aria-label="Cuenta"></button>
-    <div class="actions">
-      <button class="btn" id="w-open">＋ Registrar peso</button>
-      <button class="btn primary" id="r-go">Empezar rutina →</button>
-    </div>
   </div>
 
-  <div class="kpis">
-    <section class="card kpi" id="k-rut" style="--c:var(--rut)">
-      <div class="kh"><div class="icon" style="background:var(--h-rutina-soft)">🏋️</div><div class="label">Rutina</div></div>
-      <div class="num" id="r-progress"><span class="sk">0/15</span></div>
-      <div class="bar"><i id="r-bar"></i></div>
-    </section>
-    <section class="card kpi" id="k-peso" style="--c:var(--met)">
-      <div class="kh"><div class="icon" style="background:var(--h-metric-soft)">⚖️</div><div class="label">Peso</div></div>
-      <div class="num" id="w-last"><span class="sk">00.0 kg</span></div>
+  <!-- Lo de hoy: el anillo se cierra con rutina + comida registrada + peso de la semana -->
+  <section class="card hero rise">
+    <div class="ringbox" id="ringbox">
+      <svg viewBox="0 0 100 100" class="dring" id="dring">
+        <circle class="tr" cx="50" cy="50" r="42" pathLength="300" stroke-dasharray="92 208" stroke-dashoffset="-4"/>
+        <circle class="tr" cx="50" cy="50" r="42" pathLength="300" stroke-dasharray="92 208" stroke-dashoffset="-104"/>
+        <circle class="tr" cx="50" cy="50" r="42" pathLength="300" stroke-dasharray="92 208" stroke-dashoffset="-204"/>
+        <circle class="fl" id="a-rut" cx="50" cy="50" r="42" pathLength="300" stroke-dashoffset="-4" style="stroke:var(--rut)"/>
+        <circle class="fl" id="a-food" cx="50" cy="50" r="42" pathLength="300" stroke-dashoffset="-104" style="stroke:var(--nut)"/>
+        <circle class="fl" id="a-w" cx="50" cy="50" r="42" pathLength="300" stroke-dashoffset="-204" style="stroke:var(--met)"/>
+      </svg>
+      <div class="rc" id="rc"><b id="d-n">0/3</b><span id="d-t">del día</span></div>
+    </div>
+    <div class="hinfo">
+      <div class="label">Hoy toca</div>
+      <h2 id="r-name"><span class="sk">Equilibrio</span></h2>
+      <div class="sub" id="r-meta"></div>
+      <button class="btn go" id="r-go">Empezar →</button>
+    </div>
+    <div class="checks">
+      <div class="ck" id="c-rut" style="--c:var(--rut)">
+        <span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span>
+        <div><b>Rutina</b><span id="c-rut-t">—</span></div>
+        <button class="btn sm" id="c-rut-btn">Ir</button>
+      </div>
+      <div class="ck food" id="c-food" style="--c:var(--nut)">
+        <span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span>
+        <div><b>Comida</b><span id="c-food-t">¿Seguiste el plan hoy?</span></div>
+        <div class="seg3" id="food-seg">
+          <button data-f="si">Sí</button><button data-f="parcial">Más o menos</button><button data-f="no" class="no">No</button>
+        </div>
+        <div class="days" id="food-days" hidden></div>
+      </div>
+      <div class="ck" id="c-w" style="--c:var(--met)">
+        <span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span>
+        <div><b>Peso de la semana</b><span id="c-w-t">—</span></div>
+        <button class="btn sm" id="c-w-btn">Registrar</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="two c">
+    <section class="card rise" id="k-peso" style="--c:var(--met);--d:.05s">
+      <div class="row between"><div class="label">⚖️ Peso</div><button class="link" id="g-edit">Poner meta</button></div>
+      <div class="num" id="w-last" style="margin-top:6px"><span class="sk">00.0 kg</span></div>
       <div class="sub" id="w-sub"><span class="sk">esta semana</span></div>
+      <div class="goal" id="g-box" hidden>
+        <div class="bar"><i id="g-bar"></i></div>
+        <div class="gl"><span id="g-from"></span><span id="g-pct"></span><span id="g-to"></span></div>
+        <div class="eta" id="g-eta"></div>
+      </div>
+      <div class="gform" id="g-form" hidden>
+        <input type="number" id="g-input" inputmode="decimal" step="0.5" min="20" max="400" placeholder="Meta (kg)">
+        <button class="btn sm" id="g-save">Guardar meta</button>
+      </div>
       <div class="wform" id="w-form" hidden>
         <button class="btn sm step" id="w-dn" aria-label="Menos 0.1">−</button>
         <input type="number" id="w-input" inputmode="decimal" step="0.1" min="20" max="400" placeholder="kg">
@@ -186,22 +289,18 @@
       </div>
       <div class="msg" id="w-msg" hidden></div>
     </section>
-    <section class="card kpi" id="k-nut" style="--c:var(--nut)">
-      <div class="kh"><div class="icon" style="background:var(--h-nutri-soft)">🍳</div><div class="label">Calorías del plan</div></div>
-      <div class="num" id="n-kcal"><span class="sk">0000</span></div>
-      <div class="bar"><i id="n-bar"></i></div>
-    </section>
-    <section class="card kpi" id="k-racha" style="--c:var(--warn)">
-      <div class="kh"><div class="icon" style="background:var(--h-warn-soft)">🔥</div><div class="label">Racha</div></div>
-      <div class="num" id="s-num">0<small>días</small></div>
-      <div class="sub" id="s-sub">Sin historial todavía</div>
+    <section class="card rise" id="k-racha" style="--d:.1s">
+      <div class="label">🔥 Días completos seguidos</div>
+      <div class="num" id="s-num" style="margin-top:6px">0<small>días</small></div>
+      <div class="sub" id="s-sub">Cierra el anillo para empezar</div>
+      <div class="dots" id="s-dots"></div>
     </section>
   </div>
 
   <div class="two">
-    <section class="card">
+    <section class="card rise" style="--d:.15s">
       <div class="row between" style="align-items:flex-start">
-        <div style="min-width:0"><div class="label">Rutina de hoy</div><div class="ttl" id="r-name">—</div></div>
+        <div class="label">Siguientes ejercicios</div>
         <span class="pill" id="r-left" hidden></span>
       </div>
       <div id="r-next" style="margin-top:8px"></div>
@@ -210,23 +309,27 @@
         <select id="h-link"><option value="">No vincular</option></select>
       </div>
     </section>
-    <section class="card" style="--c:var(--nut)">
+    <section class="card rise" style="--c:var(--nut);--d:.2s">
       <div class="row between"><div class="label" id="n-title">Nutrición</div><button class="link" id="n-go">Ver plan</button></div>
-      <div class="donut">
-        <svg viewBox="0 0 42 42" id="n-donut"><circle cx="21" cy="21" r="15.9" fill="none" style="stroke:var(--track)" stroke-width="5"/></svg>
-        <div class="legend">
-          <div><i style="background:var(--protein)"></i>Proteína<b id="m-p">—</b></div>
-          <div><i style="background:var(--fat)"></i>Grasas<b id="m-f">—</b></div>
-          <div><i style="background:var(--carb)"></i>Carbs<b id="m-c">—</b></div>
+      <div id="n-body">
+        <div class="kcal" id="n-kcal"><span class="sk">0000 kcal</span></div>
+        <div class="bar" style="margin-top:8px"><i id="n-bar"></i></div>
+        <div class="donut">
+          <svg viewBox="0 0 42 42" id="n-donut"><circle cx="21" cy="21" r="15.9" fill="none" style="stroke:var(--track)" stroke-width="5"/></svg>
+          <div class="legend">
+            <div><i style="background:var(--protein)"></i>Proteína<b id="m-p">—</b></div>
+            <div><i style="background:var(--fat)"></i>Grasas<b id="m-f">—</b></div>
+            <div><i style="background:var(--carb)"></i>Carbs<b id="m-c">—</b></div>
+          </div>
         </div>
       </div>
-      <div class="label" style="margin-top:16px">¿Qué comiste hoy?</div>
-      <div class="chips" id="n-chips"></div>
+      <div class="empty" id="n-empty" hidden><div class="e">🍳</div><b>Aún no tienes plan</b><span>Arma tu día de comidas y aquí verás calorías y macros.</span>
+        <button class="btn sm" id="n-empty-go">Armar mi plan →</button></div>
     </section>
   </div>
 
   <div class="two b">
-    <section class="card">
+    <section class="card rise" style="--d:.25s">
       <div class="row between" style="flex-wrap:wrap">
         <div class="label">Últimos 7 días</div>
         <div class="row" style="gap:14px;font-size:13px">
@@ -237,28 +340,39 @@
       </div>
       <div class="heat" id="wk-strip"></div>
       <div class="dayinfo" id="wk-day" hidden></div>
-      <div class="lg"><span><i style="background:var(--rut)"></i>Rutina</span><span><i style="background:var(--nut)"></i>Plan cumplido</span></div>
+      <div class="row between" style="margin-top:12px;flex-wrap:wrap">
+        <div class="lg" style="margin:0"><span><i style="background:var(--rut)"></i>Rutina</span><span><i style="background:var(--nut)"></i>Plan</span><span><i style="background:var(--ok)"></i>Día completo</span></div>
+        <button class="btn sm" id="wk-open">Ver mi semana ✨</button>
+      </div>
     </section>
-    <section class="card">
+    <section class="card rise" style="--d:.3s">
       <div class="label">Recordatorios</div>
       <div class="opt">
-        <div><b>Rutina</b><div class="sub">Solo si ese día aún no la hiciste</div></div>
+        <div><b>Rutina</b><div class="sub">Solo si ese día aún no la hiciste (y otro aviso 2 h después)</div></div>
         <label class="switch"><input type="checkbox" id="rem-on"><span></span></label>
-      </div>
-      <div class="opt">
-        <div><b>Resumen semanal</b><div class="sub">Los domingos</div></div>
-        <label class="switch"><input type="checkbox" id="rem-weekly"><span></span></label>
       </div>
       <div class="opt">
         <div class="row" style="gap:8px"><span class="sub">Hora</span><input type="time" id="rem-time" value="19:00"></div>
         <button class="btn sm" id="rem-test">Probar</button>
+      </div>
+      <div class="opt">
+        <div><b>Pregunta de la noche</b><div class="sub">«¿Seguiste el plan?» y respondes desde la notificación</div></div>
+        <label class="switch"><input type="checkbox" id="rem-check"><span></span></label>
+      </div>
+      <div class="opt">
+        <div class="row" style="gap:8px"><span class="sub">Hora</span><input type="time" id="rem-ctime" value="21:30"></div>
+        <button class="btn sm" id="rem-test-check">Probar</button>
+      </div>
+      <div class="opt">
+        <div><b>Resumen semanal</b><div class="sub">Los domingos, a la hora de la rutina</div></div>
+        <label class="switch"><input type="checkbox" id="rem-weekly"><span></span></label>
       </div>
       <div class="msg" id="rem-msg"></div>
       <button class="link" id="rem-test-weekly">Probar resumen semanal</button>
     </section>
   </div>
 
-  <section class="card" id="cuenta">
+  <section class="card rise" id="cuenta" style="--d:.35s">
     <div class="label">Cuenta</div>
     <div class="acc">
       <div>
@@ -277,6 +391,17 @@
   </section>
 </main>
 
+<!-- Resumen de la semana (tambien se abre desde la notificacion del domingo) -->
+<dialog id="wk-dlg">
+  <div class="wk">
+    <div class="label" id="wk-range">Tu semana</div>
+    <h2 id="wk-title">Tu semana</h2>
+    <div class="wkg" id="wk-grid"></div>
+    <div class="msgw" id="wk-msg"></div>
+    <button class="btn primary" id="wk-close" style="width:100%">Cerrar</button>
+  </div>
+</dialog>
+
 <script type="module">
 import { calcBMR, calcTDEE, calcTarget, totalMacros } from './nutricion/calculator.js';
 import { loadLocal as nLoad, pull as nPull } from './nutricion/sync.js';
@@ -289,10 +414,18 @@ const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 const isoLocal = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 const today = () => isoLocal(new Date());
+const shift = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
+const dshort = iso => new Date(iso + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
 const toParent = msg => { if (window.parent !== window) window.parent.postMessage(msg, location.origin); };
-
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = s => pad(Math.floor(s / 60)) + ':' + pad(Math.round(s % 60));
+const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
+
+// App Android (Capacitor, health-app/): sus plugins propios; null en la web.
+// Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
+const nativeApp = () => { try { const c = (window.parent !== window && parent.Capacitor) || window.Capacitor; return c?.isNativePlatform?.() && c.Plugins?.Native || null; } catch { return null; } };
+function haptic(k) { const n = nativeApp(); if (n) n.haptic({ kind: k || 'key' }).catch(() => {}); }
+
 $('date').textContent = new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' });
 const hr = new Date().getHours();
 const greet = hr < 12 ? 'Buenos días' : hr < 19 ? 'Buenas tardes' : 'Buenas noches';
@@ -304,52 +437,120 @@ async function api(path, opts = {}) {
   return r.json();
 }
 
-/* ---------- Rutina ---------- */
-function streak(hist) {
-  const set = new Set(hist); let n = 0; const d = new Date();
-  if (!set.has(today())) d.setDate(d.getDate() - 1);
-  while (set.has(isoLocal(d))) { n++; d.setDate(d.getDate() - 1); }
+/* ======================= estado ======================= */
+let rut = {};          // snapshot de Rutina (con la rutina que toca hoy)
+let rutinaHist = [];   // dias con la rutina completa
+let nState = null;     // estado de Nutricion
+let nlog = {};         // que se comio cada dia: {dayId,label} | {partial} | {skipped}
+let bm = null;         // estado de Metricas (peso, meta, sesiones)
+
+const weights = () => (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
+const profile = () => nState?.profiles?.[nState.activeProfile];
+// Un dia esta completo con: rutina + comida registrada + algun peso en esa semana (7 dias)
+const rDone = d => rutinaHist.includes(d);
+const fDone = d => !!nlog[d];
+const wDone = d => weights().some(e => e.date <= d && e.date > shift(d, -7));
+const full = d => rDone(d) && fDone(d) && wDone(d);
+function fullStreak() {
+  let d = today(), n = 0;
+  if (!full(d)) d = shift(d, -1); // hoy aun cuenta si se cierra
+  while (full(d)) { n++; d = shift(d, -1); }
   return n;
 }
-function bestStreak(hist) {
-  let best = 0, run = 0, prev = null;
-  for (const d of [...new Set(hist)].sort()) {
-    const day = new Date(d + 'T00:00:00');
-    run = prev && Math.round((day - prev) / 864e5) === 1 ? run + 1 : 1;
-    best = Math.max(best, run); prev = day;
-  }
+function bestFull() {
+  const all = [...rutinaHist, ...Object.keys(nlog)].sort();
+  if (!all.length) return 0;
+  let best = 0, run = 0;
+  for (let d = all[0]; d <= today(); d = shift(d, 1)) { run = full(d) ? run + 1 : 0; best = Math.max(best, run); }
   return best;
 }
-let rutinaHist = [];
+function streak(hist) { // racha de rutina (para los mensajes)
+  const set = new Set(hist); let d = today(), n = 0;
+  if (!set.has(d)) d = shift(d, -1);
+  while (set.has(d)) { n++; d = shift(d, -1); }
+  return n;
+}
+
+/* ======================= anillo del dia ======================= */
+let wasFull = null;
+function paintDay() {
+  const t = today(), parts = [rDone(t), fDone(t), wDone(t)], n = parts.filter(Boolean).length;
+  // vacio: invisible (con la punta redonda, un trazo de largo 0 se veria como un punto)
+  ['a-rut', 'a-food', 'a-w'].forEach((id, i) => { $(id).style.strokeDasharray = parts[i] ? '92 208' : '0 300'; $(id).style.opacity = parts[i] ? 1 : 0; });
+  ['c-rut', 'c-food', 'c-w'].forEach((id, i) => $(id).classList.toggle('done', parts[i]));
+  const isFull = n === 3;
+  $('dring').classList.toggle('full', isFull);
+  $('rc').classList.toggle('full', isFull);
+  $('d-n').textContent = isFull ? '✓' : `${n}/3`;
+  $('d-t').textContent = isFull ? 'Día completo' : 'del día';
+  if (wasFull === false && isFull) celebrateDay();
+  wasFull = isFull;
+  // racha de dias completos + los ultimos 7
+  const s = fullStreak(), best = bestFull();
+  $('s-num').innerHTML = `${s}<small>${s === 1 ? 'día' : 'días'}</small>`;
+  $('s-sub').textContent = s ? `Mejor: ${plural(best, 'día', 'días')}` + (isFull ? ' · hoy ✓' : ' · cierra hoy el anillo') : best ? `Tu mejor racha: ${plural(best, 'día', 'días')}. Hoy empieza otra.` : 'Cierra el anillo para empezar';
+  $('s-dots').innerHTML = [...Array(7)].map((_, i) => { const d = shift(t, i - 6); return `<i class="${full(d) ? 'on' : ''}${i === 6 ? ' today' : ''}" title="${dshort(d)}"></i>`; }).join('');
+  paintMood();
+  updateWidget();
+}
+function celebrateDay() {
+  haptic(); if (navigator.vibrate) navigator.vibrate([80, 50, 80, 50, 200]);
+  const b = document.createElement('div'); b.className = 'burst';
+  const colors = ['#4f86ff', '#fb923c', '#a78bfa', '#34d399', '#fbbf24'];
+  b.innerHTML = Array.from({ length: 26 }, (_, k) => { const a = k / 26 * Math.PI * 2, r = 70 + Math.random() * 60;
+    return `<i style="background:${colors[k % colors.length]};--x:${Math.cos(a) * r}px;--y:${Math.sin(a) * r}px"></i>`; }).join('');
+  $('ringbox').appendChild(b); setTimeout(() => b.remove(), 1200);
+}
+
+/* ======================= mensaje del dia ======================= */
+function paintMood() {
+  const t = today(), s = fullStreak(), rs = streak(rutinaHist), p = profile();
+  const name = rut.name || 'tu rutina';
+  const plan = planInfo();
+  let m;
+  if (full(t)) m = s > 1 ? `Día completo ✨ ${s} seguidos. Así se construye.` : 'Día completo ✨ Así se construye.';
+  else if (rDone(t) && !fDone(t)) m = 'Rutina lista 💪 ¿Cómo comiste hoy?';
+  else if (rDone(t) && !wDone(t)) m = 'Rutina lista 💪 Solo falta pesarte esta semana.';
+  else if (!rDone(t) && !rDone(shift(t, -1)) && rutinaHist.length) m = `Ayer descansaste. Hoy toca ${name}.`;
+  else if (rs >= 2) m = `Llevas ${rs} días seguidos entrenando 🔥 Hoy toca ${name}.`;
+  else if (plan && plan.target && plan.target - plan.kcal > 250) m = `A tu plan le faltan ~${Math.round((plan.target - plan.kcal) / 50) * 50} kcal para tu meta: un batido de avena con maní lo resuelve.`;
+  else if (!wDone(t)) m = 'Toca pesarse esta semana ⚖️';
+  else m = hr < 12 ? 'Un día a la vez. Hoy cuenta.' : hr < 19 ? 'Todavía hay tiempo de cerrar el día.' : 'Cierra el día y descansa tranquilo.';
+  $('mood').textContent = m;
+  if (p?.name) $('hello').textContent = `${greet}, ${p.name}`;
+}
+
+/* ======================= rutina ======================= */
 function paintRutina(r) {
   rutinaHist = r.history || [];
   // Dia nuevo: la rutina que toca (alternancia A-B), guardada como nextDay
   if (r.date !== today() && r.nextDay) r = { ...r, name: r.nextDay.name, list: r.nextDay.list, total: r.nextDay.list.length };
-  paintWeek();
-  const total = r.total || 15;
+  rut = r;
   const done = r.date === today() ? (r.done || {}) : {};
-  const n = Object.values(done).filter(Boolean).length;
-  const hist = r.history || [];
-  const completed = hist.includes(today());
-  $('r-progress').innerHTML = `${n}<small>/ ${total}</small>`;
-  $('r-bar').style.width = (n / total * 100) + '%';
-  const s = streak(hist), best = bestStreak(hist);
-  $('s-num').innerHTML = `${s}<small>${s === 1 ? 'día' : 'días'}</small>`;
-  $('s-sub').textContent = hist.length ? (completed ? 'Hoy completada ✓ · ' : '') + `Mejor: ${best} ${best === 1 ? 'día' : 'días'}` : 'Sin historial todavía';
-  // Siguientes ejercicios de la rutina activa (rutina.html guarda la lista)
-  $('r-name').textContent = r.name || 'Equilibrio + estiramiento';
   // Sin lista guardada (app recien instalada): la rutina incluida
   const list = r.list || (!r.routine || r.routine === 'estiramiento' ? listOf(BUILTIN) : []);
+  const total = list.length || r.total || 15;
+  const n = Object.values(done).filter(Boolean).length;
   const pending = list.map((x, i) => ({ ...x, i })).filter(x => !done[x.i]);
+  const mins = Math.max(1, Math.round(list.reduce((a, x) => a + x.dur, 0) / 60));
   const left = Math.max(1, Math.round(pending.reduce((a, x) => a + x.dur, 0) / 60));
+  const completed = rutinaHist.includes(today());
+  $('r-name').textContent = r.name || 'Equilibrio + estiramiento';
+  $('r-meta').textContent = `${plural(total, 'ejercicio', 'ejercicios')} · ~${mins} min` + (r.mini === today() ? ' · ⚡ modo mínimo' : '');
+  $('r-go').textContent = completed ? 'Completada ✓' : n ? `Continuar · ${n}/${total} →` : 'Empezar →';
+  $('r-go').classList.toggle('done', completed);
+  $('c-rut-t').textContent = completed ? 'Hecha ✓' : n ? `${n} de ${total} · faltan ~${left} min` : `${plural(total, 'ejercicio', 'ejercicios')} · ~${mins} min`;
+  $('c-rut-btn').hidden = completed;
+  $('c-rut-btn').textContent = n ? 'Seguir' : 'Ir';
   $('r-left').hidden = !list.length;
   $('r-left').className = 'pill' + (pending.length ? '' : ' ok');
   $('r-left').textContent = pending.length ? `~${left} min restantes` : 'Completada ✓';
-  $('r-next').innerHTML = !list.length ? '<div class="empty">Abre Rutina para empezar.</div>'
-    : !pending.length ? '<div class="empty">Terminaste todos los ejercicios de hoy 🎉</div>'
+  $('r-next').innerHTML = !list.length
+    ? '<div class="empty"><div class="e">🏋️</div><b>Elige tu rutina</b><span>Abre Rutina y escoge (o crea) la de hoy.</span></div>'
+    : !pending.length ? '<div class="empty"><div class="e">🎉</div><b>Terminaste todo por hoy</b><span>Mañana toca la siguiente.</span></div>'
     : pending.slice(0, 3).map((x, k) => `<div class="nx"><span class="n${k === 0 ? ' go' : ''}">${k === 0 ? '▶' : x.i + 1}</span>
         <div class="tx"><b>${esc(x.name)}</b><div class="sub">${esc(x.dose)}</div></div><span class="muted">${fmt(x.dur)}</span></div>`).join('');
-  $('r-go').textContent = list.length && !pending.length ? 'Ver rutina →' : n ? 'Continuar rutina →' : 'Empezar rutina →';
+  paintWeek(); paintDay();
 }
 async function loadRutina() {
   let local = {};
@@ -365,23 +566,8 @@ async function loadRutina() {
 }
 const goTab = tab => () => toParent({ type: 'health:tab', tab });
 $('r-go').onclick = goTab('rutina');
-$('k-rut').onclick = goTab('rutina');
-$('k-racha').onclick = goTab('rutina');
-$('k-nut').onclick = goTab('nutricion');
-$('k-peso').onclick = e => { if (!e.target.closest('.wform')) toggleWeight(); };
-$('w-open').onclick = () => toggleWeight(true);
-function toggleWeight(open) {
-  const f = $('w-form'); f.hidden = open ? false : !f.hidden;
-  if (f.hidden) return;
-  // arranca en el ultimo peso: casi siempre basta con tocar +/- y Guardar
-  const comp = (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
-  if (!$('w-input').value && comp.length) $('w-input').value = comp[comp.length - 1].weight;
-  $('k-peso').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-}
-const nudge = d => () => { const v = parseFloat($('w-input').value.replace(',', '.')) || 0; $('w-input').value = Math.round((v + d) * 10) / 10; haptic('tick'); };
-$('w-dn').onclick = nudge(-0.1);
-$('w-up').onclick = nudge(0.1);
-$('w-input').onkeydown = e => { if (e.key === 'Enter') $('w-save').click(); };
+$('c-rut-btn').onclick = goTab('rutina');
+$('c-w-btn').onclick = () => toggleWeight(true);
 
 /* ---------- Vinculo con Habits: al completar la rutina se marca ese habito ---------- */
 async function loadHabits() {
@@ -404,26 +590,68 @@ $('h-link').onchange = async e => {
   loadHabits();
 };
 
-/* ---------- Peso (mismo estado que Body Metrics) ---------- */
-let bm = null;
+/* ======================= peso y meta ======================= */
+// Objetivo del perfil activo de Nutricion: 'surplus' (subir), 'deficit' (bajar)
+// o mantener. Sin objetivo de subir o bajar, el cambio de peso no se colorea.
+function deltaClass(d) {
+  const goal = profile()?.tdee?.goal;
+  const good = goal === 'surplus' ? d > 0 : goal === 'deficit' ? d < 0 : null;
+  return !d || good === null ? '' : good ? 'good' : 'bad';
+}
+// kg por semana segun los registros de las ultimas 6 semanas (minimos cuadrados)
+function weeklyRate() {
+  const es = weights().filter(e => e.date > shift(today(), -42));
+  if (es.length < 2) return null;
+  const xs = es.map(e => (new Date(e.date + 'T00:00:00') - new Date(es[0].date + 'T00:00:00')) / 864e5);
+  if (xs[xs.length - 1] < 6) return null; // menos de una semana de datos
+  const mx = xs.reduce((a, x) => a + x, 0) / xs.length, my = es.reduce((a, e) => a + e.weight, 0) / es.length;
+  const num = xs.reduce((a, x, i) => a + (x - mx) * (es[i].weight - my), 0), den = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+  return den ? num / den * 7 : null;
+}
 function paintWeight() {
-  paintWeek();
-  const entries = (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
-  const last = entries[entries.length - 1];
-  if (!last) { $('w-last').innerHTML = '—<small>kg</small>'; $('w-sub').textContent = 'Sin registros todavía'; return; }
-  $('w-last').innerHTML = `${last.weight}<small>kg</small>`;
-  // tendencia contra el registro mas cercano a 7 dias antes
-  const ref = new Date(last.date + 'T00:00:00'); ref.setDate(ref.getDate() - 7);
-  const prev = [...entries].reverse().find(e => e.date <= isoLocal(ref)) || entries[entries.length - 2];
-  const when = last.date === today() ? 'hoy' : new Date(last.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
-  if (prev && prev !== last) {
-    const d = +(last.weight - prev.weight).toFixed(1);
-    const cls = deltaClass(d);
-    $('w-sub').innerHTML = `<span class="delta ${cls}">${d < 0 ? '▼' : d > 0 ? '▲' : '='} ${Math.abs(d)} kg</span> <span class="muted">vs ${new Date(prev.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>`;
+  const es = weights(), last = es[es.length - 1], t = today();
+  // tarea de la semana
+  const wk = es.filter(e => e.date > shift(t, -7)).pop();
+  $('c-w-t').textContent = wk ? `${wk.weight} kg · ${wk.date === t ? 'hoy' : dshort(wk.date)}` : last ? `Último: ${last.weight} kg (${dshort(last.date)})` : 'Aún no te has pesado';
+  $('c-w-btn').textContent = wk ? 'Corregir' : 'Registrar';
+  if (!last) {
+    $('w-last').innerHTML = '—<small>kg</small>';
+    $('w-sub').innerHTML = 'Pésate para empezar a ver tu progreso';
+    $('g-box').hidden = true;
   } else {
-    $('w-sub').textContent = `Registrado ${when}`;
+    $('w-last').innerHTML = `${last.weight}<small>kg</small>`;
+    // tendencia contra el registro mas cercano a 7 dias antes
+    const prev = [...es].reverse().find(e => e.date <= shift(last.date, -7)) || es[es.length - 2];
+    if (prev && prev !== last) {
+      const d = +(last.weight - prev.weight).toFixed(1);
+      $('w-sub').innerHTML = `<span class="delta ${deltaClass(d)}">${d < 0 ? '▼' : d > 0 ? '▲' : '='} ${Math.abs(d)} kg</span> <span class="muted">vs ${dshort(prev.date)}</span>`;
+    } else $('w-sub').textContent = `Registrado ${last.date === t ? 'hoy' : dshort(last.date)}`;
+    if (last.date === t) $('w-input').placeholder = `Hoy: ${last.weight} (corregir)`;
+    paintGoal(last);
   }
-  if (last.date === today()) $('w-input').placeholder = `Hoy: ${last.weight} (corregir)`;
+  paintWeek(); paintDay();
+}
+function paintGoal(last) {
+  const g = bm?.goal;
+  $('g-edit').textContent = g?.weight ? `Meta: ${g.weight} kg ✎` : 'Poner meta';
+  $('g-box').hidden = !g?.weight;
+  if (!g?.weight) return;
+  const start = g.start ?? last.weight, span = g.weight - start;
+  const pct = span ? Math.max(0, Math.min(1, (last.weight - start) / span)) : 1;
+  $('g-bar').style.width = pct * 100 + '%';
+  $('g-from').textContent = `${start} kg`;
+  $('g-to').textContent = `${g.weight} kg`;
+  $('g-pct').innerHTML = `<b>${Math.round(pct * 100)}%</b>`;
+  const rate = weeklyRate(), left = g.weight - last.weight, sign = v => (v > 0 ? '+' : '') + v.toFixed(2).replace(/0$/, '');
+  let eta;
+  if (Math.abs(left) < 0.1 || pct >= 1) eta = '¡Llegaste a tu meta! 🎉 Pon una nueva.';
+  else if (rate == null) eta = 'Pésate 1 vez por semana y aquí verás cuándo llegas.';
+  else if (Math.abs(rate) < 0.05 || Math.sign(rate) !== Math.sign(left)) eta = `Vas ${sign(rate)} kg/sem: así no llegas. ${left > 0 ? 'Suma ~300 kcal al día.' : 'Ajusta un poco las calorías.'}`;
+  else {
+    const d = new Date(); d.setDate(d.getDate() + Math.round(left / rate * 7));
+    eta = `Vas ${sign(rate)} kg/sem · llegas ~${d.toLocaleDateString('es', { day: 'numeric', month: 'short', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined })}`;
+  }
+  $('g-eta').textContent = eta;
 }
 async function loadWeight() {
   bm = bLoad(); if (bm) paintWeight(); // sin copia local: el placeholder queda hasta que llegue la nube
@@ -432,97 +660,131 @@ async function loadWeight() {
   bm = bm || { bodyComp: [] };
   paintWeight();
 }
+// Releer lo ultimo antes de escribir, para no pisar cambios hechos en Metricas
+async function editBm(change) {
+  const remote = await bPull();
+  bm = remote && (remote.lastModified || 0) > (bLoad()?.lastModified || 0) ? remote : (bLoad() || remote || { bodyComp: [], lastModified: 0 });
+  bm.bodyComp = bm.bodyComp || [];
+  change(bm);
+  bm.lastModified = Date.now();
+  bSave(bm); await bPush(bm);
+  toParent({ type: 'health:reload', tab: 'metricas' });
+}
+$('k-peso').onclick = e => { if (!e.target.closest('.wform,.gform,button')) toggleWeight(); };
+function toggleWeight(open) {
+  const f = $('w-form'); f.hidden = open ? false : !f.hidden;
+  if (f.hidden) return;
+  $('g-form').hidden = true;
+  // arranca en el ultimo peso: casi siempre basta con tocar +/- y Guardar
+  const es = weights();
+  if (!$('w-input').value && es.length) $('w-input').value = es[es.length - 1].weight;
+  $('k-peso').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+const nudge = d => () => { const v = parseFloat($('w-input').value.replace(',', '.')) || 0; $('w-input').value = Math.round((v + d) * 10) / 10; haptic('tick'); };
+$('w-dn').onclick = nudge(-0.1);
+$('w-up').onclick = nudge(0.1);
+$('w-input').onkeydown = e => { if (e.key === 'Enter') $('w-save').click(); };
 $('w-save').onclick = async () => {
   const weight = parseFloat($('w-input').value.replace(',', '.'));
   $('w-msg').hidden = false;
   if (!weight || weight < 20 || weight > 400) { $('w-msg').textContent = 'Escribe un peso válido'; $('w-msg').className = 'msg err'; return; }
   $('w-save').disabled = true;
-  // releer lo ultimo antes de escribir, para no pisar cambios hechos en Metricas
-  const remote = await bPull();
-  bm = remote && (remote.lastModified || 0) > (bLoad()?.lastModified || 0) ? remote : (bLoad() || remote || { bodyComp: [], lastModified: 0 });
-  bm.bodyComp = bm.bodyComp || [];
-  const date = today();
-  const i = bm.bodyComp.findIndex(e => e.date === date);
-  if (i >= 0) bm.bodyComp[i] = { ...bm.bodyComp[i], weight };
-  else bm.bodyComp.push({ date, weight, fatPct: null, measurements: { waist: null, chest: null, arm: null, hip: null, thigh: null } });
-  bm.bodyComp.sort((a, b) => a.date.localeCompare(b.date));
-  bm.lastModified = Date.now();
-  bSave(bm);
-  await bPush(bm);
+  await editBm(s => {
+    const date = today(), i = s.bodyComp.findIndex(e => e.date === date);
+    if (i >= 0) s.bodyComp[i] = { ...s.bodyComp[i], weight };
+    else s.bodyComp.push({ date, weight, fatPct: null, measurements: { waist: null, chest: null, arm: null, hip: null, thigh: null } });
+    s.bodyComp.sort((a, b) => a.date.localeCompare(b.date));
+  });
   $('w-input').value = ''; $('w-form').hidden = true; haptic();
   $('w-msg').textContent = 'Guardado ✓'; $('w-msg').className = 'msg';
   setTimeout(() => { $('w-msg').hidden = true; }, 2500);
   $('w-save').disabled = false;
   paintWeight();
-  toParent({ type: 'health:reload', tab: 'metricas' });
+};
+$('g-edit').onclick = () => {
+  $('g-form').hidden = !$('g-form').hidden; $('w-form').hidden = true;
+  if (!$('g-form').hidden) { $('g-input').value = bm?.goal?.weight || ''; $('g-input').focus(); }
+};
+$('g-save').onclick = async () => {
+  const goal = parseFloat($('g-input').value.replace(',', '.'));
+  const es = weights(), last = es[es.length - 1];
+  await editBm(s => { s.goal = goal >= 20 && goal <= 400 ? { weight: goal, start: last?.weight ?? goal, since: today() } : null; });
+  $('g-form').hidden = true; haptic(); paintWeight();
 };
 
-/* ---------- Nutricion (plan activo) ---------- */
-let nState = null, nlog = {};
+/* ======================= nutricion ======================= */
 function donut(parts) {
   const tot = parts.reduce((a, [v]) => a + v, 0); let acc = 0;
   const ring = (len, off, color) => `<circle cx="21" cy="21" r="15.9" fill="none" pathLength="100" stroke-width="5" style="stroke:${color}" stroke-dasharray="${len} ${100 - len}" stroke-dashoffset="${-off}"/>`;
   $('n-donut').innerHTML = ring(100, 0, 'var(--track)') + (tot ? parts.map(([v, c]) => { const len = v / tot * 100, s = ring(len, acc, c); acc += len; return s; }).join('') : '');
 }
-// Objetivo del perfil activo de Nutricion: 'surplus' (subir), 'deficit' (bajar)
-// o mantener. Sin objetivo de subir o bajar, el cambio de peso no se colorea.
-function deltaClass(d) {
-  const goal = nState?.profiles?.[nState.activeProfile]?.tdee?.goal;
-  const good = goal === 'surplus' ? d > 0 : goal === 'deficit' ? d < 0 : null;
-  return !d || good === null ? '' : good ? 'good' : 'bad';
-}
-function paintNutrition(S) {
-  nState = S; paintChips();
-  const p = S?.profiles?.[S.activeProfile];
-  if (!p) {
-    $('n-kcal').innerHTML = '—<small>kcal</small>'; $('n-title').textContent = 'Nutrición · sin plan configurado';
-    ['m-p', 'm-f', 'm-c'].forEach(id => $(id).textContent = '—'); donut([]); return;
-  }
-  if (p.name) $('hello').textContent = `${greet}, ${p.name}`;
+// kcal del dia activo del plan y la meta (TDEE + objetivo)
+function planInfo() {
+  const p = profile(); if (!p) return null;
   const day = (p.days || []).find(d => d.id === p.activeDay) || (p.days || [])[0] || { meals: [] };
-  const m = totalMacros(day.meals || []);
-  const t = p.tdee || {};
+  const m = totalMacros(day.meals || []), t = p.tdee || {};
   let target = 0;
   if (t.weight && t.height && t.age) target = calcTarget(calcTDEE(calcBMR(+t.weight, +t.height, +t.age, t.gender), t.activity), t.goal, t.goalPct);
-  const k = v => Math.round(v).toLocaleString('en');
-  $('n-kcal').innerHTML = `${k(m.calories)}<small>${target ? '/ ' + k(target) : 'kcal'}</small>`;
-  $('n-title').textContent = `Nutrición · ${day.label || 'Día'}`;
-  $('n-bar').style.width = target ? Math.min(100, m.calories / target * 100) + '%' : '0';
-  $('m-p').textContent = Math.round(m.protein) + ' g';
-  $('m-f').textContent = Math.round(m.fat) + ' g';
-  $('m-c').textContent = Math.round(m.carbs) + ' g';
-  donut([[m.protein * 4, 'var(--protein)'], [m.fat * 9, 'var(--fat)'], [m.carbs * 4, 'var(--carb)']]);
-  if (bm) paintWeight(); // el color del peso depende del objetivo
+  return { p, day, m, kcal: m.calories, target };
+}
+function paintNutrition(S) {
+  nState = S; paintFood();
+  const pi = planInfo();
+  const empty = !pi || !(pi.day.meals || []).length;
+  $('n-body').hidden = empty; $('n-empty').hidden = !empty;
+  $('n-title').textContent = pi ? `Nutrición · ${pi.day.label || 'Día'}` : 'Nutrición';
+  if (!empty) {
+    const k = v => Math.round(v).toLocaleString('en');
+    $('n-kcal').innerHTML = `<b>${k(pi.kcal)}</b> ${pi.target ? '/ ' + k(pi.target) + ' kcal' : 'kcal'}`;
+    $('n-bar').style.width = pi.target ? Math.min(100, pi.kcal / pi.target * 100) + '%' : '0';
+    $('m-p').textContent = Math.round(pi.m.protein) + ' g';
+    $('m-f').textContent = Math.round(pi.m.fat) + ' g';
+    $('m-c').textContent = Math.round(pi.m.carbs) + ' g';
+    donut([[pi.m.protein * 4, 'var(--protein)'], [pi.m.fat * 9, 'var(--fat)'], [pi.m.carbs * 4, 'var(--carb)']]);
+  }
+  if (bm) paintWeight(); else paintDay(); // el color del peso y los mensajes dependen del plan
 }
 async function loadNutrition() {
   const S = nLoad(); if (S) paintNutrition(S);
   const remote = await nPull();
   if (remote && (!S || (remote.lastModified || 0) > (S.lastModified || 0))) paintNutrition(remote);
-  else if (!S && !navigator.onLine) { $('n-kcal').innerHTML = '—<small>kcal</small>'; $('n-title').textContent = 'Sin conexión: se carga al volver la red'; }
+  else if (!S && !navigator.onLine) { $('n-kcal').textContent = 'Sin conexión: se carga al volver la red'; }
   else if (!S) paintNutrition(null);
 }
 addEventListener('online', () => { if (!nState) loadNutrition(); });
 $('n-go').onclick = goTab('nutricion');
+$('n-empty-go').onclick = goTab('nutricion');
 
-/* ---------- Que dia del plan se comio hoy (adherencia) ---------- */
-function paintChips() {
-  const p = nState?.profiles?.[nState.activeProfile];
-  const cur = nlog[today()];
-  const box = $('n-chips'); box.replaceChildren();
-  const chip = (text, on, cls, onclick) => {
-    const b = document.createElement('button'); b.className = 'chip' + (cls ? ' ' + cls : '') + (on ? ' on' : '');
-    b.textContent = (on ? '✓ ' : '') + text; b.onclick = onclick; box.append(b);
-  };
-  (p?.days || []).forEach(d => chip(d.label || 'Día', cur && !cur.skipped && cur.dayId === d.id, '', () =>
-    setLog(cur && cur.dayId === d.id ? null : { dayId: d.id, label: d.label, profile: p.name })));
-  chip('No seguí el plan', !!cur?.skipped, 'skip', () => setLog(cur?.skipped ? null : { skipped: true }));
+/* ---------- ¿Seguiste el plan? Si / Mas o menos / No ---------- */
+function paintFood() {
+  const cur = nlog[today()], p = profile();
+  const kind = !cur ? null : cur.skipped ? 'no' : cur.partial ? 'parcial' : 'si';
+  $('food-seg').querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === kind));
+  $('c-food-t').textContent = !cur ? '¿Seguiste el plan hoy?' : kind === 'no' ? 'Registrado: no seguiste el plan. Mañana otra vez.'
+    : kind === 'parcial' ? `Más o menos${cur.label ? ' · ' + cur.label : ''}` : `Plan cumplido${cur.label ? ' · ' + cur.label : ''} ✓`;
+  // si el plan tiene varios dias, cual se comio
+  const days = p?.days || [];
+  $('food-days').hidden = !(kind === 'si' || kind === 'parcial') || days.length < 2;
+  $('food-days').innerHTML = days.map(d => `<button data-day="${esc(d.id)}" class="${cur?.dayId === d.id ? 'on' : ''}">${esc(d.label || 'Día')}</button>`).join('');
+  $('food-days').querySelectorAll('[data-day]').forEach(b => b.onclick = () => {
+    const d = days.find(x => x.id === b.dataset.day);
+    setLog({ ...cur, dayId: d.id, label: d.label, profile: p.name });
+  });
 }
+$('food-seg').querySelectorAll('[data-f]').forEach(b => b.onclick = () => {
+  const cur = nlog[today()], p = profile(), f = b.dataset.f;
+  const kind = !cur ? null : cur.skipped ? 'no' : cur.partial ? 'parcial' : 'si';
+  if (kind === f) return setLog(null); // tocar de nuevo lo quita
+  const day = (p?.days || []).find(d => d.id === (cur?.dayId || p.activeDay)) || (p?.days || [])[0];
+  const base = day ? { dayId: day.id, label: day.label, profile: p.name } : {};
+  setLog(f === 'no' ? { skipped: true } : f === 'parcial' ? { ...base, partial: true } : base);
+});
 async function setLog(entry) {
   haptic();
   if (entry) nlog[today()] = entry; else delete nlog[today()];
   // conservar solo los ultimos ~4 meses
   nlog = Object.fromEntries(Object.entries(nlog).sort(([a], [b]) => a.localeCompare(b)).slice(-120));
-  paintChips(); paintWeek();
+  paintFood(); paintWeek(); paintDay();
   await pushLog();
 }
 // Sin conexion el registro queda guardado aqui y se sube al volver la red
@@ -535,46 +797,78 @@ async function loadLog() {
   try { pending = JSON.parse(localStorage.getItem('health_nlog_pending')); } catch {}
   if (pending) { nlog = pending; pushLog(); }
   else { try { const { data } = await api('/nutrition_log'); nlog = data || {}; } catch {} }
-  paintChips(); paintWeek();
+  paintFood(); paintWeek(); paintDay();
 }
 addEventListener('online', () => { if (localStorage.getItem('health_nlog_pending')) pushLog(); });
 
-/* ---------- Ultimos 7 dias ---------- */
+/* ======================= ultimos 7 dias ======================= */
+const planScore = d => !nlog[d] || nlog[d].skipped ? 0 : nlog[d].partial ? 0.5 : 1;
 let selDay = null; // dia tocado en la franja
 function paintWeek() {
-  const days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); return d; });
-  const isos = days.map(isoLocal);
-  const r = isos.filter(d => rutinaHist.includes(d)).length;
-  const n = isos.filter(d => nlog[d] && !nlog[d].skipped).length;
-  $('wk-r').textContent = `${r}/7`;
-  $('wk-n').textContent = `${n}/7`;
-  const comp = (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
-  const last = comp[comp.length - 1];
+  const isos = [...Array(7)].map((_, i) => shift(today(), i - 6));
+  $('wk-r').textContent = `${isos.filter(rDone).length}/7`;
+  const ps = isos.reduce((a, d) => a + planScore(d), 0);
+  $('wk-n').textContent = `${+ps.toFixed(1)}/7`;
+  const es = weights(), last = es[es.length - 1];
   if (last) {
-    const ref = new Date(last.date + 'T00:00:00'); ref.setDate(ref.getDate() - 7);
-    const prev = [...comp].reverse().find(e => e.date <= isoLocal(ref));
+    const prev = [...es].reverse().find(e => e.date <= shift(last.date, -7));
     const d = prev ? +(last.weight - prev.weight).toFixed(1) : null;
     $('wk-w').textContent = d == null ? `${last.weight} kg` : `${d > 0 ? '+' : ''}${d} kg`;
   } else if (bm) $('wk-w').textContent = '—';
   const L = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  $('wk-strip').innerHTML = days.map((d, i) => `<div data-d="${isos[i]}" class="${i === 6 ? 'today' : ''}${isos[i] === selDay ? ' sel' : ''}">${i === 6 ? 'Hoy' : L[d.getDay()]}
-    <span${rutinaHist.includes(isos[i]) ? ' class="on"' : ''}></span><em${nlog[isos[i]] && !nlog[isos[i]].skipped ? ' class="on"' : ''}></em></div>`).join('');
+  $('wk-strip').innerHTML = isos.map((d, i) => `<div data-d="${d}" class="${i === 6 ? 'today' : ''}${d === selDay ? ' sel' : ''}">${i === 6 ? 'Hoy' : L[new Date(d + 'T00:00:00').getDay()]}
+    <span class="${rDone(d) ? 'on' : ''}${full(d) ? ' full' : ''}"></span><em class="${planScore(d) === 1 ? 'on' : planScore(d) ? 'half' : ''}"></em></div>`).join('');
   $('wk-strip').querySelectorAll('[data-d]').forEach(el => el.onclick = () => { selDay = selDay === el.dataset.d ? null : el.dataset.d; haptic('tick'); paintWeek(); });
   // Detalle del dia tocado: rutina, plan y peso
   const box = $('wk-day');
   box.hidden = !selDay;
   if (!selDay) return;
-  const nl = nlog[selDay], w = comp.find(e => e.date === selDay);
+  const nl = nlog[selDay], w = es.find(e => e.date === selDay);
   const when = new Date(selDay + 'T00:00:00').toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'short' });
-  box.innerHTML = `<b>${when.replace(/^./, c => c.toUpperCase())}</b> · Rutina ${rutinaHist.includes(selDay) ? '✓' : '—'}`
-    + ` · Plan ${nl ? (nl.skipped ? 'no seguido' : esc(nl.label || 'cumplido')) : '—'}` + (w ? ` · ${w.weight} kg` : '');
+  box.innerHTML = `<b>${when.replace(/^./, c => c.toUpperCase())}</b>${full(selDay) ? ' · Día completo ✨' : ''} · Rutina ${rDone(selDay) ? '✓' : '—'}`
+    + ` · Plan ${nl ? (nl.skipped ? 'no seguido' : nl.partial ? 'más o menos' : esc(nl.label || 'cumplido')) : '—'}` + (w ? ` · ${w.weight} kg` : '');
 }
 
-/* ---------- Recordatorio push ---------- */
-// App Android (Capacitor, health-app/): sus plugins propios; null en la web.
-// Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
-const nativeApp = () => { try { const c = (window.parent !== window && parent.Capacitor) || window.Capacitor; return c?.isNativePlatform?.() && c.Plugins?.Native || null; } catch { return null; } };
-function haptic(k) { const n = nativeApp(); if (n) n.haptic({ kind: k || 'key' }).catch(() => {}); }
+/* ======================= tu semana ======================= */
+function openWeek() {
+  const t = today(), from = shift(t, -6), isos = [...Array(7)].map((_, i) => shift(t, i - 6));
+  const fullN = isos.filter(full).length, trains = isos.filter(rDone).length, ps = +isos.reduce((a, d) => a + planScore(d), 0).toFixed(1);
+  const es = weights(), last = es[es.length - 1], prev = last && [...es].reverse().find(e => e.date < from);
+  const dw = last && prev ? +(last.weight - prev.weight).toFixed(1) : null;
+  // series y records de la semana (Rutina las anota en Metricas)
+  const sessions = bm?.sessions || [], wkSets = sessions.filter(s => s.date >= from).flatMap(s => s.sets);
+  const before = sessions.filter(s => s.date < from).flatMap(s => s.sets);
+  const recs = new Set(wkSets.filter(z => { const old = before.filter(o => o.exerciseId === z.exerciseId);
+    return old.length && !old.some(o => (o.weight || 0) >= (z.weight || 0) && o.reps >= z.reps); }).map(z => z.exerciseId)).size;
+  const reps = wkSets.reduce((a, z) => a + z.reps, 0);
+  $('wk-range').textContent = `${dshort(from)} – ${dshort(t)}`;
+  $('wk-title').textContent = fullN >= 5 ? 'Semana enorme 🏆' : trains >= 5 ? 'Buena semana 💪' : trains >= 3 ? 'Vas construyendo 🧱' : 'Semana nueva, página nueva 🌱';
+  $('wk-grid').innerHTML = [
+    [`${fullN}/7`, 'días completos'], [`${trains}/7`, 'entrenos'], [`${ps}/7`, 'plan cumplido'],
+    [dw == null ? '—' : `<span class="delta ${deltaClass(dw)}">${dw > 0 ? '+' : ''}${dw} kg</span>`, 'peso en la semana'],
+    [recs, recs === 1 ? 'récord nuevo' : 'récords nuevos'], [wkSets.length ? `${wkSets.length}` : '—', reps ? `series · ${reps} reps` : 'series'],
+  ].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join('');
+  const goal = bm?.goal?.weight;
+  $('wk-msg').textContent = fullN === 7 ? 'Siete de siete. Esto ya es un hábito.'
+    : trains >= 5 && ps < 4 ? 'Entrenaste muy bien; la comida es lo que más te va a hacer crecer esta semana.'
+    : dw != null && goal && Math.sign(dw) === Math.sign(goal - last.weight) && dw !== 0 ? `Vas hacia tu meta de ${goal} kg. Sigue así.`
+    : 'Cada día que cierras el anillo suma. La próxima semana, uno más que esta.';
+  $('wk-dlg').showModal(); haptic();
+}
+$('wk-open').onclick = openWeek;
+$('wk-close').onclick = () => $('wk-dlg').close();
+$('wk-dlg').onclick = e => { if (e.target === $('wk-dlg')) $('wk-dlg').close(); };
+
+/* ======================= widget de la app ======================= */
+// El widget de la pantalla de inicio muestra lo que toca, el anillo y la racha.
+function updateWidget() {
+  const n = nativeApp(); if (!n) return;
+  const t = today(), parts = [rDone(t), fDone(t), wDone(t)];
+  n.widget({ title: rut.name || 'Tu rutina', ring: parts.filter(Boolean).length, rut: parts[0], food: parts[1], weight: parts[2],
+    streak: fullStreak() }).catch(() => {});
+}
+
+/* ======================= recordatorios ======================= */
 const canPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 function remMsg(t, err) { $('rem-msg').textContent = t; $('rem-msg').className = 'msg' + (err ? ' err' : ''); }
 const b64ToBytes = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
@@ -591,7 +885,9 @@ async function subscribe() {
       throw new Error(m === 'denied' ? 'Las notificaciones están bloqueadas para la app en los ajustes del teléfono'
         : m === 'not set up' ? 'Esta versión de la app no tiene notificaciones: instala el APK más reciente' : 'No se pudo activar: ' + m);
     }
-    await api('/push', { method: 'POST', body: JSON.stringify({ fcm: t.token }) });
+    // v2: la app arma sus notificaciones (con botones para responder)
+    const v = await n.appInfo().then(r => r?.v || 1).catch(() => 1);
+    await api('/push', { method: 'POST', body: JSON.stringify({ fcm: t.token, v }) });
     return;
   }
   if (!canPush) throw new Error('Este navegador no soporta notificaciones push');
@@ -610,15 +906,14 @@ async function subscribe() {
   await api('/push', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
 }
 function remStatus(r) {
-  if (!r.enabled && !r.weekly) return 'Recordatorios desactivados';
-  return [r.enabled && `rutina todos los días a las ${r.time}`, r.weekly && `resumen los domingos a las ${r.time}`]
-    .filter(Boolean).join(' · ').replace(/^./, c => c.toUpperCase());
+  const parts = [r.enabled && `rutina a las ${r.time}`, r.checkin && `pregunta de la noche a las ${r.checkinTime}`, r.weekly && 'resumen los domingos'].filter(Boolean);
+  return parts.length ? parts.join(' · ').replace(/^./, c => c.toUpperCase()) : 'Recordatorios desactivados';
 }
 async function saveReminder(e) {
   const r = { enabled: $('rem-on').checked, weekly: $('rem-weekly').checked, time: $('rem-time').value || '19:00',
-    tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
+    checkin: $('rem-check').checked, checkinTime: $('rem-ctime').value || '21:30', tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
   try {
-    if (r.enabled || r.weekly) await subscribe();
+    if (r.enabled || r.weekly || r.checkin) await subscribe();
     await api('/reminder', { method: 'PUT', body: JSON.stringify(r) });
     remMsg(remStatus(r));
   } catch (err) {
@@ -626,34 +921,33 @@ async function saveReminder(e) {
     remMsg(err.message, true);
   }
 }
-$('rem-on').onchange = saveReminder;
-$('rem-weekly').onchange = saveReminder;
-$('rem-time').onchange = () => { if ($('rem-on').checked || $('rem-weekly').checked) saveReminder(); };
-$('rem-test-weekly').onclick = async () => {
+['rem-on', 'rem-weekly', 'rem-check'].forEach(id => $(id).onchange = saveReminder);
+['rem-time', 'rem-ctime'].forEach(id => $(id).onchange = () => { if ($('rem-on').checked || $('rem-weekly').checked || $('rem-check').checked) saveReminder(); });
+const testPush = (kind, ok) => async () => {
   try {
     await subscribe();
-    const { sent, payload } = await api('/test-push', { method: 'POST', body: JSON.stringify({ kind: 'weekly' }) });
-    remMsg(sent ? `Enviado: ${payload.body}` : 'No se pudo enviar (sin dispositivos suscritos)', !sent);
+    const { sent, payload } = await api('/test-push', { method: 'POST', body: JSON.stringify({ kind }) });
+    remMsg(sent ? ok(payload) : 'No se pudo enviar (sin dispositivos suscritos)', !sent);
   } catch (e) { remMsg(e.message, true); }
 };
-$('rem-test').onclick = async () => {
-  try {
-    await subscribe();
-    const { sent } = await api('/test-push', { method: 'POST' });
-    remMsg(sent ? 'Notificación de prueba enviada' : 'No se pudo enviar (sin dispositivos suscritos)', !sent);
-  } catch (e) { remMsg(e.message, true); }
-};
+$('rem-test').onclick = testPush(undefined, () => 'Notificación de prueba enviada');
+$('rem-test-check').onclick = testPush('checkin', () => 'Pregunta de prueba enviada: respóndela desde la notificación');
+$('rem-test-weekly').onclick = testPush('weekly', p => `Enviado: ${p.body}`);
 async function loadReminder() {
   try {
     const { data } = await api('/reminder');
-    if (data) { $('rem-on').checked = !!data.enabled; $('rem-weekly').checked = !!data.weekly; if (data.time) $('rem-time').value = data.time; }
-    if (data?.enabled || data?.weekly) remMsg(remStatus(data));
+    if (data) {
+      $('rem-on').checked = !!data.enabled; $('rem-weekly').checked = !!data.weekly; $('rem-check').checked = !!data.checkin;
+      if (data.time) $('rem-time').value = data.time;
+      if (data.checkinTime) $('rem-ctime').value = data.checkinTime;
+    }
+    if (data?.enabled || data?.weekly || data?.checkin) remMsg(remStatus(data));
     // En la app: el token de FCM al dia (Firebase lo rota a veces)
-    if ((data?.enabled || data?.weekly) && nativeApp()) subscribe().catch(() => {});
+    if ((data?.enabled || data?.weekly || data?.checkin) && nativeApp()) subscribe().catch(() => {});
   } catch {}
 }
 
-/* ---------- Cuenta y passkeys ---------- */
+/* ======================= cuenta y passkeys ======================= */
 $('acc-email').textContent = currentEmail();
 $('me').textContent = (currentEmail() || '?')[0];
 $('me').onclick = () => $('cuenta').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -674,7 +968,6 @@ $('pk-add').onclick = async () => {
   catch (e) { $('acc-msg').textContent = e?.name === 'NotAllowedError' ? 'Cancelado' : e.message; $('acc-msg').className = 'msg err'; }
 };
 
-
 function loadAll() { loadRutina(); loadWeight(); loadNutrition(); loadLog(); }
 loadAll(); loadReminder(); loadHabits();
 // El shell avisa al volver a esta pestana para refrescar lo que cambio en las otras
@@ -682,6 +975,7 @@ window.addEventListener('message', e => {
   if (e.origin !== location.origin) return;
   if (e.data?.type === 'health:refresh') loadAll();
   if (e.data?.type === 'health:weight') { toggleWeight(true); $('w-input').focus(); }
+  if (e.data?.type === 'health:week') openWeek();
   if (e.data?.type === 'health:account') $('cuenta').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 </script>

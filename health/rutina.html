@@ -58,6 +58,16 @@
   .rchip{border:1px solid var(--line2);background:transparent;color:var(--text2);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;white-space:nowrap;}
   .rchip.on{background:var(--accent);border-color:var(--accent);color:#fff;}
   .rchip.add,.rchip.edit{border-style:dashed;color:var(--muted);}
+  .rchip.lite{color:var(--h-warn);border-color:rgba(251,191,36,.35);}
+  .rchip.lite.on{background:var(--h-warn);border-color:var(--h-warn);color:#1a1405;}
+  /* Aviso de nuevo record durante la rutina */
+  .rec{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:90;background:var(--card);border:1px solid var(--h-warn);
+    color:var(--text);border-radius:999px;padding:10px 18px;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.45);
+    animation:recIn .5s cubic-bezier(.2,1.4,.4,1),recOut .4s ease-in 2.4s forwards;white-space:nowrap;}
+  .rec i{position:absolute;top:50%;left:50%;width:7px;height:10px;border-radius:2px;animation:burst .9s ease-out forwards;}
+  @keyframes recIn{from{transform:translate(-50%,-30px) scale(.8);opacity:0}}
+  @keyframes recOut{to{opacity:0;transform:translate(-50%,-12px)}}
+  @keyframes burst{to{transform:translate(var(--x),var(--y)) rotate(400deg);opacity:0}}
 
   /* Barra de progreso fija (aparece al empezar) */
   .sticky{position:sticky;top:0;z-index:20;background:var(--bg);margin:0 -32px 14px;padding:10px 32px;border-bottom:1px solid var(--line);}
@@ -308,7 +318,9 @@ if(saved.prefs)['voice','sound','auto'].forEach(k=>{if(typeof saved.prefs[k]==='
 const routines=()=>[BUILTIN,...custom];
 const getR=()=>routines().find(r=>r.id===active)||BUILTIN;
 let items=[];
-function load(){if(!routines().some(r=>r.id===active))active='estiramiento';items=compile(getR());}
+// Modo minimo: vale solo para el dia en que se activo
+let mini=saved.mini===today();
+function load(){if(!routines().some(r=>r.id===active))active='estiramiento';items=compile(getR(),mini);}
 function done(){
   if(curDate!==today()){curDate=today();doneBy={};} // paso la medianoche con la app abierta
   return doneBy[active]||(doneBy[active]={});
@@ -326,7 +338,7 @@ function snapshot(){
   const r=getR(),nx=nDone()===items.length&&r.next&&routines().find(x=>x.id===r.next)||r;
   const nextDay={name:nx.name,list:listOf(nx)};
   return {date:today(),routine:active,name:getR().name,doneBy,done:done(),total:items.length,list,nextDay,routines:custom,
-    prefs:{voice:state.voice,sound:state.sound,auto:state.auto},history:hist,updated:saved.updated||0};
+    mini:mini?today():null,prefs:{voice:state.voice,sound:state.sound,auto:state.auto},history:hist,updated:saved.updated||0};
 }
 function writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(snapshot()));}catch(e){}}
 function pushRemote(){
@@ -354,9 +366,15 @@ function renderHead(){
   const r=getR(),n=nDone(),s=streakCount();
   $('title').textContent=r.name;
   const total=Math.round(items.reduce((a,it)=>a+dur(it),0)/60);
-  $('meta').textContent=[s?`🔥 ${s} ${s===1?'día':'días'} de racha`:'',`${n} de ${items.length} hechos`,`~${total} min`].filter(Boolean).join(' · ');
+  $('meta').textContent=[s?`🔥 ${s} ${s===1?'día':'días'} de racha`:'',`${n} de ${items.length} hechos`,`~${total} min`,mini?'⚡ modo mínimo':''].filter(Boolean).join(' · ');
   $('picker').innerHTML=routines().map(x=>`<button class="rchip${x.id===active?' on':''}" data-r="${esc(x.id)}">${esc(x.name)}</button>`).join('')+
-    (r.builtin?'':'<button class="rchip edit" id="edit">✎ Editar</button>')+'<button class="rchip add" id="add">＋ Nueva rutina</button>';
+    (r.builtin?'':'<button class="rchip edit" id="edit">✎ Editar</button>')+
+    `<button class="rchip lite${mini?' on':''}" id="liteBtn" title="Versión corta para días malos: igual cuenta para la racha">⚡ Mínimo</button>`+
+    '<button class="rchip add" id="add">＋ Nueva rutina</button>';
+  $('liteBtn').onclick=()=>{
+    if(T.i!==null&&!confirm('Hay un ejercicio en curso. ¿Cambiar de modo?'))return;
+    stopAll();mini=!mini;haptic();sel=null;load();save();renderAll();
+  };
   $('picker').querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>pick(b.dataset.r));
   $('add').onclick=()=>openEditor(null);
   if($('edit'))$('edit').onclick=()=>openEditor(active);
@@ -632,6 +650,11 @@ function logSet(it,kg,reps){
   let s=bm.sessions.find(x=>x.date===today()&&x.from==='rutina');
   if(!s){s={id:'s'+Date.now().toString(36),date:today(),sets:[],from:'rutina'};bm.sessions.push(s);
     bm.sessions.sort((a,b)=>a.date.localeCompare(b.date));}
+  // Record: ninguna serie anterior de este ejercicio tiene igual o mas peso con igual o mas reps
+  const prev=bm.sessions.flatMap(x=>x.sets.filter(z=>z.exerciseId===ex.id));
+  if(prev.length&&!prev.some(z=>(z.weight||0)>=kg&&z.reps>=reps)){
+    hintNext='¡Nuevo récord! '+hintNext;showRecord(kg?`${kg} kg × ${reps}`:`${reps} reps`);
+  }
   s.sets.push({exerciseId:ex.id,weight:kg,reps});
   bm.lastModified=Date.now();bmSave(bm);
   clearTimeout(bmTimer);
@@ -757,6 +780,15 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&autoWake&&!state.wake&&!vid&&T.i!==null)wakeOn(true);
 });
 
+function showRecord(txt){
+  haptic();if(navigator.vibrate)navigator.vibrate([60,40,60]);
+  const el=document.createElement('div');el.className='rec';
+  const colors=['#fbbf24','#4f86ff','#34d399','#fb923c','#a78bfa'];
+  el.innerHTML='🏆 Nuevo récord · '+esc(txt)+Array.from({length:18},(_,k)=>{
+    const a=k/18*Math.PI*2,r=60+Math.random()*50;
+    return `<i style="background:${colors[k%colors.length]};--x:${Math.cos(a)*r}px;--y:${Math.sin(a)*r}px"></i>`;}).join('');
+  document.body.appendChild(el);setTimeout(()=>el.remove(),3000);
+}
 function celebrate(){
   if(navigator.vibrate)navigator.vibrate([120,80,120,80,320]);
   say('¡Rutina completada! Excelente trabajo.');
