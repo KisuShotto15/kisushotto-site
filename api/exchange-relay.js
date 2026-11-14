@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 
 const HOSTS = new Set([
-  'fapi.binance.com', 'api.binance.com', 'demo-fapi.binance.com', 'testnet.binance.vision',
+  'fapi.binance.com', 'api.binance.com', 'dapi.binance.com', 'demo-fapi.binance.com', 'testnet.binance.vision',
   'api.bitget.com', 'nfs.faireconomy.media',
 ]);
 const MAX_SKEW_MS = 30000;

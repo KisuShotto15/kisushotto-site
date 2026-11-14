@@ -385,7 +385,7 @@ function renderOpenPositions(data) {
         <span class="open-pos-symbol">${p.symbol}</span>
         <span class="side-badge side-badge-${p.side}" style="font-size: 11px;padding:2px 6px">${p.side.toUpperCase()}</span>
         ${p.legacy ? '<span class="legacy-badge" title="Capital inmovilizado de la etapa anterior: no cuenta en las metricas">heredada</span>' : ''}
-        ${p.exchange && p.exchange !== 'bybit' ? `<span class="legacy-badge" title="${p.terminal ? 'Abierta desde el terminal' : 'Abierta fuera del terminal'}">${p.exchange}${p.terminal ? ' · terminal' : ''}</span>` : ''}
+        ${p.exchange && p.exchange !== 'bybit' ? `<span class="legacy-badge" title="${p.terminal ? 'Abierta desde el terminal' : 'Abierta fuera del terminal'}">${p.exchange}${p.category === 'inverse' ? ' · COIN-M' : ''}${p.terminal ? ' · terminal' : p.profile === 'swing' ? ' · swing' : ''}</span>` : ''}
         <span class="open-pos-pnl ${win ? 'pos' : 'neg'}">${fmtPnl(p.unrealized_pnl)}${p.settle_coin && p.settle_coin !== 'USDT' ? ' ' + p.settle_coin : ''}</span>
         ${p.terminal ? '<a class="plan-btn done" href="./terminal.html" title="El plan quedo registrado al abrirla desde el terminal">✓</a>' : `<button class="plan-btn ${planned ? 'done' : ''}" onclick="openPlan(${i})"
           title="${planned ? 'Plan guardado — editar' : 'Registrar el plan antes de que cierre'}">${planned ? '✓' : '✎'}</button>`}

@@ -92,6 +92,7 @@ function render() {
   renderDay();
   renderPositions();
   renderSpot();
+  renderSwing();
   renderPending();
   renderChecklist();
   renderAccounts();
@@ -201,6 +202,33 @@ function renderPositions() {
   }).join('');
 }
 
+// Cuentas de swing: solo se muestran. El guardian no las corrige ni cuentan
+// para el riesgo de la estrategia VWAP.
+function renderSwing() {
+  const list = S.swing_positions || [];
+  $('swingPanel').classList.toggle('hidden', !list.length && !S.accounts.some(a => a.profile === 'swing'));
+  const total = list.reduce((s, p) => s + (p.upnl || 0), 0);
+  $('swingTotal').innerHTML = list.length ? `<span class="${total >= 0 ? 'pos' : 'neg'}">${sign(total)} USD</span>` : '';
+  $('swing').innerHTML = list.length ? list.map(p => {
+    const coinm = p.market === 'coinm';
+    return `<div class="tm-pos">
+      <div class="tm-pos-line">
+        <b>${esc(p.symbol)}</b>
+        <span class="side-badge side-badge-${p.side}">${p.side.toUpperCase()}</span>
+        <span class="tm-tag">${esc(p.exchange)} · ${coinm ? 'COIN-M' : 'USDT-M'}</span>
+        <span class="tm-pos-pnl ${p.upnl >= 0 ? 'pos' : 'neg'}">${sign(p.upnl)} USD${coinm ? ` · ${p.upnl_coin >= 0 ? '+' : ''}${(+p.upnl_coin).toFixed(6)} ${esc(p.settle_coin)}` : ''}</span>
+      </div>
+      <div class="tm-pos-meta">
+        <span>${coinm ? `${fmt(p.contracts, 0)} contratos (${fmt(p.notional, 0)} USD)` : fmt(p.size, 4)} @ ${px(p.entry)} → ${px(p.mark)}</span>
+        <span class="${p.stop ? '' : 'warn'}">SL ${px(p.stop)}</span>
+        <span>TP ${px(p.tp)}</span>
+        ${p.leverage ? `<span>${p.leverage}x</span>` : ''}
+        ${p.liq ? `<span>liq ${px(p.liq)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('') : '<div class="tm-sub">Sin posiciones de swing abiertas</div>';
+}
+
 function renderPending() {
   const pend = S.open_trades.filter(t => t.status === 'pending');
   $('pending').innerHTML = pend.length ? pend.map(t => `<div class="tm-pos">
@@ -264,7 +292,9 @@ window.cancelPending = async id => {
 function fillExchanges() {
   const sel = $('tExchange');
   const cur = sel.value;
-  const list = S.accounts.length ? S.accounts.map(a => a.exchange) : ['binance', 'bitget'];
+  // Solo las cuentas de la estrategia VWAP abren operaciones desde el ticket
+  const vwap = S.accounts.filter(a => a.profile === 'vwap').map(a => a.exchange);
+  const list = vwap.length ? vwap : S.rules.vwap_exchanges;
   const html = list.map(x => `<option value="${x}">${x === 'binance' ? 'Binance' : 'Bitget'}</option>`).join('');
   if (sel.innerHTML !== html) { sel.innerHTML = html; if (list.includes(cur)) sel.value = cur; }
 }
@@ -466,6 +496,7 @@ function renderRules() {
         <input type="number" step="any" min="${h.min}" max="${h.max}" data-rule="${k}" value="${S.rules[k]}"></div>`;
     }).join('') + `<label class="tm-check"><input type="checkbox" id="rBlockNews" ${S.rules.block_news ? 'checked' : ''}><span>No operar dias de noticias macro</span></label>`;
     $('rSymbols').value = S.rules.symbols.join(', ');
+    $('rVwapEx').value = S.rules.vwap_exchanges.join(', ');
     $('rChecklist').value = S.rules.checklist.join('\n');
     form.dataset.ready = '1';
   }
@@ -481,6 +512,7 @@ window.saveRules = async () => {
   document.querySelectorAll('[data-rule]').forEach(i => { body[i.dataset.rule] = +i.value; });
   body.block_news = $('rBlockNews').checked;
   body.symbols = $('rSymbols').value.split(/[\s,;]+/).filter(Boolean);
+  body.vwap_exchanges = $('rVwapEx').value.split(/[\s,;]+/).filter(Boolean);
   body.checklist = $('rChecklist').value.split('\n').map(x => x.trim()).filter(Boolean);
   try {
     const r = await exec.rules(body);
@@ -513,12 +545,14 @@ function renderAccounts() {
     <div class="tm-acc">
       <b>${a.exchange === 'binance' ? 'Binance' : 'Bitget'}</b>
       <span class="tm-tag">${esc(a.env)}${a.mode ? ' · ' + esc(a.mode) : ''}</span>
-      <span class="tm-tag ${a.dry_run ? '' : 'live'}">${a.dry_run ? 'simulacion' : 'REAL'}</span>
-      <span>${a.equity ? `${fmt(a.equity.total)} USDT (futuros ${fmt(a.equity.futures_equity)} · spot ${fmt(a.equity.spot_value)})` : '<span class="neg">sin lectura</span>'}</span>
-      <button class="btn btn-sm" onclick="toggleMode('${a.exchange}', ${a.dry_run ? 'false' : 'true'})">${a.dry_run ? 'Pasar a real' : 'Volver a simulacion'}</button>
+      <span class="tm-tag ${a.profile === 'vwap' ? 'live' : ''}">${a.profile === 'vwap' ? 'estrategia VWAP' : 'swing · solo lectura'}</span>
+      ${a.profile === 'vwap' ? `<span class="tm-tag ${a.dry_run ? '' : 'live'}">${a.dry_run ? 'simulacion' : 'REAL'}</span>` : ''}
+      <span>${a.equity ? `${fmt(a.equity.total)} USDT (futuros ${fmt(a.equity.futures_equity)}${a.equity.coinm_value != null ? ` · COIN-M ${fmt(a.equity.coinm_value)}` : ''} · spot ${fmt(a.equity.spot_value)})` : '<span class="neg">sin lectura</span>'}</span>
+      ${a.profile === 'vwap' ? `<button class="btn btn-sm" onclick="toggleMode('${a.exchange}', ${a.dry_run ? 'false' : 'true'})">${a.dry_run ? 'Pasar a real' : 'Volver a simulacion'}</button>` : ''}
       <button class="btn btn-sm btn-danger" onclick="removeAccount('${a.exchange}')">Quitar</button>
     </div>`).join('') : '<div class="tm-sub">Ninguna cuenta conectada</div>';
-  if (S.errors?.length) $('accounts').insertAdjacentHTML('beforeend', `<div class="tm-err">${S.errors.map(esc).join('<br>')}</div>`);
+  const errs = [...(S.errors || []), ...(S.swing_errors || [])];
+  if (errs.length) $('accounts').insertAdjacentHTML('beforeend', `<div class="tm-err">${errs.map(esc).join('<br>')}</div>`);
 }
 
 function openAccounts() {

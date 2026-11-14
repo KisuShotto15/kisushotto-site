@@ -469,10 +469,14 @@ async function livePositions(env) {
   for (const p of termPos) {
     const margin = p.leverage ? p.notional / p.leverage : null;
     results.push({
-      symbol: p.symbol, side: p.side, category: 'linear', size: p.size, entry_price: p.entry, mark_price: p.mark,
-      unrealized_pnl: p.upnl, roi_pct: margin ? p.upnl / margin * 100 : null, leverage: p.leverage,
+      symbol: p.symbol, side: p.side, category: p.market === 'coinm' ? 'inverse' : 'linear', size: p.size,
+      entry_price: p.entry, mark_price: p.mark,
+      // COIN-M liquida en la moneda base: el PnL se muestra en esa moneda
+      unrealized_pnl: p.market === 'coinm' ? p.upnl_coin : p.upnl,
+      roi_pct: margin ? p.upnl / margin * 100 : null, leverage: p.leverage,
       position_value: p.notional, take_profit: p.tp, stop_loss: p.stop, liq_price: p.liq, opened_at: p.opened_at,
-      updated_at: term.guardian_at, settle_coin: 'USDT', exchange: p.exchange, terminal: p.terminal ? 1 : 0,
+      updated_at: term.guardian_at, settle_coin: p.market === 'coinm' ? p.settle_coin : 'USDT',
+      exchange: p.exchange, terminal: p.terminal ? 1 : 0, profile: p.profile || 'vwap',
     });
   }
 

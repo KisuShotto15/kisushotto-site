@@ -158,8 +158,13 @@
     <!-- Posiciones -->
     <section class="tm-col">
       <div class="tm-panel">
-        <div class="tm-panel-head"><span>POSICIONES ABIERTAS · FUTUROS</span><span class="tm-sub" id="posStamp"></span></div>
+        <div class="tm-panel-head"><span>POSICIONES · ESTRATEGIA VWAP</span><span class="tm-sub" id="posStamp"></span></div>
         <div id="positions"><div class="tm-sub">—</div></div>
+      </div>
+      <div class="tm-panel hidden" id="swingPanel">
+        <div class="tm-panel-head"><span>SWING · SOLO LECTURA</span><span class="tm-sub" id="swingTotal"></span></div>
+        <div class="tm-sub">Sin reglas de la estrategia VWAP: el guardian no las toca y no cuentan para tu riesgo diario.</div>
+        <div id="swing"></div>
       </div>
       <div class="tm-panel">
         <div class="tm-panel-head"><span>ORDENES PENDIENTES</span></div>
@@ -183,6 +188,7 @@
     <div id="rulesPending"></div>
     <div class="tm-rules" id="rulesForm"></div>
     <div class="form-field"><label>Simbolos permitidos (vacio = todos)</label><input id="rSymbols" placeholder="BTCUSDT, ETHUSDT, SOLUSDT"></div>
+    <div class="form-field"><label>Cuentas de la estrategia VWAP (las demas son swing, solo lectura)</label><input id="rVwapEx" placeholder="bitget"></div>
     <div class="form-field"><label>Checklist (uno por linea)</label><textarea id="rChecklist" rows="8"></textarea></div>
     <div class="tm-row">
       <button class="btn btn-accent" onclick="saveRules()">Guardar reglas</button>

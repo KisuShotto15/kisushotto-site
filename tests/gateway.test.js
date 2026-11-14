@@ -12,7 +12,7 @@ const W = new URL('../workers/trade-journal-worker/', import.meta.url);
 function d1() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('schema.sql', W), 'utf8'));
-  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution', '0010_egress', '0011_btc_only', '0012_journal_sync']) {
+  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution', '0010_egress', '0011_btc_only', '0012_journal_sync', '0013_profiles']) {
     db.exec(readFileSync(new URL(`migrations/${f}.sql`, W), 'utf8'));
   }
   const stmt = (sql, args = []) => ({
@@ -63,13 +63,18 @@ globalThis.fetch = async () => new Response(JSON.stringify([
 ]), { status: 200 });
 
 const { st, api } = fakeExchange();
+// Binance: cuenta de swing con longs en USDT-M y COIN-M
+const bn = fakeExchange();
+bn.st.equity = 5000;
+bn.api.name = 'binance';
+bn.api.coinm = async () => ({ value: 2000, positions: [{ exchange: 'binance', market: 'coinm', symbol: 'BTCUSD_PERP', side: 'long', size: 3, entry: 60000, mark: 61000, upnl: 50, upnl_coin: 0.0008, settle_coin: 'BTC', notional: 300 }] });
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (u, ...r) => String(u).includes('faireconomy') ? realFetch(u, ...r)
   : new Response(String(u).includes('trace') ? 'colo=AMS\nloc=NL\n' : '{}', { status: 200 });
 const DB = d1();
 // Estas pruebas usan varios simbolos; la regla de solo BTC tiene su propia prueba
 DB.raw.prepare("INSERT INTO risk_rules (id, rules, updated_at) VALUES ('main', ?, 0)").run(JSON.stringify({ ...DEFAULT_RULES, symbols: [] }));
-const gw = new ExchangeGateway({}, { DB, KEYS_SECRET: 'test-secret-1234567890', ADAPTER: () => api, DETECT_MODE: async () => 'classic' });
+const gw = new ExchangeGateway({}, { DB, KEYS_SECRET: 'test-secret-1234567890', ADAPTER: acc => acc.exchange === 'binance' ? bn.api : api, DETECT_MODE: async () => 'classic' });
 const call = async (path, body, method = body ? 'POST' : 'GET') => {
   const res = await gw.fetch(new Request(`https://gw/exec${path}`, { method, body: body ? JSON.stringify(body) : undefined }));
   return res.json();
@@ -208,6 +213,26 @@ test('historial: entran las operaciones hechas por fuera, sin duplicar las del t
   // la del terminal guarda la senal de entrada
   const j = DB.raw.prepare("SELECT signal FROM trades WHERE exchange_id = ?").get(`tj:${btc.id}`);
   assert.ok(j);
+});
+
+test('swing: Binance es solo lectura, no cuenta para el riesgo y el guardian no la toca', async () => {
+  clock = Date.UTC(2026, 10, 10, 15, 0);
+  DB.raw.exec('UPDATE risk_state SET lock_until = 0');
+  await call('/accounts', { exchange: 'binance', key: 'k', secret: 's' });
+  await call('/accounts/mode', { exchange: 'binance', dry_run: false });
+  bn.st.positions = [{ exchange: 'binance', market: 'futures', symbol: 'ETHUSDT', side: 'long', size: 5, entry: 1900, stop: null, stop_refs: [] }];
+  bn.st.calls.length = 0;
+  clock += 60000;
+  await call('/guardian', {});
+  assert.deepEqual(bn.st.calls, [], 'el guardian no debe actuar sobre swing');
+  const s = await call('/status?fresh=1');
+  assert.equal(s.swing_positions.length, 2);   // USDT-M + COIN-M
+  assert.ok(s.swing_positions.some(p => p.market === 'coinm'));
+  assert.ok(!s.positions.some(p => p.exchange === 'binance'));
+  assert.ok(s.equity.now < 2000, 'el capital de la estrategia no incluye Binance');
+  const r = await call('/preview', order({ exchange: 'binance' }));
+  assert.match(r.error, /swing/);
+  bn.st.positions = [];
 });
 
 test('guardian: fuera de la ventana y sin nada abierto revisa cada 5 min', async () => {

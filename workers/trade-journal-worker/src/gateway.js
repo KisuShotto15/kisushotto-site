@@ -177,35 +177,55 @@ export class ExchangeGateway {
     const win = sessionWindow(now, rules);
     const newsSt = newsStatus(win.date, news.events, news.coverage, state.news_confirmed_day === win.date);
 
+    // Cada cuenta tiene un perfil: 'vwap' (reglas + guardian) o 'swing' (solo
+    // lectura). Las de swing no cuentan para el capital, el riesgo ni los
+    // bloqueos de la estrategia, y el guardian nunca las toca.
+    for (const acc of accounts) acc.profile = rules.vwap_exchanges.includes(acc.exchange) ? 'vwap' : 'swing';
     const reads = await Promise.allSettled(accounts.map(async acc => {
       if (acc.broken) throw new Error(acc.broken);
       const ex = this.adapter(acc);
       // Si falla solo spot (p. ej. la llave no tiene permiso de spot), los
       // futuros se siguen vigilando; el error igual bloquea ordenes nuevas.
-      const [eq, pos, spot] = await Promise.all([ex.equity(), ex.futuresPositions(), ex.spotHoldings().catch(e => e)]);
+      const [eq, pos, spot, cm] = await Promise.all([
+        ex.equity(), ex.futuresPositions(), ex.spotHoldings().catch(e => e),
+        acc.profile === 'swing' && ex.coinm ? ex.coinm().catch(e => e) : null,
+      ]);
+      const out = { acc, profile: acc.profile, eq, pos, spot, coinm: [] };
       if (spot instanceof Error) {
         eq.errors = [...(eq.errors || []), `spot: ${spot.message}`];
-        return { acc, eq, pos, spot: [], spotError: true };
+        Object.assign(out, { spot: [], spotError: true });
       }
-      return { acc, eq, pos, spot };
+      if (cm instanceof Error) eq.errors = [...(eq.errors || []), `COIN-M: ${cm.message}`];
+      else if (cm) { out.coinm = cm.positions; eq.coinm_value = cm.value; eq.total += cm.value; }
+      return out;
     }));
-    const live = [], errors = [];
+    const live = [], errors = [], swingErrors = [];
     reads.forEach((x, i) => {
-      if (x.status === 'fulfilled') { live.push(x.value); for (const e of x.value.eq.errors || []) errors.push(`${accounts[i].exchange}: ${e}`); }
-      else errors.push(`${accounts[i].exchange}: ${x.reason?.message || x.reason}`);
+      const sink = accounts[i].profile === 'vwap' ? errors : swingErrors;
+      if (x.status === 'fulfilled') { live.push(x.value); for (const e of x.value.eq.errors || []) sink.push(`${accounts[i].exchange}: ${e}`); }
+      else sink.push(`${accounts[i].exchange}: ${x.reason?.message || x.reason}`);
     });
-    const positions = live.flatMap(x => x.pos);
-    const spot = live.flatMap(x => x.spot);
-    const readOk = accounts.length > 0 && errors.length === 0;
-    const equityNow = readOk ? live.reduce((s, x) => s + x.eq.total, 0) : (state.equity_now || 0);
+    const vwapLive = live.filter(x => x.profile === 'vwap');
+    const positions = vwapLive.flatMap(x => x.pos);
+    const swingPositions = live.filter(x => x.profile === 'swing').flatMap(x => [...x.pos, ...x.coinm]);
+    const spot = live.flatMap(x => x.spot.map(h => ({ ...h, profile: x.profile })));
+    const vwapAccounts = accounts.filter(a => a.profile === 'vwap');
+    const readOk = vwapAccounts.length > 0 && errors.length === 0;
+    const equityNow = readOk ? vwapLive.reduce((s, x) => s + x.eq.total, 0) : (state.equity_now || 0);
 
     // Capital al abrir el dia y la semana (NY). Solo se fija con una lectura completa.
+    // Si cambia que cuentas forman la estrategia, la base se vuelve a tomar:
+    // comparar contra un capital de otras cuentas daria perdidas falsas.
     const patch = {};
     const wk = weekStart(win.date);
+    const scope = vwapAccounts.map(a => a.exchange).sort().join(',');
     if (readOk && equityNow > 0) {
       patch.equity_now = equityNow; patch.equity_at = nowSec();
-      if (state.day !== win.date) { patch.day = win.date; patch.day_start_equity = equityNow; patch.news_confirmed_day = null; }
-      if (state.week !== wk) { patch.week = wk; patch.week_start_equity = equityNow; }
+      const rescope = (state.equity_scope || '') !== scope;
+      if (rescope) patch.equity_scope = scope;
+      if (rescope || state.day !== win.date) { patch.day = win.date; patch.day_start_equity = equityNow; }
+      if (state.day !== win.date) patch.news_confirmed_day = null;
+      if (rescope || state.week !== wk) { patch.week = wk; patch.week_start_equity = equityNow; }
     }
     if (Object.keys(patch).length) { await this.patchState(patch); Object.assign(state, patch); }
 
@@ -223,7 +243,7 @@ export class ExchangeGateway {
     const equity = { now: equityNow, day_start: state.day_start_equity, week_start: state.week_start_equity };
     const gateArgs = { now, rules, window: win, news: newsSt, lock, equity, today };
     const gates = evaluateGates({ ...gateArgs, open: [...ledgerOpen, ...external] });
-    if (!readOk) gates.blocks.push({ code: 'read', msg: accounts.length ? `No se pudo leer: ${errors.join(' | ')}` : 'Conecta al menos una cuenta' }), gates.ok = false;
+    if (!readOk) gates.blocks.push({ code: 'read', msg: vwapAccounts.length ? `No se pudo leer: ${errors.join(' | ')}` : `Conecta la cuenta de la estrategia VWAP (${rules.vwap_exchanges.join(', ') || 'ninguna'})` }), gates.ok = false;
     // Para juzgar una posicion externa nueva no se cuenta ella misma
     const gatesLedger = evaluateGates({ ...gateArgs, open: ledgerOpen });
 
@@ -238,8 +258,8 @@ export class ExchangeGateway {
       }
     }
 
-    const ctx = { now, ...r, state, accounts, live, positions, spot, ledger, news: newsSt, newsList: news.events,
-                  newsMeta: news.meta, window: win, today, gates, gatesLedger, errors, equity };
+    const ctx = { now, ...r, state, accounts, live, vwapLive, positions, swingPositions, spot, ledger, news: newsSt, newsList: news.events,
+                  newsMeta: news.meta, window: win, today, gates, gatesLedger, errors, swingErrors, equity };
     this.ctxCache = { t: Date.now(), ctx };
     return ctx;
   }
@@ -252,7 +272,9 @@ export class ExchangeGateway {
       window: ctx.window, news: ctx.news, news_list: ctx.newsList.slice(0, 20), news_meta: ctx.newsMeta,
       lock: ctx.state.lock_until > nowSec() ? { until: ctx.state.lock_until, reason: ctx.state.lock_reason } : null,
       equity: ctx.equity, today: ctx.today, gates: ctx.gates, errors: ctx.errors,
-      accounts: accounts.map(a => ({ ...a, equity: ctx.live.find(l => l.acc.exchange === a.exchange)?.eq || null })),
+      accounts: accounts.map(a => ({ ...a, profile: ctx.rules.vwap_exchanges.includes(a.exchange) ? 'vwap' : 'swing',
+                                     equity: ctx.live.find(l => l.acc.exchange === a.exchange)?.eq || null })),
+      swing_positions: ctx.swingPositions, swing_errors: ctx.swingErrors,
       positions: ctx.positions.map(p => ({ ...p, trade: ctx.ledger.find(t => t.status === 'open' && t.exchange === p.exchange && t.market === 'futures' && t.symbol === p.symbol && t.side === p.side) || null })),
       spot: ctx.spot,
       open_trades: ctx.ledger.filter(t => t.status === 'open' || t.status === 'pending'),
@@ -303,6 +325,7 @@ export class ExchangeGateway {
     const ctx = await this.context(!previewOnly);
     const acc = ctx.accounts.find(a => a.exchange === o.exchange);
     if (!acc) throw bad(`No hay cuenta ${o.exchange} conectada`);
+    if (acc.profile !== 'vwap') throw bad(`${o.exchange} es una cuenta de swing (solo lectura): el terminal opera la estrategia VWAP en ${ctx.rules.vwap_exchanges.join(', ')}`);
     const ex = this.adapter(acc);
     const [inst, px] = await Promise.all([ex.instrument(o.market, o.symbol), ex.price(o.market, o.symbol)]);
     const entry = o.type === 'market' ? px : o.entry;
@@ -665,7 +688,7 @@ export class ExchangeGateway {
     const tradingAllowed = { ok: blocking.length === 0, reason: blocking[0]?.msg };
     // Solo se juzgan las cuentas que se leyeron bien: si un exchange no
     // respondio, sus posiciones no "desaparecieron", simplemente no se ven.
-    const readable = new Set(ctx.live.map(l => l.acc.exchange));
+    const readable = new Set(ctx.vwapLive.map(l => l.acc.exchange));
 
     const plan = guardianPlan({ positions: ctx.positions, ledger: ctx.ledger.filter(t => readable.has(t.exchange)), tradingAllowed, rules: ctx.rules,
                                 baseEquity: ctx.gates.base_equity || ctx.equity.now, now: ctx.now });
@@ -719,10 +742,12 @@ export class ExchangeGateway {
     const patch = { guardian_at: nowSec(), guardian_error: ctx.errors.join(' | ') || null };
     // Copia de las posiciones para el dashboard: lo lee de D1 sin pasar por el relay
     const tracked = new Set(ctx.ledger.filter(t => t.status === 'open' && !t.external).map(t => `${t.exchange}|${t.symbol}|${t.side}`));
-    patch.positions_json = JSON.stringify(ctx.positions.map(p => ({
+    patch.positions_json = JSON.stringify([...ctx.positions, ...ctx.swingPositions].map(p => ({
       exchange: p.exchange, symbol: p.symbol, side: p.side, size: p.size, entry: p.entry, mark: p.mark, upnl: p.upnl,
       leverage: p.leverage, notional: p.notional, stop: p.stop, tp: p.tp, liq: p.liq, opened_at: p.opened_at,
       terminal: tracked.has(`${p.exchange}|${p.symbol}|${p.side}`),
+      profile: p.market === 'coinm' || !ctx.rules.vwap_exchanges.includes(p.exchange) ? 'swing' : 'vwap',
+      market: p.market, settle_coin: p.settle_coin || 'USDT', upnl_coin: p.upnl_coin ?? null,
     })));
     if (!ctx.state.egress_at || nowSec() - ctx.state.egress_at > 1800) {
       patch.egress = JSON.stringify(await this.probeEgress().catch(e => ({ error: e.message })));
@@ -804,7 +829,7 @@ export class ExchangeGateway {
         pnl=excluded.pnl, fees=excluded.fees, exit_price=excluded.exit_price, exit_time=excluded.exit_time, size=excluded.size`);
     let added = 0;
     const errors = [];
-    for (const l of ctx.live) {
+    for (const l of ctx.vwapLive) {
       const ex = this.adapter(l.acc);
       if (!ex.closedHistory) continue;
       let rows;
@@ -827,7 +852,7 @@ export class ExchangeGateway {
   }
 
   async guardSpot(ctx) {
-    const readable = new Set(ctx.live.filter(l => !l.spotError).map(l => l.acc.exchange));
+    const readable = new Set(ctx.vwapLive.filter(l => !l.spotError).map(l => l.acc.exchange));
     for (const t of ctx.ledger.filter(x => x.market === 'spot' && x.status === 'open' && readable.has(x.exchange))) {
       const acc = ctx.accounts.find(a => a.exchange === t.exchange);
       if (!acc || acc.broken) continue;

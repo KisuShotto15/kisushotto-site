@@ -55,6 +55,9 @@ export const DEFAULT_RULES = {
   post_close_min: 60,
   block_news: true,
   symbols: ['BTCUSDT'],        // la estrategia VWAP a 51x es solo para Bitcoin
+  // Cuentas donde se opera la estrategia (reglas + guardian). El resto es swing:
+  // solo lectura, sin reglas ni correcciones.
+  vwap_exchanges: ['bitget'],
   checklist: DEFAULT_CHECKLIST,
 };
 
@@ -81,6 +84,9 @@ export function normalizeRules(input = {}, base = DEFAULT_RULES) {
   const syms = input.symbols ?? base.symbols ?? [];
   out.symbols = [...new Set((Array.isArray(syms) ? syms : String(syms).split(/[\s,;]+/))
     .map(s => String(s).trim().toUpperCase()).filter(Boolean))];
+  const vx = input.vwap_exchanges ?? base.vwap_exchanges ?? DEFAULT_RULES.vwap_exchanges;
+  out.vwap_exchanges = [...new Set((Array.isArray(vx) ? vx : String(vx).split(/[\s,;]+/))
+    .map(s => String(s).trim().toLowerCase()).filter(x => ['binance', 'bitget'].includes(x)))];
   const cl = input.checklist ?? base.checklist ?? DEFAULT_CHECKLIST;
   out.checklist = [...new Set((Array.isArray(cl) ? cl : []).map(s => String(s).trim()).filter(Boolean))].slice(0, 15);
   return out;
@@ -103,6 +109,11 @@ export function splitChange(current, proposed) {
     // permitir mas simbolos (o todos) es aflojar; quitar es endurecer
     const widens = (cur.size > 0 && nxt.size === 0) || [...nxt].some(s => cur.size > 0 && !cur.has(s));
     (widens ? looser : tighter).symbols = proposed.symbols;
+  }
+  const curVx = current.vwap_exchanges || [], nxtVx = proposed.vwap_exchanges || [];
+  if ([...curVx].sort().join() !== [...nxtVx].sort().join()) {
+    // sacar una cuenta de la estrategia la libera de las reglas: es aflojar
+    (curVx.some(x => !nxtVx.includes(x)) ? looser : tighter).vwap_exchanges = nxtVx;
   }
   const curCl = current.checklist, nxtCl = proposed.checklist;
   if (curCl.join('\n') !== nxtCl.join('\n')) {

@@ -7,8 +7,8 @@ import { floorStep, roundTick } from '../risk.js';
 import { buildBinancePositions } from '../ingestion.js';
 
 const HOSTS = {
-  live: { fapi: 'https://fapi.binance.com',      spot: 'https://api.binance.com' },
-  demo: { fapi: 'https://demo-fapi.binance.com', spot: 'https://testnet.binance.vision' },
+  live: { fapi: 'https://fapi.binance.com',      spot: 'https://api.binance.com',      dapi: 'https://dapi.binance.com' },
+  demo: { fapi: 'https://demo-fapi.binance.com', spot: 'https://testnet.binance.vision', dapi: 'https://dapi.binance.com' },
 };
 
 const INFO_TTL = 3600 * 1000;
@@ -37,6 +37,7 @@ export function binance({ key, secret, env = 'live' }) {
   }
   const F = (m, p, q, s) => call(m, host.fapi, p, q, s);
   const S = (m, p, q, s) => call(m, host.spot, p, q, s);
+  const D = (m, p, q, s) => call(m, host.dapi, p, q, s);   // futuros COIN-M
 
   async function isDual() {
     if (dual == null) dual = !!(await F('GET', '/fapi/v1/positionSide/dual')).dualSidePosition;
@@ -77,6 +78,51 @@ export function binance({ key, secret, env = 'live' }) {
       futures_equity: futEq, futures_available: futAv, spot_value: spotV, total: futEq + spotV,
       errors: [fut, spot].filter(x => x.status === 'rejected').map(x => x.reason.message),
     };
+  }
+
+  // Precio en USDT de varias monedas (cache de 5 min compartido con spot)
+  function spotPx(symbols) {
+    if (!symbols.length) return Promise.resolve(new Map());
+    return cachedPrices('binance', symbols, async miss => {
+      const list = await S('GET', '/api/v3/ticker/price', { symbols: JSON.stringify(miss) }, false).catch(async () => {
+        // un simbolo inexistente hace fallar todo el lote: se piden de a uno
+        const one = await Promise.all(miss.map(sym => S('GET', '/api/v3/ticker/price', { symbol: sym }, false).catch(() => null)));
+        return one.filter(Boolean);
+      });
+      return list.map(p => [p.symbol, num(p.price)]);
+    });
+  }
+
+  // ── Futuros COIN-M (solo lectura) ──────────────────────────────────────────
+  // Contratos en USD (100 por contrato en BTC, 10 en el resto); el PnL y el
+  // margen se liquidan en la moneda base.
+  async function coinm() {
+    const [acct, rows, orders] = await Promise.all([
+      D('GET', '/dapi/v1/account'), D('GET', '/dapi/v1/positionRisk'), D('GET', '/dapi/v1/openOrders').catch(() => []),
+    ]);
+    const assets = (acct.assets || []).filter(a => num(a.marginBalance) > 0);
+    const px = await spotPx(assets.map(a => a.asset + 'USDT'));
+    const value = assets.reduce((s, a) => s + num(a.marginBalance) * (px.get(a.asset + 'USDT') || 0), 0);
+    const positions = rows.filter(p => num(p.positionAmt) !== 0).map(p => {
+      const amt = num(p.positionAmt);
+      const side = p.positionSide === 'LONG' ? 'long' : p.positionSide === 'SHORT' ? 'short' : (amt > 0 ? 'long' : 'short');
+      const coin = p.symbol.replace(/USD(_.*)?$/, '');
+      const mark = num(p.markPrice);
+      const closeSide = side === 'long' ? 'SELL' : 'BUY';
+      const mine = (Array.isArray(orders) ? orders : []).filter(o => o.symbol === p.symbol && o.side === closeSide);
+      const sl = mine.filter(o => /STOP/.test(o.type)).map(o => num(o.stopPrice)).sort((a, b) => side === 'long' ? b - a : a - b)[0];
+      const tp = mine.find(o => /TAKE_PROFIT/.test(o.type));
+      const upnlCoin = num(p.unRealizedProfit);
+      return {
+        exchange: 'binance', market: 'coinm', symbol: p.symbol, side, size: Math.abs(amt), contracts: Math.abs(amt),
+        entry: num(p.entryPrice), mark, upnl: upnlCoin * mark, upnl_coin: upnlCoin, settle_coin: coin,
+        leverage: num(p.leverage) || null, liq: num(p.liquidationPrice) || null,
+        notional: Math.abs(amt) * (coin === 'BTC' ? 100 : 10),
+        stop: sl || null, tp: tp ? num(tp.stopPrice) : null,
+        opened_at: p.updateTime ? Math.floor(p.updateTime / 1000) : null,
+      };
+    });
+    return { value, positions };
   }
 
   async function stopsBySymbol() {
@@ -132,14 +178,7 @@ export function binance({ key, secret, env = 'live' }) {
   async function readHoldings() {
     const acct = await S('GET', '/api/v3/account', { omitZeroBalances: 'true' });
     const wanted = acct.balances.filter(b => !STABLES.has(b.asset) && num(b.free) + num(b.locked) > 0).map(b => b.asset + 'USDT');
-    const px = wanted.length ? await cachedPrices('binance', wanted, async miss => {
-      const list = await S('GET', '/api/v3/ticker/price', { symbols: JSON.stringify(miss) }, false).catch(async () => {
-        // un simbolo inexistente hace fallar todo el lote: se piden de a uno
-        const one = await Promise.all(miss.map(sym => S('GET', '/api/v3/ticker/price', { symbol: sym }, false).catch(() => null)));
-        return one.filter(Boolean);
-      });
-      return list.map(p => [p.symbol, num(p.price)]);
-    }) : new Map();
+    const px = await spotPx(wanted);
     return acct.balances.map(b => {
       const qty = num(b.free) + num(b.locked);
       const price = STABLES.has(b.asset) ? 1 : (px.get(b.asset + 'USDT') || 0);
@@ -356,7 +395,7 @@ export function binance({ key, secret, env = 'live' }) {
   return {
     name: 'binance', equity, futuresPositions, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
-    spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, closedHistory,
+    spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, closedHistory, coinm,
     diag: async () => ({ futures: !!(await F('GET', '/fapi/v1/time', {}, false)).serverTime, hedge: await isDual() }),
   };
 }
