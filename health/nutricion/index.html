@@ -38,6 +38,7 @@
     <div class="days-bar" id="daysBar"></div>
 
     <div class="summary-bar" id="summaryBar"></div>
+    <div class="kcal-gap" id="kcalGap" hidden></div>
   </section>
 
   <!-- ── MAIN GRID ────────────────────────────────────────────────── -->
@@ -63,7 +64,7 @@
         <div class="tdee-toggle" onclick="window._toggleTDEE()">
           <div class="panel-head">
             <span class="panel-eyebrow">CALCULADORA</span>
-            <h3 class="panel-title">TDEE & Target</h3>
+            <h3 class="panel-title">Gasto diario y meta</h3>
           </div>
           <span class="chevron" id="tdeeChevron" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
@@ -121,22 +122,12 @@
         </div>
       </div>
 
-      <!-- API HINT -->
-      <div class="api-hint">
-        <div class="api-hint-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-        </div>
-        <div class="api-hint-text">
-          La búsqueda USDA requiere una API key gratuita.
-          <button class="link-btn" onclick="window._openApiKeyModal()">Configurar</button>
-        </div>
-      </div>
 
     </aside>
   </div>
 
   <!-- ── DISTRIBUCIÓN DE GRASAS ──────────────────────────────────── -->
-  <section class="fat-dist-section">
+  <section class="fat-dist-section" id="fatSection" hidden>
     <div class="section-head">
       <h2 class="section-title">Distribución de grasas</h2>
       <span class="section-note">Del total de grasas del día</span>
@@ -158,10 +149,11 @@
   </section>
 
   <!-- ── REGLAS ──────────────────────────────────────────────────── -->
-  <section class="rules-section">
-    <div class="section-head">
+  <details class="rules-section">
+    <summary class="section-head">
       <h2 class="section-title">Reglas del protocolo</h2>
-    </div>
+      <span class="section-note">6 reglas · toca para ver</span>
+    </summary>
     <div class="rules-grid">
       <div class="rule-card"><div class="rule-num">01</div><h4 class="rule-title">Calorías desde grasa, no carbos</h4><p class="rule-text">Para subir calorías sin inflar los carbos, sube primero aceite, aguacate o más huevos.</p></div>
       <div class="rule-card"><div class="rule-num">02</div><h4 class="rule-title">Muslo &gt; Pechuga</h4><p class="rule-text">El muslo con piel es más económico, más sabroso y más rico en grasa y micronutrientes.</p></div>
@@ -172,18 +164,10 @@
     </div>
 
     <div class="gaps-callout">
-      <div class="gaps-eyebrow">GAPS A CONSIDERAR</div>
+      <div class="gaps-eyebrow">LO QUE EL PLAN NO CUBRE</div>
       <p>Los únicos dos micronutrientes que este plan no cubre completamente son <strong>Vitamina&nbsp;D</strong> y <strong>Magnesio</strong>. La vitamina&nbsp;D se obtiene con 20–30 min de sol directo. El magnesio con semillas de girasol/ajonjolí o suplemento de óxido/citrato.</p>
     </div>
-  </section>
-
-  <footer class="footer">
-    <span>Nutrition · protocolo personal</span>
-    <span class="footer-dot">·</span>
-    <span>Datos USDA + lista local</span>
-    <span class="footer-dot">·</span>
-    <span class="app-version">v11</span>
-  </footer>
+  </details>
 
 </div><!-- /app -->
 

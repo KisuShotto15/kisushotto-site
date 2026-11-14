@@ -198,6 +198,10 @@
     .picker{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px 14px;padding:0 16px;scrollbar-width:none;}
     .sticky{margin:0 -16px 12px;padding:10px 16px;}
     .steps{display:flex;overflow-x:auto;gap:8px;margin:-4px -16px 8px;padding:4px 16px;scrollbar-width:none;}
+    /* Degradado en el borde cuando hay mas para deslizar */
+    .picker.fr,.steps.fr{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);}
+    .picker.fl,.steps.fl{-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px);mask-image:linear-gradient(90deg,transparent,#000 36px);}
+    .picker.fl.fr,.steps.fl.fr{-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent);}
     .step{min-width:72%;padding:12px 14px;}
     .hero{padding:18px;gap:18px;border-radius:16px;margin-bottom:12px;}
     .ring{width:200px;height:200px;} .ring .big{font-size:44px;}
@@ -366,7 +370,7 @@ function renderHead(){
   const r=getR(),n=nDone(),s=streakCount();
   $('title').textContent=r.name;
   const total=Math.round(items.reduce((a,it)=>a+dur(it),0)/60);
-  $('meta').textContent=[s?`🔥 ${s} ${s===1?'día':'días'} de racha`:'',`${n} de ${items.length} hechos`,`~${total} min`,mini?'⚡ modo mínimo':''].filter(Boolean).join(' · ');
+  $('meta').textContent=[s?`🔥 ${s} ${s===1?'día':'días'} entrenando`:'',`${n}/${items.length} hechos`,`~${total} min`,mini?'⚡ modo mínimo':''].filter(Boolean).join(' · ');
   $('picker').innerHTML=routines().map(x=>`<button class="rchip${x.id===active?' on':''}" data-r="${esc(x.id)}">${esc(x.name)}</button>`).join('')+
     (r.builtin?'':'<button class="rchip edit" id="edit">✎ Editar</button>')+
     `<button class="rchip lite${mini?' on':''}" id="liteBtn" title="Versión corta para días malos: igual cuenta para la racha">⚡ Mínimo</button>`+
@@ -941,6 +945,13 @@ window.addEventListener('load',()=>window.healthFetch(SYNC_URL).then(r=>r.ok?r.j
   if(localNewer||hist.length>remoteDays)pushRemote();
   writeLocal();renderAll();
 }).catch(()=>{}));
+
+// Degradado en los bordes de las filas que se deslizan (chips y etapas)
+function edgeFade(el){
+  const f=()=>{el.classList.toggle('fl',el.scrollLeft>4);el.classList.toggle('fr',el.scrollLeft+el.clientWidth<el.scrollWidth-4);};
+  el.addEventListener('scroll',f,{passive:true});new ResizeObserver(f).observe(el);new MutationObserver(f).observe(el,{childList:true});f();
+}
+edgeFade($('picker'));edgeFade($('steps'));
 </script>
 </body>
 </html>

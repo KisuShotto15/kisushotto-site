@@ -79,7 +79,7 @@ input,select{font-family:inherit;outline:none}
 .stat-delta.neutral{color:var(--text-3)}
 
 /* ── Weight chart ── */
-.chart-wrap{height:100px;position:relative;margin-top:4px}
+.chart-wrap{height:150px;position:relative;margin-top:10px}
 .chart-wrap svg{width:100%;height:100%;overflow:visible}
 
 /* ── Measurements ── */
@@ -169,13 +169,16 @@ select.inp{cursor:pointer}
 
 /* ── Toast ── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surf-2);border:1px solid var(--border-2);border-radius:10px;padding:10px 20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:all .25s;pointer-events:none}
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.toast{display:flex;align-items:center;gap:14px;white-space:nowrap}
+.toast button{background:none;border:0;color:var(--h-metric,#a78bfa);font-weight:700;font-size:13px;padding:4px 6px;cursor:pointer}
 
 /* ── Boton flotante ── */
 .fab-wrap{position:fixed;right:18px;bottom:18px;z-index:150;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
-.fab{width:56px;height:56px;border-radius:50%;background:var(--h-metric,#a78bfa);color:#fff;font-size:30px;line-height:1;
-  box-shadow:0 6px 20px rgba(0,0,0,.45);transition:transform .15s}
-.fab-wrap.open .fab{transform:rotate(45deg)}
+.fab{height:52px;padding:0 20px 0 16px;border-radius:26px;background:var(--h-metric,#a78bfa);color:#fff;font-size:15px;font-weight:700;
+  display:flex;align-items:center;gap:6px;box-shadow:0 6px 20px rgba(0,0,0,.45);border:0}
+.fab i{font-style:normal;font-size:26px;line-height:1;font-weight:400;display:inline-block;transition:transform .15s}
+.fab-wrap.open .fab i{transform:rotate(45deg)}
 .fab-menu{display:none;flex-direction:column;gap:8px;align-items:flex-end}
 .fab-wrap.open .fab-menu{display:flex}
 .fab-menu button{background:var(--surf-2);color:var(--text);border:1px solid var(--border-2);padding:11px 16px;border-radius:24px;
@@ -192,7 +195,7 @@ select.inp{cursor:pointer}
     <button onclick="toggleFab(false);openLogComp()">⚖️ Peso y medidas</button>
     <button onclick="toggleFab(false);openLogSession()">🏋️ Sesión de gym</button>
   </div>
-  <button class="fab" onclick="toggleFab()" aria-label="Registrar">+</button>
+  <button class="fab" onclick="toggleFab()" aria-label="Registrar"><i>+</i>Registrar</button>
 </div>
 
 <!-- Main -->
@@ -497,11 +500,11 @@ function renderComp() {
       ? val + `<span class="stat-unit">${unit}</span>` : `—<span class="stat-unit">${unit}</span>`;
   }
   // goodWhen: 'down', 'up' o null (sin color)
-  function setDelta(id, cur, prv, goodWhen = 'down') {
+  function setDelta(id, cur, prv, goodWhen = 'down', prevDate = prev?.date) {
     const el = document.getElementById(id);
     if (cur == null || prv == null) { el.textContent = 'sin historial'; el.className = 'stat-delta neutral'; return; }
     const d = (cur - prv).toFixed(1);
-    el.textContent = (d < 0 ? '▼ ' : d > 0 ? '▲ ' : '= ') + Math.abs(d) + ' vs ' + new Date(prev.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
+    el.textContent = (d < 0 ? '▼ ' : d > 0 ? '▲ ' : '= ') + Math.abs(d) + ' vs ' + new Date(prevDate + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
     const dir = d > 0 ? 'up' : d < 0 ? 'down' : 'neutral';
     el.className = 'stat-delta ' + dir + (goodWhen && dir !== 'neutral' ? (dir === goodWhen ? ' good' : ' bad') : '');
   }
@@ -510,7 +513,11 @@ function renderComp() {
     setVal('stat-weight', last.weight, 'kg');
     setVal('stat-fat', last.fatPct || '—', '%');
     setVal('stat-waist', last.measurements?.waist || '—', 'cm');
-    setDelta('delta-weight', last.weight, prev?.weight, weightGoal());
+    // Peso: contra el registro mas cercano a 7 dias antes (igual que en Hoy)
+    const ws = entries.filter(e => e.weight), lw = ws[ws.length - 1];
+    const back = d => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() - 7); return x.toISOString().slice(0, 10); };
+    const pw = lw && ([...ws].reverse().find(e => e.date <= back(lw.date)) || ws[ws.length - 2]);
+    setDelta('delta-weight', lw?.weight, pw && pw !== lw ? pw.weight : null, weightGoal(), pw?.date);
     setDelta('delta-fat', last.fatPct, prev?.fatPct);
     setDelta('delta-waist', last.measurements?.waist, prev?.measurements?.waist);
 
@@ -542,12 +549,13 @@ function renderWeightChart(entries) {
   axis.hidden = false;
   axis.innerHTML = `<span>${fd(weights[0].date)}</span><span>min <b>${Math.min(...ws)}</b> · max <b>${Math.max(...ws)}</b> kg</span><span>${fd(weights[weights.length - 1].date)}</span>`;
 
-  const W = 600, H = 100, pad = 10;
+  const W = 600, H = 150, pad = 12;
   const vals = weights.map(e => e.weight);
   // Meta (se pone en Hoy): linea punteada si queda cerca del rango; si no, solo el texto
   const goal = S.goal?.weight;
   const near = goal && goal > Math.min(...vals) - 4 && goal < Math.max(...vals) + 4;
-  const min = Math.min(...vals, near ? goal : Infinity) - 1, max = Math.max(...vals, near ? goal : -Infinity) + 1;
+  const lo = Math.min(...vals, near ? goal : Infinity), hi = Math.max(...vals, near ? goal : -Infinity);
+  const padK = Math.max(0.3, (hi - lo) * 0.15), min = lo - padK, max = hi + padK;
   if (goal) axis.innerHTML = axis.innerHTML.replace('</b> kg</span>', `</b> kg · meta <b>${goal}</b></span>`);
   const x = i => pad + (i / (weights.length - 1)) * (W - 2 * pad);
   const y = v => H - pad - ((v - min) / (max - min)) * (H - 2 * pad);
@@ -565,7 +573,9 @@ function renderWeightChart(entries) {
     </defs>
     <polygon points="${area}" fill="url(#wg)"/>
     <polyline points="${pts}" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${x(weights.length-1)}" cy="${y(vals[vals.length-1])}" r="3.5" fill="#a78bfa"/>
+    ${weights.length <= 40 ? weights.map((e, i) => `<circle cx="${x(i)}" cy="${y(e.weight)}" r="3" fill="#17181d" stroke="#a78bfa" stroke-width="1.6"/>`).join('') : ''}
+    <circle cx="${x(weights.length-1)}" cy="${y(vals[vals.length-1])}" r="5" fill="#a78bfa"/>
+    <text x="${Math.min(x(weights.length-1), W - 30)}" y="${y(vals[vals.length-1]) - 10}" text-anchor="middle" fill="#ececf1" font-size="13" font-weight="700">${vals[vals.length-1]}</text>
     ${near ? `<line x1="${pad}" x2="${W - pad}" y1="${y(goal)}" y2="${y(goal)}" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5 5" opacity=".8"/>` : ''}
   `;
 }
@@ -579,7 +589,7 @@ function renderPRs() {
     const exName = S.exercises.find(e => e.id === pr.exerciseId)?.name || pr.exerciseId;
     const deltaHtml = pr.isNew
       ? `<span class="pr-delta up">nuevo PR</span>`
-      : `<span class="pr-delta same">—</span>`;
+      : `<span class="pr-delta same">${new Date(pr.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>`;
     return `<div class="pr-row">
       <span class="pr-name">${exName}</span>
       <span class="pr-val">${pr.weight ? `${pr.weight}<span class="pr-unit">kg × ${pr.reps}</span>` : `${pr.reps}<span class="pr-unit"> reps</span>`}</span>
@@ -615,9 +625,10 @@ function renderVolume() {
   const weekSessions = S.sessions.filter(s => s.date >= weekStr);
   const weekVol = weekSessions.reduce((acc, s) =>
     acc + s.sets.reduce((a, set) => a + (set.weight * set.reps), 0), 0);
-
+  const weekReps = weekSessions.reduce((acc, s) => acc + s.sets.reduce((a, set) => a + set.reps, 0), 0);
+  const unit = u => ` <span style="font-size:12px;color:var(--text-2)">${u}</span>`;
   document.getElementById('vol-week').innerHTML =
-    weekVol > 0 ? Math.round(weekVol).toLocaleString() + ' <span style="font-size:12px;color:var(--text-2)">kg</span>' : '—';
+    weekVol > 0 ? Math.round(weekVol).toLocaleString('en') + unit('kg') : weekReps ? weekReps + unit('reps') : '—';
   document.getElementById('vol-sessions').textContent = weekSessions.length || '—';
 
   renderVolChart();
@@ -637,7 +648,12 @@ function renderVolChart() {
     const sess = S.sessions.filter(s => s.date >= wk && s.date < nextWk);
     return sess.reduce((acc, s) => acc + s.sets.reduce((a, set) => a + (set.weight * set.reps), 0), 0);
   });
-
+  // Sin pesos (todo con el cuerpo): las barras son repeticiones por semana
+  if (vols.every(v => v === 0)) weeks.forEach((wk, i) => {
+    const nextWk = weeks[i+1] || '9999-99-99';
+    vols[i] = S.sessions.filter(s => s.date >= wk && s.date < nextWk).reduce((acc, s) => acc + s.sets.reduce((a, set) => a + set.reps, 0), 0);
+  });
+  svg.parentElement.hidden = vols.every(v => v === 0);
   if (vols.every(v => v === 0)) { svg.innerHTML = ''; return; }
   const max = Math.max(...vols) || 1;
   const W = 600, H = 60, bw = Math.floor((W - 24) / 12) - 2;
@@ -733,11 +749,15 @@ window.openLogSession = function(id) {
   openModal('modal-session');
 };
 window.deleteSession = function() {
-  if (!editingSession || !confirm('¿Eliminar esta sesión?')) return;
-  S.sessions = S.sessions.filter(x => x !== editingSession);
+  if (!editingSession) return;
+  const gone = editingSession;
+  S.sessions = S.sessions.filter(x => x !== gone);
   editingSession = null;
   save(); closeModal('modal-session'); renderPRs(); renderVolume(); renderSessions();
-  toast('Sesión eliminada');
+  toast('Sesión eliminada', () => {
+    S.sessions.push(gone); S.sessions.sort((a, b) => a.date.localeCompare(b.date));
+    save(); renderPRs(); renderVolume(); renderSessions();
+  });
 };
 
 function renderSessions() {
@@ -752,7 +772,7 @@ function renderSessions() {
     return `<button class="sess-row" onclick="openLogSession('${s.id}')">
       <span class="sd">${new Date(s.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>
       <span class="sx">${esc(names.join(', '))}</span>
-      <span class="sv">${s.sets.length} series · ${vol ? Math.round(vol).toLocaleString('en') + ' kg' : reps + ' reps'}</span></button>`;
+      <span class="sv">${s.sets.length} ${s.sets.length === 1 ? 'serie' : 'series'} · ${vol ? Math.round(vol).toLocaleString('en') + ' kg' : reps + ' reps'}</span></button>`;
   }).join('');
 }
 
@@ -808,10 +828,17 @@ document.querySelectorAll('.modal-bg').forEach(bg => {
   bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
 });
 
-function toast(msg) {
+let toastT;
+function toast(msg, undo) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2500);
+  if (undo) {
+    const b = document.createElement('button'); b.textContent = 'Deshacer';
+    b.onclick = () => { el.classList.remove('show'); clearTimeout(toastT); undo(); };
+    el.appendChild(b);
+  }
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('show'), undo ? 5000 : 2500);
 }
 
 window.toast = toast;
