@@ -1,0 +1,18 @@
+{
+  "appId": "com.kisushotto.trades.app",
+  "appName": "Trade Journal",
+  "webDir": "www",
+  "server": {
+    "url": "https://trades.kisushotto.com/terminal",
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#181818"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "disable",
+      "style": "DARK"
+    }
+  }
+}

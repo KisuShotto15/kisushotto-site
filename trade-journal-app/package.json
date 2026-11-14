@@ -1,0 +1,12 @@
+{
+  "name": "trade-journal-app",
+  "private": true,
+  "description": "App Android del Trade Journal (Capacitor): carga trades.kisushotto.com",
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Trade Journal</string>
+    <string name="title_activity_main">Trade Journal</string>
+    <string name="package_name">com.kisushotto.trades.app</string>
+    <string name="custom_url_scheme">com.kisushotto.trades.app</string>
+</resources>

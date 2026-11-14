@@ -1,0 +1,69 @@
+# APK de la app Android del Trade Journal (Capacitor, trade-journal-app/). La app
+# carga trades.kisushotto.com/terminal, asi que los cambios de la web NO piden APK
+# nuevo: esto corre solo cuando cambia lo nativo. El APK queda en el release
+# "trade-journal-android" del repo.
+name: Trade Journal Android APK
+
+on:
+  push:
+    branches: [main]
+    paths: ['trade-journal-app/**', '.github/workflows/trade-journal-android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trade-journal-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: trade-journal-app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npx cap sync android
+
+      # Misma llave que la app de Health (secrets HEALTH_*): una llave puede firmar
+      # varias apps y asi cada APK nuevo instala encima del anterior. Sin ella sale
+      # firmado en debug (sirve para probar, pero no se actualiza encima).
+      - name: Keystore
+        env:
+          KS: ${{ secrets.HEALTH_KEYSTORE }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/release.p12"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build
+        working-directory: trade-journal-app/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.HEALTH_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.HEALTH_KEY_ALIAS }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trade-journal-apk
+          path: trade-journal-app/android/app/build/outputs/apk/release/*.apk
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release*.apk trade-journal.apk
+          gh release delete trade-journal-android --yes --cleanup-tag || true
+          gh release create trade-journal-android trade-journal.apk --target "$GITHUB_SHA" --latest=false \
+            --title "Trade Journal Android · build ${{ github.run_number }}" \
+            --notes "Abre esta pagina en el celular y toca trade-journal.apk para instalar o actualizar."
