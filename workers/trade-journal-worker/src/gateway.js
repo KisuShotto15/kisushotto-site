@@ -178,7 +178,13 @@ export class ExchangeGateway {
     const reads = await Promise.allSettled(accounts.map(async acc => {
       if (acc.broken) throw new Error(acc.broken);
       const ex = this.adapter(acc);
-      const [eq, pos, spot] = await Promise.all([ex.equity(), ex.futuresPositions(), ex.spotHoldings()]);
+      // Si falla solo spot (p. ej. la llave no tiene permiso de spot), los
+      // futuros se siguen vigilando; el error igual bloquea ordenes nuevas.
+      const [eq, pos, spot] = await Promise.all([ex.equity(), ex.futuresPositions(), ex.spotHoldings().catch(e => e)]);
+      if (spot instanceof Error) {
+        eq.errors = [...(eq.errors || []), `spot: ${spot.message}`];
+        return { acc, eq, pos, spot: [], spotError: true };
+      }
       return { acc, eq, pos, spot };
     }));
     const live = [], errors = [];
@@ -743,7 +749,7 @@ export class ExchangeGateway {
   }
 
   async guardSpot(ctx) {
-    const readable = new Set(ctx.live.map(l => l.acc.exchange));
+    const readable = new Set(ctx.live.filter(l => !l.spotError).map(l => l.acc.exchange));
     for (const t of ctx.ledger.filter(x => x.market === 'spot' && x.status === 'open' && readable.has(x.exchange))) {
       const acc = ctx.accounts.find(a => a.exchange === t.exchange);
       if (!acc || acc.broken) continue;
