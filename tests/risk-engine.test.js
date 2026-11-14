@@ -211,6 +211,24 @@ test('guardian: posicion externa en un simbolo fuera de la estrategia se cierra'
   assert.deepEqual(R.symbols, ['BTCUSDT']);
 });
 
+test('guardian: un stop del lado de la ganancia no es riesgo (caso real: short 69638 con stop 67000)', () => {
+  const short = pos({ side: 'short', size: 0.0562, entry: 69638, mark: 66000, stop: 67000 });
+  assert.deepEqual(plan([short], [led({ side: 'short', qty: 0.0562, stop: 67000 })]), []);
+  // long con stop sobre la entrada: igual
+  assert.deepEqual(plan([pos({ size: 10, entry: 100, mark: 110, stop: 105 })], [led({ qty: 10, stop: 105 })]), []);
+});
+
+test('guardian: una posicion previa al modo real con mucho riesgo solo avisa', () => {
+  const a = plan([pos({ size: 10, stop: 97 })], [led({ qty: 10, stop: 97, external: 2 })]);
+  assert.equal(a[0].type, 'alert');
+});
+
+test('guardian: el recorte deja margen para no repetirse al minuto siguiente', () => {
+  const a = plan([pos({ size: 10, stop: 97 })], [led({ qty: 10, stop: 97 })]);
+  const left = 10 - a[0].qty;
+  assert.ok(left * 3 < 1000 * 0.02 * 1.15 * 0.95);
+});
+
 test('guardian: riesgo mayor al 2% se recorta', () => {
   const a = plan([pos({ size: 10, stop: 97 })], [led({ qty: 10, stop: 97 })]);
   assert.equal(a[0].type, 'reduce');

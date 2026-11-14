@@ -225,7 +225,9 @@ function renderPositions() {
     const risk = posRiskUsd(p);
     const coinm = p.market === 'coinm';
     const rNow = risk ? p.upnl / risk : null;
-    const be = p.side === 'long' ? p.mark > p.entry : p.mark < p.entry;
+    // "Stop a entrada" solo si acerca el stop: en ganancia y con el stop aun del lado de la perdida
+    const be = (p.side === 'long' ? p.mark > p.entry : p.mark < p.entry) &&
+               (!p.stop || (p.side === 'long' ? p.stop < p.entry : p.stop > p.entry));
     return `<div class="tm-pos">
       <div class="tm-pos-line">
         <b>${esc(p.symbol)}</b>

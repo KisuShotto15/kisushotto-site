@@ -689,7 +689,7 @@ export class ExchangeGateway {
       const known = new Set(ctx.ledger.filter(t => t.status === 'open' || t.status === 'pending').map(key));
       const swing = !ctx.rules.vwap_exchanges.includes(b.exchange);
       for (const p of (swing ? ctx.swingPositions : ctx.positions).filter(p => p.exchange === b.exchange && !known.has(key(p)))) {
-        await this.adopt(p, ctx, swing ? 'swing' : 'vwap');
+        await this.adopt(p, ctx, swing ? 'swing' : 'vwap', 2);
         await this.log('guardian', `${p.symbol}: posicion previa al modo real adoptada; queda bajo las reglas de stop y riesgo`, 'warn');
       }
     }
@@ -779,7 +779,13 @@ export class ExchangeGateway {
           continue;
         }
         if (a.type === 'set_stop') await ex.setStop(a.pos, a.stop);
-        if (a.type === 'reduce')   await ex.reduce(a.pos, a.qty);
+        if (a.type === 'reduce') {
+          await ex.reduce(a.pos, a.qty);
+          // El libro refleja el tamano que queda, para que la R y los controles sigan bien
+          await this.db.prepare("UPDATE exec_trades SET qty = ?, risk_usd = ? WHERE status = 'open' AND exchange = ? AND market = ? AND symbol = ? AND side = ?")
+            .bind(a.pos.size - a.qty, posRisk({ ...a.pos, size: a.pos.size - a.qty, notional: a.pos.notional * (1 - a.qty / a.pos.size) }),
+                  a.pos.exchange, a.pos.market, a.pos.symbol, a.pos.side).run();
+        }
         if (a.type === 'close')    await ex.closePosition(a.pos);
         await this.log('guardian', `${sym}: ${a.reason}`, a.type === 'close' ? 'critical' : 'warn', { action: a.type, stop: a.stop, qty: a.qty });
         acted.push(a.type);
@@ -814,15 +820,17 @@ export class ExchangeGateway {
     return { ok: true, actions: plan.length, acted, errors: ctx.errors };
   }
 
-  async adopt(p, ctx, strategy = 'vwap') {
+  // external: 1 = abierta por fuera con el modo real activo; 2 = ya estaba abierta
+  // al pasar a real (no se recorta sola, solo se avisa)
+  async adopt(p, ctx, strategy = 'vwap', external = 1) {
     const risk = posRisk(p);
     const base = strategy === 'swing' ? ctx.swingEquity : ctx.gates.base_equity;
     await this.db.prepare(`INSERT INTO exec_trades (id, exchange, market, symbol, side, order_type, status, qty, entry, stop, initial_stop,
       risk_usd, risk_pct, equity_base, leverage, external, opened_at, notes, strategy)
-      VALUES (?,?,?,?,?,'external','open',?,?,?,?,?,?,?,?,1,?,?,?)`)
+      VALUES (?,?,?,?,?,'external','open',?,?,?,?,?,?,?,?,?,?,?,?)`)
       .bind(rid(), p.exchange, p.market || 'futures', p.symbol, p.side, p.size, p.entry, p.stop ?? null, p.stop ?? null, risk,
             risk && base ? risk / base * 100 : null, base || null,
-            p.leverage ?? null, nowSec(), 'Abierta fuera del terminal', strategy).run();
+            p.leverage ?? null, external, nowSec(), external === 2 ? 'Abierta antes de activar el modo real' : 'Abierta fuera del terminal', strategy).run();
   }
 
   async checkPending(t, ex, cancel) {
@@ -982,7 +990,9 @@ export function afterHoursAdvice(win, positions) {
 function posRisk(p, stop = p.stop) {
   if (!(stop > 0) || !(p.entry > 0)) return null;
   const base = p.market === 'coinm' && p.notional ? p.notional / p.entry : p.size;
-  return Math.abs(p.entry - stop) * base;
+  // Un stop del lado de la ganancia no arriesga nada
+  const loss = p.side === 'long' ? p.entry - stop : stop - p.entry;
+  return Math.max(0, loss) * base;
 }
 
 function sessionOf(unixSec) {

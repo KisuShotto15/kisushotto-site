@@ -529,15 +529,26 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
     if (rules.max_margin_pct) {
       const capNotional = baseEquity * rules.max_margin_pct / 100 * rules.leverage;
       if (base * p.entry > capNotional * 1.05) {
-        actions.push({ type: 'reduce', pos: p, qty: (base - capNotional / p.entry) / unit,
-                       reason: `Posicion mayor al ${rules.max_margin_pct}% de margen a ${rules.leverage}x: se recorta` });
+        if (t?.external === 2) actions.push({ type: 'alert', pos: p, reason: `Posicion mayor al ${rules.max_margin_pct}% de margen a ${rules.leverage}x. Reducela tu` });
+        else actions.push({ type: 'reduce', pos: p, qty: (base - capNotional / p.entry) / unit,
+                            reason: `Posicion mayor al ${rules.max_margin_pct}% de margen a ${rules.leverage}x: se recorta` });
         continue;
       }
     }
-    const risk = Math.abs(p.entry - p.stop) * base;
+    // Riesgo = lo que se pierde si salta el stop, medido desde la entrada. Un stop
+    // del lado de la ganancia (long arriba / short abajo de la entrada) no arriesga nada.
+    const lossPerUnit = long ? p.entry - p.stop : p.stop - p.entry;
+    const risk = Math.max(0, lossPerUnit) * base;
     if (risk > capUsd) {
-      const keep = capUsd / Math.abs(p.entry - p.stop);
-      actions.push({ type: 'reduce', pos: p, qty: (base - keep) / unit, reason: `Riesgo ${risk.toFixed(2)} USDT supera el 2% de la cuenta: se recorta` });
+      // Una posicion previa al modo real no se recorta sola: se avisa
+      if (t?.external === 2) {
+        actions.push({ type: 'alert', pos: p, reason: `Riesgo ${risk.toFixed(2)} USDT supera el 2% de la cuenta. Acerca el stop o reduce tu la posicion` });
+      } else {
+        // Se deja en el 90% del tope: si quedara justo en el limite, cualquier
+        // cambio de capital pediria otro recorte minusculo al minuto siguiente
+        const keep = capUsd * 0.9 / lossPerUnit;
+        actions.push({ type: 'reduce', pos: p, qty: (base - keep) / unit, reason: `Riesgo ${risk.toFixed(2)} USDT supera el 2% de la cuenta: se recorta` });
+      }
     }
   }
 
