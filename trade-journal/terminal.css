@@ -185,3 +185,18 @@
 .tm-feed.live { color: var(--green); }
 .tm-feed.connecting, .tm-feed.reconnecting { color: var(--amber); }
 .tm-feed.off { color: var(--muted2); }
+
+/* Pestanas por estrategia */
+.tm-tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.tm-tabs button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 16px; min-width: 200px;
+  border-radius: 10px; border: 1px solid var(--border2); background: var(--card); color: var(--muted2); cursor: pointer; text-align: left;
+}
+.tm-tabs button b { font-family: 'IBM Plex Mono', monospace; font-size: 15px; letter-spacing: 0.08em; color: var(--text); }
+.tm-tabs button span { font-size: 12px; }
+.tm-tabs button.active { border-color: var(--accent); background: rgba(0,200,150,0.08); }
+.tm-tabs button.active b { color: var(--accent); }
+@media (max-width: 520px) { .tm-tabs button { min-width: 0; flex: 1; } }
+.tm-status-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) { .tm-status-4 { grid-template-columns: 1fr 1fr; } }
+.tm-rules-h { font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: 0.08em; color: var(--accent); margin-top: 6px; }

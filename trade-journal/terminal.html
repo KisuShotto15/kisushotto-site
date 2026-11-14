@@ -47,7 +47,7 @@
   <header class="tm-header">
     <div>
       <div class="page-header-label">// ejecucion con reglas</div>
-      <h1 class="dash-title">TERMINAL <span>VWAP</span></h1>
+      <h1 class="dash-title">TERMINAL <span id="titleStrat">VWAP</span></h1>
       <div class="dash-subtitle"><span id="nyClock">—</span> · Binance · Bitget · <a href="#accountsPanel" onclick="openAccounts();return false" class="tm-link">Cuentas</a></div>
     </div>
     <div class="tm-verdict" id="verdict">
@@ -56,10 +56,39 @@
     </div>
   </header>
 
+  <nav class="tm-tabs" id="stratTabs">
+    <button data-s="vwap" onclick="setStrategy('vwap')"><b>VWAP</b><span>Bitget · intradía · BTC 51x</span></button>
+    <button data-s="swing" onclick="setStrategy('swing')"><b>Swing</b><span>Binance · USDT-M y COIN-M</span></button>
+  </nav>
+
   <div class="tm-advice hidden" id="advice"></div>
   <div class="tm-blocks hidden" id="blocks"></div>
 
-  <section class="tm-status">
+  <section class="tm-status tm-status-4 hidden" id="swingStatus">
+    <div class="tm-card">
+      <div class="tm-card-title">CAPITAL SWING</div>
+      <div class="tm-big" id="swEq">—</div>
+      <div class="tm-sub">futuros USDT-M + COIN-M (sin spot)</div>
+    </div>
+    <div class="tm-card">
+      <div class="tm-card-title">RIESGO DISPONIBLE</div>
+      <div class="tm-big" id="swRisk">—</div>
+      <div class="tm-sub" id="swRiskSub">—</div>
+    </div>
+    <div class="tm-card">
+      <div class="tm-card-title">RIESGO ABIERTO</div>
+      <div class="tm-big" id="swOpen">—</div>
+      <div class="tm-meter"><div class="tm-meter-fill" id="swOpenMeter"></div></div>
+      <div class="tm-sub" id="swOpenSub">—</div>
+    </div>
+    <div class="tm-card">
+      <div class="tm-card-title">POSICIONES</div>
+      <div class="tm-big" id="swCount">—</div>
+      <div class="tm-sub" id="swCountSub">—</div>
+    </div>
+  </section>
+
+  <section class="tm-status" id="vwapStatus">
     <div class="tm-card">
       <div class="tm-card-title">VENTANA</div>
       <div class="tm-big" id="winBig">—</div>
@@ -94,7 +123,7 @@
     <!-- Ticket -->
     <section class="tm-panel tm-ticket">
       <div class="tm-panel-head">
-        <span>NUEVA OPERACION</span>
+        <span id="ticketTitle">NUEVA OPERACION · VWAP</span>
         <span class="tm-mode" id="ticketMode">—</span>
       </div>
 
@@ -158,13 +187,8 @@
     <!-- Posiciones -->
     <section class="tm-col">
       <div class="tm-panel">
-        <div class="tm-panel-head"><span>POSICIONES · ESTRATEGIA VWAP</span><span class="tm-sub" id="posStamp"></span></div>
+        <div class="tm-panel-head"><span id="posTitle">POSICIONES · VWAP</span><span class="tm-sub" id="posStamp"></span></div>
         <div id="positions"><div class="tm-sub">—</div></div>
-      </div>
-      <div class="tm-panel hidden" id="swingPanel">
-        <div class="tm-panel-head"><span>SWING · SOLO LECTURA</span><span class="tm-sub" id="swingTotal"></span></div>
-        <div class="tm-sub">Sin reglas de la estrategia VWAP: el guardian no las toca y no cuentan para tu riesgo diario.</div>
-        <div id="swing"></div>
       </div>
       <div class="tm-panel">
         <div class="tm-panel-head"><span>ORDENES PENDIENTES</span></div>
@@ -190,6 +214,10 @@
     <div class="form-field"><label>Simbolos permitidos (vacio = todos)</label><input id="rSymbols" placeholder="BTCUSDT, ETHUSDT, SOLUSDT"></div>
     <div class="form-field"><label>Cuentas de la estrategia VWAP (las demas son swing, solo lectura)</label><input id="rVwapEx" placeholder="bitget"></div>
     <div class="form-field"><label>Checklist (uno por linea)</label><textarea id="rChecklist" rows="8"></textarea></div>
+    <h3 class="tm-rules-h">Swing (Binance)</h3>
+    <div class="tm-rules" id="swingRulesForm"></div>
+    <div class="form-field"><label>Simbolos permitidos en swing (vacio = todos)</label><input id="rSwSymbols" placeholder="vacio = cualquiera"></div>
+    <div class="form-field"><label>Checklist del swing (uno por linea)</label><textarea id="rSwChecklist" rows="6"></textarea></div>
     <div class="tm-row">
       <button class="btn btn-accent" onclick="saveRules()">Guardar reglas</button>
       <button class="btn btn-danger" onclick="selfLock()">Bloquearme por hoy</button>

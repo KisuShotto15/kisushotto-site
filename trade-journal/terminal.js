@@ -32,6 +32,47 @@ function toast(msg, type = 'ok') {
 }
 
 let S = null;          // ultimo /exec/status
+// Estrategia de la pestana activa: 'vwap' (Bitget) o 'swing' (Binance)
+let strat = (() => { try { return localStorage.getItem('tm_strat') === 'swing' ? 'swing' : 'vwap'; } catch { return 'vwap'; } })();
+const isSwing = () => strat === 'swing';
+const gatesOf = () => isSwing() ? S.swing_gates : S.gates;
+const rulesOf = () => isSwing() ? S.rules.swing : S.rules;
+const positionsOf = () => (isSwing() ? S.swing_positions : S.positions) || [];
+
+const SETUPS = {
+  vwap: ['VWAP 3σ reversion', 'VWAP 2σ reversion', 'Rechazo en VWAP', 'Ruptura y retest de banda'],
+  swing: ['Retest de soporte / resistencia', 'Ruptura con volumen', 'Pullback en tendencia', 'Rango: extremo a extremo', 'Otro'],
+};
+const MARKETS = {
+  vwap: [['futures', 'Futuros USDT-M'], ['spot', 'Spot']],
+  swing: [['futures', 'Futuros USDT-M'], ['coinm', 'Futuros COIN-M']],
+};
+
+window.setStrategy = s => {
+  if (s === strat) return;
+  strat = s;
+  try { localStorage.setItem('tm_strat', s); } catch { /* sin storage */ }
+  lastPreview = null;
+  $('checklist').dataset.sig = '';
+  applyStrategyUI();
+  if (S) render();
+  loadMarket();
+};
+
+function applyStrategyUI() {
+  document.querySelectorAll('#stratTabs button').forEach(b => b.classList.toggle('active', b.dataset.s === strat));
+  $('vwapStatus').classList.toggle('hidden', isSwing());
+  $('swingStatus').classList.toggle('hidden', !isSwing());
+  $('ticketTitle').textContent = `NUEVA OPERACION · ${isSwing() ? 'SWING' : 'VWAP'}`;
+  $('titleStrat').textContent = isSwing() ? 'SWING' : 'VWAP';
+  $('posTitle').textContent = `POSICIONES · ${isSwing() ? 'SWING' : 'VWAP'}`;
+  $('tMarket').innerHTML = MARKETS[strat].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  $('tSetup').innerHTML = SETUPS[strat].map(x => `<option>${x}</option>`).join('');
+  $('tType').disabled = false;
+  document.querySelector('.tm-side.short').disabled = false;
+  $('tSymbol').readOnly = false;
+  if (isSwing() && !$('tSymbol').value) $('tSymbol').value = 'BTCUSDT';
+}
 let M = null;          // ultimo /exec/market
 let side = 'long';
 let lastPreview = null;
@@ -61,7 +102,7 @@ async function loadStatus(fresh = false) {
 }
 
 function render() {
-  const g = S.gates;
+  const g = gatesOf();
   const v = $('verdict');
   if (g.ok) {
     v.className = 'tm-verdict ok';
@@ -77,10 +118,11 @@ function render() {
   blocks.innerHTML = g.blocks.map(b => `<div class="tm-block tm-block-${esc(b.code)}">${esc(b.msg)}</div>`).join('');
 
   // Con un solo simbolo permitido el ticket queda fijo en ese simbolo
-  const only = S.rules.symbols.length === 1 ? S.rules.symbols[0] : null;
+  const syms = rulesOf().symbols;
+  const only = syms.length === 1 ? syms[0] : null;
   if (only && $('tSymbol').value !== only) { $('tSymbol').value = only; loadMarket(); }
   $('tSymbol').readOnly = !!only;
-  const adv = S.advice;
+  const adv = isSwing() ? null : S.advice;
   $('advice').classList.toggle('hidden', !adv);
   if (adv) {
     $('advice').className = `tm-advice ${adv.level}`;
@@ -90,9 +132,9 @@ function render() {
   renderWindow();
   renderNews();
   renderDay();
+  renderSwingStatus();
   renderPositions();
   renderSpot();
-  renderSwing();
   renderPending();
   renderChecklist();
   renderAccounts();
@@ -168,24 +210,32 @@ function meter(id, frac) {
 
 // ── Posiciones ────────────────────────────────────────────────────────────────
 
+function posRiskUsd(p) {
+  if (p.trade?.risk_usd) return p.trade.risk_usd;
+  if (!p.stop) return null;
+  const base = p.market === 'coinm' && p.notional ? p.notional / p.entry : p.size;
+  return Math.abs(p.entry - p.stop) * base;
+}
+
 function renderPositions() {
-  const list = S.positions;
+  const list = positionsOf();
   $('posStamp').textContent = S.guardian_at ? `guardian hace ${Math.max(0, Math.round(Date.now() / 1000 - S.guardian_at))}s` : '';
   if (!list.length) { $('positions').innerHTML = '<div class="tm-sub">Sin posiciones abiertas</div>'; return; }
   $('positions').innerHTML = list.map((p, i) => {
-    const risk = p.trade?.risk_usd || (p.stop ? Math.abs(p.entry - p.stop) * p.size : null);
+    const risk = posRiskUsd(p);
+    const coinm = p.market === 'coinm';
     const rNow = risk ? p.upnl / risk : null;
     const be = p.side === 'long' ? p.mark > p.entry : p.mark < p.entry;
     return `<div class="tm-pos">
       <div class="tm-pos-line">
         <b>${esc(p.symbol)}</b>
         <span class="side-badge side-badge-${p.side}">${p.side.toUpperCase()}</span>
-        <span class="tm-tag">${esc(p.exchange)}</span>
+        <span class="tm-tag">${esc(p.exchange)}${coinm ? ' · COIN-M' : ''}</span>
         ${p.trade ? '' : '<span class="tm-tag warn">externa</span>'}
-        <span class="tm-pos-pnl ${p.upnl >= 0 ? 'pos' : 'neg'}">${sign(p.upnl)}${rNow != null ? ` · ${sign(rNow)}R` : ''}</span>
+        <span class="tm-pos-pnl ${p.upnl >= 0 ? 'pos' : 'neg'}">${sign(p.upnl)}${coinm ? ` (${p.upnl_coin >= 0 ? '+' : ''}${(+p.upnl_coin).toFixed(6)} ${esc(p.settle_coin)})` : ''}${rNow != null ? ` · ${sign(rNow)}R` : ''}</span>
       </div>
       <div class="tm-pos-meta">
-        <span>${fmt(p.size, 4)} @ ${px(p.entry)} → ${px(p.mark)}</span>
+        <span>${coinm ? `${fmt(p.size, 0)} contratos (${fmt(p.notional, 0)} USD)` : fmt(p.size, 4)} @ ${px(p.entry)} → ${px(p.mark)}</span>
         <span class="${p.stop ? '' : 'neg'}">SL ${px(p.stop)}</span>
         <span>TP ${px(p.tp)}</span>
         ${p.leverage ? `<span>${p.leverage}x</span>` : ''}
@@ -202,35 +252,25 @@ function renderPositions() {
   }).join('');
 }
 
-// Cuentas de swing: solo se muestran. El guardian no las corrige ni cuentan
-// para el riesgo de la estrategia VWAP.
-function renderSwing() {
-  const list = S.swing_positions || [];
-  $('swingPanel').classList.toggle('hidden', !list.length && !S.accounts.some(a => a.profile === 'swing'));
-  const total = list.reduce((s, p) => s + (p.upnl || 0), 0);
-  $('swingTotal').innerHTML = list.length ? `<span class="${total >= 0 ? 'pos' : 'neg'}">${sign(total)} USD</span>` : '';
-  $('swing').innerHTML = list.length ? list.map(p => {
-    const coinm = p.market === 'coinm';
-    return `<div class="tm-pos">
-      <div class="tm-pos-line">
-        <b>${esc(p.symbol)}</b>
-        <span class="side-badge side-badge-${p.side}">${p.side.toUpperCase()}</span>
-        <span class="tm-tag">${esc(p.exchange)} · ${coinm ? 'COIN-M' : 'USDT-M'}</span>
-        <span class="tm-pos-pnl ${p.upnl >= 0 ? 'pos' : 'neg'}">${sign(p.upnl)} USD${coinm ? ` · ${p.upnl_coin >= 0 ? '+' : ''}${(+p.upnl_coin).toFixed(6)} ${esc(p.settle_coin)}` : ''}</span>
-      </div>
-      <div class="tm-pos-meta">
-        <span>${coinm ? `${fmt(p.contracts, 0)} contratos (${fmt(p.notional, 0)} USD)` : fmt(p.size, 4)} @ ${px(p.entry)} → ${px(p.mark)}</span>
-        <span class="${p.stop ? '' : 'warn'}">SL ${px(p.stop)}</span>
-        <span>TP ${px(p.tp)}</span>
-        ${p.leverage ? `<span>${p.leverage}x</span>` : ''}
-        ${p.liq ? `<span>liq ${px(p.liq)}</span>` : ''}
-      </div>
-    </div>`;
-  }).join('') : '<div class="tm-sub">Sin posiciones de swing abiertas</div>';
+// Tarjetas de estado de la pestana swing
+function renderSwingStatus() {
+  if (!isSwing()) return;
+  const g = S.swing_gates, r = S.rules.swing, list = S.swing_positions || [];
+  $('swEq').textContent = `${fmt(S.swing_equity)} USD`;
+  $('swRisk').textContent = `${fmt(g.risk_pct)}%`;
+  $('swRisk').className = `tm-big ${g.ok ? 'acc' : 'neu'}`;
+  $('swRiskSub').textContent = `${fmt(g.risk_usd)} USD por operacion · maximo ${r.risk_pct}%`;
+  $('swOpen').textContent = `${fmt(g.open_risk_pct)}%`;
+  meter('swOpenMeter', g.open_risk_pct / r.max_open_risk_pct);
+  $('swOpenSub').textContent = `de ${r.max_open_risk_pct}% permitido · ${r.leverage}x aislado`;
+  const noStop = list.filter(p => !p.stop).length;
+  $('swCount').textContent = list.length;
+  $('swCount').className = `tm-big ${noStop ? 'neg' : ''}`;
+  $('swCountSub').textContent = noStop ? `${noStop} sin stop: el guardian se lo pone (en modo real)` : 'todas con stop';
 }
 
 function renderPending() {
-  const pend = S.open_trades.filter(t => t.status === 'pending');
+  const pend = S.open_trades.filter(t => t.status === 'pending' && (t.strategy || 'vwap') === strat);
   $('pending').innerHTML = pend.length ? pend.map(t => `<div class="tm-pos">
       <div class="tm-pos-line"><b>${esc(t.symbol)}</b><span class="side-badge side-badge-${t.side}">${t.side.toUpperCase()}</span>
       <span class="tm-tag">${esc(t.exchange)}</span><span>${fmt(t.qty, 4)} @ ${px(t.entry)}</span>
@@ -255,24 +295,24 @@ function renderSpot() {
   }).join('') : '<div class="tm-sub">Sin activos en spot</div>';
 }
 
-window.posBreakeven = i => moveStop(S.positions[i], S.positions[i].entry);
+window.posBreakeven = i => moveStop(positionsOf()[i], positionsOf()[i].entry);
 window.posStop = i => {
-  const p = S.positions[i];
+  const p = positionsOf()[i];
   const v = prompt(`Nuevo stop para ${p.symbol} (actual ${px(p.stop)}). Solo se puede acercar al precio.`, p.stop || '');
   if (v) moveStop(p, +v);
 };
 async function moveStop(p, stop) {
   try {
-    const r = await exec.stop({ exchange: p.exchange, symbol: p.symbol, side: p.side, stop });
+    const r = await exec.stop({ exchange: p.exchange, market: p.market, symbol: p.symbol, side: p.side, stop });
     toast(r.simulated ? 'Simulacion: el stop no se envio' : 'Stop actualizado');
     loadStatus(true);
   } catch (e) { toast(errMsg(e), 'err'); }
 }
 window.posClose = async (i, pct) => {
-  const p = S.positions[i];
+  const p = positionsOf()[i];
   if (!confirm(`¿Cerrar ${pct}% de ${p.symbol} ${p.side.toUpperCase()} a mercado?`)) return;
   try {
-    const r = await exec.close({ exchange: p.exchange, market: 'futures', symbol: p.symbol, side: p.side, pct });
+    const r = await exec.close({ exchange: p.exchange, market: p.market || 'futures', symbol: p.symbol, side: p.side, pct });
     toast(r.simulated ? 'Simulacion: no se envio' : 'Orden de cierre enviada');
     loadStatus(true);
   } catch (e) { toast(errMsg(e), 'err'); }
@@ -292,9 +332,9 @@ window.cancelPending = async id => {
 function fillExchanges() {
   const sel = $('tExchange');
   const cur = sel.value;
-  // Solo las cuentas de la estrategia VWAP abren operaciones desde el ticket
-  const vwap = S.accounts.filter(a => a.profile === 'vwap').map(a => a.exchange);
-  const list = vwap.length ? vwap : S.rules.vwap_exchanges;
+  // Cada pestana solo opera las cuentas de su estrategia
+  const mine = S.accounts.filter(a => a.profile === strat).map(a => a.exchange);
+  const list = mine.length ? mine : isSwing() ? ['binance'] : S.rules.vwap_exchanges;
   const html = list.map(x => `<option value="${x}">${x === 'binance' ? 'Binance' : 'Bitget'}</option>`).join('');
   if (sel.innerHTML !== html) { sel.innerHTML = html; if (list.includes(cur)) sel.value = cur; }
 }
@@ -302,7 +342,7 @@ function fillExchanges() {
 function renderChecklist() {
   const box = $('checklist');
   const checked = new Set([...box.querySelectorAll('input:checked')].map(x => x.value));
-  const items = S.rules.checklist;
+  const items = rulesOf().checklist;
   const sig = items.join('\n');
   if (box.dataset.sig === sig) return;
   box.dataset.sig = sig;
@@ -317,6 +357,10 @@ window.setSide = s => {
 window.onTypeChange = () => { $('tEntry').disabled = $('tType').value !== 'limit'; schedulePreview(); };
 window.onMarketChange = () => {
   const spot = $('tMarket').value === 'spot';
+  // COIN-M usa otros simbolos (BTCUSD_PERP); se traduce el del ticket
+  const sym = $('tSymbol').value.trim().toUpperCase();
+  if ($('tMarket').value === 'coinm' && /USDT$/.test(sym)) $('tSymbol').value = sym.replace(/USDT$/, 'USD_PERP');
+  if ($('tMarket').value !== 'coinm' && /USD_PERP$/.test(sym)) $('tSymbol').value = sym.replace(/USD_PERP$/, 'USDT');
   if (spot) { setSide('long'); $('tType').value = 'market'; onTypeChange(); }
   document.querySelector('.tm-side.short').disabled = spot;
   $('tType').disabled = spot;
@@ -325,7 +369,7 @@ window.onMarketChange = () => {
 
 function currentOrder() {
   return {
-    exchange: $('tExchange').value, market: $('tMarket').value,
+    strategy: strat, exchange: $('tExchange').value, market: $('tMarket').value,
     symbol: $('tSymbol').value.trim().toUpperCase(), side, type: $('tType').value,
     entry: +$('tEntry').value || null, stop: +$('tStop').value || null, tp: +$('tTp').value || null,
     checklist: [...document.querySelectorAll('#checklist input:checked')].map(x => x.value),
@@ -366,8 +410,8 @@ function renderPreview(r) {
   const p = r.plan;
   $('preview').innerHTML = `
     <div class="tm-prev-grid">
-      <div><span>Cantidad</span><b>${fmt(p.qty, 4)}</b></div>
-      <div><span>Valor</span><b>${fmt(p.notional)} USDT</b></div>
+      <div><span>Cantidad</span><b>${p.market === 'coinm' ? `${p.qty} contratos` : fmt(p.qty, 4)}</b></div>
+      <div><span>Valor</span><b>${fmt(p.notional)} ${p.market === 'coinm' ? 'USD' : 'USDT'}</b></div>
       <div><span>Apalancamiento</span><b>${p.leverage ? p.leverage + 'x aislado' : '—'}</b></div>
       <div><span>Margen</span><b>${fmt(p.margin)} USDT · ${fmt(p.margin_pct)}%</b></div>
       <div><span>Comisiones ida y vuelta</span><b>${fmt(p.fees_round_trip)} USDT</b></div>
@@ -378,6 +422,7 @@ function renderPreview(r) {
     </div>
     <div class="tm-sub">Precio ${px(p.price)} · entrada ${px(p.entry)} · comision ${(p.fee * 100).toFixed(3)}% incluida en el tamano</div>
     ${p.capped_by_margin ? `<div class="tm-sub warn">Tamano limitado por el margen maximo (${S.rules.max_margin_pct}% a ${p.leverage}x): arriesgas menos que tu presupuesto.</div>` : ''}
+    ${p.market === 'coinm' ? `<div class="tm-sub">COIN-M: ${p.contract_size} USD por contrato; margen y resultado en la moneda base.</div>` : ''}
     ${r.errors.length ? `<ul class="tm-errs">${r.errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="tm-ok">Cumple todas las reglas</div>'}`;
 }
 
@@ -498,12 +543,21 @@ function renderRules() {
     $('rSymbols').value = S.rules.symbols.join(', ');
     $('rVwapEx').value = S.rules.vwap_exchanges.join(', ');
     $('rChecklist').value = S.rules.checklist.join('\n');
+    const SW = { risk_pct: 'Riesgo por operacion (%)', max_open_risk_pct: 'Riesgo abierto maximo (%)',
+                 leverage: 'Apalancamiento (fijo)', min_rr: 'R:R minimo' };
+    $('swingRulesForm').innerHTML = Object.entries(SW).map(([k, label]) => {
+      const h = S.swing_hard[k];
+      return `<div class="form-field"><label>${label} <i>(${h.min}–${h.max})</i></label>
+        <input type="number" step="any" min="${h.min}" max="${h.max}" data-swing="${k}" value="${S.rules.swing[k]}"></div>`;
+    }).join('');
+    $('rSwSymbols').value = S.rules.swing.symbols.join(', ');
+    $('rSwChecklist').value = S.rules.swing.checklist.join('\n');
     form.dataset.ready = '1';
   }
   const p = S.pending;
   $('rulesPendingTag').textContent = p ? '· cambio en espera' : '';
   $('rulesPending').innerHTML = p ? `<div class="tm-pending">
-      En espera hasta ${new Date(S.pending_at * 1000).toLocaleString('es')}: ${Object.entries(p).map(([k, v]) => `<b>${esc(RULE_LABELS[k] || k)}</b> → ${esc(Array.isArray(v) ? v.length + ' elementos' : v)}`).join(' · ')}
+      En espera hasta ${new Date(S.pending_at * 1000).toLocaleString('es')}: ${Object.entries(p).map(([k, v]) => `<b>${esc(k === 'swing' ? 'Swing' : RULE_LABELS[k] || k)}</b> → ${esc(Array.isArray(v) ? v.length + ' elementos' : typeof v === 'object' ? Object.entries(v).map(([a, b]) => `${a}: ${Array.isArray(b) ? b.length + ' elementos' : b}`).join(', ') : v)}`).join(' · ')}
       <button class="btn btn-sm" onclick="cancelPendingRules()">Cancelar cambio</button></div>` : '';
 }
 
@@ -514,6 +568,9 @@ window.saveRules = async () => {
   body.symbols = $('rSymbols').value.split(/[\s,;]+/).filter(Boolean);
   body.vwap_exchanges = $('rVwapEx').value.split(/[\s,;]+/).filter(Boolean);
   body.checklist = $('rChecklist').value.split('\n').map(x => x.trim()).filter(Boolean);
+  body.swing = { symbols: $('rSwSymbols').value.split(/[\s,;]+/).filter(Boolean),
+                 checklist: $('rSwChecklist').value.split('\n').map(x => x.trim()).filter(Boolean) };
+  document.querySelectorAll('[data-swing]').forEach(i => { body.swing[i.dataset.swing] = +i.value; });
   try {
     const r = await exec.rules(body);
     const a = Object.keys(r.applied || {}).length, p = Object.keys(r.pending || {}).length;
@@ -615,7 +672,7 @@ function tickClock() {
 let poll = null;
 function startPolling() {
   clearTimeout(poll);
-  const active = S && (S.window.in_window || S.positions.length || S.open_trades.length);
+  const active = S && (S.window.in_window || S.positions.length || (isSwing() && S.swing_positions?.length) || S.open_trades.length);
   poll = setTimeout(async () => {
     if (document.visibilityState === 'visible') await loadStatus();
     startPolling();
@@ -627,6 +684,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   tickClock();
   setInterval(tickClock, 1000);
   $('nDate').value = new Date().toISOString().slice(0, 10);
+  applyStrategyUI();
   await loadStatus(true);
   loadMarket();
   loadEvents();

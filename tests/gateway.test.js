@@ -12,7 +12,7 @@ const W = new URL('../workers/trade-journal-worker/', import.meta.url);
 function d1() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('schema.sql', W), 'utf8'));
-  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution', '0010_egress', '0011_btc_only', '0012_journal_sync', '0013_profiles']) {
+  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution', '0010_egress', '0011_btc_only', '0012_journal_sync', '0013_profiles', '0014_swing']) {
     db.exec(readFileSync(new URL(`migrations/${f}.sql`, W), 'utf8'));
   }
   const stmt = (sql, args = []) => ({
@@ -215,28 +215,58 @@ test('historial: entran las operaciones hechas por fuera, sin duplicar las del t
   assert.ok(j);
 });
 
-test('swing: Binance es solo lectura, no cuenta para el riesgo y el guardian no la toca', async () => {
-  clock = Date.UTC(2026, 10, 10, 15, 0);
+test('swing: Binance tiene sus propias reglas y no cuenta para el riesgo VWAP', async () => {
+  clock = Date.UTC(2026, 10, 14, 15, 0);   // sabado: la estrategia VWAP no opera, el swing si
   DB.raw.exec('UPDATE risk_state SET lock_until = 0');
   await call('/accounts', { exchange: 'binance', key: 'k', secret: 's' });
   await call('/accounts/mode', { exchange: 'binance', dry_run: false });
-  bn.st.positions = [{ exchange: 'binance', market: 'futures', symbol: 'ETHUSDT', side: 'long', size: 5, entry: 1900, stop: null, stop_refs: [] }];
+  // posicion previa sin stop: se adopta como swing y el guardian le pone stop al 1%
+  bn.st.positions = [{ exchange: 'binance', market: 'futures', symbol: 'ETHUSDT', side: 'long', size: 1, entry: 2000, mark: 2010, stop: null, stop_refs: [] }];
+  bn.st.price = 2010;   // el simulado usa este precio como marca
   bn.st.calls.length = 0;
   clock += 60000;
   await call('/guardian', {});
-  assert.deepEqual(bn.st.calls, [], 'el guardian no debe actuar sobre swing');
+  const adopted = DB.raw.prepare("SELECT * FROM exec_trades WHERE exchange='binance' AND symbol='ETHUSDT'").get();
+  assert.equal(adopted.strategy, 'swing');
+  const stops = bn.st.calls.filter(c => c[0] === 'stop').map(c => Math.round(c[1]));
+  // capital swing = futuros 5000 + COIN-M 2000; riesgo 1% = 70 USD
+  // ETH: 1 unidad -> stop 70 USD abajo. COIN-M BTC: 3 contratos de 100 USD = 0.005 BTC -> 14000 abajo
+  assert.ok(stops.includes(1930), `stops: ${stops}`);
+  assert.ok(stops.includes(46000), `stops: ${stops}`);
   const s = await call('/status?fresh=1');
-  assert.equal(s.swing_positions.length, 2);   // USDT-M + COIN-M
   assert.ok(s.swing_positions.some(p => p.market === 'coinm'));
   assert.ok(!s.positions.some(p => p.exchange === 'binance'));
-  assert.ok(s.equity.now < 2000, 'el capital de la estrategia no incluye Binance');
-  const r = await call('/preview', order({ exchange: 'binance' }));
-  assert.match(r.error, /swing/);
+  assert.ok(s.equity.now < 2000, 'el capital VWAP no incluye Binance');
+  assert.equal(s.swing_equity, 7000);
+  // en la pestana VWAP no se puede usar Binance; en swing si, aunque sea sabado
+  const wrong = await call('/preview', order({ exchange: 'binance' }));
+  assert.match(wrong.error, /swing/);
   bn.st.positions = [];
+  DB.raw.exec("DELETE FROM exec_trades WHERE exchange='binance'");
+  bn.st.price = 100;
+  const ok = await call('/preview', { strategy: 'swing', exchange: 'binance', market: 'futures', symbol: 'SOLUSDT', side: 'long',
+    type: 'market', stop: 98, tp: 104, checklist: (await call('/status')).rules.swing.checklist });
+  assert.equal(ok.ok, true, ok.errors?.join());
+  assert.equal(ok.plan.leverage, 5);
+  assert.ok(ok.plan.risk_usd <= 70 && ok.plan.risk_usd > 60);
+});
+
+test('swing: si el stop de una posicion heredada ya quedo cruzado, avisa y no cierra', async () => {
+  bn.st.positions = [{ exchange: 'binance', market: 'futures', symbol: 'BTCUSDT', side: 'long', size: 1, entry: 60000, mark: 58000, stop: null, stop_refs: [] }];
+  bn.st.price = 58000;
+  bn.st.calls.length = 0;
+  clock += 6 * 60000;   // fuera de la ventana y sin VWAP abierto, el guardian revisa cada 5 min
+  await call('/guardian', {});
+  assert.ok(!bn.st.calls.some(c => c[0] === 'close'));
+  const ev = DB.raw.prepare("SELECT * FROM risk_events WHERE kind='guardian_alert' ORDER BY id DESC").get();
+  assert.match(ev.message, /No se cierra solo/);
+  bn.st.positions = [];
+  DB.raw.exec("DELETE FROM exec_trades WHERE exchange='binance'");
+  await call('/accounts/delete', { exchange: 'binance' });
 });
 
 test('guardian: fuera de la ventana y sin nada abierto revisa cada 5 min', async () => {
-  clock = Date.UTC(2026, 10, 14, 15, 0);   // sabado
+  clock = Date.UTC(2026, 10, 14, 18, 0);   // sabado, despues de la prueba anterior
   st.positions = [];
   assert.equal((await call('/guardian', {})).skipped, undefined);
   clock += 60000;

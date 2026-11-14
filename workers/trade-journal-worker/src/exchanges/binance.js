@@ -16,7 +16,9 @@ const infoCache = new Map();   // vive mientras el Durable Object siga en memori
 
 export function binance({ key, secret, env = 'live' }) {
   const host = HOSTS[env] || HOSTS.live;
-  let dual = null;
+  const dual = {};
+  // USDT-M (fapi) y COIN-M (dapi) comparten casi todos los endpoints de ejecucion
+  const fx = market => market === 'coinm' ? { X: D, v: '/dapi/v1' } : { X: F, v: '/fapi/v1' };
 
   async function call(method, base, path, params = {}, signed = true) {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''));
@@ -39,15 +41,17 @@ export function binance({ key, secret, env = 'live' }) {
   const S = (m, p, q, s) => call(m, host.spot, p, q, s);
   const D = (m, p, q, s) => call(m, host.dapi, p, q, s);   // futuros COIN-M
 
-  async function isDual() {
-    if (dual == null) dual = !!(await F('GET', '/fapi/v1/positionSide/dual')).dualSidePosition;
-    return dual;
+  async function isDual(market = 'futures') {
+    const { X, v } = fx(market);
+    if (dual[market] == null) dual[market] = !!(await X('GET', `${v}/positionSide/dual`)).dualSidePosition;
+    return dual[market];
   }
 
   async function exchangeInfo(market) {
     const c = infoCache.get(env + market);
     if (c && Date.now() - c.t < INFO_TTL) return c.data;
-    const d = market === 'futures' ? await F('GET', '/fapi/v1/exchangeInfo', {}, false) : null;
+    const d = market === 'futures' ? await F('GET', '/fapi/v1/exchangeInfo', {}, false)
+            : market === 'coinm' ? await D('GET', '/dapi/v1/exchangeInfo', {}, false) : null;
     if (d) infoCache.set(env + market, { t: Date.now(), data: d });
     return d;
   }
@@ -97,9 +101,14 @@ export function binance({ key, secret, env = 'live' }) {
   // Contratos en USD (100 por contrato en BTC, 10 en el resto); el PnL y el
   // margen se liquidan en la moneda base.
   async function coinm() {
-    const [acct, rows, orders] = await Promise.all([
-      D('GET', '/dapi/v1/account'), D('GET', '/dapi/v1/positionRisk'), D('GET', '/dapi/v1/openOrders').catch(() => []),
+    const [acct, rows, legacy, algo] = await Promise.all([
+      D('GET', '/dapi/v1/account'), D('GET', '/dapi/v1/positionRisk'),
+      D('GET', '/dapi/v1/openOrders').catch(() => []), D('GET', '/dapi/v1/openAlgoOrders').catch(() => []),
     ]);
+    const orders = [
+      ...listOf(algo).map(o => ({ symbol: o.symbol, side: o.side, type: o.orderType || o.type, stopPrice: o.triggerPrice, ref: { algoId: o.algoId } })),
+      ...(Array.isArray(legacy) ? legacy : []).map(o => ({ ...o, ref: { orderId: o.orderId } })),
+    ];
     const assets = (acct.assets || []).filter(a => num(a.marginBalance) > 0);
     const px = await spotPx(assets.map(a => a.asset + 'USDT'));
     const value = assets.reduce((s, a) => s + num(a.marginBalance) * (px.get(a.asset + 'USDT') || 0), 0);
@@ -110,7 +119,8 @@ export function binance({ key, secret, env = 'live' }) {
       const mark = num(p.markPrice);
       const closeSide = side === 'long' ? 'SELL' : 'BUY';
       const mine = (Array.isArray(orders) ? orders : []).filter(o => o.symbol === p.symbol && o.side === closeSide);
-      const sl = mine.filter(o => /STOP/.test(o.type)).map(o => num(o.stopPrice)).sort((a, b) => side === 'long' ? b - a : a - b)[0];
+      const slOrders = mine.filter(o => /STOP/.test(o.type));
+      const sl = slOrders.map(o => num(o.stopPrice)).sort((a, b) => side === 'long' ? b - a : a - b)[0];
       const tp = mine.find(o => /TAKE_PROFIT/.test(o.type));
       const upnlCoin = num(p.unRealizedProfit);
       return {
@@ -118,7 +128,8 @@ export function binance({ key, secret, env = 'live' }) {
         entry: num(p.entryPrice), mark, upnl: upnlCoin * mark, upnl_coin: upnlCoin, settle_coin: coin,
         leverage: num(p.leverage) || null, liq: num(p.liquidationPrice) || null,
         notional: Math.abs(amt) * (coin === 'BTC' ? 100 : 10),
-        stop: sl || null, tp: tp ? num(tp.stopPrice) : null,
+        stop: sl || null, tp: tp ? num(tp.stopPrice) : null, stop_refs: slOrders.map(o => o.ref),
+        position_side: p.positionSide,
         opened_at: p.updateTime ? Math.floor(p.updateTime / 1000) : null,
       };
     });
@@ -188,6 +199,14 @@ export function binance({ key, secret, env = 'live' }) {
   }
 
   async function instrument(market, symbol) {
+    if (market === 'coinm') {
+      const info = await exchangeInfo('coinm');
+      const s = info.symbols.find(x => x.symbol === symbol);
+      if (!s) throw new Error(`${symbol} no existe en Binance COIN-M (ej: BTCUSD_PERP)`);
+      if ((s.contractStatus || s.status) !== 'TRADING') throw new Error(`${symbol} no esta operable en COIN-M`);
+      const f = parseFilters(s, 0.0005);
+      return { ...f, step: 1, min_qty: 1, contract_size: num(s.contractSize) || (symbol.startsWith('BTC') ? 100 : 10) };
+    }
     if (market === 'futures') {
       const info = await exchangeInfo('futures');
       const s = info.symbols.find(x => x.symbol === symbol);
@@ -203,20 +222,22 @@ export function binance({ key, secret, env = 'live' }) {
 
   async function price(market, symbol) {
     if (market === 'futures') return num((await F('GET', '/fapi/v1/premiumIndex', { symbol }, false)).markPrice);
+    if (market === 'coinm') { const d = await D('GET', '/dapi/v1/premiumIndex', { symbol }, false); return num((Array.isArray(d) ? d[0] : d)?.markPrice); }
     return num((await S('GET', '/api/v3/ticker/price', { symbol }, false)).price);
   }
 
   async function klines(market, symbol, interval = '5m', limit = 500) {
-    const rows = market === 'futures'
-      ? await F('GET', '/fapi/v1/klines', { symbol, interval, limit }, false)
+    const rows = market === 'futures' ? await F('GET', '/fapi/v1/klines', { symbol, interval, limit }, false)
+      : market === 'coinm' ? await D('GET', '/dapi/v1/klines', { symbol, interval, limit: Math.min(limit, 1500) }, false)
       : await S('GET', '/api/v3/klines', { symbol, interval, limit }, false);
     return rows.map(r => ({ t: r[0], o: num(r[1]), h: num(r[2]), l: num(r[3]), c: num(r[4]), v: num(r[5]) }));
   }
 
   // ── Futuros: ejecucion ─────────────────────────────────────────────────────
 
-  async function placeStopAlgo(symbol, side, positionSide, kind, trigger, tick) {
-    return F('POST', '/fapi/v1/algoOrder', {
+  async function placeStopAlgo(market, symbol, side, positionSide, kind, trigger, tick) {
+    const { X, v } = fx(market);
+    return X('POST', `${v}/algoOrder`, {
       algoType: 'CONDITIONAL', symbol,
       side: side === 'long' ? 'SELL' : 'BUY',
       positionSide: positionSide && positionSide !== 'BOTH' ? positionSide : undefined,
@@ -225,14 +246,16 @@ export function binance({ key, secret, env = 'live' }) {
     });
   }
 
-  async function openFutures({ symbol, side, qty, type, price: limitPrice, stop, tp, leverage, cid, inst }) {
-    const hedge = await isDual();
+  // market: 'futures' (USDT-M, qty en moneda) o 'coinm' (COIN-M, qty en contratos)
+  async function openFutures({ market = 'futures', symbol, side, qty, type, price: limitPrice, stop, tp, leverage, cid, inst }) {
+    const { X, v } = fx(market);
+    const hedge = await isDual(market);
     const positionSide = hedge ? (side === 'long' ? 'LONG' : 'SHORT') : undefined;
-    try { await F('POST', '/fapi/v1/marginType', { symbol, marginType: 'ISOLATED' }); }
+    try { await X('POST', `${v}/marginType`, { symbol, marginType: 'ISOLATED' }); }
     catch (e) { if (e.code !== -4046) throw e; }   // -4046: ya estaba en aislado
-    await F('POST', '/fapi/v1/leverage', { symbol, leverage });
+    await X('POST', `${v}/leverage`, { symbol, leverage });
 
-    const order = await F('POST', '/fapi/v1/order', {
+    const order = await X('POST', `${v}/order`, {
       symbol, side: side === 'long' ? 'BUY' : 'SELL', positionSide,
       type: type === 'limit' ? 'LIMIT' : 'MARKET',
       quantity: fmt(qty, inst.step),
@@ -243,10 +266,10 @@ export function binance({ key, secret, env = 'live' }) {
 
     // closePosition se puede dejar puesto antes de que entre la limite
     let stopErr = null, tpErr = null;
-    try { await placeStopAlgo(symbol, side, positionSide, 'STOP_MARKET', stop, inst.tick); }
+    try { await placeStopAlgo(market, symbol, side, positionSide, 'STOP_MARKET', stop, inst.tick); }
     catch (e) { stopErr = e.message; }
     if (tp) {
-      try { await placeStopAlgo(symbol, side, positionSide, 'TAKE_PROFIT_MARKET', tp, inst.tick); }
+      try { await placeStopAlgo(market, symbol, side, positionSide, 'TAKE_PROFIT_MARKET', tp, inst.tick); }
       catch (e) { tpErr = e.message; }
     }
     return {
@@ -260,22 +283,26 @@ export function binance({ key, secret, env = 'live' }) {
 
   // Primero se pone el nuevo y despues se quita el viejo: nunca queda sin stop
   async function setStop(pos, stop) {
-    const inst = await instrument('futures', pos.symbol);
-    await placeStopAlgo(pos.symbol, pos.side, pos.position_side, 'STOP_MARKET', stop, inst.tick);
+    const market = pos.market === 'coinm' ? 'coinm' : 'futures';
+    const { X, v } = fx(market);
+    const inst = await instrument(market, pos.symbol);
+    await placeStopAlgo(market, pos.symbol, pos.side, pos.position_side, 'STOP_MARKET', stop, inst.tick);
     for (const ref of pos.stop_refs || []) {
       try {
-        if (ref.algoId) await F('DELETE', '/fapi/v1/algoOrder', { algoId: ref.algoId });
-        else await F('DELETE', '/fapi/v1/order', { symbol: pos.symbol, orderId: ref.orderId });
+        if (ref.algoId) await X('DELETE', `${v}/algoOrder`, { algoId: ref.algoId });
+        else await X('DELETE', `${v}/order`, { symbol: pos.symbol, orderId: ref.orderId });
       } catch (e) { console.error('cancel old stop', e.message); }
     }
   }
 
   async function reduce(pos, qty) {
-    const inst = await instrument('futures', pos.symbol);
+    const market = pos.market === 'coinm' ? 'coinm' : 'futures';
+    const { X, v } = fx(market);
+    const inst = await instrument(market, pos.symbol);
     const hedge = pos.position_side && pos.position_side !== 'BOTH';
     const q = floorStep(Math.min(qty, pos.size), inst.step);
     if (!(q > 0)) return null;
-    return F('POST', '/fapi/v1/order', {
+    return X('POST', `${v}/order`, {
       symbol: pos.symbol, side: pos.side === 'long' ? 'SELL' : 'BUY',
       positionSide: hedge ? pos.position_side : undefined,
       reduceOnly: hedge ? undefined : 'true',
@@ -286,33 +313,38 @@ export function binance({ key, secret, env = 'live' }) {
   const closePosition = pos => reduce(pos, pos.size);
 
   async function orderState(market, symbol, cid) {
-    const o = market === 'futures'
-      ? await F('GET', '/fapi/v1/order', { symbol, origClientOrderId: cid })
-      : await S('GET', '/api/v3/order', { symbol, origClientOrderId: cid });
+    const o = market === 'spot'
+      ? await S('GET', '/api/v3/order', { symbol, origClientOrderId: cid })
+      : await fx(market).X('GET', `${fx(market).v}/order`, { symbol, origClientOrderId: cid });
     const map = { NEW: 'open', PARTIALLY_FILLED: 'partial', FILLED: 'filled' };
     return { state: map[o.status] || 'cancelled', filled_qty: num(o.executedQty), avg_price: num(o.avgPrice) || null };
   }
 
   async function cancelOrder(market, symbol, cid) {
-    if (market === 'futures') return F('DELETE', '/fapi/v1/order', { symbol, origClientOrderId: cid });
-    return S('DELETE', '/api/v3/order', { symbol, origClientOrderId: cid });
+    if (market === 'spot') return S('DELETE', '/api/v3/order', { symbol, origClientOrderId: cid });
+    return fx(market).X('DELETE', `${fx(market).v}/order`, { symbol, origClientOrderId: cid });
   }
 
   // Los stops con closePosition pueden quedar vivos tras cerrar: se limpian
-  async function cleanup(symbol) {
-    try { await F('DELETE', '/fapi/v1/algoOpenOrders', { symbol }); } catch (e) { console.error('cleanup algo', e.message); }
+  async function cleanup(symbol, market = 'futures') {
+    const { X, v } = fx(market);
+    try { await X('DELETE', `${v}/algoOpenOrders`, { symbol }); } catch (e) { console.error('cleanup algo', e.message); }
   }
 
-  async function closedPnl(symbol, side, sinceMs) {
-    const fills = await F('GET', '/fapi/v1/userTrades', { symbol, startTime: sinceMs - 60000, limit: 1000 });
+  // COIN-M liquida en la moneda: el PnL se pasa a USD al precio de salida
+  async function closedPnl(symbol, side, sinceMs, market = 'futures') {
+    const { X, v } = fx(market);
+    const fills = await X('GET', `${v}/userTrades`, { symbol, startTime: sinceMs - 60000, limit: 1000 });
     const closing = side === 'long' ? 'SELL' : 'BUY';
     let pnl = 0, fees = 0, q = 0, notional = 0, last = 0;
     for (const f of fills) {
       pnl += num(f.realizedPnl);
-      if (f.commissionAsset === 'USDT' || f.commissionAsset === 'USDC') fees += num(f.commission);
+      if (market === 'coinm' || f.commissionAsset === 'USDT' || f.commissionAsset === 'USDC') fees += num(f.commission);
       if (f.side === closing) { q += num(f.qty); notional += num(f.qty) * num(f.price); last = Math.max(last, f.time); }
     }
-    return { pnl: pnl - fees, fees, exit_price: q ? notional / q : null, closed_at: last ? Math.floor(last / 1000) : null };
+    const exit = q ? notional / q : null;
+    const usd = market === 'coinm' ? (exit || 0) : 1;
+    return { pnl: (pnl - fees) * usd, fees: fees * usd, exit_price: exit, closed_at: last ? Math.floor(last / 1000) : null };
   }
 
   // Posiciones de futuros cerradas desde sinceMs. userTrades exige simbolo y

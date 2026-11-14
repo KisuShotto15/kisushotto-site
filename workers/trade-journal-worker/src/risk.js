@@ -39,6 +39,91 @@ export const DEFAULT_CHECKLIST = [
   'Estoy tranquilo: no es revancha, no es FOMO, no es aburrimiento',
 ];
 
+// ── Estrategia swing (Binance) ───────────────────────────────────────────────
+// Sin ventana horaria ni bloqueo por noticias: dura dias. Riesgo por operacion
+// y riesgo abierto total, stop obligatorio y apalancamiento bajo fijo.
+export const SWING_HARD = {
+  risk_pct:          { min: 0.1, max: 2 },
+  max_open_risk_pct: { min: 0.5, max: 4 },
+  leverage:          { min: 1,   max: 5 },
+  min_rr:            { min: 1,   max: 10 },
+};
+const SWING_LOOSER = { risk_pct: 'up', max_open_risk_pct: 'up', leverage: 'up', min_rr: 'down' };
+
+export const DEFAULT_SWING_CHECKLIST = [
+  'Tendencia a favor en temporalidad alta (diario / 4h)',
+  'Entrada en zona marcada antes (soporte, resistencia, retest)',
+  'Stop donde la idea queda invalidada, no donde duele menos',
+  'Objetivo con R:R minimo y espacio hasta la siguiente zona',
+  'Sin noticias macro que puedan romper el plan en las proximas horas',
+  'Puedo sostener la posicion varios dias sin mirarla cada minuto',
+];
+
+export const DEFAULT_SWING = {
+  risk_pct: 1,
+  max_open_risk_pct: 3,
+  leverage: 5,
+  min_rr: 1.5,
+  symbols: [],
+  checklist: DEFAULT_SWING_CHECKLIST,
+};
+
+export function normalizeSwing(input = {}, base = DEFAULT_SWING) {
+  const out = {};
+  for (const k of Object.keys(SWING_HARD)) {
+    const v = parseFloat(input[k]);
+    out[k] = clamp(Number.isFinite(v) ? v : parseFloat(base[k] ?? DEFAULT_SWING[k]), SWING_HARD[k]);
+  }
+  out.leverage = Math.floor(out.leverage);
+  out.risk_pct = Math.min(out.risk_pct, out.max_open_risk_pct);
+  const syms = input.symbols ?? base.symbols ?? [];
+  out.symbols = [...new Set((Array.isArray(syms) ? syms : String(syms).split(/[\s,;]+/))
+    .map(s => String(s).trim().toUpperCase()).filter(Boolean))];
+  const cl = input.checklist ?? base.checklist ?? DEFAULT_SWING_CHECKLIST;
+  out.checklist = [...new Set((Array.isArray(cl) ? cl : []).map(s => String(s).trim()).filter(Boolean))].slice(0, 15);
+  return out;
+}
+
+function splitSwing(cur, nxt) {
+  const tighter = {}, looser = {};
+  for (const k of Object.keys(SWING_LOOSER)) {
+    if (nxt[k] === cur[k]) continue;
+    ((SWING_LOOSER[k] === 'up') === (nxt[k] > cur[k]) ? looser : tighter)[k] = nxt[k];
+  }
+  const cs = new Set(cur.symbols);
+  if ([...cs].join() !== nxt.symbols.join()) {
+    const widens = (cs.size > 0 && nxt.symbols.length === 0) || nxt.symbols.some(s => cs.size > 0 && !cs.has(s));
+    (widens ? looser : tighter).symbols = nxt.symbols;
+  }
+  if (cur.checklist.join('\n') !== nxt.checklist.join('\n')) {
+    (cur.checklist.some(c => !nxt.checklist.includes(c)) ? looser : tighter).checklist = nxt.checklist;
+  }
+  return { tighter, looser };
+}
+
+// Compuertas del swing: bloqueo voluntario y presupuesto de riesgo abierto
+export function evaluateSwingGates({ now, rules, lock, equity, open = [] }) {
+  const blocks = [];
+  if (lock && lock.until > now / 1000) blocks.push({ code: 'lock', msg: lock.reason || 'Bloqueado' });
+  if (!(equity > 0)) blocks.push({ code: 'equity', msg: 'No se pudo leer el capital de la cuenta de swing' });
+  const openRiskPct = equity > 0 ? open.reduce((s, p) => s + (p.risk_usd || 0), 0) / equity * 100 : 0;
+  const riskPct = Math.max(0, Math.floor(Math.min(rules.risk_pct, rules.max_open_risk_pct - openRiskPct) * 100) / 100);
+  if (riskPct < rules.risk_pct * MIN_RISK_FRACTION) {
+    blocks.push({ code: 'budget', msg: `Sin presupuesto de riesgo: ${openRiskPct.toFixed(2)}% ya abierto de ${rules.max_open_risk_pct}%` });
+  }
+  return { ok: blocks.length === 0, blocks, base_equity: equity, risk_pct: riskPct,
+           risk_usd: equity > 0 ? equity * riskPct / 100 : 0, open_risk_pct: openRiskPct };
+}
+
+// COIN-M: la cantidad va en contratos de valor fijo en USD (100 en BTC, 10 en el resto)
+export function sizeInverse({ risk_usd, entry, stop, contract_size, fee_rate = 0.0005, slippage = 0.0005 }) {
+  const perContract = contract_size * (Math.abs(entry - stop) / entry + 2 * fee_rate + slippage);
+  if (!(perContract > 0) || !(risk_usd > 0)) return { qty: 0, error: 'Riesgo o stop invalido' };
+  const qty = Math.floor(risk_usd / perContract + 1e-9);
+  if (qty < 1) return { qty: 0, error: `Con ${risk_usd.toFixed(2)} USD de riesgo y ese stop no alcanza ni para 1 contrato (${contract_size} USD). Acerca el stop.` };
+  return { qty, notional: qty * contract_size, risk_usd: qty * perContract, stop_dist_pct: Math.abs(entry - stop) / entry * 100 };
+}
+
 export const DEFAULT_RULES = {
   risk_pct: 1,
   max_open_risk_pct: 2,
@@ -58,6 +143,7 @@ export const DEFAULT_RULES = {
   // Cuentas donde se opera la estrategia (reglas + guardian). El resto es swing:
   // solo lectura, sin reglas ni correcciones.
   vwap_exchanges: ['bitget'],
+  swing: DEFAULT_SWING,
   checklist: DEFAULT_CHECKLIST,
 };
 
@@ -84,6 +170,7 @@ export function normalizeRules(input = {}, base = DEFAULT_RULES) {
   const syms = input.symbols ?? base.symbols ?? [];
   out.symbols = [...new Set((Array.isArray(syms) ? syms : String(syms).split(/[\s,;]+/))
     .map(s => String(s).trim().toUpperCase()).filter(Boolean))];
+  out.swing = normalizeSwing(input.swing || {}, base.swing || DEFAULT_SWING);
   const vx = input.vwap_exchanges ?? base.vwap_exchanges ?? DEFAULT_RULES.vwap_exchanges;
   out.vwap_exchanges = [...new Set((Array.isArray(vx) ? vx : String(vx).split(/[\s,;]+/))
     .map(s => String(s).trim().toLowerCase()).filter(x => ['binance', 'bitget'].includes(x)))];
@@ -114,6 +201,11 @@ export function splitChange(current, proposed) {
   if ([...curVx].sort().join() !== [...nxtVx].sort().join()) {
     // sacar una cuenta de la estrategia la libera de las reglas: es aflojar
     (curVx.some(x => !nxtVx.includes(x)) ? looser : tighter).vwap_exchanges = nxtVx;
+  }
+  if (current.swing && proposed.swing) {
+    const sw = splitSwing(current.swing, proposed.swing);
+    if (Object.keys(sw.tighter).length) tighter.swing = sw.tighter;
+    if (Object.keys(sw.looser).length) looser.swing = sw.looser;
   }
   const curCl = current.checklist, nxtCl = proposed.checklist;
   if (curCl.join('\n') !== nxtCl.join('\n')) {
@@ -380,7 +472,10 @@ export function chooseLeverage({ notional, available, leverage, stop_dist_pct, m
 // positions: [{exchange, market, symbol, side, size, entry, mark, stop}]
 // ledger:    [{id, exchange, market, symbol, side, qty, stop, status, opened_at}]
 // tradingAllowed: si ahora mismo se podria abrir (ventana, noticias, bloqueo).
-export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEquity, now }) {
+// onCrossed: que hacer si el stop que corresponde ya quedo del otro lado del
+// precio. 'close' (VWAP, intradia) cierra; 'alert' (swing) solo avisa, porque
+// cerrar a mercado un swing heredado puede realizar una perdida grande.
+export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEquity, now, onCrossed = 'close' }) {
   const actions = [];
   const key = x => `${x.exchange}|${x.market}|${x.symbol}|${x.side}`;
   const open = new Map(ledger.filter(t => t.status === 'open' || t.status === 'pending').map(t => [key(t), t]));
@@ -388,12 +483,18 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
   const capUsd = baseEquity * HARD.risk_pct.max / 100 * 1.15;   // 15% de holgura por redondeos y deslizamiento
 
   for (const p of positions) {
-    if (p.market !== 'futures') continue;   // spot se revisa aparte (no hay posicion, hay saldo)
+    if (p.market === 'spot') continue;   // spot se revisa aparte (no hay posicion, hay saldo)
+    // COIN-M cuenta en contratos: se pasa a unidades de la moneda para medir riesgo
+    const unit = p.market === 'coinm' && p.size > 0 ? p.notional / p.size / p.entry : 1;
+    const base = p.size * unit;
     const k = key(p);
     seen.add(k);
     const t = open.get(k);
     const long = p.side === 'long';
     const crossed = s => s > 0 && p.mark > 0 && (long ? p.mark <= s : p.mark >= s);
+    const onCross = (reason) => actions.push(onCrossed === 'close'
+      ? { type: 'close', pos: p, reason }
+      : { type: 'alert', pos: p, reason: `${reason}. No se cierra solo: decide tu el cierre o el stop` });
 
     if (!t) {
       if (rules.symbols.length && !rules.symbols.includes(p.symbol)) {
@@ -411,13 +512,13 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
 
     const want = t?.stop || null;
     if (!(p.stop > 0)) {
-      const stop = want || emergencyStop(p, baseEquity * rules.risk_pct / 100);
-      if (!stop || crossed(stop)) actions.push({ type: 'close', pos: p, reason: 'Sin stop y el precio ya paso el nivel de riesgo maximo' });
+      const stop = want || emergencyStop({ ...p, size: base }, baseEquity * rules.risk_pct / 100);
+      if (!stop || crossed(stop)) onCross('Sin stop y el precio ya paso el nivel de riesgo maximo');
       else actions.push({ type: 'set_stop', pos: p, stop, reason: want ? 'El stop desaparecio: se repone' : 'Posicion sin stop: se coloca stop de emergencia al riesgo maximo' });
       continue;
     }
     if (want && (long ? p.stop < want * 0.9999 : p.stop > want * 1.0001)) {
-      if (crossed(want)) actions.push({ type: 'close', pos: p, reason: 'Alejaste el stop y el precio ya cruzo el original: se cierra' });
+      if (crossed(want)) onCross('Alejaste el stop y el precio ya cruzo el original');
       else actions.push({ type: 'set_stop', pos: p, stop: want, reason: 'Alejaste el stop: se devuelve a donde estaba' });
       continue;
     }
@@ -425,21 +526,23 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
       actions.push({ type: 'reduce', pos: p, qty: p.size - t.qty, reason: 'Agregaste tamano a la posicion: se recorta a lo aprobado' });
       continue;
     }
-    const capNotional = baseEquity * rules.max_margin_pct / 100 * rules.leverage;
-    if (p.size * p.entry > capNotional * 1.05) {
-      actions.push({ type: 'reduce', pos: p, qty: p.size - capNotional / p.entry,
-                     reason: `Posicion mayor al ${rules.max_margin_pct}% de margen a ${rules.leverage}x: se recorta` });
-      continue;
+    if (rules.max_margin_pct) {
+      const capNotional = baseEquity * rules.max_margin_pct / 100 * rules.leverage;
+      if (base * p.entry > capNotional * 1.05) {
+        actions.push({ type: 'reduce', pos: p, qty: (base - capNotional / p.entry) / unit,
+                       reason: `Posicion mayor al ${rules.max_margin_pct}% de margen a ${rules.leverage}x: se recorta` });
+        continue;
+      }
     }
-    const risk = Math.abs(p.entry - p.stop) * p.size;
+    const risk = Math.abs(p.entry - p.stop) * base;
     if (risk > capUsd) {
       const keep = capUsd / Math.abs(p.entry - p.stop);
-      actions.push({ type: 'reduce', pos: p, qty: p.size - keep, reason: `Riesgo ${risk.toFixed(2)} USDT supera el 2% de la cuenta: se recorta` });
+      actions.push({ type: 'reduce', pos: p, qty: (base - keep) / unit, reason: `Riesgo ${risk.toFixed(2)} USDT supera el 2% de la cuenta: se recorta` });
     }
   }
 
   for (const [k, t] of open) {
-    if (t.market !== 'futures' || seen.has(k)) continue;
+    if (t.market === 'spot' || seen.has(k)) continue;
     // Una orden limite que aun no entra no tiene posicion: no es un cierre
     if (t.status === 'pending') { actions.push({ type: 'check_pending', trade: t, cancel: !tradingAllowed.ok }); continue; }
     if (now / 1000 - t.opened_at < 90) continue;   // margen para que el exchange refleje la posicion

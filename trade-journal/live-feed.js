@@ -12,6 +12,7 @@ const RECALC_MS = 1000;
 function wsUrl(exchange, market, symbol, interval) {
   if (exchange === 'bitget') return 'wss://ws.bitget.com/v2/ws/public';
   const s = symbol.toLowerCase();
+  if (market === 'coinm') return `wss://dstream.binance.com/ws/${s}@kline_${interval}`;
   return market === 'futures'
     ? `wss://fstream.binance.com/ws/${s}@kline_${interval}`
     : `wss://stream.binance.com:9443/ws/${s}@kline_${interval}`;
