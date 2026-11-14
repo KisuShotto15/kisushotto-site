@@ -862,7 +862,7 @@ $('wk-dlg').onclick = e => { if (e.target === $('wk-dlg')) $('wk-dlg').close(); 
 /* ======================= widget de la app ======================= */
 // El widget de la pantalla de inicio muestra lo que toca, el anillo y la racha.
 function updateWidget() {
-  const n = nativeApp(); if (!n) return;
+  const n = nativeApp(); if (!n?.widget) return; // APK viejo: sin widget
   const t = today(), parts = [rDone(t), fDone(t), wDone(t)];
   n.widget({ title: rut.name || 'Tu rutina', ring: parts.filter(Boolean).length, rut: parts[0], food: parts[1], weight: parts[2],
     streak: fullStreak() }).catch(() => {});
@@ -886,7 +886,7 @@ async function subscribe() {
         : m === 'not set up' ? 'Esta versión de la app no tiene notificaciones: instala el APK más reciente' : 'No se pudo activar: ' + m);
     }
     // v2: la app arma sus notificaciones (con botones para responder)
-    const v = await n.appInfo().then(r => r?.v || 1).catch(() => 1);
+    const v = n.appInfo ? await n.appInfo().then(r => r?.v || 1).catch(() => 1) : 1;
     await api('/push', { method: 'POST', body: JSON.stringify({ fcm: t.token, v }) });
     return;
   }
