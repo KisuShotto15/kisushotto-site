@@ -66,6 +66,7 @@ export const setConfig       = (b)       => api('/config', { method: 'POST', bod
 export const getBySession    = ()        => api('/analytics/by-session');
 export const getBySymbol     = (params)  => api(`/analytics/by-symbol${qs(params)}`);
 export const getBySetup      = ()        => api('/analytics/by-setup');
+export const getByOrigin     = ()        => api('/analytics/by-origin');
 export const getByStrategy   = ()        => api('/analytics/by-strategy');
 export const getHeatmap      = ()        => api('/analytics/heatmap');
 export const getWeekly       = (params)  => api(`/analytics/weekly${qs(params)}`);
@@ -118,4 +119,5 @@ export const exec = {
   deleteAccount: (b)     => api('/exec/accounts/delete', post(b)),
   diag:          ()      => api('/exec/diag'),
   events:        (n)     => api(`/exec/events?limit=${n || 60}`),
+  syncHistory:   ()      => api('/exec/history/sync', post()),
 };

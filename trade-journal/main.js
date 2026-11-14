@@ -1,5 +1,5 @@
 import { swr, invalidate } from './cache.js';
-import { cfg, getConfig, getAnalytics, getTrades, getBySymbol, getLivePositions, getPlans, savePlan, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
+import { exec, cfg, getConfig, getAnalytics, getTrades, getBySymbol, getLivePositions, getPlans, savePlan, ingestBybit, ingestBybitInverse, ingestBybitSpot, ingestBinance, ingestBinanceSpot, ingestCSV, getSyncConfig, setSyncConfig, runSync } from './api.js';
 
 const $ = id => document.getElementById(id);
 
@@ -313,7 +313,7 @@ function renderTopTickers(symbols) {
   el.innerHTML = top.map(s => {
     const pct  = (Math.abs(s.totalPnl) / maxAbs * 100).toFixed(1);
     const pos  = s.totalPnl >= 0;
-    const sign = pos ? '+' : '';
+    const sign = pos ? '+' : '-';
     return `
       <div class="ticker-row">
         <div class="ticker-row-top">
@@ -385,9 +385,10 @@ function renderOpenPositions(data) {
         <span class="open-pos-symbol">${p.symbol}</span>
         <span class="side-badge side-badge-${p.side}" style="font-size: 11px;padding:2px 6px">${p.side.toUpperCase()}</span>
         ${p.legacy ? '<span class="legacy-badge" title="Capital inmovilizado de la etapa anterior: no cuenta en las metricas">heredada</span>' : ''}
+        ${p.exchange && p.exchange !== 'bybit' ? `<span class="legacy-badge" title="${p.terminal ? 'Abierta desde el terminal' : 'Abierta fuera del terminal'}">${p.exchange}${p.terminal ? ' · terminal' : ''}</span>` : ''}
         <span class="open-pos-pnl ${win ? 'pos' : 'neg'}">${fmtPnl(p.unrealized_pnl)}${p.settle_coin && p.settle_coin !== 'USDT' ? ' ' + p.settle_coin : ''}</span>
-        <button class="plan-btn ${planned ? 'done' : ''}" onclick="openPlan(${i})"
-          title="${planned ? 'Plan guardado — editar' : 'Registrar el plan antes de que cierre'}">${planned ? '✓' : '✎'}</button>
+        ${p.terminal ? '<a class="plan-btn done" href="./terminal.html" title="El plan quedo registrado al abrirla desde el terminal">✓</a>' : `<button class="plan-btn ${planned ? 'done' : ''}" onclick="openPlan(${i})"
+          title="${planned ? 'Plan guardado — editar' : 'Registrar el plan antes de que cierre'}">${planned ? '✓' : '✎'}</button>`}
       </div>
       <div class="open-pos-meta">
         <span>${fmtPrice(p.entry_price)} → ${fmtPrice(p.mark_price)}</span>
@@ -692,6 +693,21 @@ window.doIngestCSV = async function() {
   } catch (err) {
     resultEl.className = 'ingest-result show err';
     resultEl.textContent = '✗ ' + err.message;
+  }
+};
+
+window.doSyncExec = async function() {
+  const el = $('result-auto');
+  el.className = 'ingest-result show';
+  el.textContent = 'Sincronizando…';
+  try {
+    const r = await exec.syncHistory();
+    el.className = `ingest-result show ${r.errors?.length ? 'err' : 'ok'}`;
+    el.textContent = r.errors?.length ? '✗ ' + r.errors.join(' | ') : `✓ ${r.added} operaciones nuevas`;
+    if (r.added > 0) { invalidate(); setTimeout(() => init(), 800); }
+  } catch (err) {
+    el.className = 'ingest-result show err';
+    el.textContent = '✗ ' + err.message;
   }
 };
 

@@ -2,6 +2,7 @@
 // Toda la validacion real ocurre en el servidor; aqui solo se muestra.
 
 import { exec } from './api.js';
+import { LiveFeed } from './live-feed.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -404,8 +405,11 @@ window.loadMarket = async () => {
     M = await exec.market({ exchange: $('tExchange').value, market: $('tMarket').value, symbol,
                             interval: $('tInterval').value, anchor: $('tAnchor').value });
     renderIndicators();
+    // Desde aqui los indicadores se actualizan por WebSocket, sin mas peticiones
+    if (M.candles?.length) feed.start(M);
   } catch (e) {
     M = null;
+    feed.stop();
     $('bands').innerHTML = `<div class="tm-err">${esc(errMsg(e))}</div>`;
     $('osc').innerHTML = '';
     $('indStamp').textContent = '';
@@ -413,10 +417,21 @@ window.loadMarket = async () => {
   schedulePreview();
 };
 
+let feedState = 'off';
+const feed = new LiveFeed({
+  onUpdate: snap => { if (M) { M.indicators = snap; renderIndicators(); } },
+  onStatus: st => { feedState = st; if (M?.indicators) renderStamp(); },
+});
+
+function renderStamp() {
+  const label = { live: '● en vivo', connecting: 'conectando…', reconnecting: 'reconectando…', off: 'sin tiempo real' }[feedState] || '';
+  $('indStamp').innerHTML = `<span class="tm-feed ${feedState}">${label}</span> ${new Date(M.indicators.t).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}${M.partial_vwap ? ' · VWAP parcial' : ''}`;
+}
+
 function renderIndicators() {
   const s = M.indicators;
   if (!s) { $('bands').innerHTML = '<div class="tm-sub">Sin velas</div>'; return; }
-  $('indStamp').textContent = `${new Date(s.t).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}${M.partial_vwap ? ' · VWAP parcial' : ''}`;
+  renderStamp();
   const rows = [
     ...[3, 2, 1].map(n => ({ label: `+${n}σ`, v: s.bands[n - 1].up, z: n })),
     { label: 'VWAP', v: s.vwap, z: 0 },
@@ -582,5 +597,14 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   loadMarket();
   loadEvents();
   startPolling();
-  setInterval(() => { if (document.visibilityState === 'visible' && M && S?.window?.in_window) loadMarket(); }, 60000);
+  // Con la pestana oculta el WebSocket se cierra; al volver, si paso mas de un
+  // minuto se recarga el historial (una peticion) para no dejar huecos.
+  let hiddenAt = null;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); feed.stop(); return; }
+    if (!M) return;
+    if (hiddenAt && Date.now() - hiddenAt > 60000) loadMarket();
+    else if (M.candles) feed.start({ ...M, candles: feed.candles.map(k => [k.t, k.o, k.h, k.l, k.c, k.v]) });
+    hiddenAt = null;
+  });
 })();

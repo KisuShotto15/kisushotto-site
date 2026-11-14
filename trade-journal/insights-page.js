@@ -22,7 +22,7 @@ function render(insights) {
   el.innerHTML = `<div class="insights-grid">
     ${insights.map(ins => `
       <div class="insight-card ${ins.severity}">
-        <div class="insight-badge ${ins.severity}">${ICONS[ins.severity] || ''} ${ins.severity}</div>
+        <div class="insight-badge ${ins.severity}">${ICONS[ins.severity] || ''} ${({ critical: 'crítico', warning: 'atención', info: 'info' })[ins.severity] || ins.severity}</div>
         <div class="insight-title">${ins.title}</div>
         <div class="insight-desc">${ins.description}</div>
         <div class="insight-time">${new Date(ins.generated_at * 1000).toLocaleString('es', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</div>

@@ -4,6 +4,7 @@
 
 import { hmacRaw, hex, fmt, num, STABLES, sleep, listOf, xfetch, cachedPrices } from './common.js';
 import { floorStep, roundTick } from '../risk.js';
+import { buildBinancePositions } from '../ingestion.js';
 
 const HOSTS = {
   live: { fapi: 'https://fapi.binance.com',      spot: 'https://api.binance.com' },
@@ -275,6 +276,18 @@ export function binance({ key, secret, env = 'live' }) {
     return { pnl: pnl - fees, fees, exit_price: q ? notional / q : null, closed_at: last ? Math.floor(last / 1000) : null };
   }
 
+  // Posiciones de futuros cerradas desde sinceMs. userTrades exige simbolo y
+  // como maximo 7 dias, asi que se piden solo los simbolos de la estrategia.
+  async function closedHistory(sinceMs, symbols = ['BTCUSDT']) {
+    const start = Math.max(sinceMs, Date.now() - 7 * 86400000 + 60000);
+    const out = [];
+    for (const symbol of symbols) {
+      const fills = await F('GET', '/fapi/v1/userTrades', { symbol, startTime: start, limit: 1000 });
+      out.push(...buildBinancePositions(fills).filter(t => t.exit_time && t.exit_time * 1000 >= sinceMs));
+    }
+    return out;
+  }
+
   // ── Spot ───────────────────────────────────────────────────────────────────
 
   async function spotStopOrders(symbol) {
@@ -343,7 +356,7 @@ export function binance({ key, secret, env = 'live' }) {
   return {
     name: 'binance', equity, futuresPositions, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
-    spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl,
+    spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, closedHistory,
     diag: async () => ({ futures: !!(await F('GET', '/fapi/v1/time', {}, false)).serverTime, hedge: await isDual() }),
   };
 }

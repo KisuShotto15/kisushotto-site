@@ -15,7 +15,29 @@ export function generateInsights(trades) {
     ...checkOvertrade(closed),
     ...checkHourPatterns(closed),
     ...checkDayPatterns(closed),
+    ...checkOutsideTerminal(closed),
   ];
+}
+
+// ── Disciplina: operaciones que no pasaron por el terminal ───────────────────
+// Desde que existe el terminal, cada operacion hecha por fuera se salto las
+// reglas (tamano, stop, ventana, noticias). Se compara su resultado.
+export function checkOutsideTerminal(sorted) {
+  const tracked = sorted.filter(t => t.exec_type === 'terminal' || t.exec_type === 'external');
+  const ext = tracked.filter(t => t.exec_type === 'external');
+  if (!ext.length) return [];
+  const term = tracked.filter(t => t.exec_type === 'terminal');
+  const avg = l => l.length ? l.reduce((s, t) => s + t.pnl, 0) / l.length : 0;
+  const pct = Math.round(ext.length / tracked.length * 100);
+  return [{
+    type: 'outside_terminal',
+    title: `${ext.length} operacion${ext.length > 1 ? 'es' : ''} fuera del terminal (${pct}%)`,
+    description: `Fuera del terminal: ${avg(ext).toFixed(2)} USDT por operacion` +
+      (term.length ? ` contra ${avg(term).toFixed(2)} desde el terminal.` : '.') +
+      ' Esas operaciones no pasaron por el limite de riesgo, la ventana ni el checklist.',
+    severity: avg(ext) < 0 || pct >= 20 ? 'critical' : 'warning',
+    data: JSON.stringify({ external: ext.length, terminal: term.length }),
+  }];
 }
 
 function bwr(trades) {

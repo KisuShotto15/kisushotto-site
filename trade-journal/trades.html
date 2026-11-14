@@ -34,6 +34,10 @@
     </a>
   </nav>
 
+  <nav class="tm-mobile-nav">
+    <a href="./index.html">Dashboard</a><a href="./terminal.html">Terminal</a><a href="./trades.html" class="active">Trades</a><a href="./analytics.html">Analytics</a><a href="./insights.html">Insights</a>
+  </nav>
+
   <div class="page-header">
     <div class="page-header-label">// historial</div>
     <h1>TRADE <span>LIST</span></h1>
@@ -43,36 +47,42 @@
   <div class="filter-bar">
     <select id="fExchange" onchange="applyFilters()">
       <option value="">Exchange</option>
-      <option value="bybit">Bybit</option>
+      <option value="bitget">Bitget</option>
       <option value="binance">Binance</option>
+      <option value="bybit">Bybit</option>
+    </select>
+    <select id="fOrigin" onchange="applyFilters()" title="Por donde entro la operacion">
+      <option value="">Origen</option>
+      <option value="terminal">Terminal</option>
+      <option value="external">Fuera del terminal</option>
     </select>
     <select id="fCategory" onchange="applyFilters()">
       <option value="">Categoría</option>
-      <option value="linear">Linear</option>
-      <option value="inverse">Inverse</option>
+      <option value="linear">Futuros USDT</option>
+      <option value="inverse">Futuros inverse</option>
       <option value="spot">Spot</option>
     </select>
     <select id="fSide" onchange="applyFilters()">
-      <option value="">Side</option>
+      <option value="">Lado</option>
       <option value="long">Long</option>
       <option value="short">Short</option>
     </select>
     <select id="fSession" onchange="applyFilters()">
       <option value="">Sesión</option>
       <option value="asia">Asia</option>
-      <option value="london">London</option>
-      <option value="ny">NY</option>
-      <option value="other">Other</option>
+      <option value="london">Londres</option>
+      <option value="ny">Nueva York</option>
+      <option value="other">Otra</option>
     </select>
     <select id="fStatus" onchange="applyFilters()">
-      <option value="">Status</option>
-      <option value="closed">Closed</option>
-      <option value="open">Open</option>
+      <option value="">Estado</option>
+      <option value="closed">Cerrada</option>
+      <option value="open">Abierta</option>
     </select>
     <input type="text" id="fSymbol" placeholder="Símbolo" style="width:120px" oninput="applyFiltersDebounced()">
     <input type="date" id="fFrom" onchange="applyFilters()" title="Desde">
     <input type="date" id="fTo"   onchange="applyFilters()" title="Hasta">
-    <button class="btn btn-sm" onclick="resetFilters()">↺ Reset</button>
+    <button class="btn btn-sm" onclick="resetFilters()">↺ Limpiar</button>
     <button class="btn btn-sm" onclick="doExport()" title="Exportar CSV con los filtros de fecha aplicados">↓ CSV</button>
   </div>
 
@@ -96,10 +106,10 @@
   <div class="trades-list">
     <div class="tc-header">
       <div class="tc-header-cell">Símbolo</div>
-      <div class="tc-header-cell">Side</div>
-      <div class="tc-header-cell">Open → Close</div>
-      <div class="tc-header-cell">Entry</div>
-      <div class="tc-header-cell">Exit</div>
+      <div class="tc-header-cell">Lado</div>
+      <div class="tc-header-cell">Apertura → Cierre</div>
+      <div class="tc-header-cell">Entrada</div>
+      <div class="tc-header-cell">Salida</div>
       <div class="tc-header-cell">P&L</div>
       <div class="tc-header-cell">Duración</div>
       <div></div>

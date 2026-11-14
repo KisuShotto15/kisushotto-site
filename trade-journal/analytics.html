@@ -34,37 +34,42 @@
     </a>
   </nav>
 
+  <nav class="tm-mobile-nav">
+    <a href="./index.html">Dashboard</a><a href="./terminal.html">Terminal</a><a href="./trades.html">Trades</a><a href="./analytics.html" class="active">Analytics</a><a href="./insights.html">Insights</a>
+  </nav>
+
   <div class="page-header">
     <div class="page-header-label">// edge discovery</div>
     <h1>DEEP <span>ANALYTICS</span></h1>
   </div>
 
   <div class="tab-bar">
-    <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+    <button class="tab-btn active" onclick="switchTab('overview')">Resumen</button>
     <button class="tab-btn" onclick="switchTab('sessions')">Sesiones</button>
     <button class="tab-btn" onclick="switchTab('symbols')">Símbolos</button>
     <button class="tab-btn" onclick="switchTab('setups')">Setups</button>
-    <button class="tab-btn" onclick="switchTab('heatmap')">Heatmap</button>
-    <button class="tab-btn" onclick="switchTab('review')">Review semanal</button>
+    <button class="tab-btn" onclick="switchTab('heatmap')">Mapa de calor</button>
+    <button class="tab-btn" onclick="switchTab('review')">Revisión semanal</button>
+    <button class="tab-btn" onclick="switchTab('discipline')">Disciplina</button>
   </div>
 
   <!-- OVERVIEW -->
   <div class="tab-panel active" id="panel-overview">
-    <div class="kpi-grid" id="overviewKPIs" style="grid-template-columns:repeat(6,1fr)">
-      <div class="kpi-card"><div class="kpi-label">Avg Win</div><div class="kpi-value pos" id="aWin">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Avg Loss</div><div class="kpi-value neg" id="aLoss">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Avg R</div><div class="kpi-value neu" id="aAvgR">—</div><div class="kpi-sub" id="aRCov">—</div></div>
+    <div class="kpi-grid kpi-grid-6" id="overviewKPIs">
+      <div class="kpi-card"><div class="kpi-label">Ganancia media</div><div class="kpi-value pos" id="aWin">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Pérdida media</div><div class="kpi-value neg" id="aLoss">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">R medio</div><div class="kpi-value neu" id="aAvgR">—</div><div class="kpi-sub" id="aRCov">—</div></div>
       <div class="kpi-card"><div class="kpi-label">Total R</div><div class="kpi-value neu" id="aTotalR">—</div><div class="kpi-sub" id="aRRange">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Max Racha Win</div><div class="kpi-value acc" id="aMaxW">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Max Racha Loss</div><div class="kpi-value neg" id="aMaxL">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Mejor racha</div><div class="kpi-value acc" id="aMaxW">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Peor racha</div><div class="kpi-value neg" id="aMaxL">—</div></div>
     </div>
     <div class="chart-wrap">
-      <div class="chart-title">equity curve</div>
+      <div class="chart-title">curva de capital</div>
       <div class="chart-inner" id="analyticsEquity"></div>
     </div>
     <div class="two-col">
       <div class="section-card">
-        <div class="section-card-title">distribución win/loss</div>
+        <div class="section-card-title">ganadoras / perdedoras</div>
         <div id="winLossBars" style="padding-top:8px"></div>
         <div id="winLossLabels" style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size: 13px;color:var(--muted);margin-top:6px;"></div>
       </div>
@@ -90,7 +95,7 @@
     <div class="section-card">
       <div class="section-card-title">detalle sesiones</div>
       <table class="stats-table">
-        <thead><tr><th>Sesión</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th><th>Avg R</th></tr></thead>
+        <thead><tr><th>Sesión</th><th>Trades</th><th>% ganadoras</th><th>PnL total</th><th>PnL medio</th><th>Factor de beneficio</th><th>R medio</th></tr></thead>
         <tbody id="sessionTable"></tbody>
       </table>
     </div>
@@ -111,7 +116,7 @@
     <div class="section-card">
       <div class="section-card-title">detalle símbolos</div>
       <table class="stats-table">
-        <thead><tr><th>Símbolo</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th><th>Avg R</th></tr></thead>
+        <thead><tr><th>Símbolo</th><th>Trades</th><th>% ganadoras</th><th>PnL total</th><th>PnL medio</th><th>Factor de beneficio</th><th>R medio</th></tr></thead>
         <tbody id="symbolTable"></tbody>
       </table>
     </div>
@@ -125,14 +130,14 @@
         <div id="setupPnlChart" style="min-height:200px"></div>
       </div>
       <div class="section-card">
-        <div class="section-card-title">expectancy por setup (avg PnL)</div>
+        <div class="section-card-title">esperanza por setup (PnL medio)</div>
         <div id="setupExpChart" style="min-height:200px"></div>
       </div>
     </div>
     <div class="section-card">
       <div class="section-card-title">detalle setups</div>
       <table class="stats-table">
-        <thead><tr><th>Setup</th><th>Trades</th><th>Win Rate</th><th>Total PnL</th><th>Avg PnL</th><th>P. Factor</th><th>Avg R</th></tr></thead>
+        <thead><tr><th>Setup</th><th>Trades</th><th>% ganadoras</th><th>PnL total</th><th>PnL medio</th><th>Factor de beneficio</th><th>R medio</th></tr></thead>
         <tbody id="setupTable"></tbody>
       </table>
     </div>
@@ -141,11 +146,26 @@
   <!-- HEATMAP -->
   <div class="tab-panel" id="panel-heatmap">
     <div class="section-card">
-      <div class="section-card-title">avg PnL por hora UTC × día de semana (verde = profit, rojo = loss)</div>
+      <div class="section-card-title">PnL medio por hora UTC × día de la semana (verde = ganancia, rojo = pérdida)</div>
       <div id="heatmapChart" style="margin-top:8px"></div>
     </div>
     <div style="margin-top:12px;font-family:'IBM Plex Mono',monospace;font-size: 13px;color:var(--muted)">
       Eje Y: hora UTC · Eje X: L=Lunes … D=Domingo · Celda vacía = sin datos suficientes
+    </div>
+  </div>
+
+  <!-- DISCIPLINA -->
+  <div class="tab-panel" id="panel-discipline">
+    <div class="section-card">
+      <div class="section-card-title">terminal vs fuera del terminal</div>
+      <div style="font-size:14px;color:var(--muted2);line-height:1.5;margin-bottom:10px">
+        Las operaciones del terminal pasaron por tus reglas, el checklist y el tamaño calculado. Las de fuera no.
+        Si las de fuera rinden peor, ahí está tu fuga.
+      </div>
+      <table class="stats-table">
+        <thead><tr><th>Origen</th><th>Trades</th><th>% ganadoras</th><th>PnL total</th><th>PnL medio</th><th>Factor de beneficio</th><th>R medio</th></tr></thead>
+        <tbody id="originTable"></tbody>
+      </table>
     </div>
   </div>
 

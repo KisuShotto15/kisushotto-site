@@ -1729,7 +1729,7 @@ table col.col-hold { width: 80px; }
 .tc-price-change.pos { color: var(--green); }
 .tc-price-change.neg { color: var(--red); }
 .tc-price-change.neu { color: var(--muted2); }
-.tc-pnl-col { display: flex; align-items: center; justify-content: center; }
+.tc-pnl-col { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .tc-pnl-badge {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 14px;
@@ -1965,16 +1965,18 @@ table col.col-hold { width: 80px; }
 }
 
 /* ── Trade rows: 1.5× scale ────────────────────────────────────────────────── */
+/* Columnas flexibles: con anchos fijos la columna de P&L quedaba cortada en
+   pantallas de 1440px y habia que desplazar a la derecha para verla. */
 .tc-header,
 .tc-body {
-  grid-template-columns: 285px 150px 330px 160px 160px 240px 120px 42px;
-  min-width: 1300px;
+  grid-template-columns: minmax(250px, 1.8fr) 110px minmax(240px, 1.8fr) minmax(110px, 1fr) minmax(120px, 1fr) minmax(230px, 1.8fr) 80px 32px;
+  min-width: 1080px;
   gap: 0 10px;
 }
 .tc-header { padding: 12px 28px; }
 .tc-body   { padding: 18px 28px; }
 .tc-header-cell { font-size: 14px; }
-.tc-detail { min-width: 1300px; }
+.tc-detail { min-width: 1080px; }
 .tc-icon   { width: 46px; height: 46px; font-size: 19px; }
 .tc-symbol-col { gap: 14px; }
 .tc-symbol { font-size: 20px; }
@@ -2269,3 +2271,23 @@ table col.col-hold { width: 80px; }
   letter-spacing: 0;
   text-transform: none;
 }
+
+/* Senal de entrada del terminal en el detalle del trade */
+.td-signal { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--muted2); padding: 8px 0 0; }
+.td-signal b { color: var(--text); font-weight: 600; }
+.td-signal.warn { color: var(--amber); }
+
+/* Navegacion en el telefono: la barra lateral se oculta bajo 700px */
+.tm-mobile-nav { display: none; }
+@media (max-width: 700px) {
+  .tm-mobile-nav {
+    display: flex; gap: 6px; overflow-x: auto; margin-bottom: 14px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+  }
+  .tm-mobile-nav a { color: var(--muted2); text-decoration: none; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); white-space: nowrap; }
+  .tm-mobile-nav a.active { color: var(--accent); border-color: var(--accent); }
+}
+
+.kpi-grid.kpi-grid-6 { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 1100px) { .kpi-grid.kpi-grid-6 { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px)  { .kpi-grid.kpi-grid-6 { grid-template-columns: repeat(2, 1fr); } }

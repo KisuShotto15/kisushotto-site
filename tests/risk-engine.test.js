@@ -262,3 +262,12 @@ test('fuera de la ventana con posicion abierta se recomienda cerrar', () => {
   assert.equal(afterHoursAdvice(sessionWindow(ny(18), R), p).level, 'closed');
   assert.equal(afterHoursAdvice(sessionWindow(ny(18), R), []), null);
 });
+
+import { checkOutsideTerminal } from '../workers/trade-journal-worker/src/insights.js';
+test('insight: operaciones fuera del terminal', () => {
+  const t = (exec_type, pnl) => ({ exec_type, pnl, status: 'closed' });
+  assert.deepEqual(checkOutsideTerminal([t('terminal', 5), t('bot', -3)]), []);
+  const r = checkOutsideTerminal([t('terminal', 5), t('terminal', 3), t('external', -8)]);
+  assert.equal(r[0].severity, 'critical');
+  assert.match(r[0].title, /1 operacion fuera/);
+});

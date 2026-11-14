@@ -1,5 +1,5 @@
 import { swr } from './cache.js';
-import { getAnalytics, getBySession, getBySymbol, getBySetup, getHeatmap, getWeekly } from './api.js';
+import { getAnalytics, getBySession, getBySymbol, getBySetup, getHeatmap, getWeekly, getByOrigin } from './api.js';
 import { drawEquityCurve, drawBars, drawHeatmap, drawWinLossBars } from './charts.js';
 
 const $ = id => document.getElementById(id);
@@ -15,7 +15,7 @@ function toast(msg, type = 'ok') {
 // ── Tab switching ─────────────────────────────────────────────────────────────
 window.switchTab = function(tab) {
   document.querySelectorAll('.tab-btn').forEach((btn, i) => {
-    const tabs = ['overview','sessions','symbols','setups','heatmap','review'];
+    const tabs = ['overview','sessions','symbols','setups','heatmap','review','discipline'];
     btn.classList.toggle('active', tabs[i] === tab);
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -36,6 +36,7 @@ async function loadTab(tab) {
       case 'setups':    await loadSetups();   break;
       case 'heatmap':   await loadHeatmap();  break;
       case 'review':    await loadReview();   break;
+      case 'discipline': await loadDiscipline(); break;
     }
   } catch (err) {
     toast('Error: ' + err.message, 'err');
@@ -64,7 +65,7 @@ async function loadOverview() {
   const wlEl = $('winLossBars');
   wlEl.style.height = '20px';
   drawWinLossBars(wlEl, s.winRate, s.closedCount);
-  $('winLossLabels').innerHTML = `<span style="color:var(--green)">${s.winCount} wins</span><span style="color:var(--red)">${s.lossCount} losses</span>`;
+  $('winLossLabels').innerHTML = `<span style="color:var(--green)">${s.winCount} ganadoras</span><span style="color:var(--red)">${s.lossCount} perdedoras</span>`;
 
   const bwEl = $('bestWorstDetail');
   const lines = [];
@@ -72,7 +73,7 @@ async function loadOverview() {
   if (s.bestTrade)  lines.push(`<span style="color:var(--green)">✅ ${s.bestTrade.symbol} +${s.bestTrade.pnl.toFixed(2)} USDT · ${fmtDate(s.bestTrade.entry_time)}</span>`);
   if (s.worstTrade) lines.push(`<span style="color:var(--red)">❌ ${s.worstTrade.symbol} ${s.worstTrade.pnl.toFixed(2)} USDT · ${fmtDate(s.worstTrade.entry_time)}</span>`);
   if (s.avgHoldMinutes) lines.push(`<span>⏱ Hold promedio: ${s.avgHoldMinutes < 60 ? s.avgHoldMinutes + ' min' : Math.round(s.avgHoldMinutes / 60) + 'h'}</span>`);
-  lines.push(`<span style="color:var(--accent)">🔒 Max Drawdown: ${s.maxDrawdown}%</span>`);
+  if (s.maxDrawdown != null) lines.push(`<span style="color:var(--accent)">🔒 Caída máxima: ${s.maxDrawdown}%</span>`);
   bwEl.innerHTML = lines.join('<br>') || '—';
 }
 
@@ -99,6 +100,13 @@ async function loadSetups() {
   drawBars($('setupPnlChart'), data.map(d => ({ label: d.label, value: d.totalPnl, count: d.count })));
   drawBars($('setupExpChart'), data.map(d => ({ label: d.label, value: d.avgPnl,   count: d.count })));
   $('setupTable').innerHTML = renderDimTable(data);
+}
+
+// ── Disciplina ────────────────────────────────────────────────────────────────
+const ORIGIN = { terminal: 'Terminal (con reglas)', external: 'Fuera del terminal', bot: 'Importadas (Bybit/CSV)', manual: 'Manual' };
+async function loadDiscipline() {
+  const { data } = await swr('a:byorigin', () => getByOrigin());
+  $('originTable').innerHTML = renderDimTable(data.map(d => ({ ...d, label: ORIGIN[d.label] || d.label || '—' })));
 }
 
 // ── Heatmap ───────────────────────────────────────────────────────────────────

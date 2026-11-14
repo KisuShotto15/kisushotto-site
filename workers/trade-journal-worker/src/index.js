@@ -208,6 +208,7 @@ export default {
       if (path === '/analytics/by-symbol'    && method === 'GET') return await byDimension('symbol', env, url);
       if (path === '/analytics/by-setup'     && method === 'GET') return await byDimension('setup_tag', env, url);
       if (path === '/analytics/by-strategy'  && method === 'GET') return await byDimension('strategy_tag', env, url);
+      if (path === '/analytics/by-origin'    && method === 'GET') return await byDimension('exec_type', env, url);
       if (path === '/analytics/heatmap'      && method === 'GET') return await heatmap(env);
       if (path === '/analytics/weekly'       && method === 'GET') return await weekly(url, env);
 
@@ -290,6 +291,7 @@ async function listTrades(url, env) {
     ['status',       'status = ?',       v => v],
     ['exchange',     'exchange = ?',     v => v],
     ['category',     'category = ?',     v => v],
+    ['origin',       'exec_type = ?',    v => v],
     ['from',         'entry_time >= ?',  v => parseInt(v)],
     ['to',           'entry_time <= ?',  v => parseInt(v)],
   ];
@@ -459,7 +461,22 @@ async function livePositions(env) {
     'SELECT * FROM live_positions ORDER BY position_value DESC'
   ).all();
 
-  const updatedAt = results.length ? Math.max(...results.map(p => p.updated_at)) : null;
+  // Posiciones de Binance/Bitget: copia que deja el guardian del terminal cada
+  // minuto. Se leen de D1, sin llamar a ningun exchange.
+  const term = await env.DB.prepare('SELECT positions_json, guardian_at FROM risk_state WHERE id = ?').bind('main').first().catch(() => null);
+  let termPos = [];
+  try { termPos = JSON.parse(term?.positions_json || '[]'); } catch { termPos = []; }
+  for (const p of termPos) {
+    const margin = p.leverage ? p.notional / p.leverage : null;
+    results.push({
+      symbol: p.symbol, side: p.side, category: 'linear', size: p.size, entry_price: p.entry, mark_price: p.mark,
+      unrealized_pnl: p.upnl, roi_pct: margin ? p.upnl / margin * 100 : null, leverage: p.leverage,
+      position_value: p.notional, take_profit: p.tp, stop_loss: p.stop, liq_price: p.liq, opened_at: p.opened_at,
+      updated_at: term.guardian_at, settle_coin: 'USDT', exchange: p.exchange, terminal: p.terminal ? 1 : 0,
+    });
+  }
+
+  const updatedAt = results.length ? Math.max(...results.map(p => p.updated_at || 0)) : null;
   const conf = await env.DB.prepare('SELECT legacy_symbols FROM journal_config WHERE id = ?').bind('main').first();
 
   // Capital inmovilizado de la etapa anterior: se muestra pero no cuenta como

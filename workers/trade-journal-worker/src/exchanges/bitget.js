@@ -305,9 +305,29 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     const rows = listOf(d).filter(p => (uta ? p.posSide : p.holdSide) === side);
     if (!rows.length) return null;
     const pnl = rows.reduce((s, p) => s + num(p.netProfit), 0);
-    const last = rows.reduce((m, p) => Math.max(m, num(uta ? p.updatedTime : p.utime)), 0);
+    const last = rows.reduce((m, p) => Math.max(m, num(uta ? p.updatedTime : p.uTime)), 0);
     const exit = num(uta ? rows[0].closePriceAvg : rows[0].closeAvgPrice) || null;
     return { pnl, exit_price: exit, closed_at: last ? Math.floor(last / 1000) : null };
+  }
+
+  // Posiciones de futuros cerradas desde sinceMs, hechas por el terminal o por
+  // fuera. Las usa el journal para no perder operaciones.
+  async function closedHistory(sinceMs) {
+    const d = uta
+      ? await get('/api/v3/position/history-position', { category: PT, startTime: String(sinceMs), limit: '100' })
+      : await get('/api/v2/mix/position/history-position', { productType: PT, startTime: String(sinceMs), limit: '100' });
+    return listOf(d).map(p => ({
+      symbol: p.symbol, category: 'linear',
+      side: (uta ? p.posSide : p.holdSide) === 'short' ? 'short' : 'long',
+      entry_price: num(uta ? p.openPriceAvg : p.openAvgPrice),
+      exit_price: num(uta ? p.closePriceAvg : p.closeAvgPrice) || null,
+      size: num(p.closeTotalPos) || num(p.openTotalPos),
+      pnl: num(p.netProfit),
+      fees: Math.abs(num(uta ? p.openFeeTotal : p.openFee)) + Math.abs(num(uta ? p.closeFeeTotal : p.closeFee)),
+      entry_time: Math.floor(num(uta ? p.createdTime : p.cTime) / 1000),
+      exit_time: Math.floor(num(uta ? p.updatedTime : p.uTime) / 1000),
+      exchange: 'bitget', exchange_id: String(p.positionId),
+    })).filter(t => t.entry_price > 0 && t.exit_time > 0);
   }
 
   // ── Spot ───────────────────────────────────────────────────────────────────
@@ -381,7 +401,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
   return {
     name: 'bitget', equity, futuresPositions, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
-    spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, diag,
+    spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, diag, closedHistory,
   };
 }
 

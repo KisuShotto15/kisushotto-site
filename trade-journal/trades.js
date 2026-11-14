@@ -41,24 +41,42 @@ function strategyOf(t) {
 }
 
 // ── Tag definitions ───────────────────────────────────────────────────────────
+// Setups de la estrategia VWAP (los mismos del ticket del terminal) y, al
+// final, los de antes para poder seguir leyendo el historial viejo.
 const SETUP_TAGS = [
-  'OB', 'FVG', 'FVG+OB', 'BOS', 'CHoCH', 'MSS',
-  'BREAKER', 'RETEST', 'LIQUIDITY', 'STOP HUNT',
-  'SNR', 'RECLAIM', 'IMBALANCE', 'TURTLE SOUP', 'TREND',
+  'VWAP 3σ reversion', 'VWAP 2σ reversion', 'Rechazo en VWAP', 'Ruptura y retest de banda',
+  'FUERA DE PLAN',
 ];
-const STRATEGY_TAGS = [
-  'ICT', 'Smart Money', 'Scalp', 'Swing', 'Reversal',
-  'Continuation', 'Breakout', 'News', 'Grid',
-];
+const STRATEGY_TAGS = ['VWAP', 'Otra'];
+// La clave es lo que se guarda; la etiqueta es lo que se ve
 const EMOTION_TAGS = [
-  { label: 'Calm', color: '#4ade80' },
-  { label: 'Confident', color: '#35c8f1' },
-  { label: 'FOMO', color: '#fbbf24' },
-  { label: 'Fear', color: '#f87171' },
-  { label: 'Greed', color: '#fb923c' },
-  { label: 'Revenge', color: '#f87171' },
-  { label: 'Neutral', color: '#9494aa' },
+  { key: 'calm',      label: 'Tranquilo',  color: '#4ade80' },
+  { key: 'confident', label: 'Confiado',   color: '#35c8f1' },
+  { key: 'anxious',   label: 'Ansioso',    color: '#fbbf24' },
+  { key: 'impatient', label: 'Impaciente', color: '#fbbf24' },
+  { key: 'tired',     label: 'Cansado',    color: '#9494aa' },
+  { key: 'fomo',      label: 'FOMO',       color: '#fb923c' },
+  { key: 'fear',      label: 'Miedo',      color: '#f87171' },
+  { key: 'greed',     label: 'Codicia',    color: '#fb923c' },
+  { key: 'revenge',   label: 'Revancha',   color: '#f87171' },
+  { key: 'neutral',   label: 'Neutral',    color: '#9494aa' },
 ];
+
+// Senal guardada al entrar desde el terminal (sigma VWAP, RSI 6, estocastico)
+function signalOf(t) {
+  if (!t.signal) return null;
+  try { return JSON.parse(t.signal); } catch { return null; }
+}
+function signalText(sig) {
+  if (!sig) return '';
+  const parts = [];
+  if (sig.sigma != null) parts.push(`${sig.sigma >= 0 ? '+' : ''}${sig.sigma}σ VWAP`);
+  if (sig.rsi6 != null) parts.push(`RSI6 ${sig.rsi6}`);
+  if (sig.stoch_k != null) parts.push(`Estoc ${sig.stoch_k}/${sig.stoch_d ?? '—'}${sig.stoch_cross === 'up' ? ' ↑' : sig.stoch_cross === 'down' ? ' ↓' : ''}`);
+  if (sig.interval) parts.push(sig.interval);
+  return parts.join(' · ');
+}
+const ORIGIN_LABEL = { terminal: 'terminal', external: 'externa' };
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function toast(msg, type = 'ok') {
@@ -115,6 +133,7 @@ function getFilters() {
     category: $('fCategory').value || undefined,
     side:     $('fSide').value     || undefined,
     session:  $('fSession').value  || undefined,
+    origin:   $('fOrigin').value   || undefined,
     status:   $('fStatus').value   || undefined,
     symbol:   $('fSymbol').value   || undefined,
     from:     $('fFrom').value ? Math.floor(new Date($('fFrom').value).getTime() / 1000) : undefined,
@@ -129,7 +148,7 @@ window.applyFiltersDebounced = function() {
   filterDebounce = setTimeout(applyFilters, 400);
 };
 window.resetFilters = function() {
-  ['fExchange','fCategory','fSide','fSession','fStatus','fFrom','fTo'].forEach(id => { $(id).value = ''; });
+  ['fExchange','fOrigin','fCategory','fSide','fSession','fStatus','fFrom','fTo'].forEach(id => { $(id).value = ''; });
   $('fSymbol').value = '';
   page = 0;
   load();
@@ -160,6 +179,7 @@ async function load() {
     renderSummary(trades);
     $('pageInfo').textContent = `Página ${page + 1}`;
     $('btnPrev').disabled = page === 0;
+    $('btnNext').disabled = trades.length < 50;
   } catch (err) {
     $('tradesBody').innerHTML = `<div style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size: 15px;padding:20px">${err.message}</div>`;
     toast(err.message, 'err');
@@ -178,7 +198,7 @@ function renderCards(trades) {
     const isLong    = t.side === 'long' || t.side === 'buy';
     const sideClass = isLong ? 'pos' : 'neg';
     const sideArrow = isLong ? '↗' : '↘';
-    const sideLabel = t.side.charAt(0).toUpperCase() + t.side.slice(1);
+    const sideLabel = { long: 'Long', short: 'Short', buy: 'Compra', sell: 'Venta' }[t.side] || t.side;
     const iconChar  = t.symbol.replace(/USDT|USDC|BTC|PERP/g, '').charAt(0) || t.symbol.charAt(0);
 
     let pctChange = 'neu';
@@ -199,7 +219,7 @@ function renderCards(trades) {
           <div class="tc-icon ${sideClass}">${iconChar}</div>
           <div class="tc-symbol-info">
             <div class="tc-symbol">${t.symbol}${t.notes || t.setup_tag ? ' <span class="row-dot"></span>' : ''}</div>
-            <div class="tc-exchange">${t.exchange || ''}${t.session ? ' · ' + t.session : ''}</div>
+            <div class="tc-exchange">${t.exchange || ''}${ORIGIN_LABEL[t.exec_type] ? ' · ' + ORIGIN_LABEL[t.exec_type] : ''}${t.session ? ' · ' + t.session : ''}</div>
           </div>
         </div>
         <div class="tc-side-col">
@@ -323,23 +343,26 @@ window.openPanel = function(id) {
   const rClass = r == null ? '' : r >= 0 ? 'pnl-pos' : 'pnl-neg';
   detail.innerHTML = `
     <div class="td-stats-row">
-      <div class="td-stat"><div class="td-stat-label">Entry</div><div class="td-stat-val">${fmtNum(t.entry_price, 4)}</div></div>
-      <div class="td-stat"><div class="td-stat-label">Exit</div><div class="td-stat-val">${t.exit_price != null ? fmtNum(t.exit_price, 4) : '—'}</div></div>
-      <div class="td-stat"><div class="td-stat-label">Size</div><div class="td-stat-val">${fmtNum(t.size, 4)}</div></div>
+      <div class="td-stat"><div class="td-stat-label">Entrada</div><div class="td-stat-val">${fmtNum(t.entry_price, 4)}</div></div>
+      <div class="td-stat"><div class="td-stat-label">Salida</div><div class="td-stat-val">${t.exit_price != null ? fmtNum(t.exit_price, 4) : '—'}</div></div>
+      <div class="td-stat"><div class="td-stat-label">Tamaño</div><div class="td-stat-val">${fmtNum(t.size, 4)}</div></div>
       <div class="td-stat"><div class="td-stat-label">PnL</div><div class="td-stat-val ${pnlClass}">${fmtPnl(t.pnl)} USDT</div></div>
       <div class="td-stat"><div class="td-stat-label">R</div><div class="td-stat-val ${rClass}">${fmtR(t)}</div></div>
       <div class="td-stat"><div class="td-stat-label">Duración</div><div class="td-stat-val">${fmtHoldTime(t.entry_time, t.exit_time)}</div></div>
       <div class="td-stat"><div class="td-stat-label">Sesión</div><div class="td-stat-val">${t.session || '—'}</div></div>
     </div>
+    ${signalOf(t) ? `<div class="td-signal">Señal al entrar: <b>${signalText(signalOf(t))}</b></div>` : ''}
+    ${t.exec_type === 'external' ? '<div class="td-signal warn">Operación hecha fuera del terminal: no pasó por las reglas ni el checklist. Revisa por qué.</div>' : ''}
     <div class="td-divider"></div>
     <div class="td-main-grid">
 
       <!-- Tags + Emotion -->
       <div class="td-col">
-        <div class="td-section-title">Tags</div>
+        <div class="td-section-title">Setup</div>
         <div class="td-chips" id="tagChips"></div>
+        <div class="tag-grid" id="setupPicks" style="margin:8px 0"></div>
         <div class="td-input-row">
-          <input type="text" id="tagInput" class="td-text-input" placeholder="Add tag…"
+          <input type="text" id="tagInput" class="td-text-input" placeholder="Agregar etiqueta…"
             onkeydown="if(event.key==='Enter'){event.preventDefault();addTag()}">
           <button class="td-add-btn" onclick="addTag()">+</button>
         </div>
@@ -356,18 +379,18 @@ window.openPanel = function(id) {
           ? 'Stop tomado de tu exchange automaticamente. Solo editalo si quieres corregirlo.'
           : 'Se toma solo del exchange si la posicion estaba abierta. Escribelo si falta.'}</div>
         <div class="td-input-row" style="margin-bottom:10px">
-          <input type="number" step="any" id="panelStop" class="td-text-input" placeholder="Stop price…"
+          <input type="number" step="any" id="panelStop" class="td-text-input" placeholder="Precio del stop…"
             oninput="previewRisk()" onkeydown="if(event.key==='Enter'){event.preventDefault();savePanel()}">
         </div>
         <div class="td-risk-preview" id="riskPreview">—</div>
-        <div class="td-section-title" style="margin-top:16px">Notes</div>
-        <textarea id="panelNotes" class="panel-textarea td-notes-area" placeholder="Type your notes here…"></textarea>
+        <div class="td-section-title" style="margin-top:16px">Notas</div>
+        <textarea id="panelNotes" class="panel-textarea td-notes-area" placeholder="¿Seguiste el plan? ¿Qué harías distinto?"></textarea>
       </div>
 
       <!-- Screenshots -->
       <div class="td-col">
-        <div class="td-section-title">Screenshots</div>
-        <div class="td-section-hint">Paste a TradingView, Gyazo or Imgur link</div>
+        <div class="td-section-title">Capturas</div>
+        <div class="td-section-hint">Pega un enlace de TradingView, Gyazo o Imgur</div>
         <div class="td-input-row" style="margin-bottom:10px">
           <input type="text" id="screenshotInput" class="td-text-input" placeholder="https://…"
             onkeydown="if(event.key==='Enter'){event.preventDefault();addScreenshot()}">
@@ -380,13 +403,15 @@ window.openPanel = function(id) {
     <div class="td-divider"></div>
     <div class="td-footer-row">
       <div>
-        <div class="td-section-title" style="margin-bottom:8px">Rule Score</div>
+        <div class="td-section-title" style="margin-bottom:8px">Disciplina (0–10): ¿cuánto seguiste el plan?</div>
         <div class="rule-score-row" id="ruleScoreRow"></div>
       </div>
       <button class="btn btn-accent" onclick="savePanel()">Guardar</button>
     </div>`;
 
   renderChips();
+  $('setupPicks').innerHTML = SETUP_TAGS.map(tag =>
+    `<button class="tag-pill" onclick="pickSetup(${JSON.stringify(tag).replace(/"/g, '&quot;')})">${tag}</button>`).join('');
   renderScreenshots();
   renderStrategyGrid(currentStrategy);
   renderEmotionGrid(t.emotion);
@@ -422,6 +447,11 @@ window.addTag = function() {
   if (!val || currentTags.includes(val)) { input.value = ''; return; }
   currentTags.push(val);
   input.value = '';
+  renderChips();
+};
+
+window.pickSetup = function(tag) {
+  if (!currentTags.includes(tag)) currentTags.push(tag);
   renderChips();
 };
 
@@ -501,8 +531,8 @@ window.previewRisk = function() {
 function renderEmotionGrid(selected) {
   const el = $('tagEmotion');
   el.innerHTML = EMOTION_TAGS.map(e => {
-    const active = selected === e.label.toLowerCase();
-    return `<button class="tag-pill emotion-pill ${active ? 'active' : ''}" data-type="emotion" data-val="${e.label.toLowerCase()}" onclick="selectTag(this,'emotion')" style="--dot:${e.color}">${e.label}</button>`;
+    const active = selected === e.key || selected === e.label;
+    return `<button class="tag-pill emotion-pill ${active ? 'active' : ''}" data-type="emotion" data-val="${e.key}" onclick="selectTag(this,'emotion')" style="--dot:${e.color}">${e.label}</button>`;
   }).join('');
 }
 
@@ -584,8 +614,8 @@ document.addEventListener('keydown', e => {
 });
 
 // La cabecera dice en que zona se estan mostrando las horas
-const th = [...document.querySelectorAll('.tc-header-cell')].find(e => /open/i.test(e.textContent));
-if (th) th.innerHTML = `Open → Close <span class="tc-tz">${tzOffsetLabel()}</span>`;
+const th = [...document.querySelectorAll('.tc-header-cell')].find(e => /apertura/i.test(e.textContent));
+if (th) th.innerHTML = `Apertura → Cierre <span class="tc-tz">${tzOffsetLabel()}</span>`;
 
 $('bulkSetup').innerHTML    = bulkOptions(SETUP_TAGS);
 $('bulkStrategy').innerHTML = bulkOptions(STRATEGY_TAGS);

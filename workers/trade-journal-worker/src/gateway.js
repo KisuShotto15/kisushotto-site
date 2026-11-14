@@ -76,6 +76,7 @@ export class ExchangeGateway {
       if (path === '/accounts' && m === 'POST') return json(await this.serial(() => this.saveAccount(body)));
       if (path === '/accounts/mode' && m === 'POST') return json(await this.serial(() => this.setMode(body)));
       if (path === '/accounts/delete' && m === 'POST') return json(await this.serial(() => this.deleteAccount(body)));
+      if (path === '/history/sync' && m === 'POST') return json(await this.serial(async () => this.syncHistory(await this.context(true), true)));
       if (path === '/guardian' && m === 'POST') return json(await this.serial(() => this.guardian()));
       return json({ error: 'Not found' }, 404);
     } catch (e) {
@@ -281,7 +282,9 @@ export class ExchangeGateway {
     const snap = snapshot(candles, anchorOf);
     const lastAnchor = candles.length ? anchorOf(candles[candles.length - 1].t) : null;
     const partial = candles.length > 0 && anchorOf(candles[0].t) === lastAnchor && candles.length >= limit;
-    return { exchange, market, symbol, interval, anchor, instrument: inst, indicators: snap, partial_vwap: partial };
+    // Las velas van compactas: la pagina sigue calculando en vivo con el WebSocket del exchange
+    return { exchange, market, symbol, interval, anchor, instrument: inst, indicators: snap, partial_vwap: partial,
+             candles: candles.map(k => [k.t, k.o, k.h, k.l, k.c, k.v]) };
   }
 
   // ── Orden ──────────────────────────────────────────────────────────────────
@@ -712,7 +715,15 @@ export class ExchangeGateway {
     // recomienda cerrarlas. El aviso se repite cada 30 min mientras sigan abiertas.
     const adv = afterHoursAdvice(ctx.window, ctx.positions);
     if (adv) await this.logOnce(adv.kind, adv.msg, 'warn');
+    await this.syncHistory(ctx).catch(e => console.error('history', e));
     const patch = { guardian_at: nowSec(), guardian_error: ctx.errors.join(' | ') || null };
+    // Copia de las posiciones para el dashboard: lo lee de D1 sin pasar por el relay
+    const tracked = new Set(ctx.ledger.filter(t => t.status === 'open' && !t.external).map(t => `${t.exchange}|${t.symbol}|${t.side}`));
+    patch.positions_json = JSON.stringify(ctx.positions.map(p => ({
+      exchange: p.exchange, symbol: p.symbol, side: p.side, size: p.size, entry: p.entry, mark: p.mark, upnl: p.upnl,
+      leverage: p.leverage, notional: p.notional, stop: p.stop, tp: p.tp, liq: p.liq, opened_at: p.opened_at,
+      terminal: tracked.has(`${p.exchange}|${p.symbol}|${p.side}`),
+    })));
     if (!ctx.state.egress_at || nowSec() - ctx.state.egress_at > 1800) {
       patch.egress = JSON.stringify(await this.probeEgress().catch(e => ({ error: e.message })));
       patch.egress_at = nowSec();
@@ -770,12 +781,49 @@ export class ExchangeGateway {
     const { rules } = await this.loadRules();
     const score = rules.checklist.length ? Math.round(checklist.filter(c => rules.checklist.includes(c)).length / rules.checklist.length * 10) : null;
     await this.db.prepare(`INSERT INTO trades (id, symbol, category, side, entry_price, exit_price, size, pnl, fees, entry_time, exit_time,
-      strategy_tag, setup_tag, session, exec_type, notes, emotion, rule_score, stop_price, risk_usd, stop_source, status, exchange, exchange_id, created_at)
-      VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?,'ny',?,?,?,?,?,?,'terminal','closed',?,?,?)
+      strategy_tag, setup_tag, session, exec_type, notes, emotion, rule_score, stop_price, risk_usd, stop_source, status, exchange, exchange_id, created_at, signal)
+      VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?,'ny',?,?,?,?,?,?,'terminal','closed',?,?,?,?)
       ON CONFLICT(exchange, exchange_id) WHERE exchange_id IS NOT NULL DO UPDATE SET pnl=excluded.pnl, exit_price=excluded.exit_price, exit_time=excluded.exit_time`)
       .bind(crypto.randomUUID(), t.symbol, t.market === 'spot' ? 'spot' : 'linear', t.side, t.entry || 0, t.exit_price, t.qty || 0, t.pnl,
             t.opened_at, t.closed_at, t.external ? null : 'VWAP', t.setup, t.external ? 'external' : 'terminal', t.notes, t.emotion,
-            t.external ? null : score, t.initial_stop, t.risk_usd, t.exchange, `tj:${t.id}`, nowSec()).run();
+            t.external ? null : score, t.initial_stop, t.risk_usd, t.exchange, `tj:${t.id}`, nowSec(), t.signal || null).run();
+  }
+
+  // Trae al journal las posiciones cerradas en el exchange, incluidas las que no
+  // pasaron por el terminal. Las del terminal ya entran con su stop y su R, asi
+  // que se saltan para no duplicarlas. Cada 30 min: una llamada por cuenta.
+  async syncHistory(ctx, force = false) {
+    const st = ctx.state;
+    if (!force && st.history_at && nowSec() - st.history_at < 1800) return { skipped: true };
+    const since = (st.history_at ? st.history_at - 3600 : nowSec() - 7 * 86400) * 1000;
+    const ledger = await this.loadLedger();
+    const ins = this.db.prepare(`INSERT INTO trades (id, symbol, category, side, entry_price, exit_price, size, pnl, fees,
+      entry_time, exit_time, session, exec_type, status, exchange, exchange_id, created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'external','closed',?,?,?)
+      ON CONFLICT(exchange, exchange_id) WHERE exchange_id IS NOT NULL DO UPDATE SET
+        pnl=excluded.pnl, fees=excluded.fees, exit_price=excluded.exit_price, exit_time=excluded.exit_time, size=excluded.size`);
+    let added = 0;
+    const errors = [];
+    for (const l of ctx.live) {
+      const ex = this.adapter(l.acc);
+      if (!ex.closedHistory) continue;
+      let rows;
+      try { rows = await ex.closedHistory(since, ctx.rules.symbols.length ? ctx.rules.symbols : ['BTCUSDT']); }
+      catch (e) { errors.push(`${l.acc.exchange}: ${e.message}`); continue; }
+      const mine = ledger.filter(t => t.exchange === l.acc.exchange && t.market === 'futures' && t.status !== 'rejected' && t.status !== 'cancelled');
+      const stmts = [];
+      for (const r of rows) {
+        const fromTerminal = mine.some(t => t.symbol === r.symbol && t.side === r.side && r.exit_time >= t.opened_at - 600 &&
+          (t.closed_at == null || Math.abs(t.closed_at - r.exit_time) < 600));
+        if (fromTerminal) continue;
+        stmts.push(ins.bind(crypto.randomUUID(), r.symbol, r.category, r.side, r.entry_price, r.exit_price, r.size, r.pnl, r.fees || 0,
+          r.entry_time, r.exit_time, sessionOf(r.entry_time), r.exchange, r.exchange_id, nowSec()));
+      }
+      if (stmts.length) { await this.db.batch(stmts); added += stmts.length; }
+    }
+    await this.patchState({ history_at: nowSec() });
+    if (errors.length) await this.logOnce('history_error', `Historial: ${errors.join(' | ')}`, 'error');
+    return { ok: true, added, errors };
   }
 
   async guardSpot(ctx) {
@@ -845,6 +893,14 @@ export function afterHoursAdvice(win, positions) {
              msg: `La ventana cierra en menos de 15 min con posicion abierta (${list}). Recomendacion: sal antes del cierre o asegura el stop.` };
   }
   return null;
+}
+
+function sessionOf(unixSec) {
+  const h = new Date(unixSec * 1000).getUTCHours();
+  if (h < 8)  return 'asia';
+  if (h < 12) return 'london';
+  if (h < 21) return 'ny';
+  return 'other';
 }
 
 function bad(msg) { const e = new Error(msg); e.status = 400; return e; }

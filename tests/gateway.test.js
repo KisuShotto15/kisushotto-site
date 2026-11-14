@@ -12,7 +12,7 @@ const W = new URL('../workers/trade-journal-worker/', import.meta.url);
 function d1() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('schema.sql', W), 'utf8'));
-  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution', '0010_egress']) {
+  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution', '0010_egress', '0011_btc_only', '0012_journal_sync']) {
     db.exec(readFileSync(new URL(`migrations/${f}.sql`, W), 'utf8'));
   }
   const stmt = (sql, args = []) => ({
@@ -48,6 +48,7 @@ function fakeExchange() {
     closedPnl: async () => ({ pnl: st.pnl, exit_price: 98, closed_at: Math.floor(Date.now() / 1000) }),
     spotStopOrders: async () => [], spotPlaceStop: async () => {}, openSpot: async () => ({}), spotClose: async () => {}, spotPnl: async () => null,
     diag: async () => ({ ok: true }),
+    closedHistory: async () => st.history || [],
   };
   return { st, api };
 }
@@ -189,6 +190,24 @@ test('dia de noticias: no se opera', async () => {
   DB.raw.exec('UPDATE risk_state SET lock_until = 0');
   const r = await call('/preview', order({ symbol: 'XRPUSDT' }));
   assert.match(r.errors.join(), /noticias/);
+});
+
+test('historial: entran las operaciones hechas por fuera, sin duplicar las del terminal', async () => {
+  const btc = DB.raw.prepare("SELECT * FROM exec_trades WHERE symbol='BTCUSDT' AND status='closed'").get();
+  const row = (o) => ({ category: 'linear', entry_price: 100, exit_price: 101, size: 1, pnl: 1, fees: 0.1,
+                        entry_time: btc.opened_at, exchange: 'bitget', ...o });
+  st.history = [
+    row({ symbol: 'BTCUSDT', side: 'long', exit_time: btc.closed_at + 30, exchange_id: 'p1' }),   // es la del terminal
+    row({ symbol: 'ETHUSDT', side: 'short', exit_time: btc.closed_at, exchange_id: 'p2' }),        // hecha por fuera
+  ];
+  const r = await call('/history/sync', {});
+  assert.equal(r.added, 1);
+  const ext = DB.raw.prepare("SELECT * FROM trades WHERE exchange='bitget' AND exchange_id NOT LIKE 'tj:%'").all();
+  assert.deepEqual(ext.map(t => t.symbol), ['ETHUSDT']);
+  assert.equal(ext[0].exec_type, 'external');
+  // la del terminal guarda la senal de entrada
+  const j = DB.raw.prepare("SELECT signal FROM trades WHERE exchange_id = ?").get(`tj:${btc.id}`);
+  assert.ok(j);
 });
 
 test('guardian: fuera de la ventana y sin nada abierto revisa cada 5 min', async () => {

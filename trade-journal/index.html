@@ -38,19 +38,23 @@
     </a>
   </nav>
 
+  <nav class="tm-mobile-nav">
+    <a href="./index.html" class="active">Dashboard</a><a href="./terminal.html">Terminal</a><a href="./trades.html">Trades</a><a href="./analytics.html">Analytics</a><a href="./insights.html">Insights</a>
+  </nav>
+
   <!-- Dashboard header -->
   <div class="dash-header">
     <div class="dash-title-block">
       <div class="page-header-label">// edge analytics</div>
       <h1 class="dash-title">TRADE <span>JOURNAL</span></h1>
-      <div class="dash-subtitle">Bybit · <span class="sync-dot" id="syncDot">●</span> <span id="syncLabel">Tiempo real</span></div>
+      <div class="dash-subtitle">Bitget · Binance · Bybit · <span class="sync-dot" id="syncDot">●</span> <span id="syncLabel">Tiempo real</span></div>
     </div>
     <div class="dash-header-right">
       <div class="period-selector" id="periodSelector">
         <button class="period-btn active" data-p="start" onclick="setPeriod(this,'start')">Desde el inicio</button>
         <button class="period-btn" data-p="month" onclick="setPeriod(this,'month')">Este mes</button>
         <button class="period-btn" data-p="year"  onclick="setPeriod(this,'year')">Este año</button>
-        <button class="period-btn" data-p="custom" onclick="setPeriod(this,'custom')">Custom</button>
+        <button class="period-btn" data-p="custom" onclick="setPeriod(this,'custom')">Rango</button>
       </div>
       <div class="period-custom hidden" id="customRange">
         <input type="date" id="pFrom">
@@ -82,13 +86,13 @@
     <div class="dash-sidebar">
       <!-- Top Tickers -->
       <div class="sidebar-card">
-        <div class="sidebar-card-title">TRADED TICKERS · <span id="tickerPeriodLabel">ESTE MES</span></div>
+        <div class="sidebar-card-title">SÍMBOLOS OPERADOS · <span id="tickerPeriodLabel">ESTE MES</span></div>
         <div id="topTickersList"><div class="sidebar-loading">Cargando…</div></div>
       </div>
       <!-- Open Positions -->
       <div class="sidebar-card">
         <div class="sidebar-card-title">
-          CRÉDITO ABIERTO
+          POSICIONES ABIERTAS
           <span class="live-badge"><span class="live-dot" id="liveDot"></span><span id="liveStamp">—</span></span>
         </div>
         <div class="open-pnl-total neu" id="openPnlTotal">—</div>
@@ -200,7 +204,7 @@
 <button class="btn btn-accent" id="ingestBtn"
   style="position:fixed;bottom:24px;right:24px;z-index:50;box-shadow:0 4px 20px rgba(53,200,241,0.2)"
   onclick="document.getElementById('ingestModal').classList.remove('hidden')">
-  ↑ Importar trades
+  ↑ Importar / sincronizar
 </button>
 
 <!-- Ingest modal -->
@@ -212,12 +216,18 @@
     </div>
     <div class="modal-body">
       <div class="ingest-section-tabs">
-        <button class="isect-tab active" onclick="switchExchange('bybit',this)">Bybit</button>
+        <button class="isect-tab active" onclick="switchExchange('auto',this)">Bitget / Binance</button>
+        <button class="isect-tab" onclick="switchExchange('bybit',this)">Bybit</button>
         <button class="isect-tab" onclick="switchExchange('binance',this)">Binance</button>
         <button class="isect-tab" onclick="switchExchange('csv',this)">CSV histórico</button>
         <button class="isect-tab" onclick="switchExchange('autosync',this)">⚡ Auto-sync</button>
       </div>
-      <div class="isect-panel active" id="panel-bybit">
+      <div class="isect-panel active" id="panel-auto">
+        <div class="ingest-note">Las cuentas de Bitget y Binance conectadas en el <a href="./terminal.html" style="color:var(--accent)">Terminal</a> se sincronizan solas cada 30 minutos: entran todas las posiciones cerradas, tambien las que abriste fuera del terminal. Las del terminal llegan con su stop, su R y la senal de entrada.</div>
+        <button class="btn btn-accent" onclick="doSyncExec()">Sincronizar ahora</button>
+        <div class="ingest-result" id="result-auto"></div>
+      </div>
+      <div class="isect-panel" id="panel-bybit">
         <div class="ingest-note">⚡ Una sola API key sirve para todos los tipos. Solo requiere permiso de lectura — no puede hacer órdenes.</div>
         <div class="form-row">
           <div class="form-field"><label>API Key</label><input type="password" id="bybit-key" placeholder="..."></div>
