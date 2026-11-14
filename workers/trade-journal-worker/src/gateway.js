@@ -24,6 +24,7 @@ const RELAY_URL = 'https://kisushotto-site.vercel.app/api/exchange-relay';
 const CAL_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 const CAL_TTL = 6 * 3600;
 const CTX_TTL = 8000;
+const GUARD_IDLE_MS = 5 * 60 * 1000;
 
 const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json' } });
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -641,8 +642,19 @@ export class ExchangeGateway {
   // ── Guardian ───────────────────────────────────────────────────────────────
 
   async guardian() {
+    // Cadencia adaptativa para gastar menos en Vercel: cada minuto dentro de la
+    // ventana o con algo abierto; fuera de la ventana y sin nada abierto, cada
+    // 5 min (una posicion abierta por fuera se detecta en 5 min como maximo).
+    const now = Date.now();
+    if (this.flatAt && now - this.lastFull < GUARD_IDLE_MS) {
+      const { rules } = await this.loadRules();
+      if (!sessionWindow(now, rules).in_window) return { ok: true, skipped: true };
+    }
+    this.lastFull = now;
     await this.refreshCalendar().catch(e => console.error('calendar', e));
     const ctx = await this.context(true);
+    const busy = ctx.positions.length || ctx.ledger.some(t => t.status === 'open' || t.status === 'pending');
+    this.flatAt = busy || ctx.errors.length ? null : now;
     const acted = [];
     const g = ctx.gatesLedger;
     // Una posicion externa se juzga como si fuera una orden nueva del terminal

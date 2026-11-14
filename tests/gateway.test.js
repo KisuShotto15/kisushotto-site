@@ -189,5 +189,21 @@ test('dia de noticias: no se opera', async () => {
   DB.raw.exec('UPDATE risk_state SET lock_until = 0');
   const r = await call('/preview', order({ symbol: 'XRPUSDT' }));
   assert.match(r.errors.join(), /noticias/);
+});
+
+test('guardian: fuera de la ventana y sin nada abierto revisa cada 5 min', async () => {
+  clock = Date.UTC(2026, 10, 14, 15, 0);   // sabado
+  st.positions = [];
+  assert.equal((await call('/guardian', {})).skipped, undefined);
+  clock += 60000;
+  assert.equal((await call('/guardian', {})).skipped, true);
+  clock += 5 * 60000;
+  assert.equal((await call('/guardian', {})).skipped, undefined);
+  // con una posicion abierta vuelve a revisar cada minuto
+  st.positions.push({ exchange: 'bitget', market: 'futures', symbol: 'BTCUSDT', side: 'long', size: 1, entry: 100, stop: 99.7, stop_refs: [] });
+  clock += 6 * 60000;
+  await call('/guardian', {});
+  clock += 60000;
+  assert.equal((await call('/guardian', {})).skipped, undefined);
   Date.now = realNow;
 });

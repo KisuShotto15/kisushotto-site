@@ -24,13 +24,14 @@ export const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Lista de una respuesta que a veces es un arreglo y a veces {list|orders|rows: []}
 export const listOf = d => Array.isArray(d) ? d : (d?.list || d?.orders || d?.rows || d?.entrustedList || d?.orderList || []);
 
-// Precios spot cacheados un minuto entre revisiones (vive con el Durable Object)
+// Precios spot cacheados 5 min: solo valoran el saldo spot para la base de
+// riesgo, no deciden entradas. Asi casi todas las revisiones son un solo POST.
 const priceCache = new Map();
 export async function cachedPrices(exchange, symbols, fetchOne) {
   const now = Date.now(), out = new Map(), miss = [];
   for (const s of symbols) {
     const c = priceCache.get(exchange + s);
-    if (c && now - c.t < 60000) out.set(s, c.p); else miss.push(s);
+    if (c && now - c.t < 300000) out.set(s, c.p); else miss.push(s);
   }
   if (miss.length) {
     const got = await fetchOne(miss);

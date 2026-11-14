@@ -562,10 +562,15 @@ function tickClock() {
   $('nyClock').textContent = new Date().toLocaleTimeString('es', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' NY';
 }
 
+// Cada 20 s dentro de la ventana o con posiciones; si no, cada 60 s
 let poll = null;
 function startPolling() {
-  clearInterval(poll);
-  poll = setInterval(() => { if (document.visibilityState === 'visible') loadStatus(); }, 20000);
+  clearTimeout(poll);
+  const active = S && (S.window.in_window || S.positions.length || S.open_trades.length);
+  poll = setTimeout(async () => {
+    if (document.visibilityState === 'visible') await loadStatus();
+    startPolling();
+  }, active ? 20000 : 60000);
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadStatus(); });
 
@@ -577,5 +582,5 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   loadMarket();
   loadEvents();
   startPolling();
-  setInterval(() => { if (document.visibilityState === 'visible' && M) loadMarket(); }, 60000);
+  setInterval(() => { if (document.visibilityState === 'visible' && M && S?.window?.in_window) loadMarket(); }, 60000);
 })();
