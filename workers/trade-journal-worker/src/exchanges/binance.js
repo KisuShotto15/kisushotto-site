@@ -2,7 +2,7 @@
 // Desde dic-2025 los STOP_MARKET/TAKE_PROFIT_MARKET de futuros van por el
 // Algo Service (/fapi/v1/algoOrder); el endpoint normal devuelve -4120.
 
-import { hmacRaw, hex, fmt, num, STABLES, sleep, listOf, xfetch } from './common.js';
+import { hmacRaw, hex, fmt, num, STABLES, sleep, listOf, xfetch, cachedPrices } from './common.js';
 import { floorStep, roundTick } from '../risk.js';
 
 const HOSTS = {
@@ -121,18 +121,30 @@ export function binance({ key, secret, env = 'live' }) {
     });
   }
 
-  async function spotHoldings(quiet = false) {
-    const [acct, prices] = await Promise.all([
-      S('GET', '/api/v3/account', { omitZeroBalances: 'true' }),
-      S('GET', '/api/v3/ticker/price', {}, false),
-    ]);
-    const px = new Map(prices.map(p => [p.symbol, num(p.price)]));
+  // Solo se piden los precios de lo que se tiene: la lista completa pesa mucho
+  // para descargarla cada minuto. equity() y el contexto comparten la lectura.
+  let holdingsP = null;
+  function spotHoldings(quiet = false) {
+    holdingsP ||= readHoldings();
+    return holdingsP.then(rows => rows.filter(h => h.value >= 1 || (!quiet && h.qty > 0 && !h.price)));
+  }
+  async function readHoldings() {
+    const acct = await S('GET', '/api/v3/account', { omitZeroBalances: 'true' });
+    const wanted = acct.balances.filter(b => !STABLES.has(b.asset) && num(b.free) + num(b.locked) > 0).map(b => b.asset + 'USDT');
+    const px = wanted.length ? await cachedPrices('binance', wanted, async miss => {
+      const list = await S('GET', '/api/v3/ticker/price', { symbols: JSON.stringify(miss) }, false).catch(async () => {
+        // un simbolo inexistente hace fallar todo el lote: se piden de a uno
+        const one = await Promise.all(miss.map(sym => S('GET', '/api/v3/ticker/price', { symbol: sym }, false).catch(() => null)));
+        return one.filter(Boolean);
+      });
+      return list.map(p => [p.symbol, num(p.price)]);
+    }) : new Map();
     return acct.balances.map(b => {
       const qty = num(b.free) + num(b.locked);
-      const price = STABLES.has(b.asset) ? 1 : (px.get(b.asset + 'USDT') || px.get(b.asset + 'USDC') || 0);
+      const price = STABLES.has(b.asset) ? 1 : (px.get(b.asset + 'USDT') || 0);
       return { exchange: 'binance', market: 'spot', asset: b.asset, symbol: b.asset + 'USDT',
                qty, free: num(b.free), price, value: qty * price, stable: STABLES.has(b.asset) };
-    }).filter(h => h.value >= 1 || (!quiet && h.qty > 0 && !h.price));
+    });
   }
 
   async function instrument(market, symbol) {

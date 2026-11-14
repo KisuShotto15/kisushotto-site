@@ -4,7 +4,7 @@
 // El modo se detecta al conectar con /api/v3/account/settings.
 // Los datos publicos (instrumentos, velas, precios) van siempre por v3.
 
-import { hmacRaw, base64, fmt, num, STABLES, sleep, listOf, xfetch } from './common.js';
+import { hmacRaw, base64, fmt, num, STABLES, sleep, listOf, xfetch, cachedPrices } from './common.js';
 import { floorStep, roundTick } from '../risk.js';
 
 const BASE = 'https://api.bitget.com';
@@ -79,9 +79,17 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
       .sort((a, b) => a.t - b.t);
   }
 
-  async function spotPrices() {
-    const d = await get('/api/v3/market/tickers', { category: 'SPOT' }, false);
-    return new Map(listOf(d).map(t => [t.symbol, num(t.lastPrice)]));
+  // Solo los simbolos que se tienen: la lista completa de Bitget pesa ~1.2 MB
+  async function spotPrices(symbols) {
+    if (!symbols.length) return new Map();
+    return cachedPrices('bitget', symbols, async miss => {
+      const got = await Promise.all(miss.map(async sym => {
+        const d = await get('/api/v3/market/tickers', { category: 'SPOT', symbol: sym }, false).catch(() => null);
+        const t = d ? listOf(d)[0] : null;
+        return t ? [sym, num(t.lastPrice)] : null;
+      }));
+      return got.filter(Boolean);
+    });
   }
 
   // ── Lectura privada ────────────────────────────────────────────────────────
@@ -105,8 +113,13 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     };
   }
 
-  async function spotHoldings(quiet = false) {
-    const px = await spotPrices();
+  // equity() y el contexto comparten la misma lectura
+  let holdingsP = null;
+  function spotHoldings(quiet = false) {
+    holdingsP ||= readHoldings();
+    return holdingsP.then(rows => rows.filter(h => h.value >= 1 || (!quiet && h.qty > 0 && !h.price)));
+  }
+  async function readHoldings() {
     let rows;
     if (uta) {
       const a = await get('/api/v3/account/assets');
@@ -114,11 +127,12 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     } else {
       rows = listOf(await get('/api/v2/spot/account/assets')).map(x => ({ coin: x.coin, qty: num(x.available) + num(x.frozen) + num(x.locked), free: num(x.available) }));
     }
+    const px = await spotPrices(rows.filter(r => !STABLES.has(r.coin) && r.qty > 0).map(r => r.coin + 'USDT'));
     return rows.map(r => {
-      const p = STABLES.has(r.coin) ? 1 : (px.get(r.coin + 'USDT') || px.get(r.coin + 'USDC') || 0);
+      const p = STABLES.has(r.coin) ? 1 : (px.get(r.coin + 'USDT') || 0);
       return { exchange: 'bitget', market: 'spot', asset: r.coin, symbol: r.coin + 'USDT', qty: r.qty, free: r.free,
                price: p, value: r.qty * p, stable: STABLES.has(r.coin) };
-    }).filter(h => h.value >= 1 || (!quiet && h.qty > 0 && !h.price));
+    });
   }
 
   async function stopOrders() {
@@ -331,7 +345,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
           price: limit, size: fmt(qty, inst.step), clientOid: cid });
     await sleep(800);
     const st = await orderState('spot', symbol, cid).catch(() => null);
-    const holdings = await spotHoldings();
+    const holdings = await readHoldings();   // lectura fresca tras comprar
     const free = holdings.find(h => h.asset === inst.base)?.free || 0;
     const filled = floorStep(Math.min(free, st?.filled_qty || qty), inst.step);
     let stopErr = null;
@@ -347,7 +361,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
       await (uta ? post('/api/v3/trade/cancel-strategy-order', { orderId: o.orderId })
                  : post('/api/v2/spot/trade/cancel-plan-order', { orderId: o.orderId })).catch(() => {});
     }
-    const free = (await spotHoldings()).find(h => h.asset === inst.base)?.free || 0;
+    const free = (await readHoldings()).find(h => h.asset === inst.base)?.free || 0;
     const q = floorStep(free, inst.step);
     if (!(q > 0)) return null;
     const px = await price('spot', symbol);

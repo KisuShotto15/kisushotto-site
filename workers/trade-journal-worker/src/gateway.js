@@ -256,6 +256,7 @@ export class ExchangeGateway {
       open_trades: ctx.ledger.filter(t => t.status === 'open' || t.status === 'pending'),
       guardian_at: ctx.state.guardian_at, guardian_error: ctx.state.guardian_error,
       egress: ctx.state.egress ? JSON.parse(ctx.state.egress) : null,
+      advice: afterHoursAdvice(ctx.window, ctx.positions),
     };
   }
 
@@ -694,6 +695,11 @@ export class ExchangeGateway {
     }
 
     await this.guardSpot(ctx).catch(e => this.log('guardian_error', `spot: ${e.message}`, 'error'));
+
+    // Fuera de la ventana las posiciones siguen abiertas con su stop, pero se
+    // recomienda cerrarlas. El aviso se repite cada 30 min mientras sigan abiertas.
+    const adv = afterHoursAdvice(ctx.window, ctx.positions);
+    if (adv) await this.logOnce(adv.kind, adv.msg, 'warn');
     const patch = { guardian_at: nowSec(), guardian_error: ctx.errors.join(' | ') || null };
     if (!ctx.state.egress_at || nowSec() - ctx.state.egress_at > 1800) {
       patch.egress = JSON.stringify(await this.probeEgress().catch(e => ({ error: e.message })));
@@ -813,6 +819,20 @@ export class ExchangeGateway {
     }
     return { ...(await this.probeEgress()), accounts: checks };
   }
+}
+
+export function afterHoursAdvice(win, positions) {
+  if (!positions.length) return null;
+  const list = positions.map(p => `${p.symbol} ${p.side}`).join(', ');
+  if (!win.in_window) {
+    return { kind: 'after_hours', level: 'closed',
+             msg: `Ventana cerrada con posicion abierta (${list}). Recomendacion: cierrala lo antes posible. El stop sigue obligatorio y el guardian lo vigila.` };
+  }
+  if (win.minutes_to_end != null && win.minutes_to_end <= 15) {
+    return { kind: 'closing_soon', level: 'soon',
+             msg: `La ventana cierra en menos de 15 min con posicion abierta (${list}). Recomendacion: sal antes del cierre o asegura el stop.` };
+  }
+  return null;
 }
 
 function bad(msg) { const e = new Error(msg); e.status = 400; return e; }

@@ -79,6 +79,13 @@ function render() {
   const only = S.rules.symbols.length === 1 ? S.rules.symbols[0] : null;
   if (only && $('tSymbol').value !== only) { $('tSymbol').value = only; loadMarket(); }
   $('tSymbol').readOnly = !!only;
+  const adv = S.advice;
+  $('advice').classList.toggle('hidden', !adv);
+  if (adv) {
+    $('advice').className = `tm-advice ${adv.level}`;
+    $('advice').innerHTML = `<div>${esc(adv.msg)}</div><div class="tm-row">${S.positions.map((p, i) =>
+      `<button class="btn btn-sm btn-danger" onclick="posClose(${i}, 100)">Cerrar ${esc(p.symbol)} ${p.side.toUpperCase()}</button>`).join('')}</div>`;
+  }
   renderWindow();
   renderNews();
   renderDay();

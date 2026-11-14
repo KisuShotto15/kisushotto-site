@@ -24,6 +24,21 @@ export const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Lista de una respuesta que a veces es un arreglo y a veces {list|orders|rows: []}
 export const listOf = d => Array.isArray(d) ? d : (d?.list || d?.orders || d?.rows || d?.entrustedList || d?.orderList || []);
 
+// Precios spot cacheados un minuto entre revisiones (vive con el Durable Object)
+const priceCache = new Map();
+export async function cachedPrices(exchange, symbols, fetchOne) {
+  const now = Date.now(), out = new Map(), miss = [];
+  for (const s of symbols) {
+    const c = priceCache.get(exchange + s);
+    if (c && now - c.t < 60000) out.set(s, c.p); else miss.push(s);
+  }
+  if (miss.length) {
+    const got = await fetchOne(miss);
+    for (const [s, p] of got) { priceCache.set(exchange + s, { t: now, p }); out.set(s, p); }
+  }
+  return out;
+}
+
 // ── Transporte ───────────────────────────────────────────────────────────────
 // Binance y Bitget bloquean las IPs de Cloudflare Workers. Las llamadas salen
 // por un relay en Vercel (api/exchange-relay.js). Las que se piden en el mismo

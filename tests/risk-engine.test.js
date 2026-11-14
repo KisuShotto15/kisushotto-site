@@ -5,6 +5,7 @@ import {
   lockFromGates, sizeOrder, chooseLeverage, guardianPlan, todayStats, nyParts, weekStart, DEFAULT_RULES, floorStep,
 } from '../workers/trade-journal-worker/src/risk.js';
 import { vwapBands, rsi, stochRsi, snapshot, utcAnchor } from '../workers/trade-journal-worker/src/indicators.js';
+import { afterHoursAdvice } from '../workers/trade-journal-worker/src/gateway.js';
 
 const R = normalizeRules(DEFAULT_RULES);
 // Martes 2026-11-10, NY en horario estandar (UTC-5)
@@ -252,4 +253,12 @@ test('RSI y RSI estocastico en rango', () => {
   const snap = snapshot(closes.map((c, i) => ({ t: i * 60000, o: c, h: c + 1, l: c - 1, c, v: 10 })), utcAnchor);
   assert.equal(snap.bands.length, 3);
   assert.ok(snap.rsi6 >= 0 && snap.rsi6 <= 100);
+});
+
+test('fuera de la ventana con posicion abierta se recomienda cerrar', () => {
+  const p = [{ symbol: 'BTCUSDT', side: 'long' }];
+  assert.equal(afterHoursAdvice(sessionWindow(ny(10), R), p), null);
+  assert.equal(afterHoursAdvice(sessionWindow(ny(16, 50), R), p).level, 'soon');
+  assert.equal(afterHoursAdvice(sessionWindow(ny(18), R), p).level, 'closed');
+  assert.equal(afterHoursAdvice(sessionWindow(ny(18), R), []), null);
 });
