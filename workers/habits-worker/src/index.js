@@ -490,6 +490,19 @@ async function weeklySummary(env, user, today) {
   };
 }
 
+// Llamada a la API de USDA con la llave del worker. Los detalles de un alimento
+// no cambian: se guardan un mes en la cache de Cloudflare.
+async function usda(env, p, cacheable = false) {
+  const cacheKey = new Request('https://usda.cache' + p);
+  if (cacheable) { const hit = await caches.default.match(cacheKey); if (hit) return json(await hit.json()); }
+  const sep = p.includes('?') ? (p.endsWith('?') ? '' : '&') : '?';
+  const r = await fetch(`https://api.nal.usda.gov/fdc/v1${p}${sep}api_key=${env.USDA_API_KEY || 'DEMO_KEY'}`);
+  if (!r.ok) return err(`USDA ${r.status}`, r.status === 429 ? 429 : 502);
+  const data = await r.json();
+  if (cacheable) await caches.default.put(cacheKey, new Response(JSON.stringify(data), { headers: { 'Cache-Control': 'max-age=2592000' } }));
+  return json(data);
+}
+
 async function handleHealth(path, request, env) {
   const method = request.method;
   if (path === '/health/vapid' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null, fcm: !!serviceAccount(env) });
@@ -498,6 +511,15 @@ async function handleHealth(path, request, env) {
   if (!user) return err('Sesion invalida', 401);
 
   if (path === '/health/me' && method === 'GET') return json({ email: user });
+  // USDA (buscar alimentos y micronutrientes): la llave es del worker (secret
+  // USDA_API_KEY), asi nadie la pone a mano. Solo para cuentas con sesion.
+  if (path === '/health/usda/search' && method === 'GET') {
+    const q = (new URL(request.url).searchParams.get('q') || '').slice(0, 100);
+    if (!q.trim()) return err('falta q');
+    return usda(env, `/foods/search?query=${encodeURIComponent(q)}&dataType=Foundation,SR%20Legacy&pageSize=10`);
+  }
+  const fm = path.match(/^\/health\/usda\/food\/(\d{1,10})$/);
+  if (fm && method === 'GET') return usda(env, `/food/${fm[1]}?`, true);
   // Fotos de progreso: una por mes, en KV (privadas por cuenta)
   if (path === '/health/photos' && method === 'GET') {
     const { keys } = await env.PUSH_KV.list({ prefix: `photo:${user}|` });

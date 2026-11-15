@@ -101,3 +101,16 @@ jobs:
           else
             echo "Sin FIREBASE_SERVICE_ACCOUNT: la app Android no tendra recordatorios"
           fi
+
+      # Nutricion de Health: la llave de USDA (busqueda de alimentos) vive en el
+      # secret USDA_API_KEY de GitHub; sin ella el worker usa DEMO_KEY (con limite).
+      - name: USDA secret
+        if: matrix.worker == 'habits-worker'
+        env:
+          USDA: ${{ secrets.USDA_API_KEY }}
+        run: |
+          if [ -n "$USDA" ]; then
+            printf '%s' "$USDA" | npx --yes wrangler@4 secret put USDA_API_KEY
+          else
+            echo "Sin USDA_API_KEY: la busqueda de alimentos usa DEMO_KEY"
+          fi
