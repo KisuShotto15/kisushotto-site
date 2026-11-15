@@ -122,6 +122,11 @@
   .note{margin-top:14px;color:var(--text2);white-space:pre-wrap;}
   .img{display:inline-block;margin-top:14px;color:var(--muted);font-size:13px;}
   .finished{grid-column:1/-1;text-align:center;padding:16px 0;}
+  /* Sin rutinas propias: cargar la A/B con un toque */
+  .loadab{display:flex;align-items:center;gap:14px;margin-bottom:12px;padding:14px 16px;border-radius:16px;
+    background:var(--h-rutina-soft);border:1px solid rgba(79,134,255,.35);}
+  .loadab div{flex:1;min-width:0;} .loadab b{display:block;font-size:15px;} .loadab span{font-size:13px;color:var(--text2);}
+  .loadab[hidden]{display:none;}
   /* Serie por repeticiones: el numero grande es el contador */
   .repbox{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;}
   .repbox h2{margin:0;}
@@ -273,6 +278,10 @@
   </div>
 
   <div class="steps" id="steps"></div>
+  <div class="loadab" id="loadAB" hidden>
+    <div><b>Tu rutina de fuerza A/B</b><span>Día A · Empuje + piernas y Día B · Jalón + core, alternadas. Al fallo, descanso 2:30.</span></div>
+    <button class="btn blue" id="loadABBtn">Cargar</button>
+  </div>
   <section class="hero" id="hero"></section>
   <div class="tiles" id="tiles"></div>
   <footer id="foot"></footer>
@@ -421,6 +430,7 @@ function renderHead(){
   $('add').onclick=()=>openEditor(null);
   if($('edit'))$('edit').onclick=()=>openEditor(active);
   $('foot').textContent=r.note||'';
+  $('loadAB').hidden=custom.length>0;
 }
 function renderSteps(){
   const r=getR(),el=$('steps');
@@ -1028,15 +1038,19 @@ $('edParse').onclick=()=>{
 const uidR=k=>'r'+Date.now().toString(36)+k;
 document.querySelectorAll('[data-tpl]').forEach(b=>b.onclick=()=>{
   const k=b.dataset.tpl,copy=tp=>({name:tp.name,restBetween:tp.restBetween,items:tp.items.map(x=>({...x}))});
-  if(k==='AB'){
-    if(T.i!==null)stopAll();
-    const a={id:uidR('a'),...copy(TEMPLATES[0])},bb={id:uidR('b'),...copy(TEMPLATES[1])};
-    a.next=bb.id;bb.next=a.id;custom.push(a,bb);active=a.id;
-    sel=null;load();save();renderAll();$('ed').close();return;
-  }
+  if(k==='AB'){loadAB();$('ed').close();return;}
   const tp=copy(TEMPLATES.find(x=>x.key===k));
   $('edName').value=tp.name;$('edRest').value=tp.restBetween;draft=tp.items;renderDraft();
 });
+// Dia A + Dia B alternadas (las plantillas), y queda elegida la A
+function loadAB(){
+  if(T.i!==null)stopAll();
+  const copy=tp=>({name:tp.name,restBetween:tp.restBetween,items:tp.items.map(x=>({...x}))});
+  const a={id:uidR('a'),...copy(TEMPLATES[0])},bb={id:uidR('b'),...copy(TEMPLATES[1])};
+  a.next=bb.id;bb.next=a.id;custom.push(a,bb);active=a.id;
+  sel=null;haptic();load();save();renderAll();
+}
+$('loadABBtn').onclick=loadAB;
 $('edSave').onclick=()=>{
   const name=$('edName').value.trim(),list=collect().filter(x=>x.name);
   const restBetween=Math.max(0,Math.round(num($('edRest').value,0)));
