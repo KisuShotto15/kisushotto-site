@@ -470,7 +470,9 @@ let bm = null;         // estado de Metricas (peso, meta, sesiones)
 const weights = () => (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
 const profile = () => nState?.profiles?.[nState.activeProfile];
 // Un dia esta completo con: rutina + comida registrada + algun peso en esa semana (7 dias)
-const rDone = d => rutinaHist.includes(d);
+// El dia de descanso de la semana (Rutina > Opciones) cuenta como rutina hecha
+const restDayOf = d => Number.isInteger(rut.prefs?.restDay) && rut.prefs.restDay >= 0 && new Date(d + 'T00:00:00').getDay() === rut.prefs.restDay;
+const rDone = d => rutinaHist.includes(d) || restDayOf(d);
 const fDone = d => !!nlog[d];
 const wDone = d => weights().some(e => e.date <= d && e.date > shift(d, -7));
 const full = d => rDone(d) && fDone(d) && wDone(d);
@@ -557,7 +559,7 @@ function paintRutina(r) {
   $('r-go').textContent = completed ? 'Completada ✓' : n ? `Continuar · ${n}/${total} →` : 'Empezar →';
   $('r-go').classList.toggle('done', completed);
   const took = r.date === today() && r.t0 && r.t1 ? Math.max(1, Math.round((r.t1 - r.t0) / 60000)) : null;
-  $('c-rut-t').textContent = completed ? (took ? `${took} min` : 'Hecha') : n ? `${n}/${total}` : `~${mins} min`;
+  $('c-rut-t').textContent = completed ? (took ? `${took} min` : 'Hecha') : restDayOf(today()) && !n ? 'Descanso' : n ? `${n}/${total}` : `~${mins} min`;
   $('r-left').hidden = !list.length;
   $('r-left').className = 'pill' + (pending.length ? '' : ' ok');
   $('r-left').textContent = pending.length ? `~${left} min restantes` : 'Completada ✓';
@@ -874,7 +876,7 @@ const planScore = d => !nlog[d] || nlog[d].skipped ? 0 : nlog[d].partial ? 0.5 :
 let selDay = null; // dia tocado en la franja
 function paintWeek() {
   const isos = [...Array(7)].map((_, i) => shift(today(), i - 6));
-  $('wk-r').textContent = `${isos.filter(rDone).length}/7`;
+  $('wk-r').textContent = `${isos.filter(d => rutinaHist.includes(d)).length}/7`;
   const ps = isos.reduce((a, d) => a + planScore(d), 0);
   $('wk-n').textContent = `${+ps.toFixed(1)}/7`;
   const es = weights(), last = es[es.length - 1];
@@ -885,7 +887,7 @@ function paintWeek() {
   } else if (bm) $('wk-w').textContent = '—';
   const L = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   $('wk-strip').innerHTML = isos.map((d, i) => `<div data-d="${d}" class="${i === 6 ? 'today' : ''}${d === selDay ? ' sel' : ''}">${i === 6 ? 'Hoy' : L[new Date(d + 'T00:00:00').getDay()]}
-    <span class="${rDone(d) ? 'on' : ''}${full(d) ? ' full' : ''}"></span><em class="${planScore(d) === 1 ? 'on' : planScore(d) ? 'half' : ''}"></em></div>`).join('');
+    <span class="${rutinaHist.includes(d) ? 'on' : ''}${full(d) ? ' full' : ''}"></span><em class="${planScore(d) === 1 ? 'on' : planScore(d) ? 'half' : ''}"></em></div>`).join('');
   $('wk-strip').querySelectorAll('[data-d]').forEach(el => el.onclick = () => { selDay = selDay === el.dataset.d ? null : el.dataset.d; haptic('tick'); paintWeek(); });
   // Detalle del dia tocado: rutina, plan y peso
   const box = $('wk-day');
@@ -900,7 +902,7 @@ function paintWeek() {
 /* ======================= tu semana ======================= */
 function openWeek() {
   const t = today(), from = shift(t, -6), isos = [...Array(7)].map((_, i) => shift(t, i - 6));
-  const fullN = isos.filter(full).length, trains = isos.filter(rDone).length, ps = +isos.reduce((a, d) => a + planScore(d), 0).toFixed(1);
+  const fullN = isos.filter(full).length, trains = isos.filter(d => rutinaHist.includes(d)).length, ps = +isos.reduce((a, d) => a + planScore(d), 0).toFixed(1);
   const es = weights(), last = es[es.length - 1], prev = last && [...es].reverse().find(e => e.date < from);
   const dw = last && prev ? +(last.weight - prev.weight).toFixed(1) : null;
   // series y records de la semana (Rutina las anota en Metricas)

@@ -613,14 +613,17 @@ async function dispatchHealthReminder(env) {
       const nlog = (await healthGet(env, user, 'nutrition_log')) || {};
       if (!nlog[date]) await sendHealthPush(env, user, await checkinPush(env, user, date));
     }
+    // Dia de descanso de la semana (Rutina > Opciones): sin avisos de rutina
+    const restDay = async () => { const ru = await healthGet(env, user, 'rutina'); const d = ru?.prefs?.restDay;
+      return Number.isInteger(d) && d >= 0 && new Date(date + 'T00:00:00Z').getUTCDay() === d; };
     // Segundo aviso de la rutina, 2 h despues, si sigue sin hacerse
-    if (r.enabled && hhmm === addMin(r.time, 120) && (await healthGet(env, user, 'reminder2_sent')) !== date) {
+    if (r.enabled && hhmm === addMin(r.time, 120) && !(await restDay()) && (await healthGet(env, user, 'reminder2_sent')) !== date) {
       await healthSet(env, user, 'reminder2_sent', date);
       const rutina = await healthGet(env, user, 'rutina');
       if (!rutina?.history?.includes(date)) await sendHealthPush(env, user, rutinaPush2(rutina, date));
     }
     if (hhmm !== r.time) continue;
-    if (r.enabled && (await healthGet(env, user, 'reminder_sent')) !== date) {
+    if (r.enabled && (await healthGet(env, user, 'reminder_sent')) !== date && !(await restDay())) {
       await healthSet(env, user, 'reminder_sent', date);
       const rutina = await healthGet(env, user, 'rutina');
       if (!rutina?.history?.includes(date)) await sendHealthPush(env, user, rutinaPush(rutina, date)); // si ya la hizo, no avisa

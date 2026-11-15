@@ -135,29 +135,59 @@ export const BUILTIN={id:'estiramiento',name:'Equilibrio + estiramiento',builtin
   blocks:DATA.map((b,k)=>({name:BLOCK_NAMES[k]||b.block,items:b.items}))};
 
 // Ejercicio propio: {name,type:'reps'|'time',sets,reps,secs,rest,kg,sides,note}
+// y opcionales: fail (al fallo), range ('6-10'), rir ('1-2'), ss (letra de
+// superserie: los seguidos con la misma letra se alternan), warm (series de
+// calentamiento al 50 %), w (lleva peso: el kg se ve siempre), step (kg por toque)
 export function phasesOf(x){
   const out=[],sides=x.sides?['derecho','izquierdo']:[''];
+  for(let w=1;w<=(x.warm||0);w++)out.push({l:`Calentamiento ${w}/${x.warm}`,s:0,reps:x.reps,warm:true,set:0,side:null});
+  if(x.warm&&x.rest)out.push({l:'Descanso',s:60,rest:true});
   for(let s=1;s<=x.sets;s++){
     sides.forEach(sd=>out.push({l:`Serie ${s}/${x.sets}`+(sd?' · '+sd:''),s:x.type==='time'?x.secs:0,reps:x.type==='reps'?x.reps:0,set:s,side:sd||null}));
     if(x.rest&&s<x.sets)out.push({l:'Descanso',s:x.rest,rest:true});
   }
   return out;
 }
-export const doseOf=x=>`${x.sets} × ${x.fail?'al fallo':x.type==='time'?x.secs+' s':x.reps+' reps'}${x.sides?' c/lado':''}${x.kg?' · '+x.kg+' kg':''}`;
+export const doseOf=x=>`${x.sets} × ${x.fail?'al fallo':x.type==='time'?x.secs+' s':(x.range||x.reps)+' reps'}${x.sides?' c/lado':''}${x.rir?' · RIR '+x.rir:''}${x.kg?' · '+x.kg+' kg':''}`;
 // mini: "modo minimo" para dias malos (~10 min que igual cuentan): la incluida con
 // la mitad del tiempo por fase; las propias, 1 serie por ejercicio y descansos cortos.
-export function compile(r,mini=false){
+// deload: semana de descarga (mitad de las series, mismo peso)
+export function compile(r,mini=false,deload=false){
   if(r.builtin){
     const its=r.blocks.flatMap(b=>b.items.map(it=>({...it,block:b.name})));
     return mini?its.map(it=>({...it,phases:it.phases.map(p=>({...p,s:Math.max(15,Math.round(p.s/2)),
       cues:p.cues?.map(c=>({...c,t:Math.round(c.t/2)}))}))})):its;
   }
-  // restBetween: descanso entre un ejercicio y el siguiente (ultima fase del ejercicio)
+  // restBetween: descanso entre un ejercicio (o superserie) y el siguiente
   const rb=mini?Math.min(r.restBetween||0,60):r.restBetween;
-  const n=(r.items||[]).length,between=x=>({l:'Descanso',s:rb,rest:true,between:true});
-  const one=x=>mini?{...x,sets:1}:x;
-  return (r.items||[]).map((x,j)=>({src:j,kg:x.kg||null,name:x.name,dose:doseOf(one(x)),
-    phases:rb>0&&j<n-1?[...phasesOf(one(x)),between(x)]:phasesOf(one(x)),steps:[],note:x.note||'',q:x.name+' exercise',block:'',sets:one(x).sets,reps:x.type==='reps'?x.reps:0,fail:!!x.fail,sides:!!x.sides}));
+  const between=()=>({l:'Descanso',s:rb,rest:true,between:true});
+  const one=x=>mini?{...x,sets:1,warm:0}:deload?{...x,sets:Math.ceil(x.sets/2)}:x;
+  const info=(y,j)=>({src:j,kg:y.kg||null,name:y.name,dose:doseOf(y),note:y.note||'',sets:y.sets,reps:y.type==='reps'?y.reps:0,
+    fail:!!y.fail,sides:!!y.sides,range:y.range||null,rir:y.rir||null,w:!!y.w,step:y.step||null});
+  // Grupos: ejercicios seguidos con la misma letra de superserie
+  const groups=[];
+  (r.items||[]).forEach((x,j)=>{const g=groups[groups.length-1];
+    if(x.ss&&g&&g.ss===x.ss)g.list.push({x,j});else groups.push({ss:x.ss||null,list:[{x,j}]});});
+  return groups.map((g,gi)=>{
+    const tail=rb>0&&gi<groups.length-1?[between()]:[];
+    if(g.list.length===1){
+      const {x,j}=g.list[0],y=one(x);
+      return {...info(y,j),phases:[...phasesOf(y),...tail],steps:[],q:y.name+' exercise',block:''};
+    }
+    // Superserie: A1 serie 1, A2 serie 1, descanso, A1 serie 2... (sin descanso entre A1 y A2)
+    const ys=g.list.map(({x})=>one(x)),exs=ys.map((y,k)=>info(y,g.list[k].j));
+    const n=Math.max(...ys.map(y=>y.sets)),rest=ys[0].rest,ph=[];
+    ys.forEach((y,k)=>{for(let w=1;w<=(y.warm||0);w++)ph.push({l:`Calentamiento ${w}/${y.warm}`,s:0,reps:y.reps,warm:true,set:0,side:null,ex:k});});
+    if(ph.length&&rest)ph.push({l:'Descanso',s:60,rest:true});
+    for(let s=1;s<=n;s++){
+      ys.forEach((y,k)=>{if(y.sets<s)return;
+        (y.sides?['derecho','izquierdo']:['']).forEach(sd=>ph.push({l:`Serie ${s}/${y.sets}`+(sd?' · '+sd:''),
+          s:y.type==='time'?y.secs:0,reps:y.type==='reps'?y.reps:0,set:s,side:sd||null,ex:k}));});
+      if(rest&&s<n)ph.push({l:'Descanso',s:rest,rest:true});
+    }
+    return {src:g.list[0].j,exs,ss:g.ss,name:exs.map(e=>e.name).join(' + '),dose:`Superserie ${g.ss} · ${n} rondas`,
+      phases:[...ph,...tail],steps:[],note:'',q:exs[0].name+' exercise',block:'',sets:n,reps:0};
+  });
 }
 // Duracion estimada: las series por repeticiones cuentan ~3 s por rep
 export const dur=it=>it.phases.reduce((a,p)=>a+(p.s||p.reps*3),0);
@@ -165,15 +195,33 @@ export const dur=it=>it.phases.reduce((a,p)=>a+(p.s||p.reps*3),0);
 // Lista corta (nombre, dosis, duracion) para Hoy
 export const listOf=r=>compile(r).map(it=>({name:it.name,dose:it.dose,dur:dur(it)}));
 
-// Plantillas para "+ Nueva rutina". Al fallo con peso corporal: la meta son 6-12
-// reps; con 15+ en una serie toca hacer el ejercicio mas dificil.
-const FALLO='Al fallo (o a 1-2 reps del fallo). Meta: 6-12 reps; si haces 15+ en una serie, hazlo más difícil: pies más elevados, bajada de 3 s o pausa abajo.';
-const ex=(name,o={})=>({name,type:'reps',sets:3,reps:12,secs:30,rest:150,kg:null,sides:false,fail:true,note:FALLO,...o});
+// Plantillas para "+ Nueva rutina": A/B con superseries (v2). Compuestos a RIR
+// 1-2, aislamiento a RIR 0-1; cuando haces el tope del rango en todas las series,
+// sube el peso. Semana A-B-A-B-A-B + descanso; descarga cada 6 semanas.
+const RC='RIR 1-2: para cuando te queden 1-2 reps limpias. Casi todo el estímulo con mucha menos fatiga. Tope del rango en todas las series → sube el peso.';
+const RI='Aislamiento: RIR 0-1 (puedes llegar al fallo). Tope del rango en todas las series → sube el peso.';
+const ex=(name,o={})=>({name,type:'reps',sets:3,reps:8,secs:30,rest:0,kg:null,sides:false,w:true,note:RC,...o});
 export const TEMPLATES=[
-  {key:'A',name:'Día A · Empuje + piernas',restBetween:150,items:[
-    ex('Flexiones diamante'),ex('Flexiones pike (pies elevados)'),
-    ex('Sentadilla búlgara',{sides:true}),ex('Elevación de talón a una pierna',{sides:true})]},
-  {key:'B',name:'Día B · Jalón + core',restBetween:150,items:[
-    ex('Dominadas'),ex('Dominadas supinas (chin-ups)'),
-    ex('Curl nórdico'),ex('Rueda abdominal (o bodysaw)')]},
+  {key:'A',v:2,name:'Día A · Empuje + cuádriceps',restBetween:90,items:[
+    ex('Floor press con mancuernas',{ss:'A',range:'6-10',reps:6,rir:'1-2',rest:120,warm:2,step:1,note:'Antes: 2 series de calentamiento al 50 % del peso. '+RC}),
+    ex('Búlgara con mancuernas',{ss:'A',range:'8-12',reps:8,rir:'1-2',rest:120,sides:true,step:1}),
+    ex('Overhead press con barra',{ss:'B',range:'6-10',reps:6,rir:'1-2',rest:120,step:2.5}),
+    ex('Goblet squat',{ss:'B',range:'10-15',reps:10,rir:'1-2',rest:120,step:1}),
+    ex('Elevaciones laterales',{ss:'C',range:'12-15',reps:12,rir:'0-1',rest:75,step:1,note:RI}),
+    ex('Extensión de tríceps sobre la cabeza',{ss:'C',range:'10-12',reps:10,rir:'0-1',rest:75,step:1,note:RI}),
+    ex('Elevación de pantorrilla a una pierna',{ss:'D',range:'12-20',reps:12,rir:'0',rest:60,sides:true,w:false,note:'RIR 0: hasta el fallo. Pausa de 1 s arriba y abajo. Con 20+ reps, sostén una mancuerna.'}),
+    ex('Pallof press con mancuerna',{ss:'D',sets:2,range:'12',reps:12,rest:60,sides:true,step:1,note:'Antirrotación: el torso no gira. 12 por lado.'}),
+  ]},
+  {key:'B',v:2,name:'Día B · Tirón + cadena posterior',restBetween:90,items:[
+    ex('Dominadas',{ss:'A',range:'6-12',reps:6,rir:'1-2',rest:120,warm:2,w:false,note:'Antes: 2 series fáciles de calentamiento (pocas reps). '+RC+' Con 12 en todas las series, añade lastre.'}),
+    ex('Peso muerto rumano con barra',{ss:'A',range:'8-12',reps:8,rir:'1-2',rest:120,step:2.5}),
+    ex('Remo a una mano',{ss:'B',range:'8-12',reps:8,rir:'1-2',rest:120,sides:true,step:1}),
+    ex('Rueda abdominal',{ss:'B',range:'8-15',reps:8,rir:'1',rest:120,w:false,note:'RIR 1. Rango completo sin arquear la espalda baja.'}),
+    ex('Rear delt fly',{ss:'C',range:'12-20',reps:12,rir:'0-1',rest:75,step:1,note:RI}),
+    ex('Encogimiento de hombros con barra',{ss:'C',range:'12-15',reps:12,rir:'0-1',rest:75,step:2.5,note:RI}),
+    ex('Curl con mancuernas',{ss:'D',range:'8-12',reps:8,rir:'0-1',rest:60,step:1,note:RI}),
+    ex('Curl martillo',{ss:'D',sets:2,range:'10-12',reps:10,rir:'0-1',rest:60,step:1,note:RI}),
+  ]},
 ];
+// Nombres de la A/B anterior (al fallo, sin superseries): se reemplaza al cargar la nueva
+export const OLD_AB=['Día A · Empuje + piernas','Día B · Jalón + core'];
