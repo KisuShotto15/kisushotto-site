@@ -211,6 +211,24 @@ test('guardian: posicion externa en un simbolo fuera de la estrategia se cierra'
   assert.deepEqual(R.symbols, ['BTCUSDT']);
 });
 
+test('guardian: un stop del lado de la ganancia no es riesgo (caso real: short 69638 con stop 67000)', () => {
+  const short = pos({ side: 'short', size: 0.0562, entry: 69638, mark: 66000, stop: 67000 });
+  assert.deepEqual(plan([short], [led({ side: 'short', qty: 0.0562, stop: 67000 })]), []);
+  // long con stop sobre la entrada: igual
+  assert.deepEqual(plan([pos({ size: 10, entry: 100, mark: 110, stop: 105 })], [led({ qty: 10, stop: 105 })]), []);
+});
+
+test('guardian: una posicion previa al modo real con mucho riesgo solo avisa', () => {
+  const a = plan([pos({ size: 10, stop: 97 })], [led({ qty: 10, stop: 97, external: 2 })]);
+  assert.equal(a[0].type, 'alert');
+});
+
+test('guardian: el recorte deja margen para no repetirse al minuto siguiente', () => {
+  const a = plan([pos({ size: 10, stop: 97 })], [led({ qty: 10, stop: 97 })]);
+  const left = 10 - a[0].qty;
+  assert.ok(left * 3 < 1000 * 0.02 * 1.15 * 0.95);
+});
+
 test('guardian: riesgo mayor al 2% se recorta', () => {
   const a = plan([pos({ size: 10, stop: 97 })], [led({ qty: 10, stop: 97 })]);
   assert.equal(a[0].type, 'reduce');
@@ -270,4 +288,24 @@ test('insight: operaciones fuera del terminal', () => {
   const r = checkOutsideTerminal([t('terminal', 5), t('terminal', 3), t('external', -8)]);
   assert.equal(r[0].severity, 'critical');
   assert.match(r[0].title, /1 operacion fuera/);
+});
+
+test('guardian: si no se pudo leer el stop, no actua (ni stop de emergencia ni cierre)', () => {
+  const a = guardianPlan({ positions: [pos({ stop: null, stop_unknown: true, mark: 50 })], ledger: [led()],
+    tradingAllowed: { ok: true }, rules: R, baseEquity: 1000, now: 1e12 });
+  assert.deepEqual(a, []);
+});
+
+test('guardian: una posicion previa al modo real sin stop y con el nivel cruzado avisa, no cierra', () => {
+  const a = guardianPlan({ positions: [pos({ stop: null, mark: 50 })], ledger: [led({ stop: null, external: 2 })],
+    tradingAllowed: { ok: true }, rules: R, baseEquity: 1000, now: 1e12 });
+  assert.equal(a[0].type, 'alert');
+});
+
+test('guardian: una posicion que se dio por cerrada y reaparece se reabre, no se trata como externa', () => {
+  const closed = led({ status: 'closed', closed_at: 1e9, entry: 100 });
+  const a = guardianPlan({ positions: [pos()], ledger: [], recent: [closed],
+    tradingAllowed: { ok: false, reason: 'fuera de ventana' }, rules: R, baseEquity: 1000, now: 1e12 });
+  assert.equal(a[0].type, 'reopen');
+  assert.ok(!a.some(x => x.type === 'close'));
 });

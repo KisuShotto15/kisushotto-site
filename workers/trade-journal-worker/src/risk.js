@@ -475,7 +475,9 @@ export function chooseLeverage({ notional, available, leverage, stop_dist_pct, m
 // onCrossed: que hacer si el stop que corresponde ya quedo del otro lado del
 // precio. 'close' (VWAP, intradia) cierra; 'alert' (swing) solo avisa, porque
 // cerrar a mercado un swing heredado puede realizar una perdida grande.
-export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEquity, now, onCrossed = 'close' }) {
+// recent: operaciones cerradas hace poco. Si una "reaparece" (una lectura vacia
+// del exchange la dio por cerrada), se reabre en vez de tratarla como externa.
+export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEquity, now, onCrossed = 'close', recent = [] }) {
   const actions = [];
   const key = x => `${x.exchange}|${x.market}|${x.symbol}|${x.side}`;
   const open = new Map(ledger.filter(t => t.status === 'open' || t.status === 'pending').map(t => [key(t), t]));
@@ -489,10 +491,19 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
     const base = p.size * unit;
     const k = key(p);
     seen.add(k);
-    const t = open.get(k);
+    let t = open.get(k);
     const long = p.side === 'long';
     const crossed = s => s > 0 && p.mark > 0 && (long ? p.mark <= s : p.mark >= s);
-    const onCross = (reason) => actions.push(onCrossed === 'close'
+    if (!t) {
+      const back = recent.find(r => key(r) === k && r.entry > 0 && Math.abs(r.entry - p.entry) / p.entry < 0.002);
+      if (back) {
+        actions.push({ type: 'reopen', pos: p, trade: back, reason: 'La posicion sigue abierta: se habia dado por cerrada por una lectura incompleta' });
+        t = back;
+      }
+    }
+    // Una posicion que ya estaba abierta al activar el modo real nunca se cierra sola
+    const mode = t?.external === 2 ? 'alert' : onCrossed;
+    const onCross = (reason) => actions.push(mode === 'close'
       ? { type: 'close', pos: p, reason }
       : { type: 'alert', pos: p, reason: `${reason}. No se cierra solo: decide tu el cierre o el stop` });
 
@@ -509,6 +520,8 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
     } else if (t.status === 'pending') {
       actions.push({ type: 'filled', pos: p, trade: t });
     }
+    // Sin poder leer los stops no se sabe si esta protegida: no se toca esta vuelta
+    if (p.stop_unknown) continue;
 
     const want = t?.stop || null;
     if (!(p.stop > 0)) {
@@ -529,15 +542,26 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
     if (rules.max_margin_pct) {
       const capNotional = baseEquity * rules.max_margin_pct / 100 * rules.leverage;
       if (base * p.entry > capNotional * 1.05) {
-        actions.push({ type: 'reduce', pos: p, qty: (base - capNotional / p.entry) / unit,
-                       reason: `Posicion mayor al ${rules.max_margin_pct}% de margen a ${rules.leverage}x: se recorta` });
+        if (t?.external === 2) actions.push({ type: 'alert', pos: p, reason: `Posicion mayor al ${rules.max_margin_pct}% de margen a ${rules.leverage}x. Reducela tu` });
+        else actions.push({ type: 'reduce', pos: p, qty: (base - capNotional / p.entry) / unit,
+                            reason: `Posicion mayor al ${rules.max_margin_pct}% de margen a ${rules.leverage}x: se recorta` });
         continue;
       }
     }
-    const risk = Math.abs(p.entry - p.stop) * base;
+    // Riesgo = lo que se pierde si salta el stop, medido desde la entrada. Un stop
+    // del lado de la ganancia (long arriba / short abajo de la entrada) no arriesga nada.
+    const lossPerUnit = long ? p.entry - p.stop : p.stop - p.entry;
+    const risk = Math.max(0, lossPerUnit) * base;
     if (risk > capUsd) {
-      const keep = capUsd / Math.abs(p.entry - p.stop);
-      actions.push({ type: 'reduce', pos: p, qty: (base - keep) / unit, reason: `Riesgo ${risk.toFixed(2)} USDT supera el 2% de la cuenta: se recorta` });
+      // Una posicion previa al modo real no se recorta sola: se avisa
+      if (t?.external === 2) {
+        actions.push({ type: 'alert', pos: p, reason: `Riesgo ${risk.toFixed(2)} USDT supera el 2% de la cuenta. Acerca el stop o reduce tu la posicion` });
+      } else {
+        // Se deja en el 90% del tope: si quedara justo en el limite, cualquier
+        // cambio de capital pediria otro recorte minusculo al minuto siguiente
+        const keep = capUsd * 0.9 / lossPerUnit;
+        actions.push({ type: 'reduce', pos: p, qty: (base - keep) / unit, reason: `Riesgo ${risk.toFixed(2)} USDT supera el 2% de la cuenta: se recorta` });
+      }
     }
   }
 

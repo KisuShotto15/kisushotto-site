@@ -12,7 +12,7 @@ const W = new URL('../workers/trade-journal-worker/', import.meta.url);
 function d1() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('schema.sql', W), 'utf8'));
-  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution', '0010_egress', '0011_btc_only', '0012_journal_sync', '0013_profiles', '0014_swing']) {
+  for (const f of ['0004_settle_coin', '0006_stop_source', '0007_journal_config', '0009_execution', '0010_egress', '0011_btc_only', '0012_journal_sync', '0013_profiles', '0014_swing', '0015_fix_adopted']) {
     db.exec(readFileSync(new URL(`migrations/${f}.sql`, W), 'utf8'));
   }
   const stmt = (sql, args = []) => ({
@@ -100,7 +100,7 @@ test('al pasar a real, una posicion previa se adopta en vez de cerrarse', async 
   assert.equal(m.ok, true, JSON.stringify(m));
   const t = DB.raw.prepare("SELECT * FROM exec_trades WHERE symbol='ADAUSDT'").get();
   assert.equal(t.status, 'open');
-  assert.equal(t.external, 1);
+  assert.equal(t.external, 2);   // previa al modo real: no se recorta sola
   st.positions = [];
   clock += 120000;
   await call('/guardian', {});
@@ -195,6 +195,18 @@ test('dia de noticias: no se opera', async () => {
   DB.raw.exec('UPDATE risk_state SET lock_until = 0');
   const r = await call('/preview', order({ symbol: 'XRPUSDT' }));
   assert.match(r.errors.join(), /noticias/);
+});
+
+test('una lectura vacia no da por cerrada una operacion si el exchange no confirma el cierre', async () => {
+  clock = Date.UTC(2026, 10, 12, 16, 0);
+  DB.raw.exec("INSERT INTO exec_trades (id, exchange, market, symbol, side, order_type, status, qty, entry, stop, risk_usd, opened_at, strategy) VALUES ('ghost','bitget','futures','XRPUSDT','long','market','open',1,100,99,1,1794400000,'vwap')");
+  const prev = api.closedPnl;
+  api.closedPnl = async () => null;   // el historial no muestra cierre
+  st.positions = [];
+  await call('/guardian', {});
+  assert.equal(DB.raw.prepare("SELECT status FROM exec_trades WHERE id='ghost'").get().status, 'open');
+  api.closedPnl = prev;
+  DB.raw.exec("DELETE FROM exec_trades WHERE id='ghost'");
 });
 
 test('historial: entran las operaciones hechas por fuera, sin duplicar las del terminal', async () => {

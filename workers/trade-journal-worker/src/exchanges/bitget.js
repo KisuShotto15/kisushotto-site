@@ -156,11 +156,14 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     const [rows, stops] = await Promise.all([
       uta ? get('/api/v3/position/current-position', { category: PT })
           : get('/api/v2/mix/position/all-position', { productType: PT, marginCoin: 'USDT' }),
-      stopOrders().catch(e => { console.error('bitget stops', e.message); return []; }),
+      // Si no se pudieron leer los stops, la posicion NO se da por desprotegida:
+      // se marca como desconocida y el guardian no actua sobre ella esa vuelta
+      stopOrders().catch(e => { console.error('bitget stops', e.message); return null; }),
     ]);
+    const stopUnknown = stops === null;
     return listOf(rows).filter(p => num(p.total) > 0).map(p => {
       const side = (uta ? p.posSide : p.holdSide) === 'short' ? 'short' : 'long';
-      const sameSym = stops.filter(s => s.symbol === p.symbol);
+      const sameSym = (stops || []).filter(s => s.symbol === p.symbol);
       // En modo one-way solo hay una posicion por simbolo; en hedge se filtra por lado
       const mine = sameSym.filter(s => !s.posSide || !['long', 'short'].includes(s.posSide) || s.posSide === side);
       const sl = mine.filter(s => s.stop > 0).sort((a, b) => side === 'long' ? b.stop - a.stop : a.stop - b.stop);
@@ -172,7 +175,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
         upnl: num(uta ? p.unrealisedPnl : p.unrealizedPL), liq: num(p.liquidationPrice) || null,
         leverage: num(p.leverage) || null, notional: num(p.total) * num(p.markPrice),
         stop: sl[0]?.stop || null, stop_refs: sl.map(s => s.ref), stop_tp: tp?.tp || null,
-        tp: tp?.tp || null, margin_mode: p.marginMode,
+        tp: tp?.tp || null, margin_mode: p.marginMode, stop_unknown: stopUnknown,
         opened_at: Math.floor(num(uta ? p.createdTime : p.cTime) / 1000) || null,
       };
     });
@@ -218,16 +221,32 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     const p = fmt(roundTick(stop, inst.tick), inst.tick);
     const isHedge = await hedge(pos.symbol);
     if (uta) {
-      // Se crea el nuevo (conservando el TP si habia) y luego se cancela el viejo
-      await post('/api/v3/trade/place-strategy-order', {
+      // Se crea el nuevo (conservando el TP si habia) y luego se cancela el viejo.
+      // Si el exchange no admite dos TP/SL completos a la vez, se cancela primero
+      // el viejo y, si el nuevo falla, se repone el anterior.
+      const place = price => post('/api/v3/trade/place-strategy-order', {
         category: PT, symbol: pos.symbol, type: 'tpsl', tpslMode: 'full', posSide: pos.side,
-        marginMode: pos.margin_mode || 'isolated', stopLoss: p, slTriggerBy: 'mark',
+        marginMode: pos.margin_mode || 'isolated', stopLoss: fmt(roundTick(price, inst.tick), inst.tick), slTriggerBy: 'mark',
         takeProfit: pos.stop_tp ? fmt(roundTick(pos.stop_tp, inst.tick), inst.tick) : undefined,
         tpTriggerBy: pos.stop_tp ? 'mark' : undefined,
       });
-      for (const ref of pos.stop_refs || []) {
-        await post('/api/v3/trade/cancel-strategy-order', { orderId: ref.orderId }).catch(e => console.error('bitget cancel sl', e.message));
+      const cancelOld = async () => {
+        for (const ref of pos.stop_refs || []) {
+          await post('/api/v3/trade/cancel-strategy-order', { orderId: ref.orderId }).catch(e => console.error('bitget cancel sl', e.message));
+        }
+      };
+      try { await place(stop); }
+      catch (e) {
+        if (!pos.stop_refs?.length) throw e;
+        await cancelOld();
+        try { await place(stop); }
+        catch (e2) {
+          if (pos.stop) await place(pos.stop).catch(e3 => console.error('restore stop', e3.message));
+          throw e2;
+        }
+        return;
       }
+      await cancelOld();
       return;
     }
     const posStop = (pos.stop_refs || []).find(r => r.planType === 'pos_loss');
@@ -248,7 +267,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
   async function reduce(pos, qty) {
     const inst = await instrument('futures', pos.symbol);
     const q = floorStep(Math.min(qty, pos.size), inst.step);
-    if (!(q > 0)) return null;
+    if (!(q > 0) || q < (inst.min_qty || 0)) return null;   // menor al minimo del exchange: no se envia
     const isHedge = await hedge(pos.symbol);
     if (uta) {
       return post('/api/v3/trade/place-order', {

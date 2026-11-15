@@ -211,10 +211,11 @@ function meter(id, frac) {
 // ── Posiciones ────────────────────────────────────────────────────────────────
 
 function posRiskUsd(p) {
-  if (p.trade?.risk_usd) return p.trade.risk_usd;
-  if (!p.stop) return null;
+  // Riesgo actual: desde la entrada hasta el stop de ahora (no el inicial)
+  if (!p.stop) return p.trade?.risk_usd || null;
   const base = p.market === 'coinm' && p.notional ? p.notional / p.entry : p.size;
-  return Math.abs(p.entry - p.stop) * base;
+  // Un stop del lado de la ganancia no arriesga nada
+  return Math.max(0, p.side === 'long' ? p.entry - p.stop : p.stop - p.entry) * base;
 }
 
 function renderPositions() {
@@ -224,8 +225,12 @@ function renderPositions() {
   $('positions').innerHTML = list.map((p, i) => {
     const risk = posRiskUsd(p);
     const coinm = p.market === 'coinm';
-    const rNow = risk ? p.upnl / risk : null;
-    const be = p.side === 'long' ? p.mark > p.entry : p.mark < p.entry;
+    // La R se mide contra el riesgo inicial de la operacion
+    const r0 = p.trade?.risk_usd || risk;
+    const rNow = r0 > 0 ? p.upnl / r0 : null;
+    // "Stop a entrada" solo si acerca el stop: en ganancia y con el stop aun del lado de la perdida
+    const be = (p.side === 'long' ? p.mark > p.entry : p.mark < p.entry) &&
+               (!p.stop || (p.side === 'long' ? p.stop < p.entry : p.stop > p.entry));
     return `<div class="tm-pos">
       <div class="tm-pos-line">
         <b>${esc(p.symbol)}</b>
@@ -240,7 +245,7 @@ function renderPositions() {
         <span>TP ${px(p.tp)}</span>
         ${p.leverage ? `<span>${p.leverage}x</span>` : ''}
         ${p.liq ? `<span>liq ${px(p.liq)}</span>` : ''}
-        ${risk ? `<span>riesgo ${fmt(risk)} USDT</span>` : ''}
+        ${risk > 0 ? `<span>riesgo ${fmt(risk)} USDT</span>` : p.stop ? '<span class="pos">stop en ganancia</span>' : ''}
       </div>
       <div class="tm-row">
         ${be ? `<button class="btn btn-sm" onclick="posBreakeven(${i})">Stop a entrada</button>` : ''}
