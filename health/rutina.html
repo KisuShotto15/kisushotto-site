@@ -122,6 +122,40 @@
   .note{margin-top:14px;color:var(--text2);white-space:pre-wrap;}
   .img{display:inline-block;margin-top:14px;color:var(--muted);font-size:13px;}
   .finished{grid-column:1/-1;text-align:center;padding:16px 0;}
+  /* Serie por repeticiones: el numero grande es el contador */
+  .repbox{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;}
+  .repbox h2{margin:0;}
+  .rb-dots{display:flex;gap:6px;margin-top:8px;} .rb-dots i{width:30px;height:6px;border-radius:3px;background:var(--track);}
+  .rb-dots i.past{background:var(--ok);} .rb-dots i.on{background:var(--accent);}
+  .rb-cap{font-size:14px;color:var(--muted);} .rb-cap b{color:var(--text);}
+  .rb-big{display:flex;align-items:center;justify-content:center;gap:18px;margin:14px 0 2px;}
+  .rb-big button{width:62px;height:62px;border-radius:50%;border:1px solid var(--line2);background:var(--card2);font-size:28px;font-weight:500;}
+  .rb-big b{font-size:96px;font-weight:800;letter-spacing:-.05em;line-height:1;min-width:130px;font-variant-numeric:tabular-nums;}
+  .rb-goal{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 8px;}
+  .rb-goal span{font-size:12.5px;padding:6px 10px;border-radius:999px;background:var(--card2);color:var(--text2);}
+  .rb-goal span.g{background:var(--ok-soft);color:var(--ok);}
+  .rb-done{width:100%;max-width:420px;padding:17px;font-size:17px;border-radius:16px;margin-top:6px;}
+  .rb-links{display:flex;justify-content:space-between;width:100%;max-width:420px;margin-top:4px;}
+  .lk{background:none;border:0;color:var(--muted);font-size:13px;text-decoration:underline;padding:6px 0;}
+  .rb-log{display:flex;gap:8px;width:100%;max-width:420px;margin-top:6px;}
+  .rb-log span{flex:1;text-align:center;padding:8px 4px;border-radius:10px;background:var(--card2);font-size:12px;color:var(--muted);}
+  .rb-log b{display:block;font-size:17px;color:var(--text);} .rb-log .r b{color:var(--warn);}
+  .rb-next{display:flex;gap:12px;align-items:center;width:100%;max-width:420px;text-align:left;background:var(--card2);border-radius:14px;padding:12px 14px;}
+  .rb-next .n{width:36px;height:36px;flex-shrink:0;border-radius:10px;background:var(--accent-soft,rgba(79,134,255,.15));color:var(--accent);display:grid;place-items:center;font-weight:800;}
+  .rb-next b{display:block;font-size:14px;} .rb-next span{font-size:12.5px;color:var(--text2);}
+  details.how summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;margin-top:4px;}
+  /* Resumen al terminar */
+  .sum{grid-column:1/-1;display:flex;flex-direction:column;gap:12px;}
+  .sum-hero{text-align:center;padding:18px 8px 6px;border-radius:14px;background:radial-gradient(100% 120% at 50% 0%,rgba(52,211,153,.18),transparent 65%);}
+  .sum-hero .e{font-size:44px;line-height:1.1;}
+  .sum-g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;}
+  .sum-g div{background:var(--card2);border-radius:12px;padding:10px;} .sum-g b{display:block;font-size:22px;} .sum-g b.y{color:var(--warn);}
+  .sum-g span{font-size:12px;color:var(--muted);}
+  .sum-t table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px;}
+  .sum-t td{padding:9px 0;border-top:1px solid var(--line);} .sum-t tr:first-child td{border-top:0;}
+  .sum-t td:last-child{text-align:right;font-weight:600;white-space:nowrap;} .sum-t .up{color:var(--ok);} .sum-t .dn{color:var(--warn);}
+  .sum-c{display:flex;gap:12px;align-items:center;background:var(--card2);border-radius:14px;padding:12px 14px;font-size:13px;color:var(--text2);}
+  .sum-c b{display:block;color:var(--text);font-size:14px;} .sum-c .e{font-size:24px;}
   .finished .ck{width:72px;height:72px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;
     font-size:34px;margin:0 auto 12px;}
 
@@ -295,6 +329,8 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const pad=n=>String(n).padStart(2,'0');
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
 function fmt(s){return pad(Math.floor(s/60))+':'+pad(s%60);}
+// Series por repeticiones: el tiempo es una estimacion ("~9 min"); con tiempo fijo, exacto
+const durTxt=it=>it.phases.some(p=>p.reps)?'~'+Math.max(1,Math.round(dur(it)/60))+' min':fmt(dur(it));
 
 
 /* ---------- estado y persistencia ---------- */
@@ -324,9 +360,11 @@ const getR=()=>routines().find(r=>r.id===active)||BUILTIN;
 let items=[];
 // Modo minimo: vale solo para el dia en que se activo
 let mini=saved.mini===today();
+// Inicio y fin del entreno de hoy (para el resumen y Hoy)
+let t0=saved.date===today()?saved.t0||null:null,t1=saved.date===today()?saved.t1||null:null;
 function load(){if(!routines().some(r=>r.id===active))active='estiramiento';items=compile(getR(),mini);}
 function done(){
-  if(curDate!==today()){curDate=today();doneBy={};} // paso la medianoche con la app abierta
+  if(curDate!==today()){curDate=today();doneBy={};t0=t1=null;} // paso la medianoche con la app abierta
   return doneBy[active]||(doneBy[active]={});
 }
 const nDone=()=>items.filter((_,i)=>done()[i]).length;
@@ -342,7 +380,7 @@ function snapshot(){
   const r=getR(),nx=nDone()===items.length&&r.next&&routines().find(x=>x.id===r.next)||r;
   const nextDay={name:nx.name,list:listOf(nx)};
   return {date:today(),routine:active,name:getR().name,doneBy,done:done(),total:items.length,list,nextDay,routines:custom,
-    mini:mini?today():null,prefs:{voice:state.voice,sound:state.sound,auto:state.auto},history:hist,updated:saved.updated||0};
+    mini:mini?today():null,t0,t1,prefs:{voice:state.voice,sound:state.sound,auto:state.auto},history:hist,updated:saved.updated||0};
 }
 function writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(snapshot()));}catch(e){}}
 function pushRemote(){
@@ -410,7 +448,7 @@ function renderTiles(){
     const h=it.block&&it.block!==last?`<div class="bh">${esc(it.block)}</div>`:'';last=it.block;
     return h+`<div class="tile${d[i]?' done':''}${i===cur&&!d[i]?' now':''}" data-i="${i}">
       <button class="tb" data-k="${i}" aria-label="${d[i]?'Desmarcar':'Marcar hecho'}">${d[i]?'✓':i===T.i?'▶':i+1}</button>
-      <div class="tt"><b>${esc(it.name)}</b><small>${esc(it.dose)}</small></div><span class="muted">${fmt(dur(it))}</span></div>`;}).join('');
+      <div class="tt"><b>${esc(it.name)}</b><small>${esc(it.dose)}</small></div><span class="muted">${durTxt(it)}</span></div>`;}).join('');
   if($('doneToggle'))$('doneToggle').onclick=()=>{showDone=!showDone;renderTiles();};
   $('tiles').querySelectorAll('.tile').forEach(t=>t.onclick=e=>{
     const i=+t.dataset.i;
@@ -427,13 +465,9 @@ function choose(i){
 const C=2*Math.PI*52;
 function renderHero(){
   const el=$('hero'),i=current();
-  if(i<0){
-    const s=streakCount();
-    el.innerHTML=`<div class="finished"><div class="ck">✓</div><h2>Rutina completada</h2>
-      <div class="sub">${s?`🔥 ${s} ${s===1?'día':'días'} de racha`:''}</div></div>`;
-    return;
-  }
+  if(i<0){el.innerHTML=summaryHtml();return;}
   const it=items[i],run=T.i===i,ph=run?it.phases[T.p]:null,d=done()[i];
+  if(run&&ph.reps&&it.src!==undefined){renderRep(el,i,it,ph);return;}
   const work=it.phases.map((p,j)=>({p,j})).filter(o=>!o.p.rest);
   const label=run?(ph.rest?'Descanso':'Ahora'):(d?'Hecho':'Siguiente');
   const head=it.block?`${label} · ${esc(it.block)}`:label;
@@ -443,22 +477,23 @@ function renderHero(){
       <div class="ad"><button data-a="k" data-d="-2.5" aria-label="Menos peso">−</button><span><b id="aKg">${T.kg||0}</b> kg</span><button data-a="k" data-d="2.5" aria-label="Más peso">+</button></div></div>`:'')+
     `<button class="btn green" id="hSet">✓ Serie hecha</button><button class="btn" id="hStop" aria-label="Detener">■</button>`;
   else ctrl=(ph.rest?`<div class="adj"><div class="ad"><button data-r="-15" aria-label="15 segundos menos">−</button><span><b>15</b> s</span><button data-r="15" aria-label="15 segundos más">+</button></div></div>`:'')+
-    `<button class="btn blue" id="hPause">${T.paused?'▶ Seguir':'❚❚ Pausar'}</button><button class="btn" id="hSkip">Saltar ›</button><button class="btn" id="hStop" aria-label="Detener">■</button>`;
+    `<button class="btn blue" id="hPause">${T.paused?'▶ Seguir':'❚❚ Pausar'}</button><button class="btn" id="hSkip">${ph.rest?'Ya ›':'Saltar ›'}</button><button class="btn" id="hStop" aria-label="Detener">■</button>`;
   el.innerHTML=`<div class="clock">
       <div class="ring" id="ring"><svg viewBox="0 0 120 120"><circle class="trk" cx="60" cy="60" r="52"/>
         <circle class="arc" id="arc" cx="60" cy="60" r="52" stroke-dasharray="${C}" stroke-dashoffset="0"/></svg>
         <div class="ctr"><div class="big" id="cBig"></div><div class="small" id="cSmall"></div></div></div>
       <div class="ctrl">${ctrl}</div>
+      ${run&&ph.rest&&it.src!==undefined?restInfo(i,it,ph):''}
     </div>
     <div>
       <div class="label">${head}</div>
       <h2>${esc(it.name)}</h2>
-      <div class="sub">${esc(it.dose)} · ${fmt(dur(it))}</div>
+      <div class="sub">${esc(it.dose)} · ${durTxt(it)}</div>
       ${lastTime(it)}
       <div class="ph">${work.map(o=>`<span class="${run&&o.j===T.p?'on':run&&o.j<T.p?'past':''}">${esc(o.p.l)}${o.p.s?' · '+o.p.s+'s':''}</span>`).join('')}</div>
       ${it.steps.length?`<ol class="st">${it.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>`:''}
       ${it.watch?`<div class="tip">⚠ ${esc(it.watch)}</div>`:''}
-      ${it.note?`<div class="note">${esc(it.note)}</div>`:''}
+      ${it.note?(it.src!==undefined?`<details class="how"><summary>Cómo hacerla</summary><div class="note">${esc(it.note)}</div></details>`:`<div class="note">${esc(it.note)}</div>`):''}
       <a class="img" target="_blank" rel="noopener" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(it.q)}">Ver imagen ↗</a>
     </div>`;
   const on=(id,f)=>{if($(id))$(id).onclick=f;};
@@ -484,8 +519,8 @@ function drawTime(){
     const run=T.i===i,ph=run?it.phases[T.p]:null;
     let big,small,frac=1;
     if(!run){
-      big=it.reps?`${it.sets}×${it.reps}`:fmt(dur(it));
-      small=it.reps?'series × reps':'duración';
+      big=it.fail?String(it.sets):it.reps?`${it.sets}×${it.reps}`:fmt(dur(it));
+      small=it.fail?(it.sets===1?'serie':'series')+' al fallo'+(it.sides?' c/lado':''):it.reps?'series × reps':'duración';
     }else if(ph.reps){big=T.reps;small='reps · '+ph.l;}
     else{big=fmt(Math.max(T.left,0));frac=Math.min(1,Math.max(T.left,0)/T.total);
       small=ph.between?'Descanso · sigue '+(items[i+1]?.name||''):ph.rest?'Descanso · luego '+(it.phases[T.p+1]?.l||''):T.ready?ph.l:'Prepárate · '+ph.l;}
@@ -519,6 +554,7 @@ function setDone(i,v){
   if(v)done()[i]=true;else delete done()[i];
   if(!v&&sel===null)sel=i;
   if(v&&sel===i)sel=null;
+  if(nDone()===items.length&&!t1)t1=Date.now();
   if(nDone()===items.length&&!hist.includes(today())){hist.push(today());if(ready)celebrate();}
   save();renderAll();
 }
@@ -535,11 +571,13 @@ const spoken=l=>l.replace(/(\d+)\/(\d+)/,'$1 de $2').replace(' · ',', ');
 function start(i,p){
   clearInterval(T.id);clearTimeout(T.to);clearTimeout(autoNext);
   const it=items[i],ph=it.phases[p];
+  if(!t0)t0=Date.now();
   const kg=T.i===i?T.kg:it.kg; // el peso ajustado sigue en las series siguientes
+  const showKg=T.i===i&&T.showKg;
   // Fase con tiempo: primero se anuncia y la cuenta arranca cuando la voz termina
   // (T.end=0 mientras habla). El descanso arranca de una.
   const waitVoice=ph.s&&!ph.rest&&state.voice;
-  T={i,p,left:ph.s,total:ph.s,end:ph.s&&!waitVoice?Date.now()+ph.s*1000:0,ready:!waitVoice,cue:0,paused:false,id:null,to:null,kg,reps:ph.reps||0};sel=i;
+  T={i,p,left:ph.s,total:ph.s,end:ph.s&&!waitVoice?Date.now()+ph.s*1000:0,ready:!waitVoice,cue:0,paused:false,id:null,to:null,kg,showKg,reps:ph.reps?defaultReps(it,ph):0};sel=i;
   const run=T;
   wakeOn(true); // la pantalla no se apaga mientras corre el temporizador
   const pre=p===0?it.name+'. ':'';
@@ -590,7 +628,7 @@ function nextPhase(){
   clearInterval(T.id);
   const i=T.i,it=items[i],ph=it.phases[T.p],next=T.p+1;
   if(!ph.reps){beep(2);if(navigator.vibrate)navigator.vibrate([220,110,220]);}
-  else{haptic();logSet(it,T.kg,T.reps);}
+  else{haptic();logSet(it,T.kg,T.reps,ph.side);}
   if(next<it.phases.length){
     if(ph.reps)start(i,next);
     else{T.left=0;T.end=0;nativeTimer();drawTime();T.to=setTimeout(()=>start(i,next),700);}
@@ -637,12 +675,117 @@ function lastTime(it){
   const up=sets.some(z=>z.reps>=15)?'<span class="up">↑ Llegaste a 15+ reps: hazlo más difícil</span>':'';
   return `<div class="last">La vez pasada (${when}): <b>${sets.map(z=>z.weight?z.weight+'×'+z.reps:z.reps+' reps').join(' · ')}</b>${up}</div>`;
 }
+// Series de este ejercicio en Metricas: la ultima sesion antes de hoy, las de
+// antes de hoy y las de hoy (las de cada lado se guardan con side)
+function exSets(it){
+  const b=bm||bmLoad(),ex=b?.exercises?.find(e=>norm(e.name)===norm(it.name));
+  const none={last:[],lastDate:null,before:[],today:[]};
+  if(!ex)return none;
+  const ss=b.sessions||[],of=x=>x.sets.filter(z=>z.exerciseId===ex.id);
+  const lastS=[...ss].reverse().find(x=>x.date<today()&&of(x).length);
+  return {last:lastS?of(lastS):[],lastDate:lastS?.date||null,
+    before:ss.filter(x=>x.date<today()).flatMap(of),today:ss.filter(x=>x.date===today()).flatMap(of)};
+}
+const bySide=(arr,side)=>side&&arr.some(z=>z.side)?arr.filter(z=>z.side===side):arr;
+const setTxt=z=>z.weight?z.weight+'×'+z.reps:String(z.reps);
+// La serie arranca en lo que hiciste la vez pasada en esa misma serie
+function defaultReps(it,ph){
+  const l=bySide(exSets(it).last,ph.side);
+  return l[(ph.set||1)-1]?.reps??l[l.length-1]?.reps??ph.reps;
+}
+// Reps para record con ese peso (igual que el chequeo de logSet); null sin historial
+function recordTarget(it,kg){
+  const {before,today:td}=exSets(it),all=[...before,...td];
+  if(!all.length)return null;
+  return all.filter(z=>(z.weight||0)>=(kg||0)).reduce((a,z)=>Math.max(a,z.reps),0)+1;
+}
+// Series de hoy de este ejercicio, marcando las que fueron record
+function todayMarks(it){
+  const {before,today:td}=exSets(it),seen=[...before];
+  return td.map(z=>{const rec=seen.length&&!seen.some(o=>(o.weight||0)>=(z.weight||0)&&o.reps>=z.reps);seen.push(z);return {...z,rec};});
+}
+const logChips=it=>{const m=todayMarks(it);return m.length?`<div class="rb-log">${m.map((z,k)=>`<span class="${z.rec?'r':''}"><b>${setTxt(z)}${z.rec?' 🏆':''}</b>${z.side?z.side:'Serie '+(k+1)}</span>`).join('')}</div>`:'';};
+// Pantalla de la serie: contador grande, lo de la vez pasada y la meta para record
+function renderRep(el,i,it,ph){
+  const nSets=it.sets||it.phases.filter(p=>!p.rest).length;
+  const {last}=exSets(it),l=bySide(last,ph.side),tgt=recordTarget(it,T.kg);
+  const kgOn=T.kg>0||T.showKg;
+  el.innerHTML=`<div class="repbox" id="repbox">
+      <div class="label">${it.block?esc(it.block)+' · ':''}${i+1} de ${items.length}</div>
+      <h2>${esc(it.name)}</h2>
+      <div class="rb-dots">${[...Array(nSets)].map((_,k)=>`<i class="${k<ph.set-1?'past':k===ph.set-1?'on':''}"></i>`).join('')}</div>
+      <div class="rb-cap">Serie ${ph.set} de ${nSets}${ph.side?' · '+esc(ph.side):''}</div>
+      <div class="rb-big"><button data-a="r" data-d="-1" aria-label="Menos reps">−</button><b id="aReps">${T.reps}</b><button data-a="r" data-d="1" aria-label="Más reps">+</button></div>
+      <div class="rb-cap">reps${it.fail?' · <b>al fallo</b>':''}</div>
+      <div class="rb-goal">${l.length?`<span>La vez pasada: ${l.map(setTxt).join(' · ')}</span>`:''}${tgt?`<span class="g" id="rbTgt">Para récord: ${tgt}+</span>`:''}${it.fail?'<span>Meta 6–12</span>':''}</div>
+      ${kgOn?`<div class="adj"><div class="ad"><button data-a="k" data-d="-2.5" aria-label="Menos peso">−</button><span><b id="aKg">${T.kg||0}</b> kg</span><button data-a="k" data-d="2.5" aria-label="Más peso">+</button></div></div>`:''}
+      <button class="btn green rb-done" id="hSet">✓ Serie hecha</button>
+      <div class="rb-links">${kgOn?'<span></span>':'<button class="lk" id="hKg">+ Añadir lastre (kg)</button>'}<button class="lk" id="hStop">Detener</button></div>
+      ${logChips(it)}
+    </div>
+    <div>
+      ${it.note||it.steps.length?`<details class="how"><summary>Cómo hacerla</summary>
+        ${it.steps.length?`<ol class="st">${it.steps.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:''}
+        ${it.note?`<div class="note">${esc(it.note)}</div>`:''}</details>`:''}
+      <a class="img" target="_blank" rel="noopener" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(it.q)}">Ver imagen ↗</a>
+    </div>`;
+  $('hSet').onclick=()=>nextPhase();
+  $('hStop').onclick=stopAll;
+  if($('hKg'))$('hKg').onclick=()=>{T.showKg=true;haptic('tick');renderHero();};
+  el.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
+    const d=+b.dataset.d;haptic('tick');
+    if(b.dataset.a==='r')T.reps=Math.max(0,T.reps+d);else T.kg=Math.max(0,Math.round(((T.kg||0)+d)*10)/10);
+    $('aReps').textContent=T.reps;if($('aKg'))$('aKg').textContent=T.kg||0;
+    const t=recordTarget(it,T.kg);if($('rbTgt')&&t)$('rbTgt').textContent=`Para récord: ${t}+`;
+    drawTime();
+  });
+  drawTime();
+  heroObs.disconnect();heroObs.observe($('repbox'));
+}
+// Descanso: que viene, que numero superar y las series que ya hiciste
+function restInfo(i,it,ph){
+  if(ph.between){
+    const nx=items[i+1];if(!nx)return '';
+    const l=exSets(nx).last;
+    return `<div class="rb-next"><div class="n">›</div><div><b>Sigue: ${esc(nx.name)}</b><span>${l.length?'La vez pasada: '+l.map(setTxt).join(' · '):esc(nx.dose)}</span></div></div>`;
+  }
+  const np=it.phases[T.p+1];if(!np)return logChips(it);
+  const l=bySide(exSets(it).last,np.side),prev=l[(np.set||1)-1];
+  return `<div class="rb-next"><div class="n">${np.set||'›'}</div><div><b>${esc(np.l)}</b><span>${prev?'La vez pasada: '+setTxt(prev)+' · intenta superarlo':'Al fallo: todas las que salgan bien'}</span></div></div>`+logChips(it);
+}
+// Resumen al terminar: series, reps, records, contra la vez pasada y que toca manana
+function summaryHtml(){
+  const r=getR(),s=streakCount(),mins=t0&&t1?Math.max(1,Math.round((t1-t0)/60000)):null;
+  const fd=d=>new Date(d+'T00:00:00').toLocaleDateString('es',{weekday:'long',day:'numeric',month:'short'});
+  const rows=[],lvl=[];let sets=0,reps=0,recs=0,prevDate=null;
+  for(const it of items){
+    if(it.src===undefined)continue;
+    const m=todayMarks(it);if(!m.length)continue;
+    const {last,lastDate}=exSets(it);
+    const tr=m.reduce((a,z)=>a+z.reps,0),lr=last.reduce((a,z)=>a+z.reps,0);
+    sets+=m.length;reps+=tr;recs+=m.filter(z=>z.rec).length;
+    if(lastDate&&(!prevDate||lastDate>prevDate))prevDate=lastDate;
+    rows.push({name:it.name,tr,d:last.length?tr-lr:null});
+    if(m.some(z=>!z.weight&&z.reps>=15))lvl.push(it.name);
+  }
+  const nx=r.next&&routines().find(x=>x.id===r.next);
+  return `<div class="sum">
+    <div class="sum-hero"><div class="e">${rows.length?'💪':'✨'}</div><h2>${/^d[ií]a\b/i.test(r.name)?esc(r.name.split(' · ')[0])+' completo':'Rutina completa'}</h2>
+      ${/^d[ií]a\b/i.test(r.name)?'':`<div class="sub">${esc(r.name)}</div>`}
+      <div class="sub">${fd(today()).replace(/^./,c=>c.toUpperCase())}${mins?' · '+mins+' min':''}${s?` · 🔥 ${s} ${s===1?'día':'días'}`:''}</div>
+      ${rows.length?`<div class="sum-g"><div><b>${sets}</b><span>series</span></div><div><b>${reps}</b><span>reps</span></div><div><b class="${recs?'y':''}">${recs}${recs?' 🏆':''}</b><span>${recs===1?'récord':'récords'}</span></div></div>`:''}</div>
+    ${rows.length?`<div class="sum-t"><div class="label">Contra la vez pasada${prevDate?' ('+new Date(prevDate+'T00:00:00').toLocaleDateString('es',{day:'numeric',month:'short'})+')':''}</div><table>
+      ${rows.map(x=>`<tr><td>${esc(x.name)}</td><td class="${x.d>0?'up':x.d<0?'dn':''}">${x.tr} reps${x.d==null?' · primera vez':x.d?` · ${x.d>0?'+':''}${x.d}`:' · ='}</td></tr>`).join('')}</table></div>`:''}
+    ${lvl.map(n=>`<div class="sum-c"><div class="e">📈</div><div><b>Sube de nivel: ${esc(n)}</b>Hiciste 15+ reps. La próxima: variante más difícil, con mochila o bajada de 3 s.</div></div>`).join('')}
+    ${nx?`<div class="sum-c"><div class="e">🌙</div><div><span>Mañana toca</span><b>${esc(nx.name)}</b></div></div>`:''}
+  </div>`;
+}
 // Los mismos ejercicios por defecto que Metricas (si la lista aun esta vacia)
 const BM_DEFAULT=[['squat','Sentadilla'],['bench','Press Banca'],['deadlift','Peso Muerto'],['ohp','Press Militar'],['row','Remo Barra'],['pullup','Dominadas']]
   .map(([id,name])=>({id,name,custom:false}));
 const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
 let bmTimer=null,hintNext='';
-function logSet(it,kg,reps){
+function logSet(it,kg,reps,side){
   if(it.src===undefined||!(reps>0))return; // sin peso (peso corporal) tambien cuenta
   kg=kg>0?kg:0;
   if(reps>=15)hintNext='Quince o más repeticiones: la próxima vez, hazlo más difícil. ';
@@ -659,7 +802,7 @@ function logSet(it,kg,reps){
   if(prev.length&&!prev.some(z=>(z.weight||0)>=kg&&z.reps>=reps)){
     hintNext='¡Nuevo récord! '+hintNext;showRecord(kg?`${kg} kg × ${reps}`:`${reps} reps`);
   }
-  s.sets.push({exerciseId:ex.id,weight:kg,reps});
+  s.sets.push(side?{exerciseId:ex.id,weight:kg,reps,side}:{exerciseId:ex.id,weight:kg,reps});
   bm.lastModified=Date.now();bmSave(bm);
   clearTimeout(bmTimer);
   bmTimer=setTimeout(()=>{bmPush(bm);if(window.parent!==window)parent.postMessage({type:'health:reload',tab:'metricas'},location.origin);},1500);

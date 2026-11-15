@@ -86,6 +86,12 @@
   .auth-or { color:var(--muted); font-size:.85rem; margin:4px 0 14px; }
   .auth-link { background:none; border:0; color:var(--muted); font:inherit; font-size:.88rem; text-decoration:underline; cursor:pointer; margin-top:12px; }
   .auth-msg { min-height:1.3em; margin-top:12px; color:#fbbf24; font-size:.9rem; }
+  /* Sin conexion: lo que se hace se guarda y se sube al volver la red */
+  .net { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--tabh) + env(safe-area-inset-bottom, 0px) + 10px); z-index:20;
+    background:#272a32; border:1px solid #32353e; color:#ececf1; border-radius:999px; padding:8px 14px; font-size:13px; white-space:nowrap;
+    box-shadow:0 8px 24px rgba(0,0,0,.4); pointer-events:none; transition:opacity .3s; }
+  .net.ok { color:#34d399; }
+  @media (min-width: 900px) { .net { bottom:18px; } }
 </style>
 </head>
 <body>
@@ -268,6 +274,20 @@ import { hasSession, requestCode, verifyCode, passkeysUsable, passkeyLogin, curr
   if (hasSession()) start(); else askLogin();
 }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+</script>
+<div class="net" id="net" hidden></div>
+<script>
+// Aviso de red: sin conexion se sigue usando (se guarda en el telefono y se sube al volver)
+(function () {
+  const el = document.getElementById('net');
+  let t;
+  const show = () => {
+    clearTimeout(t);
+    if (!navigator.onLine) { el.textContent = '📴 Sin conexión · se guarda y se sube al volver'; el.className = 'net'; el.hidden = false; }
+    else if (!el.hidden) { el.textContent = '✓ Conectado de nuevo'; el.className = 'net ok'; t = setTimeout(() => { el.hidden = true; }, 2500); }
+  };
+  addEventListener('online', show); addEventListener('offline', show); show();
+})();
 </script>
 </body>
 </html>

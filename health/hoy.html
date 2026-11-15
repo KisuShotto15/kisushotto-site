@@ -63,19 +63,20 @@
   .hinfo .go{margin-top:14px;background:var(--rut);border-color:var(--rut);color:#fff;padding:12px 20px;font-size:15px;}
   .hinfo .go.done{background:var(--h-ok-soft);border-color:transparent;color:var(--ok);}
   .checks{display:flex;flex-direction:column;gap:10px;}
-  .ck{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;
-    background:var(--card2);border:1px solid var(--line);}
-  .ck>div b{display:block;font-weight:600;font-size:14px;}
-  .ck>div span{font-size:12.5px;color:var(--muted);}
-  .ck .tick{width:28px;height:28px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;transition:.3s;}
-  .ck .tick svg{width:15px;height:15px;stroke:#fff;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;
-    stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .45s .1s ease;}
-  .ck.done .tick{background:var(--c);border-color:var(--c);}
-  .ck.done .tick svg{stroke-dashoffset:0;}
-  .ck.food{grid-template-columns:28px 1fr;}
-  .ck.tap{cursor:pointer;grid-template-columns:28px 1fr auto;}
-  .ck.tap .go-i{color:var(--muted);font-size:18px;}
-  .ck.food .seg3{grid-column:1/-1;}
+  .chips3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .chip{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 6px;border-radius:13px;background:var(--card2);
+    border:1px solid var(--line);text-align:center;min-width:0;transition:background .3s,border-color .3s;}
+  .chip .ci{width:24px;height:24px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;font-size:13px;font-weight:800;
+    color:var(--muted);margin-bottom:2px;transition:.3s;}
+  .chip b{font-size:13px;font-weight:600;}
+  .chip span{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .chip.done{background:color-mix(in srgb,var(--c) 14%,transparent);border-color:transparent;}
+  .chip.done .ci{background:var(--c);border-color:var(--c);color:#fff;}
+  .chip.done b{color:var(--c);}
+  .chip.ask{border-color:color-mix(in srgb,var(--c) 55%,transparent);}
+  .chip.ask .ci{border-color:var(--c);color:var(--c);}
+  .askbox{background:var(--card2);border:1px solid var(--line);border-radius:13px;padding:12px;display:flex;flex-direction:column;gap:10px;}
+  .askbox .q{font-size:13px;color:var(--text2);}
   .seg3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
   .seg3 button{border:1px solid var(--line2);background:var(--card);border-radius:10px;padding:8px 6px;font-size:13px;font-weight:600;color:var(--text2);}
   .seg3 button.on{background:var(--h-nutri-soft);border-color:transparent;color:var(--nut);}
@@ -207,6 +208,7 @@
     .ringbox{width:130px;height:130px;}
     .rc b{font-size:28px;}
     .checks{grid-column:1/-1;}
+    .hinfo .label{font-size:12px;}
   }
   @media (max-width:900px){
     .two,.two.b,.two.c{grid-template-columns:1fr;}
@@ -261,28 +263,23 @@
       <div class="rc" id="rc"><b id="d-n">0/3</b><span id="d-t">del día</span></div>
     </div>
     <div class="hinfo">
-      <div class="label">Hoy toca</div>
+      <div class="label" id="r-lbl">Hoy toca</div>
       <h2 id="r-name"><span class="sk">Equilibrio</span></h2>
       <div class="sub" id="r-meta"></div>
       <button class="btn go" id="r-go">Empezar →</button>
     </div>
     <div class="checks">
-      <div class="ck" id="c-rut" style="--c:var(--rut)">
-        <span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span>
-        <div><b>Rutina</b><span id="c-rut-t">—</span></div>
+      <div class="chips3">
+        <button class="chip" id="c-rut" style="--c:var(--rut)"><i class="ci">○</i><b>Rutina</b><span id="c-rut-t">—</span></button>
+        <button class="chip" id="c-food" style="--c:var(--nut)"><i class="ci">?</i><b>Comida</b><span id="c-food-t">—</span></button>
+        <button class="chip" id="c-w" style="--c:var(--met)"><i class="ci">○</i><b>Peso</b><span id="c-w-t">—</span></button>
       </div>
-      <div class="ck food" id="c-food" style="--c:var(--nut)">
-        <span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span>
-        <div><b>Comida</b><span id="c-food-t">¿Seguiste el plan hoy?</span></div>
+      <div class="askbox" id="food-ask" hidden>
+        <div class="q" id="food-q">¿Seguiste el plan hoy?</div>
         <div class="seg3" id="food-seg">
           <button data-f="si">Sí</button><button data-f="parcial">Más o menos</button><button data-f="no" class="no">No</button>
         </div>
         <div class="days" id="food-days" hidden></div>
-      </div>
-      <div class="ck tap" id="c-w" style="--c:var(--met)">
-        <span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span>
-        <div><b>Peso de la semana</b><span id="c-w-t">—</span></div>
-        <span class="go-i" id="c-w-btn">›</span>
       </div>
     </div>
   </section>
@@ -497,7 +494,8 @@ function paintDay() {
   const t = today(), parts = [rDone(t), fDone(t), wDone(t)], n = parts.filter(Boolean).length;
   // vacio: invisible (con la punta redonda, un trazo de largo 0 se veria como un punto)
   ['a-rut', 'a-food', 'a-w'].forEach((id, i) => { $(id).style.strokeDasharray = parts[i] ? '92 208' : '0 300'; $(id).style.opacity = parts[i] ? 1 : 0; });
-  ['c-rut', 'c-food', 'c-w'].forEach((id, i) => $(id).classList.toggle('done', parts[i]));
+  ['c-rut', 'c-food', 'c-w'].forEach((id, i) => { $(id).classList.toggle('done', parts[i]); $(id).querySelector('.ci').textContent = parts[i] ? '✓' : i === 1 ? '?' : '○'; });
+  paintStep();
   const isFull = n === 3;
   $('dring').classList.toggle('full', isFull);
   $('rc').classList.toggle('full', isFull);
@@ -528,7 +526,7 @@ function paintMood() {
   const plan = planInfo();
   let m;
   if (full(t)) m = s > 1 ? `Día completo ✨ ${s} seguidos. Así se construye.` : 'Día completo ✨ Así se construye.';
-  else if (rDone(t) && !fDone(t)) m = 'Rutina lista 💪 ¿Cómo comiste hoy?';
+  else if (rDone(t) && !fDone(t)) m = 'Buen entreno 💪 Ya casi cierras el día.';
   else if (rDone(t) && !wDone(t)) m = 'Rutina lista 💪 Solo falta pesarte esta semana.';
   else if (!rDone(t) && !rDone(shift(t, -1)) && rutinaHist.length) m = 'Ayer descansaste: hoy vuelves con todo.';
   else if (s >= 2) m = `Llevas ${s} días completos seguidos 🔥 Cierra hoy el anillo.`;
@@ -558,7 +556,8 @@ function paintRutina(r) {
   $('r-meta').textContent = `${plural(total, 'ejercicio', 'ejercicios')} · ~${mins} min` + (r.mini === today() ? ' · ⚡ modo mínimo' : '');
   $('r-go').textContent = completed ? 'Completada ✓' : n ? `Continuar · ${n}/${total} →` : 'Empezar →';
   $('r-go').classList.toggle('done', completed);
-  $('c-rut-t').textContent = completed ? 'Hecha ✓' : n ? `${n} de ${total} · faltan ~${left} min` : `${plural(total, 'ejercicio', 'ejercicios')} · ~${mins} min`;
+  const took = r.date === today() && r.t0 && r.t1 ? Math.max(1, Math.round((r.t1 - r.t0) / 60000)) : null;
+  $('c-rut-t').textContent = completed ? (took ? `${took} min` : 'Hecha') : n ? `${n}/${total}` : `~${mins} min`;
   $('r-left').hidden = !list.length;
   $('r-left').className = 'pill' + (pending.length ? '' : ' ok');
   $('r-left').textContent = pending.length ? `~${left} min restantes` : 'Completada ✓';
@@ -582,10 +581,30 @@ async function loadRutina() {
   } catch {}
 }
 const goTab = tab => () => toParent({ type: 'health:tab', tab });
-$('r-go').onclick = goTab('rutina');
+const openWeight = () => { toggleWeight(true); $('w-input').focus(); $('w-input').select(); };
+let goAct = null;    // que hace el boton de la tarjeta (segun el siguiente paso)
+let foodOpen = null; // la pregunta de la comida: null = se abre sola cuando toca
+$('r-go').onclick = () => (goAct || goTab('rutina'))();
 $('c-rut').onclick = goTab('rutina');
-$('c-rut').classList.add('tap');
-$('c-w').onclick = () => { toggleWeight(true); $('w-input').focus(); $('w-input').select(); };
+$('c-w').onclick = openWeight;
+$('c-food').onclick = () => { foodOpen = $('food-ask').hidden; haptic('tick'); paintStep(); };
+
+/* ---------- Siguiente paso: la tarjeta dice que falta segun la hora y lo hecho ---------- */
+function paintStep() {
+  const t = today(), r = rDone(t), w = wDone(t), f = fDone(t);
+  const auto = !f && ((r && w) || hr >= 17);
+  $('food-ask').hidden = !(foodOpen ?? auto);
+  $('c-food').classList.toggle('ask', !f && !$('food-ask').hidden);
+  let st = null;
+  if (!r) { $('r-lbl').textContent = 'Hoy toca'; $('r-go').hidden = false; goAct = null; return; }
+  if (!w) st = { lbl: 'Siguiente paso', title: 'Pésate', sub: 'Rutina lista ✓ · falta el peso de la semana', go: 'Registrar peso', act: openWeight };
+  else if (!f) st = { lbl: 'Siguiente paso', title: '¿Seguiste el plan?', sub: 'Rutina y peso listos' };
+  else st = { lbl: 'Día completo ✨', title: 'Todo listo por hoy', sub: rut.nextDay?.name ? `Mañana toca ${rut.nextDay.name}` : 'Descansa bien', go: 'Ver mi semana', act: () => openWeek() };
+  $('r-lbl').textContent = st.lbl; $('r-name').textContent = st.title; $('r-meta').textContent = st.sub;
+  $('r-go').hidden = !st.go; $('r-go').classList.remove('done');
+  if (st.go) $('r-go').textContent = st.go;
+  goAct = st.act || null;
+}
 
 /* ---------- Vinculo con Habits: al completar la rutina se marca ese habito ---------- */
 async function loadHabits() {
@@ -630,7 +649,7 @@ function paintWeight() {
   const es = weights(), last = es[es.length - 1], t = today();
   // tarea de la semana
   const wk = es.filter(e => e.date > shift(t, -7)).pop();
-  $('c-w-t').textContent = wk ? `${wk.weight} kg · ${wk.date === t ? 'hoy' : dshort(wk.date)}` : last ? `Último: ${last.weight} kg (${dshort(last.date)})` : 'Aún no te has pesado';
+  $('c-w-t').textContent = wk ? `${wk.weight} kg` : 'Pendiente';
   if (!last) {
     $('w-last').innerHTML = '—<small>kg</small>';
     $('w-sub').innerHTML = 'Pésate para empezar a ver tu progreso';
@@ -795,7 +814,8 @@ function paintFood() {
   const cur = nlog[today()], p = profile();
   const kind = !cur ? null : cur.skipped ? 'no' : cur.partial ? 'parcial' : 'si';
   $('food-seg').querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === kind));
-  $('c-food-t').textContent = !cur ? '¿Seguiste el plan hoy?' : kind === 'no' ? 'Registrado: no seguiste el plan. Mañana otra vez.'
+  $('c-food-t').textContent = !cur ? 'Pendiente' : kind === 'no' ? 'No' : kind === 'parcial' ? 'Más o menos' : 'Sí';
+  $('food-q').textContent = !cur ? '¿Seguiste el plan hoy?' : kind === 'no' ? 'Registrado: no seguiste el plan. Mañana otra vez.'
     : kind === 'parcial' ? `Más o menos${cur.label ? ' · ' + cur.label : ''}` : `Plan cumplido${cur.label ? ' · ' + cur.label : ''} ✓`;
   // si el plan tiene varios dias, cual se comio
   const days = p?.days || [];
@@ -810,6 +830,7 @@ $('food-seg').querySelectorAll('[data-f]').forEach(b => b.onclick = () => {
   const cur = nlog[today()], p = profile(), f = b.dataset.f;
   const kind = !cur ? null : cur.skipped ? 'no' : cur.partial ? 'parcial' : 'si';
   toast(kind === f ? 'Respuesta quitada' : 'Comida registrada', () => setLog(cur || null));
+  foodOpen = kind !== f && f !== 'no' && (p?.days || []).length >= 2 ? true : null;
   if (kind === f) return setLog(null); // tocar de nuevo lo quita
   const day = (p?.days || []).find(d => d.id === (cur?.dayId || p.activeDay)) || (p?.days || [])[0];
   const base = day ? { dayId: day.id, label: day.label, profile: p.name } : {};
