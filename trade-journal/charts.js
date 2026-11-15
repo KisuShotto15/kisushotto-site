@@ -43,12 +43,17 @@ export function drawEquityCurve(container, points) {
   for (const p of points) seen.set(p.t, p.v);
   const sorted = [...seen.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ time: t, value: v }));
   series.setData(sorted);
+  // Que la curva ocupe todo el ancho en vez de quedar pegada al borde derecho
+  chart.timeScale().fitContent();
 
   // Zero baseline
   series.createPriceLine({ price: 0, color: '#333', lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
 
   // Responsive resize
-  const ro = new ResizeObserver(() => chart.resize(container.clientWidth, container.clientHeight || 260));
+  const ro = new ResizeObserver(() => {
+    chart.resize(container.clientWidth, container.clientHeight || 260);
+    chart.timeScale().fitContent();
+  });
   ro.observe(container);
   container._chartInstance = chart;
   container._chartRO = ro;
@@ -171,8 +176,8 @@ export function drawWinLossBars(container, winRate, tradeCount) {
   svg.setAttribute('width', '100%');
   svg.setAttribute('height', H);
   svg.innerHTML = `
-    <rect x="0"   y="0" width="${wW}" height="${H}" fill="#c8f135" fill-opacity="0.8" rx="3 0 0 3"/>
-    <rect x="${wW}" y="0" width="${lW}" height="${H}" fill="#ef4444" fill-opacity="0.8" rx="0 3 3 0"/>
+    <rect x="0"   y="0" width="${wW}" height="${H}" fill="#c8f135" fill-opacity="0.8" rx="3"/>
+    <rect x="${wW}" y="0" width="${lW}" height="${H}" fill="#ef4444" fill-opacity="0.8" rx="3"/>
     <text x="${wW / 2}" y="13" text-anchor="middle" fill="#000" font-size="11" font-family="IBM Plex Mono">${winRate}%</text>
     ${lW > 30 ? `<text x="${wW + lW / 2}" y="13" text-anchor="middle" fill="#fff" font-size="11" font-family="IBM Plex Mono">${(100 - winRate).toFixed(1)}%</text>` : ''}
   `;

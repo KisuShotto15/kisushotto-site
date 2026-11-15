@@ -2291,3 +2291,84 @@ table col.col-hold { width: 80px; }
 .kpi-grid.kpi-grid-6 { grid-template-columns: repeat(6, 1fr); }
 @media (max-width: 1100px) { .kpi-grid.kpi-grid-6 { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 600px)  { .kpi-grid.kpi-grid-6 { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── Telefono ──────────────────────────────────────────────────────────────────
+   Bajo 700px la barra lateral se oculta y todo tiene que caber en el ancho de
+   la pantalla: nada de anchos minimos de escritorio ni tablas que empujen la
+   pagina hacia un lado. */
+@media (max-width: 700px) {
+  body { padding: 14px 12px 90px 12px; }
+  .container { max-width: 100%; min-width: 0; }
+
+  /* Cabeceras */
+  .page-header h1, .dash-title { font-size: 30px; white-space: normal; letter-spacing: -0.5px; }
+  .page-header { margin-bottom: 16px; }
+  .dash-header { gap: 12px; margin-bottom: 14px; }
+  .dash-title-block { flex-shrink: 1; min-width: 0; }
+  .dash-subtitle { font-size: 12px; overflow-wrap: anywhere; }
+  .dash-header-right { width: 100%; align-items: stretch; }
+  .period-selector { overflow-x: auto; max-width: 100%; }
+  .period-btn { padding: 6px 10px; font-size: 12px; }
+  .period-custom { flex-wrap: wrap; }
+
+  /* Dashboard: calendario compacto */
+  .dash-body { grid-template-columns: 1fr; }
+  .dash-cal-col, .dash-sidebar { min-width: 0; }
+  .dash-cal-col { padding: 10px; }
+  .cal-nav-bar { flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .cal-title { min-width: 0; font-size: 15px; }
+  .cal-today-btn { font-size: 11px; padding: 4px 8px; }
+  .cal-days-header, .cal-grid-inner { gap: 2px; }
+  .cal-day-label { padding: 4px 0; font-size: 10px; text-align: center; }
+  .cal-cell { min-height: 50px; padding: 3px; }
+  .cal-cell-top { top: 3px; right: 4px; }
+  .cal-cell-day { font-size: 10px; }
+  .cal-cell-pnl { font-size: 10px; margin-top: 14px; letter-spacing: -0.4px; overflow: hidden; text-overflow: clip; white-space: nowrap; }
+  .cal-cell-count { font-size: 9px; margin-top: 1px; }
+  .edge-card, .kpi-grid { max-width: 100%; }
+  .edge-row { flex-wrap: wrap; gap: 10px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .kpi-value { font-size: 24px; }
+  .day-drawer { width: 100%; }
+  #ingestBtn { right: 12px !important; bottom: 12px !important; font-size: 12px; padding: 8px 12px; }
+  .modal-backdrop { padding: 12px; }
+  .modal-body { padding: 16px; }
+  .ingest-section-tabs { overflow-x: auto; }
+
+  /* Trades: cada trade como tarjeta, sin tabla ancha */
+  .filter-bar select, .filter-bar input { flex: 1 1 140px; min-width: 0; }
+  .trades-list { overflow-x: visible; }
+  .tc-header { display: none; }
+  .tc-body {
+    min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 12px;
+  }
+  .tc-symbol-col   { grid-column: 1; grid-row: 1; gap: 8px; min-width: 0; }
+  .tc-pnl-col      { grid-column: 2; grid-row: 1; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .tc-side-col     { grid-column: 1; grid-row: 2; }
+  .tc-duration-col { grid-column: 2; grid-row: 2; text-align: right; font-size: 13px; }
+  .tc-times-col    { grid-column: 1 / -1; grid-row: 3; font-size: 12px; gap: 4px; }
+  .tc-prices-col, .tc-chevron { display: none; }
+  .tc-icon { width: 32px; height: 32px; font-size: 14px; }
+  .tc-symbol { font-size: 16px; }
+  .tc-pnl-badge { font-size: 13px; padding: 3px 10px; }
+  .tc-detail { min-width: 0; padding: 14px 12px; }
+  .td-stats-row { flex-wrap: wrap; gap: 12px 0; }
+  .td-stat { flex: 1 1 33%; padding: 0 6px; border-right: none; }
+  .td-stat-val { font-size: 15px; }
+  .td-main-grid { grid-template-columns: 1fr; gap: 18px; }
+  .td-col { padding: 0; border-right: none; }
+  .td-footer-row { flex-direction: column; align-items: stretch; gap: 12px; }
+  .rule-score-row { flex-wrap: wrap; }
+  .bulk-bar { flex-wrap: wrap; }
+
+  /* Analytics e insights */
+  .tab-bar { overflow-x: auto; }
+  .tab-btn { white-space: nowrap; padding: 10px 12px; font-size: 13px; flex-shrink: 0; }
+  .section-card { overflow-x: auto; min-width: 0; }
+  .two-col, .three-col { grid-template-columns: 1fr; }
+  .stats-table { font-size: 12px; }
+  table { min-width: 560px; table-layout: auto; }   /* se desplaza dentro de su tarjeta */
+  .stats-table th, .stats-table td { padding: 8px 6px; white-space: nowrap; }
+  .chart-wrap { overflow: hidden; }
+  .insights-grid { grid-template-columns: 1fr; }
+}
