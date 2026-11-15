@@ -1,4 +1,9 @@
+import { authFetch } from '../auth.js';
+
 const BASE = 'https://api.nal.usda.gov/fdc/v1';
+// Sin llave propia, USDA va por el worker de Health (la llave vive alla)
+const PROXY = 'https://habits-worker.efrenalejandro2010.workers.dev/health/usda';
+export const SERVER_KEY = 'server';
 
 // ── API key stored per profile in localStorage ────────────────────────────────
 
@@ -7,7 +12,7 @@ const ENV_API_KEY = (() => {
 })();
 
 export function getApiKey(profileId) {
-  return localStorage.getItem(`nutrition_apikey_${profileId}`) || ENV_API_KEY;
+  return localStorage.getItem(`nutrition_apikey_${profileId}`) || ENV_API_KEY || SERVER_KEY;
 }
 
 export function setApiKey(profileId, key) {
@@ -17,9 +22,10 @@ export function setApiKey(profileId, key) {
 // ── Search USDA ───────────────────────────────────────────────────────────────
 
 export async function searchFoods(query, apiKey) {
-  const url = `${BASE}/foods/search?query=${encodeURIComponent(query)}`
-    + `&dataType=Foundation,SR%20Legacy&pageSize=10&api_key=${apiKey}`;
-  const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  const r = apiKey === SERVER_KEY
+    ? await authFetch(`${PROXY}/search?q=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(10000) })
+    : await fetch(`${BASE}/foods/search?query=${encodeURIComponent(query)}`
+      + `&dataType=Foundation,SR%20Legacy&pageSize=10&api_key=${apiKey}`, { signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw new Error(`USDA ${r.status}`);
   const data = await r.json();
   return (data.foods || []).map(food => ({
@@ -74,7 +80,9 @@ function extractPer100g(nutrients) {
 }
 
 export async function getFoodDetail(fdcId, apiKey) {
-  const r = await fetch(`${BASE}/food/${fdcId}?api_key=${apiKey}`, { signal: AbortSignal.timeout(10000) });
+  const r = apiKey === SERVER_KEY
+    ? await authFetch(`${PROXY}/food/${encodeURIComponent(fdcId)}`, { signal: AbortSignal.timeout(10000) })
+    : await fetch(`${BASE}/food/${fdcId}?api_key=${apiKey}`, { signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw new Error(`USDA detail ${r.status}`);
   const data = await r.json();
   const nutrients = (data.foodNutrients || []).map(fn => ({

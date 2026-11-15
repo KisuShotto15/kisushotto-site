@@ -192,7 +192,6 @@
     <div class="modal-header">
       <span>Agregar ingrediente</span>
       <div class="modal-header-actions">
-        <button class="link-btn small" onclick="window._openApiKeyModal()">API key</button>
         <button class="modal-close" onclick="window._closeSearch()" aria-label="Cerrar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
@@ -201,7 +200,7 @@
     <div class="modal-body">
       <div class="search-input-wrap">
         <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input type="text" id="searchInput" placeholder="Buscar alimento (USDA o lista local)…"
+        <input type="text" id="searchInput" placeholder="Buscar alimento…"
                oninput="window._handleSearchInput()" autocomplete="off">
       </div>
       <div id="searchResults" class="search-results"></div>
