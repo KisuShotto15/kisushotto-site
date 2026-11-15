@@ -240,11 +240,13 @@ function renderPositions() {
         <span class="tm-pos-pnl ${p.upnl >= 0 ? 'pos' : 'neg'}">${sign(p.upnl)}${coinm ? ` (${p.upnl_coin >= 0 ? '+' : ''}${(+p.upnl_coin).toFixed(6)} ${esc(p.settle_coin)})` : ''}${rNow != null ? ` · ${sign(rNow)}R` : ''}</span>
       </div>
       <div class="tm-pos-meta">
-        <span>${coinm ? `${fmt(p.size, 0)} contratos (${fmt(p.notional, 0)} USD)` : fmt(p.size, 4)} @ ${px(p.entry)} → ${px(p.mark)}</span>
-        <span class="${p.stop ? '' : 'neg'}">SL ${px(p.stop)}</span>
-        <span>TP ${px(p.tp)}</span>
-        ${p.leverage ? `<span>${p.leverage}x</span>` : ''}
-        ${p.liq ? `<span>liq ${px(p.liq)}</span>` : ''}
+        <span>${coinm ? `${fmt(p.size, 0)} contratos (${fmt(p.notional, 0)} USD)` : fmt(p.size, 4)}</span>
+        <span class="lv lv-entry"><b>ENTRADA</b>${px(p.entry)}</span>
+        <span>→ ${px(p.mark)}</span>
+        ${p.stop ? `<span class="lv lv-sl"><b>SL</b>${px(p.stop)}</span>` : '<span class="lv lv-missing">SIN SL</span>'}
+        ${p.tp ? `<span class="lv lv-tp"><b>TP</b>${px(p.tp)}</span>` : ''}
+        ${p.liq ? `<span class="lv lv-liq"><b>LIQ</b>${px(p.liq)}</span>` : ''}
+        ${p.leverage ? `<span class="lv lv-lev">${p.leverage}x</span>` : ''}
         ${risk > 0 ? `<span>riesgo ${fmt(risk)} USDT</span>` : p.stop ? '<span class="pos">stop en ganancia</span>' : ''}
       </div>
       <div class="tm-row">
@@ -280,7 +282,7 @@ function renderPending() {
       <div class="tm-pos-line"><b>${esc(t.symbol)}</b><span class="side-badge side-badge-${t.side}">${t.side.toUpperCase()}</span>
       <span class="tm-tag">${esc(t.exchange)}</span><span>${fmt(t.qty, 4)} @ ${px(t.entry)}</span>
       <button class="btn btn-sm btn-danger" onclick="cancelPending('${esc(t.id)}')">Cancelar</button></div>
-      <div class="tm-pos-meta"><span>SL ${px(t.stop)}</span><span>TP ${px(t.tp)}</span><span>riesgo ${fmt(t.risk_usd)} USDT</span></div>
+      <div class="tm-pos-meta"><span class="lv lv-sl"><b>SL</b>${px(t.stop)}</span><span class="lv lv-tp"><b>TP</b>${px(t.tp)}</span><span>riesgo ${fmt(t.risk_usd)} USDT</span></div>
     </div>`).join('') : '<div class="tm-sub">Sin ordenes limite pendientes</div>';
 }
 
@@ -420,7 +422,7 @@ function renderPreview(r) {
       <div><span>Apalancamiento</span><b>${p.leverage ? p.leverage + 'x aislado' : '—'}</b></div>
       <div><span>Margen</span><b>${fmt(p.margin)} USDT · ${fmt(p.margin_pct)}%</b></div>
       <div><span>Comisiones ida y vuelta</span><b>${fmt(p.fees_round_trip)} USDT</b></div>
-      <div><span>Liquidacion aprox.</span><b>${p.liq_dist_pct ? fmt(p.liq_dist_pct) + '% de la entrada' : '—'}</b></div>
+      <div><span>Liquidacion aprox.</span><b style="color:var(--lv-liq)">${p.liq_dist_pct ? fmt(p.liq_dist_pct) + '% de la entrada' : '—'}</b></div>
       <div><span>R:R</span><b>${p.rr ? p.rr.toFixed(2) : '—'}</b></div>
       <div><span>Si salta el stop</span><b class="neg">-${fmt(p.loss_if_stop)} USDT · ${fmt(p.risk_pct)}%</b></div>
       <div><span>Si llega al objetivo</span><b class="pos">+${fmt(p.gain_if_tp)} USDT</b></div>
@@ -521,8 +523,8 @@ function renderIndicators() {
   $('bands').innerHTML = rows.map(r => `
     <div class="tm-band ${Math.abs(r.z) === 3 ? 'x3' : Math.abs(r.z) === 2 ? 'x2' : ''} ${r.z === 0 ? 'mid' : ''} ${Math.round(at) === r.z ? 'here' : ''}">
       <span class="tm-band-label">${r.label}</span><span class="tm-band-px">${px(r.v)}</span>
-      <button class="tm-mini" onclick="setLevel('tStop', ${r.v})">SL</button>
-      <button class="tm-mini" onclick="setLevel('tTp', ${r.v})">TP</button>
+      <button class="tm-mini sl" onclick="setLevel('tStop', ${r.v})">SL</button>
+      <button class="tm-mini tp" onclick="setLevel('tTp', ${r.v})">TP</button>
     </div>`).join('') +
     `<div class="tm-band-now">Precio ${px(s.price)} · <b class="${Math.abs(s.sigma) >= 2 ? 'warn' : ''}">${s.sigma >= 0 ? '+' : ''}${s.sigma.toFixed(2)}σ</b></div>`;
   const rsiCls = s.rsi6 >= 80 ? 'neg' : s.rsi6 <= 20 ? 'pos' : '';

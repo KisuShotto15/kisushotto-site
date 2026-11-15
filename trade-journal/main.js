@@ -391,11 +391,13 @@ function renderOpenPositions(data) {
           title="${planned ? 'Plan guardado — editar' : 'Registrar el plan antes de que cierre'}">${planned ? '✓' : '✎'}</button>`}
       </div>
       <div class="open-pos-meta">
-        <span>${fmtPrice(p.entry_price)} → ${fmtPrice(p.mark_price)}</span>
-        ${p.leverage ? `<span>${p.leverage}x</span>` : ''}
+        <span class="lv lv-entry" title="entrada">${fmtPrice(p.entry_price)}</span>
+        <span>→ ${fmtPrice(p.mark_price)}</span>
         ${p.roi_pct != null ? `<span class="${win ? 'pos' : 'neg'}">${p.roi_pct >= 0 ? '+' : ''}${p.roi_pct.toFixed(1)}%</span>` : ''}
-        ${p.stop_loss ? `<span title="stop loss">SL ${fmtPrice(p.stop_loss)}</span>` : `<span class="warn" title="Sin stop en el exchange">sin SL</span>`}
-        ${p.take_profit ? `<span title="take profit">TP ${fmtPrice(p.take_profit)}</span>` : ''}
+        ${p.stop_loss ? `<span class="lv lv-sl" title="stop loss"><b>SL</b>${fmtPrice(p.stop_loss)}</span>` : `<span class="lv lv-missing" title="Sin stop en el exchange">SIN SL</span>`}
+        ${p.take_profit ? `<span class="lv lv-tp" title="take profit"><b>TP</b>${fmtPrice(p.take_profit)}</span>` : ''}
+        ${p.liq_price ? `<span class="lv lv-liq" title="liquidacion"><b>LIQ</b>${fmtPrice(p.liq_price)}</span>` : ''}
+        ${p.leverage ? `<span class="lv lv-lev">${p.leverage}x</span>` : ''}
       </div>
     </div>`;
   }).join('');
