@@ -138,7 +138,7 @@ export const BUILTIN={id:'estiramiento',name:'Equilibrio + estiramiento',builtin
 export function phasesOf(x){
   const out=[],sides=x.sides?['derecho','izquierdo']:[''];
   for(let s=1;s<=x.sets;s++){
-    sides.forEach(sd=>out.push({l:`Serie ${s}/${x.sets}`+(sd?' · '+sd:''),s:x.type==='time'?x.secs:0,reps:x.type==='reps'?x.reps:0}));
+    sides.forEach(sd=>out.push({l:`Serie ${s}/${x.sets}`+(sd?' · '+sd:''),s:x.type==='time'?x.secs:0,reps:x.type==='reps'?x.reps:0,set:s,side:sd||null}));
     if(x.rest&&s<x.sets)out.push({l:'Descanso',s:x.rest,rest:true});
   }
   return out;
@@ -157,7 +157,7 @@ export function compile(r,mini=false){
   const n=(r.items||[]).length,between=x=>({l:'Descanso',s:rb,rest:true,between:true});
   const one=x=>mini?{...x,sets:1}:x;
   return (r.items||[]).map((x,j)=>({src:j,kg:x.kg||null,name:x.name,dose:doseOf(one(x)),
-    phases:rb>0&&j<n-1?[...phasesOf(one(x)),between(x)]:phasesOf(one(x)),steps:[],note:x.note||'',q:x.name+' exercise',block:'',sets:x.sets,reps:x.type==='reps'?x.reps:0}));
+    phases:rb>0&&j<n-1?[...phasesOf(one(x)),between(x)]:phasesOf(one(x)),steps:[],note:x.note||'',q:x.name+' exercise',block:'',sets:one(x).sets,reps:x.type==='reps'?x.reps:0,fail:!!x.fail,sides:!!x.sides}));
 }
 // Duracion estimada: las series por repeticiones cuentan ~3 s por rep
 export const dur=it=>it.phases.reduce((a,p)=>a+(p.s||p.reps*3),0);

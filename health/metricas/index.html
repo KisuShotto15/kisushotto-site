@@ -44,8 +44,8 @@ input,select{font-family:inherit;outline:none}
 
 /* ── Layout ── */
 .page{max-width:1200px;margin:0 auto;padding:24px 20px 80px}
-.layout{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-@media(max-width:800px){.layout{grid-template-columns:1fr}}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+@media(max-width:800px){.layout{grid-template-columns:minmax(0,1fr)}}
 
 /* ── Panel ── */
 .panel{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:20px}
@@ -90,6 +90,15 @@ input,select{font-family:inherit;outline:none}
 
 /* ── PRs table ── */
 .pr-list{display:flex;flex-direction:column;gap:6px}
+.pg-row{display:grid;grid-template-columns:minmax(0,1fr) 72px auto;gap:12px;align-items:center;padding:10px 12px;background:var(--surf-2);border:1px solid var(--border);border-radius:10px}
+.pg-row b{display:block;font-size:13.5px;font-weight:600;line-height:1.25}
+.pg-row .pg-d{font-size:11.5px;color:var(--text-3)}
+.pg-row svg{width:72px;height:30px;overflow:visible}
+.pg-v{text-align:right;font-weight:700;font-size:14px;white-space:nowrap}
+.pg-v small{display:block;font-size:11px;font-weight:600}
+.pg-up{color:var(--green)} .pg-lv{color:var(--h-warn,#fbbf24)} .pg-fl{color:var(--text-3)}
+.pg-tip{display:flex;gap:10px;margin-top:8px;padding:10px 12px;border-radius:10px;background:rgba(251,191,36,.08);font-size:12.5px;color:var(--text-2)}
+.pg-tip b{color:var(--text)}
 .sess-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:10px 12px;background:var(--surf-2);border:1px solid var(--border);
   border-radius:10px;color:var(--text);margin-bottom:6px}
 .sess-row .sd{font-size:12px;color:var(--text-2);min-width:56px}
@@ -260,7 +269,7 @@ select.inp{cursor:pointer}
     <!-- RIGHT: Rendimiento -->
     <div>
       <div class="panel">
-        <div class="ptitle">PRs actuales</div>
+        <div class="ptitle">Progreso por ejercicio</div>
         <div class="pr-list" id="pr-list">
           <div class="empty">Registra sesiones para ver tus PRs</div>
         </div>
@@ -580,42 +589,46 @@ function renderWeightChart(entries) {
   `;
 }
 
+// Progreso por ejercicio: la mejor serie de cada sesion (reps si es con el
+// cuerpo, kg si lleva peso), si va subiendo, si toca subir de nivel o si se estanco.
 function renderPRs() {
   const el = document.getElementById('pr-list');
-  const prs = computePRs();
-  if (!prs.length) { el.innerHTML = '<div class="empty">Registra sesiones para ver tus PRs</div>'; return; }
-
-  el.innerHTML = prs.map(pr => {
-    const exName = S.exercises.find(e => e.id === pr.exerciseId)?.name || pr.exerciseId;
-    const deltaHtml = pr.isNew
-      ? `<span class="pr-delta up">nuevo PR</span>`
-      : `<span class="pr-delta same">${new Date(pr.date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>`;
-    return `<div class="pr-row">
-      <span class="pr-name">${exName}</span>
-      <span class="pr-val">${pr.weight ? `${pr.weight}<span class="pr-unit">kg × ${pr.reps}</span>` : `${pr.reps}<span class="pr-unit"> reps</span>`}</span>
-      ${deltaHtml}
-    </div>`;
-  }).join('');
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fd = d => new Date(d + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  const daysAgo = d => Math.round((Date.now() - new Date(d + 'T00:00:00')) / 864e5);
+  const rows = S.exercises.map(e => {
+    const ss = S.sessions.filter(s => s.sets.some(z => z.exerciseId === e.id)).sort((a, b) => a.date.localeCompare(b.date));
+    if (!ss.length) return null;
+    const kgMode = ss.some(s => s.sets.some(z => z.exerciseId === e.id && z.weight > 0));
+    const pts = ss.map(s => { const sets = s.sets.filter(z => z.exerciseId === e.id);
+      return { date: s.date, v: kgMode ? Math.max(...sets.map(z => z.weight || 0)) : Math.max(...sets.map(z => z.reps)) }; });
+    const best = Math.max(...pts.map(p => p.v)), last = pts[pts.length - 1];
+    const bestAt = pts.find(p => p.v === best).date;
+    const first = pts.find(p => daysAgo(p.date) <= 42) || pts[0];
+    const recent = pts.filter(p => daysAgo(p.date) <= 21);
+    let txt = '', cls = 'pg-fl';
+    if (!kgMode && last.v >= 15) { txt = '¡Sube de nivel!'; cls = 'pg-lv'; }
+    else if (recent.length >= 3 && daysAgo(bestAt) > 14) { txt = `sin subir hace ${Math.round(daysAgo(bestAt) / 7)} sem`; }
+    else if (last.v > first.v && pts.length > 1) { const w = Math.max(1, Math.round((new Date(last.date) - new Date(first.date)) / 6048e5));
+      txt = `+${+(last.v - first.v).toFixed(1)} en ${w} sem`; cls = 'pg-up'; }
+    else if (pts.length === 1) txt = fd(last.date);
+    else txt = 'récord ' + fd(bestAt);
+    return { e, pts: pts.slice(-8), best, last, kgMode, txt, cls };
+  }).filter(Boolean);
+  if (!rows.length) { el.innerHTML = '<div class="empty">Registra sesiones (o haz tu rutina) para ver tu progreso</div>'; return; }
+  const spark = (pts, cls) => {
+    if (pts.length < 2) return '<svg></svg>';
+    const vs = pts.map(p => p.v), mn = Math.min(...vs), mx = Math.max(...vs);
+    const xy = pts.map((p, i) => `${(i / (pts.length - 1) * 96).toFixed(1)},${(27 - (mx === mn ? 12 : (p.v - mn) / (mx - mn) * 24)).toFixed(1)}`).join(' ');
+    const col = { 'pg-up': '#34d399', 'pg-lv': '#fbbf24', 'pg-fl': '#80838e' }[cls];
+    return `<svg viewBox="0 0 96 30" preserveAspectRatio="none"><polyline points="${xy}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
+  };
+  const stuck = rows.find(r => r.txt.startsWith('sin subir')), lvl = rows.find(r => r.cls === 'pg-lv');
+  el.innerHTML = rows.map(r => `<div class="pg-row"><div><b>${esc(r.e.name)}</b><span class="pg-d">récord ${r.best}${r.kgMode ? ' kg' : ' reps'}</span></div>
+      ${spark(r.pts, r.cls)}<div class="pg-v">${r.last.v}${r.kgMode ? ' kg' : ' reps'}<small class="${r.cls}">${r.txt}</small></div></div>`).join('')
+    + (lvl ? `<div class="pg-tip">📈<div><b>${esc(lvl.e.name)}: ya pide más dificultad.</b> Con 15+ reps, cambia a una variante más dura, añade peso (mochila) o baja en 3 s.</div></div>` : '')
+    + (stuck ? `<div class="pg-tip">🧱<div><b>${esc(stuck.e.name)} lleva un tiempo igual.</b> Prueba solo la bajada lenta (4–5 s) o una variante un poco más fácil con más reps: también cuenta.</div></div>` : '');
 }
-
-function computePRs() {
-  // PR = max weight lifted per exercise (with best reps at that weight)
-  const map = {};
-  for (const sess of S.sessions) {
-    for (const set of sess.sets) {
-      const key = set.exerciseId;
-      if (!map[key] || set.weight > map[key].weight ||
-         (set.weight === map[key].weight && set.reps > map[key].reps)) {
-        map[key] = { exerciseId: key, weight: set.weight, reps: set.reps, date: sess.date };
-      }
-    }
-  }
-  // Sort by exercise order
-  return S.exercises
-    .filter(e => map[e.id])
-    .map(e => ({ ...map[e.id], isNew: false }));
-}
-
 function renderVolume() {
   const now = new Date();
   const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());

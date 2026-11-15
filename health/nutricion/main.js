@@ -150,6 +150,87 @@ function render() {
   renderTDEEResults();
 }
 
+// ── Compras de la semana ─────────────────────────────────────────────────────
+// Lista = gramos de cada ingrediente de los dias del plan × veces por semana.
+// Precio por kg (lo pones una vez); el costo, el presupuesto y que da mas
+// calorias por tu dinero salen de ahi. Lo tachado vale solo para esa semana.
+const normName = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+function weekKey() {
+  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // lunes
+  return d.toISOString().slice(0, 10);
+}
+function shop() {
+  const p = profile();
+  p.shop = p.shop || {};
+  const sh = p.shop;
+  sh.currency = sh.currency || '$';
+  sh.prices = sh.prices || {};
+  if (!sh.freq) sh.freq = { [p.activeDay || p.days[0]?.id]: 7 };
+  if (sh.checked?.week !== weekKey()) sh.checked = { week: weekKey(), keys: [] };
+  return sh;
+}
+function shopItems() {
+  const p = profile(), sh = shop(), map = {};
+  for (const d of p.days || []) {
+    const times = sh.freq[d.id] || 0;
+    if (!times) continue;
+    for (const m of d.meals || []) for (const ing of m.ingredients || []) {
+      if (ing.disabled || !ing.amountG) continue;
+      const key = normName(ing.name);
+      const it = map[key] || (map[key] = { key, name: ing.name, g: 0, kcal100: ing.per100g?.calories || 0 });
+      it.g += ing.amountG * times;
+    }
+  }
+  return Object.values(map).sort((a, b) => b.g - a.g);
+}
+const grams = g => g >= 1000 ? (Math.round(g / 100) / 10).toLocaleString('es') + ' kg' : Math.round(g) + ' g';
+const money = (sh, v) => sh.currency + ' ' + (v >= 100 ? Math.round(v).toLocaleString('es') : (Math.round(v * 100) / 100).toLocaleString('es'));
+function renderShop() {
+  const el = document.getElementById('shopItems');
+  if (!el) return;
+  const p = profile(), sh = shop(), items = shopItems();
+  const days = (p.days || []).reduce((a, d) => a + (sh.freq[d.id] || 0), 0);
+  document.getElementById('shopFreq').innerHTML = '<span class="sf-l">Días del plan esta semana</span>' + (p.days || []).map(d =>
+    `<span class="sf"><span>${esc(d.label || 'Día')}</span><button onclick="window._shopFreq('${d.id}',-1)" aria-label="Menos">−</button><b>${sh.freq[d.id] || 0}</b><button onclick="window._shopFreq('${d.id}',1)" aria-label="Más">+</button></span>`).join('');
+  const checked = new Set(sh.checked.keys);
+  el.innerHTML = items.length ? items.map(it => {
+    const price = sh.prices[it.key];
+    return `<li class="si${checked.has(it.key) ? ' on' : ''}">
+      <button class="si-ck" onclick="window._shopCheck('${esc(it.key)}')" aria-label="Tachar"></button>
+      <span class="si-n">${esc(it.name)} <small>${grams(it.g)}</small></span>
+      <span class="si-p"><input type="number" inputmode="decimal" min="0" step="any" value="${price ?? ''}" placeholder="precio/kg"
+        onchange="window._shopPrice('${esc(it.key)}',this.value)"><small>${price ? money(sh, it.g / 1000 * price) : ''}</small></span></li>`;
+  }).join('') : '<li class="si-empty">Elige cuántos días de la semana comes cada día del plan.</li>';
+  // costo, presupuesto y lo mas barato por caloria
+  const priced = items.filter(it => sh.prices[it.key] > 0);
+  const cost = priced.reduce((a, it) => a + it.g / 1000 * sh.prices[it.key], 0);
+  const kcal = items.reduce((a, it) => a + it.g / 100 * it.kcal100, 0);
+  const pct = sh.budget ? Math.round(cost / sh.budget * 100) : null;
+  const cheap = priced.filter(it => it.kcal100 > 0).map(it => ({ ...it, kpm: it.kcal100 * 10 / sh.prices[it.key] }))
+    .sort((a, b) => b.kpm - a.kpm).slice(0, 3);
+  document.getElementById('shopNote').textContent = `${items.length} alimentos · ${checked.size ? checked.size + ' tachados' : 'toca para tachar'}`;
+  document.getElementById('shopCost').innerHTML = `
+    <div class="sc-row"><div><div class="sc-l">Costo de la semana</div>
+      <div class="sc-v">${priced.length ? money(sh, cost) : '—'}</div></div>
+      <label class="sc-cur">Moneda <input value="${esc(sh.currency)}" maxlength="4" onchange="window._shopSet('currency',this.value)"></label></div>
+    ${pct !== null ? `<div class="sc-bar${pct > 100 ? ' over' : ''}"><i style="width:${Math.min(100, pct)}%"></i></div>` : ''}
+    <div class="sc-sub">${priced.length < items.length ? (items.length - priced.length === 1 ? 'Falta 1 precio · ' : `Faltan ${items.length - priced.length} precios · `) : ''}${pct !== null ? `${pct}% de tu presupuesto` : 'Sin presupuesto'}
+      ${cost && kcal ? ` · ${money(sh, cost / kcal * 1000)} por cada 1000 kcal` : ''}</div>
+    <label class="sc-bud">Presupuesto semanal <input type="number" inputmode="decimal" min="0" step="any" value="${sh.budget ?? ''}" placeholder="—"
+      onchange="window._shopSet('budget',this.value)"></label>
+    ${cheap.length ? `<div class="sc-cheap">Más calorías por tu dinero: <b>${cheap.map(c => esc(c.name)).join(', ')}</b>.</div>` : ''}
+    ${days ? '' : '<div class="sc-sub">Sin días elegidos: la lista está vacía.</div>'}`;
+}
+window._shopFreq = (id, d) => { const sh = shop(); sh.freq[id] = Math.max(0, Math.min(14, (sh.freq[id] || 0) + d)); save(); renderShop(); };
+window._shopCheck = key => { const sh = shop(), k = sh.checked.keys, i = k.indexOf(key); if (i >= 0) k.splice(i, 1); else k.push(key); save(); renderShop(); };
+window._shopPrice = (key, v) => { const sh = shop(), n = parseFloat(String(v).replace(',', '.')); if (n > 0) sh.prices[key] = n; else delete sh.prices[key]; save(); renderShop(); };
+window._shopSet = (k, v) => {
+  const sh = shop();
+  if (k === 'currency') sh.currency = String(v).trim().slice(0, 4) || '$';
+  else { const n = parseFloat(String(v).replace(',', '.')); sh.budget = n > 0 ? n : null; }
+  save(); renderShop();
+};
+
 // ── Profiles ──────────────────────────────────────────────────────────────────
 function renderProfiles() {
   const bar = document.getElementById('profilesBar');
@@ -586,6 +667,7 @@ function renderSummary() {
     gap.innerHTML = diff > 0 ? `Te faltan <b>~${diff} kcal</b> para tu meta. ${cheapFill(diff)}`
       : `Te pasas <b>~${-diff} kcal</b> de tu meta.`;
   }
+  renderShop();
   renderMicros();
 }
 const FILLERS = [['2 cdas de aceite', 240], ['50 g de maní', 290], ['1 taza de avena con leche', 300], ['1 plátano', 120], ['2 huevos', 150], ['1 taza de arroz', 200]];
