@@ -210,3 +210,35 @@
 .tm-pos-meta { align-items: center; row-gap: 6px; }
 .tm-ticket .form-field select, .tm-ticket .form-field input { width: 100%; min-width: 0; }
 .tm-ticket .form-field { min-width: 0; }
+
+/* Grafico del ticket con lineas arrastrables */
+.tc-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.tc-legend { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--muted2); margin-left: auto; }
+.tc-legend i { display: inline-block; width: 12px; height: 0; border-top: 1px dotted; margin-right: -4px; vertical-align: middle; }
+.tc-legend i.v { border-top: 2px solid var(--lv-entry); }
+.tc-legend i.s1 { border-color: var(--muted2); }
+.tc-legend i.s2 { border-color: var(--amber); }
+.tc-legend i.s3 { border-color: var(--red); }
+.tc-hint { width: 100%; font-size: 11px; color: var(--muted2); }
+.tc-chart { position: relative; height: 340px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tc-chart-canvas { position: absolute; inset: 0; }
+/* La tabla interna del grafico no debe heredar los estilos de tablas del sitio */
+.tc-chart table { width: auto; min-width: 0 !important; table-layout: auto !important; font-size: inherit; }
+.tc-chart td { padding: 0; border: 0; font-size: inherit; }
+.tc-chart-ov { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.tc-handle {
+  position: absolute; left: 8px; transform: translateY(-50%); pointer-events: auto; touch-action: none; cursor: ns-resize;
+  display: flex; gap: 5px; align-items: center; padding: 2px 8px; border-radius: 4px; font: 600 11px 'IBM Plex Mono', monospace;
+  color: #fff; white-space: nowrap; user-select: none; box-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.tc-handle span { opacity: .8; }
+.tc-handle.drag { box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
+.tc-handle.off { opacity: .6; }
+.tc-h-sl { background: var(--lv-sl); }
+.tc-h-tp { background: var(--lv-tp); color: #062a20; }
+.tc-h-entry { background: var(--lv-entry); color: #0b1a33; }
+@media (max-width: 700px) {
+  .tc-chart { height: 280px; }
+  .tc-legend { margin-left: 0; }
+  .tc-handle { padding: 5px 9px; }
+}

@@ -3,6 +3,7 @@
 
 import { exec } from './api.js';
 import { LiveFeed } from './live-feed.js';
+import { TicketChart } from './ticket-chart.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -219,6 +220,7 @@ function posRiskUsd(p) {
 }
 
 function renderPositions() {
+  syncChart();
   const list = positionsOf();
   $('posStamp').textContent = S.guardian_at ? `guardian hace ${Math.max(0, Math.round(Date.now() / 1000 - S.guardian_at))}s` : '';
   if (!list.length) { $('positions').innerHTML = '<div class="tm-sub">Sin posiciones abiertas</div>'; return; }
@@ -391,6 +393,7 @@ function currentOrder() {
 }
 
 window.schedulePreview = () => {
+  syncChart();
   clearTimeout(previewTimer);
   previewTimer = setTimeout(preview, 350);
 };
@@ -487,6 +490,8 @@ window.loadMarket = async () => {
     M = await exec.market({ exchange: $('tExchange').value, market: $('tMarket').value, symbol,
                             interval: $('tInterval').value, anchor: $('tAnchor').value });
     renderIndicators();
+    chart.setData(M.candles.map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v })), M.anchor, M.instrument?.tick);
+    syncChart();
     // Desde aqui los indicadores se actualizan por WebSocket, sin mas peticiones
     if (M.candles?.length) feed.start(M);
   } catch (e) {
@@ -501,7 +506,7 @@ window.loadMarket = async () => {
 
 let feedState = 'off';
 const feed = new LiveFeed({
-  onUpdate: snap => { if (M) { M.indicators = snap; renderIndicators(); } },
+  onUpdate: snap => { if (M) { M.indicators = snap; renderIndicators(); chart.update(feed.candles); } },
   onStatus: st => { feedState = st; if (M?.indicators) renderStamp(); },
 });
 
@@ -536,6 +541,55 @@ function renderIndicators() {
 }
 
 window.setLevel = (id, v) => { $(id).value = px(v); schedulePreview(); };
+
+// ── Grafico con SL / TP / limite arrastrables ─────────────────────────────────
+
+const LEVEL_INPUT = { sl: 'tStop', tp: 'tTp', entry: 'tEntry' };
+const pct = v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+const refPrice = () => ($('tType').value === 'limit' && +$('tEntry').value) || M?.indicators?.price || chart.lastPrice();
+
+function levelLabel(name, price) {
+  const ref = refPrice();
+  const d = ref ? (price / ref - 1) * 100 : 0;
+  if (name === 'entry') return `LIMITE ${px(price)}`;
+  if (name === 'sl') return `SL ${px(price)} · ${pct(d)}`;
+  const stop = +$('tStop').value;
+  const rr = ref && stop && Math.abs(ref - stop) > 0 ? Math.abs(price - ref) / Math.abs(ref - stop) : null;
+  return `TP ${px(price)} · ${pct(d)}${rr ? ` · ${rr.toFixed(2)}R` : ''}`;
+}
+
+const chart = new TicketChart($('tChart'), {
+  labelOf: levelLabel,
+  onDrag: (name, price) => { $(LEVEL_INPUT[name]).value = px(price); },
+  onDrop: () => schedulePreview(),
+});
+
+// Pasa al grafico lo que dicen los campos del ticket y la posicion abierta del simbolo
+function syncChart() {
+  chart.setLevel('sl', +$('tStop').value || null);
+  chart.setLevel('tp', +$('tTp').value || null);
+  chart.setLevel('entry', $('tType').value === 'limit' ? +$('tEntry').value || null : null);
+  const sym = $('tSymbol').value.trim().toUpperCase(), ex = $('tExchange').value;
+  chart.setPosition(S ? positionsOf().find(p => p.symbol === sym && p.exchange === ex) : null);
+}
+
+window.chartAdd = name => {
+  const ref = M?.indicators?.price || chart.lastPrice();
+  if (!ref) return;
+  const dir = side === 'long' ? 1 : -1;
+  if (name === 'entry') {
+    $('tType').value = 'limit';
+    onTypeChange();
+    $('tEntry').value = px(ref);
+  } else if (name === 'sl') {
+    $('tStop').value = px(ref * (1 - dir * 0.004));
+  } else {
+    const entry = refPrice();
+    const stop = +$('tStop').value || entry * (1 - dir * 0.004);
+    $('tTp').value = px(entry + dir * 2 * Math.abs(entry - stop));
+  }
+  schedulePreview();
+};
 
 // ── Reglas ────────────────────────────────────────────────────────────────────
 
