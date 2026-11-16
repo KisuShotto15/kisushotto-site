@@ -152,6 +152,7 @@
 .tm-news-row { font-size: 14px; padding: 4px 0; border-bottom: 1px solid var(--border); }
 .tm-news-row span { font-family: 'IBM Plex Mono', monospace; color: var(--muted2); margin: 0 6px; }
 .tm-news-row i { color: var(--muted); font-size: 12px; }
+.tm-news-row.minor { opacity: .55; }
 .tm-connect { display: flex; flex-direction: column; gap: 12px; }
 .tm-diag { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tm-process { font-size: 15px; line-height: 1.6; color: var(--text); }

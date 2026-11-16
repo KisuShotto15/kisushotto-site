@@ -9,7 +9,7 @@
 //     clics rapidos no pueden abrir dos operaciones saltandose el limite.
 
 import {
-  normalizeRules, splitChange, sessionWindow, newsStatus, parseCalendar, validateOrder,
+  normalizeRules, splitChange, sessionWindow, newsStatus, isMajorNews, parseCalendar, validateOrder,
   evaluateGates, lockFromGates, sizeOrder, chooseLeverage, guardianPlan, todayStats, nyParts,
   weekStart, addDays, rOf, CHANGE_DELAY_SEC, HARD, DEFAULT_RULES, evaluateSwingGates, sizeInverse, SWING_HARD,
 } from './risk.js';
@@ -286,7 +286,7 @@ export class ExchangeGateway {
     const accounts = (await this.db.prepare('SELECT exchange, env, mode, dry_run, enabled, last_error, updated_at FROM exec_accounts').all()).results;
     return {
       now: ctx.now, rules: ctx.rules, pending: ctx.pending, pending_at: ctx.pending_at, hard: HARD, swing_hard: SWING_HARD,
-      window: ctx.window, news: ctx.news, news_list: ctx.newsList.slice(0, 20), news_meta: ctx.newsMeta,
+      window: ctx.window, news: ctx.news, news_list: ctx.newsList.slice(0, 20).map(e => ({ ...e, major: isMajorNews(e) })), news_meta: ctx.newsMeta,
       lock: ctx.state.lock_until > nowSec() ? { until: ctx.state.lock_until, reason: ctx.state.lock_reason } : null,
       equity: ctx.equity, today: ctx.today, gates: ctx.gates, errors: ctx.errors,
       accounts: accounts.map(a => ({ ...a, profile: ctx.rules.vwap_exchanges.includes(a.exchange) ? 'vwap' : 'swing',

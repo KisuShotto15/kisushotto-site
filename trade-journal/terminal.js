@@ -173,12 +173,12 @@ function renderNews() {
   } else {
     $('newsBig').textContent = 'LIBRE';
     $('newsBig').className = 'tm-big pos';
-    $('newsSub').textContent = n.unknown ? 'Confirmado a mano' : 'Sin eventos de alto impacto en USD';
+    $('newsSub').textContent = n.unknown ? 'Confirmado a mano' : 'Sin noticias que bloqueen el dia';
   }
   $('newsConfirm').classList.toggle('hidden', !(n.unknown && n.blocked && !n.events.length));
 
   $('newsList').innerHTML = S.news_list.length
-    ? S.news_list.map(e => `<div class="tm-news-row"><b>${esc(e.date)}</b> <span>${esc(e.time)}</span> ${esc(e.title)} <i>${esc(e.source)}</i></div>`).join('')
+    ? S.news_list.map(e => `<div class="tm-news-row ${e.major ? '' : 'minor'}"><b>${esc(e.date)}</b> <span>${esc(e.time)}</span> ${esc(e.title)} <i>${e.major ? 'bloquea el dia' : 'no bloquea'}</i></div>`).join('')
     : '<div class="tm-sub">Sin eventos proximos</div>';
   const meta = S.news_meta;
   if (meta) $('newsList').insertAdjacentHTML('beforeend', `<div class="tm-sub">Cobertura ${esc(meta.covered_from || '—')} a ${esc(meta.covered_to || '—')}${meta.error ? ` · error: ${esc(meta.error)}` : ''}</div>`);
