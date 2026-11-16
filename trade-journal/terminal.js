@@ -233,29 +233,36 @@ function renderPositions() {
     // "Stop a entrada" solo si acerca el stop: en ganancia y con el stop aun del lado de la perdida
     const be = (p.side === 'long' ? p.mark > p.entry : p.mark < p.entry) &&
                (!p.stop || (p.side === 'long' ? p.stop < p.entry : p.stop > p.entry));
-    return `<div class="tm-pos">
-      <div class="tm-pos-line">
-        <b>${esc(p.symbol)}</b>
+    // Tarjeta: franja del lado, columnas fijas con etiqueta y resultado a la derecha
+    const cell = (label, value, cls = '', note = '') => `<div class="pc-cell ${cls}"><span>${label}${note}</span><b>${value}</b></div>`;
+    // Distancia del nivel al precio actual, junto a la etiqueta
+    const distPct = v => v && p.mark ? ` <i>${((v / p.mark - 1) * 100 >= 0 ? '+' : '')}${fmt((v / p.mark - 1) * 100)}%</i>` : '';
+    return `<div class="pc pc-${p.side}">
+      <div class="pc-id">
+        <b class="pc-sym">${esc(p.symbol)}</b>
         <span class="side-badge side-badge-${p.side}">${p.side.toUpperCase()}</span>
         <span class="tm-tag">${esc(p.exchange)}${coinm ? ' · COIN-M' : ''}</span>
         ${p.trade ? '' : '<span class="tm-tag warn">externa</span>'}
-        <span class="tm-pos-pnl ${p.upnl >= 0 ? 'pos' : 'neg'}">${sign(p.upnl)}${coinm ? ` (${p.upnl_coin >= 0 ? '+' : ''}${(+p.upnl_coin).toFixed(6)} ${esc(p.settle_coin)})` : ''}${rNow != null ? ` · ${sign(rNow)}R` : ''}</span>
+        ${p.leverage ? `<span class="tm-tag pc-lev">${p.leverage}x</span>` : ''}
       </div>
-      <div class="tm-pos-meta">
-        <span>${coinm ? `${fmt(p.size, 0)} contratos (${fmt(p.notional, 0)} USD)` : fmt(p.size, 4)}</span>
-        <span class="lv lv-entry"><b>ENTRADA</b>${px(p.entry)}</span>
-        <span>→ ${px(p.mark)}</span>
-        ${p.stop ? `<span class="lv lv-sl"><b>SL</b>${px(p.stop)}</span>` : '<span class="lv lv-missing">SIN SL</span>'}
-        ${p.tp ? `<span class="lv lv-tp"><b>TP</b>${px(p.tp)}</span>` : ''}
-        ${p.liq ? `<span class="lv lv-liq"><b>LIQ</b>${px(p.liq)}</span>` : ''}
-        ${p.leverage ? `<span class="lv lv-lev">${p.leverage}x</span>` : ''}
-        ${risk > 0 ? `<span>riesgo ${fmt(risk)} USDT</span>` : p.stop ? '<span class="pos">stop en ganancia</span>' : ''}
+      <div class="pc-pnl ${p.upnl >= 0 ? 'pos' : 'neg'}">
+        <b>${sign(p.upnl)}</b>
+        <small>${rNow != null ? `${sign(rNow)}R` : 'USDT'}${coinm ? ` · ${p.upnl_coin >= 0 ? '+' : ''}${(+p.upnl_coin).toFixed(6)} ${esc(p.settle_coin)}` : ''}</small>
       </div>
-      <div class="tm-row">
-        ${be ? `<button class="btn btn-sm" onclick="posBreakeven(${i})">Stop a entrada</button>` : ''}
-        <button class="btn btn-sm" onclick="posStop(${i})">Acercar stop</button>
-        <button class="btn btn-sm" onclick="posClose(${i}, 50)">Cerrar 50%</button>
-        <button class="btn btn-sm btn-danger" onclick="posClose(${i}, 100)">Cerrar</button>
+      <div class="pc-grid">
+        ${cell('TAMAÑO', coinm ? `${fmt(p.size, 0)} ct` : fmt(p.size, 4))}
+        ${cell('ENTRADA', px(p.entry), 'c-entry')}
+        ${cell('MARCA', px(p.mark))}
+        ${p.stop ? cell('STOP', px(p.stop), 'c-sl', distPct(p.stop)) : cell('STOP', 'SIN SL', 'c-missing')}
+        ${p.tp ? cell('TP', px(p.tp), 'c-tp', distPct(p.tp)) : ''}
+        ${p.liq ? cell('LIQ', px(p.liq), 'c-liq', distPct(p.liq)) : ''}
+        ${cell('RIESGO', risk > 0 ? `${fmt(risk)} USDT` : p.stop ? 'en ganancia' : '—', risk > 0 ? '' : p.stop ? 'c-tp' : '')}
+      </div>
+      <div class="pc-acts">
+        ${be ? `<button onclick="posBreakeven(${i})">Stop a entrada</button>` : ''}
+        <button onclick="posStop(${i})">Acercar stop</button>
+        <button onclick="posClose(${i}, 50)">Cerrar 50%</button>
+        <button class="danger" onclick="posClose(${i}, 100)">Cerrar</button>
       </div>
     </div>`;
   }).join('');
