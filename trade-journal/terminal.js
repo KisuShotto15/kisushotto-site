@@ -290,7 +290,8 @@ function renderPending() {
   const ext = (S.open_orders || []).filter(o => !o.trade_id && o.profile === strat);
   $('pending').innerHTML += ext.map(o => `<div class="tm-pos">
       <div class="tm-pos-line"><b>${esc(o.symbol)}</b><span class="side-badge side-badge-${o.side}">${o.side.toUpperCase()}</span>
-      <span class="tm-tag">${esc(o.exchange)}</span><span class="tm-tag warn">externa</span><span>${fmt(o.qty, 4)} @ ${px(o.price)}</span></div>
+      <span class="tm-tag">${esc(o.exchange)}</span><span class="tm-tag warn">externa</span><span>${fmt(o.qty, 4)} @ ${px(o.price)}</span>
+      <button class="btn btn-sm btn-danger" onclick="cancelExternal('${esc(o.exchange)}','${esc(o.order_id)}','${esc(o.symbol)}')">Cancelar</button></div>
       <div class="tm-pos-meta">${o.stop ? `<span class="lv lv-sl"><b>SL</b>${px(o.stop)}</span>` : '<span class="lv lv-missing">SIN SL</span>'}${o.tp ? `<span class="lv lv-tp"><b>TP</b>${px(o.tp)}</span>` : ''}${o.ts ? `<span>${new Date(o.ts * 1000).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>` : ''}</div>
     </div>`).join('');
   if (!pend.length && !ext.length) $('pending').innerHTML = '<div class="tm-sub">Sin ordenes limite pendientes</div>';
@@ -338,6 +339,11 @@ window.posClose = async (i, pct) => {
 window.spotSell = async (exchange, symbol) => {
   if (!confirm(`¿Vender todo ${symbol} a mercado y cancelar su stop?`)) return;
   try { await exec.close({ exchange, market: 'spot', symbol }); toast('Venta enviada'); loadStatus(true); }
+  catch (e) { toast(errMsg(e), 'err'); }
+};
+window.cancelExternal = async (exchange, order_id, symbol) => {
+  if (!confirm(`¿Cancelar la orden limite de ${symbol} en ${exchange}?`)) return;
+  try { await exec.cancel({ exchange, order_id }); toast('Orden cancelada'); loadStatus(true); }
   catch (e) { toast(errMsg(e), 'err'); }
 };
 window.cancelPending = async id => {

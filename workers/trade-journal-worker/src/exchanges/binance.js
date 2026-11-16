@@ -364,6 +364,11 @@ export function binance({ key, secret, env = 'live' }) {
     return fx(market).X('DELETE', `${fx(market).v}/order`, { symbol, origClientOrderId: cid });
   }
 
+  async function cancelById(market, symbol, orderId) {
+    if (market === 'spot') return S('DELETE', '/api/v3/order', { symbol, orderId });
+    return fx(market).X('DELETE', `${fx(market).v}/order`, { symbol, orderId });
+  }
+
   // Los stops con closePosition pueden quedar vivos tras cerrar: se limpian
   async function cleanup(symbol, market = 'futures') {
     const { X, v } = fx(market);
@@ -464,7 +469,7 @@ export function binance({ key, secret, env = 'live' }) {
   }
 
   return {
-    name: 'binance', equity, futuresPositions, openOrders, spotHoldings, instrument, price, klines,
+    name: 'binance', equity, futuresPositions, openOrders, cancelById, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
     spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, closedHistory, coinm,
     diag: async () => ({ futures: !!(await F('GET', '/fapi/v1/time', {}, false)).serverTime, hedge: await isDual() }),

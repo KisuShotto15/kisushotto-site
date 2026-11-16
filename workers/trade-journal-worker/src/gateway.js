@@ -568,6 +568,18 @@ export class ExchangeGateway {
   }
 
   async cancelPending(b) {
+    // Orden limite puesta fuera del terminal: se cancela por su id, solo si sigue abierta
+    if (b.order_id) {
+      const acc = (await this.loadAccounts()).find(a => a.exchange === b.exchange);
+      if (!acc) throw bad('Cuenta no conectada');
+      const ex = this.adapter(acc);
+      const o = (await ex.openOrders()).find(x => x.order_id === String(b.order_id));
+      if (!o) throw bad('La orden ya no esta abierta en el exchange');
+      await ex.cancelById(o.market, o.symbol, o.order_id);
+      await this.log('cancel', `${o.symbol}: limite externa cancelada (${o.side} ${o.qty} @ ${o.price})`);
+      this.ctxCache = null;
+      return { ok: true };
+    }
     const t = await this.db.prepare("SELECT * FROM exec_trades WHERE id = ? AND status = 'pending'").bind(b.id).first();
     if (!t) throw bad('Orden pendiente no encontrada');
     const acc = (await this.loadAccounts()).find(a => a.exchange === t.exchange);

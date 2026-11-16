@@ -315,6 +315,12 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     return post('/api/v2/spot/trade/cancel-order', { symbol, clientOid: cid });
   }
 
+  async function cancelById(market, symbol, orderId) {
+    if (uta) return post('/api/v3/trade/cancel-order', { orderId, category: market === 'futures' ? PT : 'SPOT', symbol });
+    if (market === 'futures') return post('/api/v2/mix/order/cancel-order', { symbol, productType: PT, orderId });
+    return post('/api/v2/spot/trade/cancel-order', { symbol, orderId });
+  }
+
   async function cleanup() { /* el TP/SL de posicion desaparece con la posicion */ }
 
   // Ordenes limite de apertura que siguen en el libro (puestas en el terminal o en Bitget)
@@ -434,7 +440,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
   }
 
   return {
-    name: 'bitget', equity, futuresPositions, openOrders, spotHoldings, instrument, price, klines,
+    name: 'bitget', equity, futuresPositions, openOrders, cancelById, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
     spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, diag, closedHistory,
   };

@@ -309,6 +309,11 @@ test('la perdida flotante no cierra el dia y se ven las ordenes limite puestas e
   assert.equal(s.open_orders.length, 1);
   assert.equal(s.open_orders[0].trade_id, null);
   assert.equal(s.open_orders[0].profile, 'vwap');
+  let cancelled = null;
+  api.cancelById = async (market, symbol, id) => { cancelled = [market, symbol, id]; };
+  await assert.rejects(() => gw.cancelPending({ exchange: 'bitget', order_id: 'nope' }), /ya no esta abierta/);
+  assert.equal((await call('/cancel', { exchange: 'bitget', order_id: '9' })).ok, true);
+  assert.deepEqual(cancelled, ['futures', 'BTCUSDT', '9']);
   // Si la perdida se realiza, el dia si se cierra
   st.positions = [];
   clock += 60000;
