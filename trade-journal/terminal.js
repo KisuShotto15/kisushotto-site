@@ -285,20 +285,29 @@ function renderPending() {
       <span class="tm-tag">${esc(t.exchange)}</span><span>${fmt(t.qty, 4)} @ ${px(t.entry)}</span>
       <button class="btn btn-sm btn-danger" onclick="cancelPending('${esc(t.id)}')">Cancelar</button></div>
       <div class="tm-pos-meta"><span class="lv lv-sl"><b>SL</b>${px(t.stop)}</span><span class="lv lv-tp"><b>TP</b>${px(t.tp)}</span><span>riesgo ${fmt(t.risk_usd)} USDT</span></div>
-    </div>`).join('') : '<div class="tm-sub">Sin ordenes limite pendientes</div>';
+    </div>`).join('') : '';
+  // Ordenes limite puestas directo en el exchange: solo se muestran, el terminal no las gestiona
+  const ext = (S.open_orders || []).filter(o => !o.trade_id && o.profile === strat);
+  $('pending').innerHTML += ext.map(o => `<div class="tm-pos">
+      <div class="tm-pos-line"><b>${esc(o.symbol)}</b><span class="side-badge side-badge-${o.side}">${o.side.toUpperCase()}</span>
+      <span class="tm-tag">${esc(o.exchange)}</span><span class="tm-tag warn">externa</span><span>${fmt(o.qty, 4)} @ ${px(o.price)}</span></div>
+      <div class="tm-pos-meta">${o.stop ? `<span class="lv lv-sl"><b>SL</b>${px(o.stop)}</span>` : '<span class="lv lv-missing">SIN SL</span>'}${o.tp ? `<span class="lv lv-tp"><b>TP</b>${px(o.tp)}</span>` : ''}${o.ts ? `<span>${new Date(o.ts * 1000).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>` : ''}</div>
+    </div>`).join('');
+  if (!pend.length && !ext.length) $('pending').innerHTML = '<div class="tm-sub">Sin ordenes limite pendientes</div>';
 }
 
 function renderSpot() {
-  const rows = S.spot.filter(h => !h.stable).sort((a, b) => b.value - a.value);
+  // Lo que vale menos de 1 USDT (polvo o sin precio) solo es ruido
+  const rows = S.spot.filter(h => !h.stable && h.value >= 1).sort((a, b) => b.value - a.value);
   const stable = S.spot.filter(h => h.stable).reduce((s, h) => s + h.value, 0);
   $('spotTotal').textContent = `stables ${fmt(stable)} USDT`;
   const tradesBySym = new Map(S.open_trades.filter(t => t.market === 'spot').map(t => [`${t.exchange}|${t.symbol}`, t]));
   $('spot').innerHTML = rows.length ? rows.map(h => {
-    const t = tradesBySym.get(`${h.exchange}|${h.symbol}`);
+    const t = h.earn ? null : tradesBySym.get(`${h.exchange}|${h.symbol}`);
     return `<div class="tm-spot-row">
       <b>${esc(h.asset)}</b><span class="tm-tag">${esc(h.exchange)}</span>
       <span>${fmt(h.qty, 4)}</span><span>${fmt(h.value)} USDT</span>
-      ${t ? `<span>SL ${px(t.stop)}</span>` : '<span class="tm-sub">fuera del terminal</span>'}
+      ${t ? `<span>SL ${px(t.stop)}</span>` : `<span class="tm-sub">${h.earn ? 'Earn' : 'fuera del terminal'}</span>`}
       ${t ? `<button class="btn btn-sm btn-danger" onclick="spotSell('${esc(h.exchange)}','${esc(h.symbol)}')">Vender</button>` : ''}
     </div>`;
   }).join('') : '<div class="tm-sub">Sin activos en spot</div>';

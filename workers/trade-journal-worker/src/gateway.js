@@ -187,11 +187,13 @@ export class ExchangeGateway {
       const ex = this.adapter(acc);
       // Si falla solo spot (p. ej. la llave no tiene permiso de spot), los
       // futuros se siguen vigilando; el error igual bloquea ordenes nuevas.
-      const [eq, pos, spot, cm] = await Promise.all([
+      const [eq, pos, spot, cm, orders] = await Promise.all([
         ex.equity(), ex.futuresPositions(), ex.spotHoldings().catch(e => e),
         acc.profile === 'swing' && ex.coinm ? ex.coinm().catch(e => e) : null,
+        // Ordenes limite abiertas, tambien las puestas fuera del terminal (solo se muestran)
+        ex.openOrders ? ex.openOrders().catch(e => { console.error('ordenes abiertas', e.message); return []; }) : [],
       ]);
-      const out = { acc, profile: acc.profile, eq, pos, spot, coinm: [] };
+      const out = { acc, profile: acc.profile, eq, pos, spot, coinm: [], orders: orders.map(o => ({ ...o, profile: acc.profile })) };
       if (spot instanceof Error) {
         eq.errors = [...(eq.errors || []), `spot: ${spot.message}`];
         Object.assign(out, { spot: [], spotError: true });
@@ -213,6 +215,10 @@ export class ExchangeGateway {
     const vwapAccounts = accounts.filter(a => a.profile === 'vwap');
     const readOk = vwapAccounts.length > 0 && errors.length === 0;
     const equityNow = readOk ? vwapLive.reduce((s, x) => s + x.eq.total, 0) : (state.equity_now || 0);
+    // Los limites de perdida diaria y semanal se miden con lo realizado: la
+    // perdida flotante de una posicion abierta no cierra el dia (su stop ya
+    // limita cuanto puede perder y ese riesgo se descuenta del presupuesto).
+    const realizedNow = equityNow - positions.reduce((s, p) => s + (p.upnl || 0), 0);
 
     // Capital al abrir el dia y la semana (NY). Solo se fija con una lectura completa.
     // Si cambia que cuentas forman la estrategia, la base se vuelve a tomar:
@@ -224,9 +230,9 @@ export class ExchangeGateway {
       patch.equity_now = equityNow; patch.equity_at = nowSec();
       const rescope = (state.equity_scope || '') !== scope;
       if (rescope) patch.equity_scope = scope;
-      if (rescope || state.day !== win.date) { patch.day = win.date; patch.day_start_equity = equityNow; }
+      if (rescope || state.day !== win.date) { patch.day = win.date; patch.day_start_equity = realizedNow; }
       if (state.day !== win.date) patch.news_confirmed_day = null;
-      if (rescope || state.week !== wk) { patch.week = wk; patch.week_start_equity = equityNow; }
+      if (rescope || state.week !== wk) { patch.week = wk; patch.week_start_equity = realizedNow; }
     }
     if (Object.keys(patch).length) { await this.patchState(patch); Object.assign(state, patch); }
 
@@ -238,13 +244,13 @@ export class ExchangeGateway {
     const key = x => `${x.exchange}|${x.market}|${x.symbol}|${x.side}`;
     const ledgerOpen = vwapLedger.filter(t => t.status === 'open' || t.status === 'pending');
     const ledgerKeys = new Set(ledgerOpen.map(key));
-    const base = Math.min(state.day_start_equity || equityNow, equityNow);
+    const base = Math.min(state.day_start_equity || realizedNow, realizedNow);
     // Lo abierto fuera del terminal tambien consume riesgo
     const external = positions.filter(p => !ledgerKeys.has(key(p))).map(p => ({
       symbol: p.symbol, side: p.side,
       risk_usd: p.stop ? Math.abs(p.entry - p.stop) * p.size : base * HARD.risk_pct.max / 100,
     }));
-    const equity = { now: equityNow, day_start: state.day_start_equity, week_start: state.week_start_equity };
+    const equity = { now: readOk ? realizedNow : equityNow, total: equityNow, day_start: state.day_start_equity, week_start: state.week_start_equity };
     const gateArgs = { now, rules, window: win, news: newsSt, lock, equity, today };
     const gates = evaluateGates({ ...gateArgs, open: [...ledgerOpen, ...external] });
     if (!readOk) gates.blocks.push({ code: 'read', msg: vwapAccounts.length ? `No se pudo leer: ${errors.join(' | ')}` : `Conecta la cuenta de la estrategia VWAP (${rules.vwap_exchanges.join(', ') || 'ninguna'})` }), gates.ok = false;
@@ -295,6 +301,8 @@ export class ExchangeGateway {
       swing_errors: ctx.swingErrors, swing_gates: ctx.swingGates, swing_equity: ctx.swingEquity,
       positions: ctx.positions.map(p => ({ ...p, trade: ctx.ledger.find(t => t.status === 'open' && t.exchange === p.exchange && t.market === 'futures' && t.symbol === p.symbol && t.side === p.side) || null })),
       spot: ctx.spot,
+      open_orders: ctx.live.flatMap(x => x.orders || []).map(o => ({
+        ...o, trade_id: ctx.ledger.find(t => t.status === 'pending' && t.client_id && t.client_id === o.cid)?.id || null })),
       open_trades: ctx.ledger.filter(t => t.status === 'open' || t.status === 'pending'),
       guardian_at: ctx.state.guardian_at, guardian_error: ctx.state.guardian_error,
       egress: ctx.state.egress ? JSON.parse(ctx.state.egress) : null,

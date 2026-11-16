@@ -317,6 +317,22 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
 
   async function cleanup() { /* el TP/SL de posicion desaparece con la posicion */ }
 
+  // Ordenes limite de apertura que siguen en el libro (puestas en el terminal o en Bitget)
+  async function openOrders() {
+    const d = uta ? await get('/api/v3/trade/unfilled-orders', { category: PT })
+                  : await get('/api/v2/mix/order/orders-pending', { productType: PT });
+    const rows = uta ? listOf(d) : (d?.entrustedList || []);
+    return rows.filter(o => String(o.orderType).toLowerCase() === 'limit' && o.reduceOnly !== 'yes' && o.reduceOnly !== true &&
+                            o.tradeSide !== 'close' && o.tradeSide !== 'reduce_close_long' && o.tradeSide !== 'reduce_close_short')
+      .map(o => ({
+        exchange: 'bitget', market: 'futures', symbol: o.symbol,
+        side: ['long', 'short'].includes(o.posSide) ? o.posSide : o.side === 'sell' ? 'short' : 'long',
+        qty: num(uta ? o.qty : o.size) - num(uta ? o.cumExecQty : o.baseVolume), price: num(o.price),
+        stop: num(uta ? o.stopLoss : o.presetStopLossPrice) || null, tp: num(uta ? o.takeProfit : o.presetStopSurplusPrice) || null,
+        cid: o.clientOid || null, order_id: String(o.orderId || ''), ts: Math.floor(num(uta ? o.createdTime : o.cTime) / 1000) || null,
+      }));
+  }
+
   async function closedPnl(symbol, side, sinceMs) {
     const d = uta
       ? await get('/api/v3/position/history-position', { category: PT, symbol, startTime: String(sinceMs - 60000) })
@@ -418,7 +434,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
   }
 
   return {
-    name: 'bitget', equity, futuresPositions, spotHoldings, instrument, price, klines,
+    name: 'bitget', equity, futuresPositions, openOrders, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
     spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, diag, closedHistory,
   };

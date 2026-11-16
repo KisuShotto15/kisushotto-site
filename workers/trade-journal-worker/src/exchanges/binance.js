@@ -137,6 +137,18 @@ export function binance({ key, secret, env = 'live' }) {
     return { value, positions };
   }
 
+  let lastOpen = null;
+  // Ordenes limite de apertura en USDⓈ-M (puestas en el terminal o en Binance)
+  async function openOrders() {
+    const list = lastOpen && Date.now() - lastOpen.t < 10000 ? lastOpen.list : await F('GET', '/fapi/v1/openOrders');
+    return list.filter(o => o.type === 'LIMIT' && !o.reduceOnly && !o.closePosition).map(o => ({
+      exchange: 'binance', market: 'futures', symbol: o.symbol,
+      side: o.positionSide === 'SHORT' ? 'short' : o.positionSide === 'LONG' ? 'long' : o.side === 'SELL' ? 'short' : 'long',
+      qty: num(o.origQty) - num(o.executedQty), price: num(o.price), stop: null, tp: null,
+      cid: o.clientOrderId || null, order_id: String(o.orderId), ts: o.time ? Math.floor(o.time / 1000) : null,
+    }));
+  }
+
   async function stopsBySymbol() {
     // Algo Service + ordenes viejas que aun vivan en el libro normal
     const [algo, legacy] = await Promise.allSettled([F('GET', '/fapi/v1/openAlgoOrders'), F('GET', '/fapi/v1/openOrders')]);
@@ -147,6 +159,8 @@ export function binance({ key, secret, env = 'live' }) {
       out.push({ symbol: o.symbol, kind: o.orderType || o.type, side: o.side, positionSide: o.positionSide,
                  price: num(o.triggerPrice), ref: { algoId: o.algoId } });
     }
+    // Se guarda para openOrders(): asi no se pide dos veces en la misma lectura
+    if (legacy.status === 'fulfilled') lastOpen = { t: Date.now(), list: legacy.value };
     for (const o of legacy.status === 'fulfilled' ? legacy.value : []) {
       if (!['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'STOP', 'TAKE_PROFIT'].includes(o.type)) continue;
       out.push({ symbol: o.symbol, kind: o.type, side: o.side, positionSide: o.positionSide,
@@ -191,11 +205,16 @@ export function binance({ key, secret, env = 'live' }) {
   }
   async function readHoldings() {
     const acct = await S('GET', '/api/v3/account', { omitZeroBalances: 'true' });
-    const wanted = acct.balances.filter(b => !STABLES.has(b.asset) && num(b.free) + num(b.locked) > 0).map(b => b.asset + 'USDT');
+    // Binance Earn flexible aparece como LD + moneda (LDUSDT, LDSOL): vale lo mismo que la moneda
+    const under = a => (/^LD[A-Z0-9]{2,}$/.test(a) ? a.slice(2) : a);
+    const wanted = acct.balances.filter(b => !STABLES.has(under(b.asset)) && num(b.free) + num(b.locked) > 0).map(b => under(b.asset) + 'USDT');
     const px = await spotPx(wanted);
     return acct.balances.map(b => {
       const qty = num(b.free) + num(b.locked);
-      const price = STABLES.has(b.asset) ? 1 : (px.get(b.asset + 'USDT') || 0);
+      const u = under(b.asset);
+      const price = STABLES.has(u) ? 1 : (px.get(u + 'USDT') || 0);
+      if (u !== b.asset) return { exchange: 'binance', market: 'spot', asset: b.asset, symbol: u + 'USDT', earn: true,
+                                  qty, free: 0, price, value: qty * price, stable: STABLES.has(u) };
       return { exchange: 'binance', market: 'spot', asset: b.asset, symbol: b.asset + 'USDT',
                qty, free: num(b.free), price, value: qty * price, stable: STABLES.has(b.asset) };
     });
@@ -445,7 +464,7 @@ export function binance({ key, secret, env = 'live' }) {
   }
 
   return {
-    name: 'binance', equity, futuresPositions, spotHoldings, instrument, price, klines,
+    name: 'binance', equity, futuresPositions, openOrders, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
     spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, closedHistory, coinm,
     diag: async () => ({ futures: !!(await F('GET', '/fapi/v1/time', {}, false)).serverTime, hedge: await isDual() }),

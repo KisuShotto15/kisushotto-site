@@ -293,3 +293,27 @@ test('guardian: fuera de la ventana y sin nada abierto revisa cada 5 min', async
   assert.equal((await call('/guardian', {})).skipped, undefined);
   Date.now = realNow;
 });
+
+test('la perdida flotante no cierra el dia y se ven las ordenes limite puestas en el exchange', async () => {
+  Date.now = () => clock;
+  clock = Date.UTC(2026, 10, 16, 15, 0);   // lunes nuevo: dia y semana nuevos
+  DB.raw.exec('UPDATE risk_state SET lock_until = 0');
+  // Posicion abierta perdiendo 6% en flotante: el capital total baja, lo realizado no
+  st.positions = [{ exchange: 'bitget', market: 'futures', symbol: 'ETHUSDT', side: 'long', size: 1, entry: 100, stop: 90, upnl: -60, stop_refs: [] }];
+  st.equity = 940;
+  api.openOrders = async () => [{ exchange: 'bitget', market: 'futures', symbol: 'BTCUSDT', side: 'long', qty: 0.01, price: 90000, stop: 89000, tp: null, cid: 'manual1', order_id: '9', ts: 1 }];
+  const s = await call('/status?fresh=1');
+  assert.equal(s.lock, null);
+  assert.ok(!s.gates.blocks.some(b => b.code === 'daily_loss'), JSON.stringify(s.gates.blocks));
+  assert.equal(Math.round(s.equity.now), 1000);
+  assert.equal(s.open_orders.length, 1);
+  assert.equal(s.open_orders[0].trade_id, null);
+  assert.equal(s.open_orders[0].profile, 'vwap');
+  // Si la perdida se realiza, el dia si se cierra
+  st.positions = [];
+  clock += 60000;
+  const s2 = await call('/status?fresh=1');
+  assert.ok(s2.lock, 'perdida realizada del 6% debe bloquear');
+  delete api.openOrders;
+  Date.now = realNow;
+});
