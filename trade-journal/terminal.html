@@ -119,6 +119,26 @@
     </div>
   </section>
 
+  <!-- Grafico a todo el ancho: es referencia de toda la terminal, no un
+       campo del ticket, y dentro de la columna del ticket solo tenia la mitad
+       del ancho de la pagina. -->
+  <div class="tm-ind" id="ind">
+      <div class="tm-ind-head">
+        <select id="tInterval" onchange="loadMarket()"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option></select>
+        <select id="tAnchor" onchange="loadMarket()"><option value="utc">VWAP 00:00 UTC</option><option value="ny">VWAP apertura NY</option></select>
+        <button class="btn btn-sm" onclick="loadMarket()">↻</button>
+        <span class="tm-ind-stamp" id="indStamp"></span>
+      </div>
+      <div class="tc-tools">
+        <button class="tm-mini" onclick="chartAdd('entry')">Limite</button>
+        <span class="tc-legend"><i class="v"></i>VWAP <i class="s1"></i>banda 1 <i class="s2"></i>banda 2 <i class="s3"></i>banda 3</span>
+        <span class="tc-hint">Arrastra TP o SL desde la etiqueta de la orden para ponerlos; luego arrastra las lineas para moverlos.</span>
+      </div>
+      <div id="tChart"></div>
+      <div class="tm-bands" id="bands"><div class="tm-sub">Elige un simbolo</div></div>
+      <div class="tm-osc" id="osc"></div>
+    </div>
+
   <div class="tm-main">
     <!-- Ticket -->
     <section class="tm-panel tm-ticket">
@@ -139,23 +159,6 @@
       </details>
 
       <div class="tm-quick" id="quick"></div>
-
-      <div class="tm-ind" id="ind">
-        <div class="tm-ind-head">
-          <select id="tInterval" onchange="loadMarket()"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option></select>
-          <select id="tAnchor" onchange="loadMarket()"><option value="utc">VWAP 00:00 UTC</option><option value="ny">VWAP apertura NY</option></select>
-          <button class="btn btn-sm" onclick="loadMarket()">↻</button>
-          <span class="tm-ind-stamp" id="indStamp"></span>
-        </div>
-        <div class="tc-tools">
-          <button class="tm-mini" onclick="chartAdd('entry')">Limite</button>
-          <span class="tc-legend"><i class="v"></i>VWAP <i class="s1"></i>banda 1 <i class="s2"></i>banda 2 <i class="s3"></i>banda 3</span>
-          <span class="tc-hint">Arrastra TP o SL desde la etiqueta de la orden para ponerlos; luego arrastra las lineas para moverlos.</span>
-        </div>
-        <div id="tChart"></div>
-        <div class="tm-bands" id="bands"><div class="tm-sub">Elige un simbolo</div></div>
-        <div class="tm-osc" id="osc"></div>
-      </div>
 
       <div class="tm-sides">
         <button class="tm-side long active" data-side="long" onclick="setSide('long')">LONG</button>
