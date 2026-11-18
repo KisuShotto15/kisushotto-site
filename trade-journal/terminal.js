@@ -465,7 +465,7 @@ function renderQuick() {
   const now = z >= 3 ? 'short3' : z >= 2 ? 'short2' : z <= -3 ? 'long3' : z <= -2 ? 'long2' : null;
   const out = `<div class="tm-quick-head"><span>ENTRADA RAPIDA · TP en el VWAP</span><span>precio ${esc(bandWords(z))}</span></div>
     <div class="tm-quick-row">${QUICK.map(q => `<button class="tm-q ${q.side} ${q.k === now ? 'on' : now ? 'dim' : ''}" onclick="quickEntry('${q.k}')">
-      <b>${q.label}</b><small>linea ${q.color}</small></button>`).join('')}</div>`;
+      <b>${q.side.toUpperCase()}</b><small>banda ${q.band} ${q.side === 'short' ? 'arriba' : 'abajo'} (${q.color})</small></button>`).join('')}</div>`;
   if (box.innerHTML !== out) box.innerHTML = out;
 }
 window.quickEntry = k => {
@@ -651,19 +651,8 @@ function renderIndicators() {
   const s = M.indicators;
   if (!s) { $('bands').innerHTML = '<div class="tm-sub">Sin velas</div>'; return; }
   renderStamp();
-  const rows = [
-    ...[3, 2, 1].map(n => ({ label: `Banda ${n} ↑`, v: s.bands[n - 1].up, z: n })),
-    { label: 'VWAP', v: s.vwap, z: 0 },
-    ...[1, 2, 3].map(n => ({ label: `Banda ${n} ↓`, v: s.bands[n - 1].dn, z: -n })),
-  ];
-  const at = Math.max(-3.5, Math.min(3.5, s.sigma));
-  $('bands').innerHTML = rows.map(r => `
-    <div class="tm-band ${Math.abs(r.z) === 3 ? 'x3' : Math.abs(r.z) === 2 ? 'x2' : Math.abs(r.z) === 1 ? 'x1' : ''} ${r.z === 0 ? 'mid' : ''} ${Math.round(at) === r.z ? 'here' : ''}">
-      <span class="tm-band-label">${r.label}</span><span class="tm-band-px">${px(r.v)}</span>
-      <button class="tm-mini sl" onclick="setLevel('tStop', ${r.v})">SL</button>
-      <button class="tm-mini tp" onclick="setLevel('tTp', ${r.v})">TP</button>
-    </div>`).join('') +
-    `<div class="tm-band-now">Precio ${px(s.price)} · <b class="${Math.abs(s.sigma) >= 2 ? 'warn' : ''}">${bandWords(s.sigma)}</b></div>`;
+  // Los niveles de las bandas se ven en el grafico; aqui no se repiten
+  $('bands').innerHTML = '';
   renderQuick();
   renderChecklist();
   updateExecButton();
@@ -675,7 +664,6 @@ function renderIndicators() {
     <div><span>Cruce</span><b>${s.stoch_cross === 'up' ? '↑ alcista' : s.stoch_cross === 'down' ? '↓ bajista' : '—'}</b></div>`;
 }
 
-window.setLevel = (id, v) => { $(id).value = px(v); schedulePreview(); };
 // Contexto del ticket en una linea (exchange, mercado, simbolo, apalancamiento)
 function renderCtx() {
   const lev = isSwing() ? S?.rules?.swing?.leverage : S?.rules?.leverage;
