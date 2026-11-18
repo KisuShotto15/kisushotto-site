@@ -548,7 +548,7 @@ function renderIndicators() {
   ];
   const at = Math.max(-3.5, Math.min(3.5, s.sigma));
   $('bands').innerHTML = rows.map(r => `
-    <div class="tm-band ${Math.abs(r.z) === 3 ? 'x3' : Math.abs(r.z) === 2 ? 'x2' : ''} ${r.z === 0 ? 'mid' : ''} ${Math.round(at) === r.z ? 'here' : ''}">
+    <div class="tm-band ${Math.abs(r.z) === 3 ? 'x3' : Math.abs(r.z) === 2 ? 'x2' : Math.abs(r.z) === 1 ? 'x1' : ''} ${r.z === 0 ? 'mid' : ''} ${Math.round(at) === r.z ? 'here' : ''}">
       <span class="tm-band-label">${r.label}</span><span class="tm-band-px">${px(r.v)}</span>
       <button class="tm-mini sl" onclick="setLevel('tStop', ${r.v})">SL</button>
       <button class="tm-mini tp" onclick="setLevel('tTp', ${r.v})">TP</button>

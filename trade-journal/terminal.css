@@ -78,10 +78,11 @@
   display: grid; grid-template-columns: 52px 1fr auto auto; gap: 8px; align-items: center;
   font-family: 'IBM Plex Mono', monospace; font-size: 13px; padding: 4px 8px; border-radius: 5px;
 }
-.tm-band.x3 .tm-band-label { color: var(--red); }
-.tm-band.x2 .tm-band-label { color: var(--amber); }
+.tm-band.x3 .tm-band-label { color: #e5484d; }
+.tm-band.x2 .tm-band-label { color: #e3c430; }
+.tm-band.x1 .tm-band-label { color: #2fa84f; }
 .tm-band.mid { background: color-mix(in srgb, var(--accent) 6%, transparent); }
-.tm-band.mid .tm-band-label { color: var(--lv-entry); }
+.tm-band.mid .tm-band-label { color: #5b86ff; }
 .tm-band.here { outline: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .tm-band-label { color: var(--muted2); }
 .tm-band-px { text-align: right; }
@@ -215,13 +216,13 @@
 /* Grafico del ticket con lineas arrastrables */
 .tc-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
 .tc-legend { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--muted2); margin-left: auto; }
-.tc-legend i { display: inline-block; width: 12px; height: 0; border-top: 1px dotted; margin-right: -4px; vertical-align: middle; }
-.tc-legend i.v { border-top: 2px solid var(--lv-entry); }
-.tc-legend i.s1 { border-color: var(--muted2); }
-.tc-legend i.s2 { border-color: var(--amber); }
-.tc-legend i.s3 { border-color: var(--red); }
+.tc-legend i { display: inline-block; width: 12px; height: 0; border-top: 1px solid; margin-right: -4px; vertical-align: middle; }
+.tc-legend i.v { border-top: 1px solid #3b6cf6; }
+.tc-legend i.s1 { border-color: #2fa84f; }
+.tc-legend i.s2 { border-color: #e3c430; }
+.tc-legend i.s3 { border-color: #e5484d; }
 .tc-hint { width: 100%; font-size: 11px; color: var(--muted2); }
-.tc-chart { position: relative; height: 340px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tc-chart { position: relative; height: 340px; margin-bottom: 10px; background: #0c0c0c; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .tc-chart-canvas { position: absolute; inset: 0; }
 /* La tabla interna del grafico no debe heredar los estilos de tablas del sitio */
 .tc-chart table { width: auto; min-width: 0 !important; table-layout: auto !important; font-size: inherit; }

@@ -9,6 +9,16 @@ import { nyParts } from '../workers/trade-journal-worker/src/risk.js';
 const cssVar = (n, fb) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || fb;
 const toBar = k => ({ time: Math.floor(k.t / 1000), open: k.o, high: k.h, low: k.l, close: k.c });
 
+// Estilo como el VWAP de TradingView del usuario: fondo casi negro sin cuadricula,
+// velas gris claro / violeta, VWAP azul y bandas solidas verde, amarillo y rojo.
+const TV = {
+  bg: '#0c0c0c', text: '#8a8a8a', border: '#1f1f1f',
+  up: '#c7c7cc', down: '#6b3fd4',
+  vwap: '#3b6cf6', band: ['#2fa84f', '#e3c430', '#e5484d'],
+  volUp: 'rgba(199,199,204,0.35)', volDown: 'rgba(107,63,212,0.55)',
+};
+const toVol = k => ({ time: Math.floor(k.t / 1000), value: k.v, color: k.c >= k.o ? TV.volUp : TV.volDown });
+
 // Lineas editables (con asa) y lineas fijas de una posicion abierta
 const EDITABLE = {
   sl:    { color: () => cssVar('--lv-sl', '#ef4444'),    label: 'SL',     style: LineStyle.Solid },
@@ -36,18 +46,21 @@ export class TicketChart {
     this.ov.className = 'tc-chart-ov';
     el.append(this.box, this.ov);
 
-    const text = cssVar('--muted2', '#888'), grid = cssVar('--border', '#303030');
     this.chart = createChart(this.box, {
-      layout: { background: { type: 'solid', color: 'transparent' }, textColor: text, fontFamily: 'IBM Plex Mono, monospace', fontSize: 11 },
-      grid: { vertLines: { color: grid + '66' }, horzLines: { color: grid + '66' } },
-      rightPriceScale: { borderColor: grid },
-      timeScale: { borderColor: grid, timeVisible: true, rightOffset: 4 },
+      layout: { background: { type: 'solid', color: TV.bg }, textColor: TV.text, fontFamily: 'IBM Plex Mono, monospace', fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
+      rightPriceScale: { borderColor: TV.border, scaleMargins: { top: 0.06, bottom: 0.16 } },
+      timeScale: { borderColor: TV.border, timeVisible: true, rightOffset: 4 },
       crosshair: { mode: CrosshairMode.Normal },
       autoSize: true,
     });
-    const up = cssVar('--green', '#00c896'), dn = cssVar('--red', '#ef4444');
+    // Volumen abajo, en su propia escala, por debajo de las velas
+    this.volume = this.chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false });
+    this.chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
     this.series = this.chart.addCandlestickSeries({
-      upColor: up, downColor: dn, wickUpColor: up, wickDownColor: dn, borderVisible: false, priceLineVisible: false,
+      upColor: TV.up, downColor: TV.down, wickUpColor: TV.up, wickDownColor: TV.down,
+      borderUpColor: TV.up, borderDownColor: TV.down, borderVisible: true,
+      priceLineVisible: true, priceLineStyle: LineStyle.Dotted, priceLineColor: '#5a5a5a', priceLineWidth: 1,
       // La escala incluye SL, TP, limite y la posicion abierta para que siempre se vean.
       // Mientras se arrastra se usa el precio inicial para que la escala no se mueva bajo el dedo.
       autoscaleInfoProvider: original => {
@@ -65,9 +78,8 @@ export class TicketChart {
     const line = (color, width, style) => this.chart.addLineSeries({
       color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
     });
-    this.vwap = line(cssVar('--lv-entry', '#93c5fd'), 2, LineStyle.Solid);
-    const bandColor = [cssVar('--muted2', '#888'), cssVar('--amber', '#f59e0b'), cssVar('--red', '#ef4444')];
-    this.bands = [0, 1, 2].map(i => [line(bandColor[i], 1, LineStyle.Dotted), line(bandColor[i], 1, LineStyle.Dotted)]);
+    this.vwap = line(TV.vwap, 1, LineStyle.Solid);
+    this.bands = [0, 1, 2].map(i => [line(TV.band[i], 1, LineStyle.Solid), line(TV.band[i], 1, LineStyle.Solid)]);
 
     new ResizeObserver(() => this.place()).observe(this.box);
     this.chart.timeScale().subscribeVisibleLogicalRangeChange(() => this.place());
@@ -81,6 +93,7 @@ export class TicketChart {
     this.series.applyOptions({ priceFormat: { type: 'price', precision: dec, minMove: this.tick } });
     this.anchorOf = anchor === 'ny' ? nyOpenAnchor(nyParts) : utcAnchor;
     this.series.setData(candles.map(toBar));
+    this.volume.setData(candles.map(toVol));
     this.drawBands(candles);
     this.chart.timeScale().fitContent();
     this.place();
@@ -90,6 +103,7 @@ export class TicketChart {
   update(candles) {
     if (!candles?.length) return;
     this.series.update(toBar(candles[candles.length - 1]));
+    this.volume.update(toVol(candles[candles.length - 1]));
     this.drawBands(candles);
   }
 
