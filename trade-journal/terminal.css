@@ -223,7 +223,10 @@
 .tc-legend i.s2 { border-color: #e3c430; }
 .tc-legend i.s3 { border-color: #e5484d; }
 .tc-hint { width: 100%; font-size: 11px; color: var(--muted2); }
-.tc-chart { position: relative; height: 340px; margin-bottom: 10px; background: #0c0c0c; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+/* Alto proporcional a la ventana, arrastrable desde la esquina inferior. El
+   chart ya tiene autoSize y un ResizeObserver sobre .tc-chart-canvas, asi que
+   sigue al contenedor sin codigo extra. */
+.tc-chart { position: relative; height: clamp(380px, 62vh, 820px); resize: vertical; margin-bottom: 10px; background: #0c0c0c; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .tc-chart-canvas { position: absolute; inset: 0; }
 /* La tabla interna del grafico no debe heredar los estilos de tablas del sitio */
 .tc-chart table { width: auto; min-width: 0 !important; table-layout: auto !important; font-size: inherit; }
@@ -241,7 +244,7 @@
 .tc-h-tp { background: var(--lv-tp); color: #062a20; }
 .tc-h-entry { background: var(--lv-entry); color: #0b1a33; }
 @media (max-width: 700px) {
-  .tc-chart { height: 280px; }
+  .tc-chart { height: clamp(300px, 52vh, 520px); }
   .tc-legend { margin-left: 0; }
   .tc-handle { padding: 5px 9px; }
 }
