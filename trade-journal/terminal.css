@@ -371,3 +371,5 @@
 
 .tc-h-entry.ghost { border-style: dashed; }
 .tc-h-entry.ghost .p-px { cursor: default; color: var(--muted2); }
+.tc-handle .h-x { margin-left: 4px; padding: 0 2px 0 8px; border-left: 1px solid rgba(0,0,0,.25); cursor: pointer; opacity: .85; }
+.tc-handle .h-x:hover { opacity: 1; }

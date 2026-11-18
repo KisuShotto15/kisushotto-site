@@ -703,19 +703,23 @@ function levelLabel(name, price) {
   }
   if (name === 'sl') {
     const loss = plan && Math.abs(plan.stop - price) < 1e-9 ? `<span class="hm"> · −${fmt(plan.loss_if_stop)} USDT</span>` : '';
-    return `SL ${px(price)} · ${pct(d)}${loss}`;
+    return `SL ${px(price)} · ${pct(d)}${loss}<span class="h-x" data-act="remove" title="Quitar el SL">×</span>`;
   }
   const stop = +$('tStop').value;
   const rr = ref && stop && Math.abs(ref - stop) > 0 ? Math.abs(price - ref) / Math.abs(ref - stop) : null;
   const gain = plan && Math.abs(plan.tp - price) < 1e-9 ? `<span class="hm"> · +${fmt(plan.gain_if_tp)} USDT</span>` : '';
-  return `TP ${px(price)} · ${rr ? `${rr.toFixed(2)}R` : pct(d)}${gain}`;
+  return `TP ${px(price)} · ${rr ? `${rr.toFixed(2)}R` : pct(d)}${gain}<span class="h-x" data-act="remove" title="Quitar el TP">×</span>`;
 }
 
 const chart = new TicketChart($('tChart'), {
   labelOf: levelLabel,
   onDrag: (name, price) => { $(LEVEL_INPUT[name]).value = px(price); },
   onDrop: () => schedulePreview(),
-  onRemove: name => { if (name === 'entry') { $('tType').value = 'market'; onTypeChange(); } },
+  onRemove: name => {
+    if (name === 'entry') { $('tType').value = 'market'; onTypeChange(); return; }
+    $(LEVEL_INPUT[name]).value = '';
+    schedulePreview();
+  },
 });
 
 // Pasa al grafico lo que dicen los campos del ticket y la posicion abierta del simbolo
