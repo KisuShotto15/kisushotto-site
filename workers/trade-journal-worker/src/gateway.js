@@ -193,7 +193,12 @@ export class ExchangeGateway {
         // Ordenes limite abiertas, tambien las puestas fuera del terminal (solo se muestran)
         ex.openOrders ? ex.openOrders().catch(e => { console.error('ordenes abiertas', e.message); return []; }) : [],
       ]);
-      const out = { acc, profile: acc.profile, eq, pos, spot, coinm: [], orders: orders.map(o => ({ ...o, profile: acc.profile })) };
+      // El TP limite (orden de solo cierre) se muestra como TP de su posicion
+      for (const p of pos) {
+        const tpo = orders.find(o => o.reduce && o.symbol === p.symbol && o.side === p.side);
+        if (tpo) { p.tp_order = tpo.order_id; if (!p.tp) p.tp = tpo.price; }
+      }
+      const out = { acc, profile: acc.profile, eq, pos, spot, coinm: [], orders: orders.filter(o => !o.reduce).map(o => ({ ...o, profile: acc.profile })) };
       if (spot instanceof Error) {
         eq.errors = [...(eq.errors || []), `spot: ${spot.message}`];
         Object.assign(out, { spot: [], spotError: true });
@@ -442,8 +447,9 @@ export class ExchangeGateway {
     let res;
     try {
       res = o.market !== 'spot'
-        ? await ex.openFutures({ market: o.market, symbol: o.symbol, side: o.side, qty: plan.qty, type: o.type, price: o.entry, stop: o.stop, tp: o.tp,
-                                 leverage: plan.leverage, cid, inst })
+        ? await ex.openFutures({ market: o.market, symbol: o.symbol, side: o.side, qty: plan.qty, type: o.type, price: o.entry, stop: o.stop,
+                                 // En USDT-M el TP va como limite de solo cierre (ver placeTp); en COIN-M sigue como trigger
+                                 tp: tpAsLimit(ex, o.market) ? null : o.tp, leverage: plan.leverage, cid, inst })
         : await ex.openSpot({ symbol: o.symbol, qty: plan.qty, stop: o.stop, tp: o.tp, cid, inst, ref_price: plan.price });
     } catch (e) {
       // Con un rechazo explicito del exchange la orden no existe. Con un error de red
@@ -502,6 +508,10 @@ export class ExchangeGateway {
     }
     const risk = posRisk(pos, o.stop);
     await upd({ status: 'open', qty: pos.size, entry: pos.entry, risk_usd: risk });
+    if (tpAsLimit(ex, o.market) && o.tp) {
+      try { await ex.placeTp(pos, o.tp, inst); }
+      catch (e) { await this.log('warn', `${o.symbol}: no se pudo poner el TP limite (${e.message}); el guardian lo reintentara`, 'warn'); }
+    }
     await this.log('order', `${o.side.toUpperCase()} ${o.symbol} ${pos.size} @ ${pos.entry} SL ${o.stop} TP ${o.tp} ${plan.leverage}x riesgo ${risk.toFixed(2)} USDT (${(risk / plan.base_equity * 100).toFixed(2)}%)`, 'info', { id });
     return { ok: true, id, plan, result: { ...res, entry: pos.entry, qty: pos.size } };
   }
@@ -845,6 +855,10 @@ export class ExchangeGateway {
     }
 
     await this.guardSpot(ctx).catch(e => this.log('guardian_error', `spot: ${e.message}`, 'error'));
+    // TP limite que falte (no en posiciones que esta vuelta se mandaron a cerrar)
+    const closing = new Set(plan.filter(a => a.type === 'close' && a.pos).map(a => `${a.pos.exchange}|${a.pos.symbol}|${a.pos.side}`));
+    acted.push(...await this.ensureTps({ ...ctx, positions: ctx.positions.filter(p => !closing.has(`${p.exchange}|${p.symbol}|${p.side}`)) }, accOf)
+      .catch(e => { console.error('tp', e.message); return []; }));
 
     // Fuera de la ventana las posiciones siguen abiertas con su stop, pero se
     // recomienda cerrarlas. El aviso se repite cada 30 min mientras sigan abiertas.
@@ -907,6 +921,7 @@ export class ExchangeGateway {
     const confirmed = t.market === 'spot' || (res && (res.exit_price != null || res.closed_at != null));
     if (!confirmed && !force) return false;
     if (t.market !== 'spot') await ex.cleanup(t.symbol, t.market);
+    if (tpAsLimit(ex, t.market)) await this.cancelTpOrders(ex, t.symbol, t.side);
     const pnl = res?.pnl ?? null;
     const r = rOf(pnl, t.risk_usd);
     const closedAt = res?.closed_at || nowSec();
@@ -916,6 +931,36 @@ export class ExchangeGateway {
     await this.log('closed', `${t.symbol} ${t.side} cerrada: ${pnl == null ? 'PnL pendiente' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT`}${r != null ? ` (${r.toFixed(2)}R)` : ''}`,
       pnl != null && pnl < 0 ? 'warn' : 'info', { id: t.id });
     return true;
+  }
+
+  // Ordenes de solo cierre que queden de una posicion ya cerrada
+  async cancelTpOrders(ex, symbol, side) {
+    try {
+      for (const o of (await ex.openOrders()).filter(x => x.reduce && x.symbol === symbol && x.side === side)) {
+        await ex.cancelById('futures', symbol, o.order_id).catch(e => console.error('cancel tp', e.message));
+      }
+    } catch (e) { console.error('tp orders', e.message); }
+  }
+
+  // Posiciones del terminal con TP en el libro pero sin orden de TP en el
+  // exchange (limite que se lleno, TP que fallo, cierre parcial): se pone el TP limite
+  async ensureTps(ctx, accOf) {
+    const out = [];
+    for (const t of ctx.ledger.filter(x => x.status === 'open' && x.market === 'futures' && x.tp > 0)) {
+      const pos = [...ctx.positions, ...ctx.swingPositions].find(p => p.exchange === t.exchange && p.market === 'futures' && p.symbol === t.symbol && p.side === t.side);
+      if (!pos || pos.tp) continue;
+      const acc = accOf(t.exchange);
+      if (!acc || acc.broken || acc.dry_run) continue;
+      const ex = this.adapter(acc);
+      if (!tpAsLimit(ex, 'futures')) continue;
+      try {
+        const inst = await ex.instrument('futures', t.symbol);
+        await ex.placeTp(pos, t.tp, inst);
+        await this.log('guardian', `${t.symbol}: TP limite puesto en ${t.tp}`);
+        out.push('tp');
+      } catch (e) { await this.logOnce('guardian_tp', `${t.symbol}: no se pudo poner el TP limite: ${e.message}`, 'warn'); }
+    }
+    return out;
   }
 
   async toJournal(t) {
@@ -1040,6 +1085,9 @@ export function afterHoursAdvice(win, positions) {
 }
 
 // Riesgo en USD si salta el stop. COIN-M va en contratos: se usa el valor en USD.
+// En futuros USDT-M el TP se pone como limite de solo cierre (comision de maker)
+function tpAsLimit(ex, market) { return market === 'futures' && typeof ex.placeTp === 'function'; }
+
 function posRisk(p, stop = p.stop) {
   if (!(stop > 0) || !(p.entry > 0)) return null;
   const base = p.market === 'coinm' && p.notional ? p.notional / p.entry : p.size;

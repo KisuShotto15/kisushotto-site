@@ -1,3 +1,46 @@
+  // Ordenes limite en el libro (puestas en el terminal o en Bitget). reduce=true
+  // son las de solo cierre (el TP limite); side es el lado de la POSICION.
+  async function openOrders() {
+    const d = uta ? await get('/api/v3/trade/unfilled-orders', { category: PT })
+                  : await get('/api/v2/mix/order/orders-pending', { productType: PT });
+    const rows = uta ? listOf(d) : (d?.entrustedList || []);
+    return rows.filter(o => String(o.orderType).toLowerCase() === 'limit').map(o => {
+      const reduce = String(o.reduceOnly).toLowerCase() === 'yes' || o.reduceOnly === true || /close/.test(String(o.tradeSide || ''));
+      const posSide = ['long', 'short'].includes(o.posSide) ? o.posSide : null;
+      const buy = o.side === 'buy';
+      return {
+        exchange: 'bitget', market: 'futures', symbol: o.symbol, reduce,
+        side: posSide || (reduce ? (buy ? 'short' : 'long') : (buy ? 'long' : 'short')),
+        qty: num(uta ? o.qty : o.size) - num(uta ? o.cumExecQty : o.baseVolume), price: num(o.price),
+        stop: num(uta ? o.stopLoss : o.presetStopLossPrice) || null, tp: num(uta ? o.takeProfit : o.presetStopSurplusPrice) || null,
+        cid: o.clientOid || null, order_id: String(o.orderId || ''), ts: Math.floor(num(uta ? o.createdTime : o.cTime) / 1000) || null,
+      };
+    });
+  }
+
+  // TP como orden limite de solo cierre por el tamano de la posicion: paga
+  // comision de maker y se llena en el precio exacto.
+  async function placeTp(pos, tp, inst) {
+    const isHedge = await hedge(pos.symbol);
+    const price = fmt(roundTick(tp, inst.tick), inst.tick);
+    const size = fmt(floorStep(pos.size, inst.step), inst.step);
+    const closeSide = pos.side === 'long' ? 'sell' : 'buy';
+    if (uta) {
+      return post('/api/v3/trade/place-order', {
+        category: PT, symbol: pos.symbol, qty: size, side: closeSide, posSide: isHedge ? pos.side : undefined,
+        orderType: 'limit', price, timeInForce: 'gtc', reduceOnly: isHedge ? undefined : 'yes',
+        marginMode: pos.margin_mode || 'isolated',
+      });
+    }
+    // Modo cobertura: el cierre lleva el lado de la posicion y tradeSide=close
+    return post('/api/v2/mix/order/place-order', {
+      symbol: pos.symbol, productType: PT, marginMode: pos.margin_mode || 'isolated', marginCoin: 'USDT',
+      size, price, orderType: 'limit', force: 'gtc',
+      side: isHedge ? (pos.side === 'long' ? 'buy' : 'sell') : closeSide,
+      tradeSide: isHedge ? 'close' : undefined, reduceOnly: isHedge ? undefined : 'YES',
+    });
+  }
+
 // Bitget: futuros USDT-M y spot. Soporta las dos clases de cuenta:
 //  - classic: API v2 (/api/v2/mix, /api/v2/spot)
 //  - uta (cuenta unificada): API v3 (/api/v3/...)
@@ -440,7 +483,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
   }
 
   return {
-    name: 'bitget', equity, futuresPositions, openOrders, cancelById, spotHoldings, instrument, price, klines,
+    name: 'bitget', equity, futuresPositions, openOrders, placeTp, cancelById, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
     spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, diag, closedHistory,
   };

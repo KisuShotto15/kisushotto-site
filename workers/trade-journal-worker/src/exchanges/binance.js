@@ -138,15 +138,33 @@ export function binance({ key, secret, env = 'live' }) {
   }
 
   let lastOpen = null;
-  // Ordenes limite de apertura en USDⓈ-M (puestas en el terminal o en Binance)
+  // Ordenes limite en USDⓈ-M (puestas en el terminal o en Binance). reduce=true
+  // son las de solo cierre (el TP limite); side es el lado de la POSICION.
   async function openOrders() {
     const list = lastOpen && Date.now() - lastOpen.t < 10000 ? lastOpen.list : await F('GET', '/fapi/v1/openOrders');
-    return list.filter(o => o.type === 'LIMIT' && !o.reduceOnly && !o.closePosition).map(o => ({
-      exchange: 'binance', market: 'futures', symbol: o.symbol,
-      side: o.positionSide === 'SHORT' ? 'short' : o.positionSide === 'LONG' ? 'long' : o.side === 'SELL' ? 'short' : 'long',
-      qty: num(o.origQty) - num(o.executedQty), price: num(o.price), stop: null, tp: null,
-      cid: o.clientOrderId || null, order_id: String(o.orderId), ts: o.time ? Math.floor(o.time / 1000) : null,
-    }));
+    return list.filter(o => o.type === 'LIMIT' && !o.closePosition).map(o => {
+      const hedged = o.positionSide === 'LONG' || o.positionSide === 'SHORT';
+      const buy = o.side === 'BUY';
+      // En cobertura, vender con positionSide LONG (o comprar con SHORT) es cerrar
+      const reduce = !!o.reduceOnly || (hedged && (o.positionSide === 'LONG') !== buy);
+      return {
+        exchange: 'binance', market: 'futures', symbol: o.symbol, reduce,
+        side: hedged ? o.positionSide.toLowerCase() : reduce ? (buy ? 'short' : 'long') : (buy ? 'long' : 'short'),
+        qty: num(o.origQty) - num(o.executedQty), price: num(o.price), stop: null, tp: null,
+        cid: o.clientOrderId || null, order_id: String(o.orderId), ts: o.time ? Math.floor(o.time / 1000) : null,
+      };
+    });
+  }
+
+  // TP como orden limite de solo cierre por el tamano de la posicion (USDⓈ-M)
+  async function placeTp(pos, tp, inst) {
+    const hedge = await isDual('futures');
+    return F('POST', '/fapi/v1/order', {
+      symbol: pos.symbol, side: pos.side === 'long' ? 'SELL' : 'BUY',
+      positionSide: hedge ? (pos.side === 'long' ? 'LONG' : 'SHORT') : undefined,
+      type: 'LIMIT', timeInForce: 'GTC', quantity: fmt(floorStep(pos.size, inst.step), inst.step),
+      price: fmt(roundTick(tp, inst.tick), inst.tick), reduceOnly: hedge ? undefined : 'true',
+    });
   }
 
   async function stopsBySymbol() {
@@ -469,7 +487,7 @@ export function binance({ key, secret, env = 'live' }) {
   }
 
   return {
-    name: 'binance', equity, futuresPositions, openOrders, cancelById, spotHoldings, instrument, price, klines,
+    name: 'binance', equity, futuresPositions, openOrders, placeTp, cancelById, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
     spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, closedHistory, coinm,
     diag: async () => ({ futures: !!(await F('GET', '/fapi/v1/time', {}, false)).serverTime, hedge: await isDual() }),
