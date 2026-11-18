@@ -283,3 +283,86 @@
   .pc-acts button { border: 0; background: var(--card); padding: 10px 4px; }
   .pc-acts button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
+
+/* Ticket rapido */
+.tm-ctx { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+.tm-ctx summary { list-style: none; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; cursor: pointer; font: 12px 'IBM Plex Mono', monospace; }
+.tm-ctx summary::-webkit-details-marker { display: none; }
+.tm-ctx #ctxSum { display: contents; }
+.tm-ctx .chip { border: 1px solid var(--border2); border-radius: 6px; padding: 3px 8px; color: var(--text); }
+.tm-ctx .chip.lev { color: var(--lv-lev); border-color: color-mix(in srgb, var(--lv-lev) 45%, transparent); }
+.tm-ctx-chg { margin-left: auto; color: var(--muted2); text-decoration: underline dotted; }
+.tm-ctx[open] .tm-ctx-chg { color: var(--accent); }
+.tm-ctx[open] .form-row { margin-top: 10px; }
+
+.tm-quick:empty { display: none; }
+.tm-quick-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font: 500 11px 'IBM Plex Mono', monospace; letter-spacing: .12em; color: var(--muted2); margin-bottom: 6px; }
+.tm-quick-head span:last-child { letter-spacing: 0; }
+.tm-quick-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.tm-q { border: 1px solid var(--border2); background: var(--card); border-radius: 10px; padding: 9px 6px; cursor: pointer; text-align: center; color: var(--text); }
+.tm-q b { display: block; font: 600 12px 'IBM Plex Mono', monospace; }
+.tm-q small { font: 10.5px 'IBM Plex Mono', monospace; color: var(--muted2); }
+.tm-q.short b { color: var(--red); }
+.tm-q.long b { color: var(--green); }
+.tm-q.dim { opacity: .4; }
+.tm-q.on.short { border-color: var(--red); background: color-mix(in srgb, var(--red) 12%, var(--card)); }
+.tm-q.on.long { border-color: var(--green); background: color-mix(in srgb, var(--green) 12%, var(--card)); }
+.tm-q:hover { opacity: 1; }
+
+/* Checklist: automaticos (avisan) y tuyos (interruptores) */
+#checklist { display: flex; flex-direction: column; gap: 2px; }
+.tm-ck { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text); padding: 4px 0; }
+.tm-ck i { font-style: normal; width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font: 700 11px 'IBM Plex Mono', monospace; flex: none; }
+.tm-ck.ok i, .tm-ck.hand i { background: color-mix(in srgb, var(--green) 20%, transparent); color: var(--green); }
+.tm-ck.no i { background: color-mix(in srgb, var(--amber) 20%, transparent); color: var(--amber); }
+.tm-ck em { margin-left: auto; font: normal 11px 'IBM Plex Mono', monospace; color: var(--muted2); text-align: right; }
+.tm-ck em.act { color: var(--amber); text-decoration: underline dotted; cursor: pointer; }
+.tm-ck.hand em.act { color: var(--muted2); }
+.tm-ck-sep { height: 1px; background: var(--border); margin: 6px 0; }
+.tm-tgs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tm-tgs:empty { display: none; }
+.tm-tg { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border2); border-radius: 9px; padding: 10px; font-size: 13px; cursor: pointer; user-select: none; }
+.tm-tg i { font-style: normal; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--muted2); display: grid; place-items: center; font: 700 12px 'IBM Plex Mono', monospace; flex: none; }
+.tm-tg.on { border-color: color-mix(in srgb, var(--green) 55%, transparent); background: color-mix(in srgb, var(--green) 8%, transparent); }
+.tm-tg.on i { background: var(--green); border-color: var(--green); color: #062a20; }
+
+/* Ejecutar: dos toques */
+.tm-exec small { display: block; font-size: 11px; font-weight: 400; opacity: .85; margin-top: 2px; }
+.tm-exec.arm { position: relative; overflow: hidden; color: #fff; }
+.tm-exec.arm.short { background: color-mix(in srgb, var(--red) 30%, var(--card)); box-shadow: 0 0 0 2px var(--red) inset; }
+.tm-exec.arm.long { background: color-mix(in srgb, var(--green) 25%, var(--card)); box-shadow: 0 0 0 2px var(--green) inset; }
+.tm-exec-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: currentColor; animation: tm-arm 3s linear forwards; }
+.tm-exec.arm.short .tm-exec-bar { background: var(--red); }
+.tm-exec.arm.long .tm-exec-bar { background: var(--green); }
+@keyframes tm-arm { from { width: 100%; } to { width: 0; } }
+
+.tm-opt { border-top: 1px dashed var(--border2); padding-top: 10px; }
+.tm-opt summary { cursor: pointer; font: 12px 'IBM Plex Mono', monospace; color: var(--muted2); }
+.tm-opt summary b { color: var(--text); font-weight: 500; }
+.tm-opt[open] .form-row { margin-top: 10px; }
+
+/* Orden limite en el grafico (como en TradingView) */
+.tc-h-entry { left: auto; right: 78px; background: #0c0c0c; color: var(--text); padding: 0; gap: 0; border: 1px solid #3b6cf6; overflow: hidden; }
+.tc-h-entry > span { padding: 3px 8px; border-right: 1px solid #2a2a2a; }
+.tc-h-entry > span:last-child { border-right: 0; }
+.tc-h-entry .p-side.long { background: #2962ff; color: #fff; }
+.tc-h-entry .p-side.short { background: var(--red); color: #fff; }
+.tc-h-entry .p-btn { cursor: grab; }
+.tc-h-entry .p-btn.tp { color: var(--green); }
+.tc-h-entry .p-btn.sl { color: var(--red); }
+.tc-h-entry .p-btn:hover { background: #1c1c1c; }
+.tc-h-entry .p-qty { color: #9db4ff; }
+.tc-h-entry .p-px { color: #9db4ff; cursor: ns-resize; }
+.tc-h-entry .p-x { color: var(--muted2); cursor: pointer; }
+.tc-h-entry .p-x:hover { color: var(--text); }
+@media (max-width: 700px) {
+  .tm-tgs { grid-template-columns: 1fr; }
+  .tc-h-entry > span { padding: 5px 7px; }
+}
+
+.tm-band-label { white-space: nowrap; }
+@media (max-width: 700px) {
+  /* En pantallas angostas las etiquetas del grafico van cortas para no tapar la escala */
+  .tc-handle .hm, .tc-h-entry .p-qty { display: none; }
+  .tc-h-entry { right: 62px; }
+}

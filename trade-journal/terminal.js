@@ -40,9 +40,16 @@ const gatesOf = () => isSwing() ? S.swing_gates : S.gates;
 const rulesOf = () => isSwing() ? S.rules.swing : S.rules;
 const positionsOf = () => (isSwing() ? S.swing_positions : S.positions) || [];
 
+// value = lo que se guarda (igual que antes, para no romper la analitica); label = lo que se ve
 const SETUPS = {
-  vwap: ['VWAP 3σ reversion', 'VWAP 2σ reversion', 'Rechazo en VWAP', 'Ruptura y retest de banda'],
-  swing: ['Retest de soporte / resistencia', 'Ruptura con volumen', 'Pullback en tendencia', 'Rango: extremo a extremo', 'Otro'],
+  vwap: [['VWAP 3σ reversion', 'Rebote en la banda 3'], ['VWAP 2σ reversion', 'Rebote en la banda 2'],
+         ['Rechazo en VWAP', 'Rechazo en el VWAP'], ['Ruptura y retest de banda', 'Ruptura y retest de banda']],
+  swing: ['Retest de soporte / resistencia', 'Ruptura con volumen', 'Pullback en tendencia', 'Rango: extremo a extremo', 'Otro'].map(x => [x, x]),
+};
+let setupTouched = false;   // si el usuario eligio el setup a mano, no se cambia solo
+window.renderSetupSum = () => {
+  const o = $('tSetup').selectedOptions[0];
+  $('setupSum').textContent = o ? o.textContent + (setupTouched ? '' : ' (detectado)') : '';
 };
 const MARKETS = {
   vwap: [['futures', 'Futuros USDT-M'], ['spot', 'Spot']],
@@ -68,7 +75,10 @@ function applyStrategyUI() {
   $('titleStrat').textContent = isSwing() ? 'SWING' : 'VWAP';
   $('posTitle').textContent = `POSICIONES · ${isSwing() ? 'SWING' : 'VWAP'}`;
   $('tMarket').innerHTML = MARKETS[strat].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-  $('tSetup').innerHTML = SETUPS[strat].map(x => `<option>${x}</option>`).join('');
+  $('tSetup').innerHTML = SETUPS[strat].map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
+  setupTouched = false;
+  renderSetupSum();
+  manualChecks.clear();
   $('tType').disabled = false;
   document.querySelector('.tm-side.short').disabled = false;
   $('tSymbol').readOnly = false;
@@ -370,16 +380,112 @@ function fillExchanges() {
   if (sel.innerHTML !== html) { sel.innerHTML = html; if (list.includes(cur)) sel.value = cur; }
 }
 
+// Puntos del checklist que el sistema puede comprobar con los indicadores en vivo.
+// Solo avisan: si no se cumplen, el usuario igual puede marcarlos a mano.
+const manualChecks = new Set();
+function autoCheck(item) {
+  if (isSwing()) return null;
+  const t = item.toLowerCase(), I = M?.indicators, short = side === 'short';
+  if (/ventana|noticia/.test(t)) {
+    const ok = !!(S?.window?.in_window && !S?.news?.blocked);
+    return { ok, note: ok ? 'sistema' : 'fuera de ventana o dia de noticias' };
+  }
+  if (!I) return /desviaci|rsi|estoc|objetivo|r:r/.test(t) ? { ok: false, note: 'sin datos' } : null;
+  if (/objetivo|r:r/.test(t)) {
+    const rr = lastPreview?.plan?.rr;
+    return { ok: rr != null && rr >= rulesOf().min_rr, note: rr != null ? `${rr.toFixed(2)}R (min ${rulesOf().min_rr})` : 'pon SL y TP' };
+  }
+  if (/desviaci/.test(t)) return { ok: short ? I.sigma >= 2 : I.sigma <= -2, note: bandWords(I.sigma) };
+  if (/rsi\s*\(?6/.test(t)) return { ok: I.rsi6 != null && (short ? I.rsi6 >= 80 : I.rsi6 <= 20), note: `RSI6 ${fmt(I.rsi6, 1)}` };
+  if (/estoc/.test(t)) {
+    const ok = I.stoch_cross === (short ? 'down' : 'up');
+    return { ok, note: I.stoch_cross === 'up' ? 'cruce alcista' : I.stoch_cross === 'down' ? 'cruce bajista' : 'sin cruce' };
+  }
+  return null;
+}
+const checklistItems = () => (rulesOf()?.checklist || []).map(c => {
+  const a = autoCheck(c);
+  return { c, auto: a, checked: (a && a.ok) || manualChecks.has(c) };
+});
+const checkedList = () => checklistItems().filter(x => x.checked).map(x => x.c);
+window.toggleCheck = i => {
+  const c = rulesOf().checklist[i];
+  if (manualChecks.has(c)) manualChecks.delete(c); else manualChecks.add(c);
+  renderChecklist();
+  updateExecButton();
+};
+// La vista previa va al servidor; el checklist se evalua aqui para no repetirla
+// en cada cambio. Al enviar, el servidor lo vuelve a validar.
+const isChecklistErr = e => /^Checklist incompleto/.test(e);
+const otherErrors = () => (lastPreview?.errors || []).filter(e => !isChecklistErr(e));
+const checklistDone = () => checklistItems().every(x => x.checked);
+const canExecute = () => !!lastPreview?.plan && otherErrors().length === 0 && checklistDone();
 function renderChecklist() {
-  const box = $('checklist');
-  const checked = new Set([...box.querySelectorAll('input:checked')].map(x => x.value));
-  const items = rulesOf().checklist;
-  const sig = items.join('\n');
-  if (box.dataset.sig === sig) return;
-  box.dataset.sig = sig;
-  box.innerHTML = items.map(c => `<label class="tm-check"><input type="checkbox" value="${esc(c)}" ${checked.has(c) ? 'checked' : ''} onchange="schedulePreview()"><span>${esc(c)}</span></label>`).join('');
+  const items = checklistItems();
+  const autos = items.filter(x => x.auto).length;
+  $('ckSub').textContent = autos ? `· ${autos} automaticos (solo avisan) · ${items.length - autos} tuyos` : '· todos obligatorios';
+  const html = items.map((x, i) => {
+    if (x.auto) {
+      const st = x.auto.ok ? 'ok' : manualChecks.has(x.c) ? 'hand' : 'no';
+      return `<div class="tm-ck ${st}"><i>${st === 'no' ? '!' : '✓'}</i><span>${esc(x.c)}</span>
+        ${x.auto.ok ? `<em>${esc(x.auto.note)}</em>`
+          : `<em class="act" onclick="toggleCheck(${i})">${esc(x.auto.note)} · ${st === 'hand' ? 'quitar marca' : 'marcar a mano'}</em>`}</div>`;
+    }
+    return `<div class="tm-tg ${x.checked ? 'on' : ''}" onclick="toggleCheck(${i})"><i>${x.checked ? '✓' : ''}</i><span>${esc(x.c)}</span></div>`;
+  });
+  const autosHtml = html.filter((_, i) => items[i].auto).join('');
+  const mineHtml = html.filter((_, i) => !items[i].auto).join('');
+  const out = autosHtml + (autosHtml && mineHtml ? '<div class="tm-ck-sep"></div>' : '') + `<div class="tm-tgs">${mineHtml}</div>`;
+  if ($('checklist').innerHTML !== out) $('checklist').innerHTML = out;
 }
 
+// "+2,41" desviaciones -> "entre la banda 2 y la 3 de arriba"
+function bandWords(z) {
+  if (z == null || !Number.isFinite(z)) return '—';
+  const a = Math.abs(z), dir = z >= 0 ? 'arriba' : 'abajo';
+  if (a < 0.15) return 'en el VWAP';
+  if (a < 1) return `entre el VWAP y la banda 1 de ${dir}`;
+  if (a >= 3) return `por fuera de la banda 3 de ${dir}`;
+  const n = Math.floor(a);
+  return `entre la banda ${n} y la ${n + 1} de ${dir}`;
+}
+
+// ── Entrada rapida: lado, SL y TP de un toque ────────────────────────────────
+const QUICK = [
+  { k: 'short3', side: 'short', band: 3, label: 'SHORT · banda 3 arriba', color: 'roja' },
+  { k: 'short2', side: 'short', band: 2, label: 'SHORT · banda 2 arriba', color: 'amarilla' },
+  { k: 'long2', side: 'long', band: 2, label: 'LONG · banda 2 abajo', color: 'amarilla' },
+  { k: 'long3', side: 'long', band: 3, label: 'LONG · banda 3 abajo', color: 'roja' },
+];
+function renderQuick() {
+  const box = $('quick');
+  const I = M?.indicators;
+  if (isSwing() || !I || $('tMarket').value !== 'futures') { box.innerHTML = ''; return; }
+  const z = I.sigma;
+  const now = z >= 3 ? 'short3' : z >= 2 ? 'short2' : z <= -3 ? 'long3' : z <= -2 ? 'long2' : null;
+  const out = `<div class="tm-quick-head"><span>ENTRADA RAPIDA · TP en el VWAP</span><span>precio ${esc(bandWords(z))}</span></div>
+    <div class="tm-quick-row">${QUICK.map(q => `<button class="tm-q ${q.side} ${q.k === now ? 'on' : now ? 'dim' : ''}" onclick="quickEntry('${q.k}')">
+      <b>${q.label}</b><small>linea ${q.color}</small></button>`).join('')}</div>`;
+  if (box.innerHTML !== out) box.innerHTML = out;
+}
+window.quickEntry = k => {
+  const q = QUICK.find(x => x.k === k), I = M?.indicators;
+  if (!q || !I) return;
+  const sd = I.bands[0].up - I.vwap;
+  const dir = q.side === 'short' ? 1 : -1;
+  const band3 = q.side === 'short' ? I.bands[2].up : I.bands[2].dn;
+  // SL un poco mas alla de la banda siguiente (desde la banda 3: una desviacion mas alla)
+  let stop = band3 + dir * (q.band === 2 ? 0.15 : 1) * sd;
+  // y nunca pegado al precio
+  stop = q.side === 'short' ? Math.max(stop, I.price + 0.2 * sd) : Math.min(stop, I.price - 0.2 * sd);
+  setSide(q.side);
+  $('tType').value = 'market';
+  $('tEntry').disabled = true;
+  $('tStop').value = px(stop);
+  $('tTp').value = px(I.vwap);
+  if (!setupTouched) { $('tSetup').value = q.band === 3 ? 'VWAP 3σ reversion' : 'VWAP 2σ reversion'; renderSetupSum(); }
+  schedulePreview();
+};
 window.setSide = s => {
   side = s;
   document.querySelectorAll('.tm-side').forEach(b => b.classList.toggle('active', b.dataset.side === s));
@@ -403,7 +509,7 @@ function currentOrder() {
     strategy: strat, exchange: $('tExchange').value, market: $('tMarket').value,
     symbol: $('tSymbol').value.trim().toUpperCase(), side, type: $('tType').value,
     entry: +$('tEntry').value || null, stop: +$('tStop').value || null, tp: +$('tTp').value || null,
-    checklist: [...document.querySelectorAll('#checklist input:checked')].map(x => x.value),
+    checklist: checkedList(),
     setup: $('tSetup').value, emotion: $('tEmotion').value || null, notes: $('tNotes').value.trim() || null,
     signal: M?.indicators ? {
       interval: M.interval, anchor: M.anchor, price: M.indicators.price, vwap: M.indicators.vwap,
@@ -416,6 +522,8 @@ function currentOrder() {
 
 window.schedulePreview = () => {
   syncChart();
+  renderChecklist();
+  renderQuick();
   clearTimeout(previewTimer);
   previewTimer = setTimeout(preview, 350);
 };
@@ -431,6 +539,8 @@ async function preview() {
   try {
     lastPreview = await exec.preview(o);
     renderPreview(lastPreview);
+    renderChecklist();
+    chart.place();
   } catch (e) {
     lastPreview = null;
     $('preview').innerHTML = `<div class="tm-err">${esc(errMsg(e))}</div>`;
@@ -455,52 +565,52 @@ function renderPreview(r) {
     <div class="tm-sub">Precio ${px(p.price)} · entrada ${px(p.entry)} · comision ${(p.fee * 100).toFixed(3)}% incluida en el tamano</div>
     ${p.capped_by_margin ? `<div class="tm-sub warn">Tamano limitado por el margen maximo (${S.rules.max_margin_pct}% a ${p.leverage}x): arriesgas menos que tu presupuesto.</div>` : ''}
     ${p.market === 'coinm' ? `<div class="tm-sub">COIN-M: ${p.contract_size} USD por contrato; margen y resultado en la moneda base.</div>` : ''}
-    ${r.errors.length ? `<ul class="tm-errs">${r.errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="tm-ok">Cumple todas las reglas</div>'}`;
+    ${otherErrors().length ? `<ul class="tm-errs">${otherErrors().map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="tm-ok">Cumple las reglas de riesgo</div>'}`;
 }
 
+let armTimer = null;
 function updateExecButton() {
   const b = $('execBtn');
-  const ok = lastPreview?.ok;
+  if (armTimer) return;   // esperando el segundo toque
+  const ok = canExecute();
   b.disabled = !ok;
   const acc = S?.accounts.find(a => a.exchange === $('tExchange').value);
-  b.textContent = !ok ? (lastPreview ? 'Bloqueado por las reglas' : 'Revisa las reglas')
-    : `${acc?.dry_run ? 'Simular' : 'Ejecutar'} ${side.toUpperCase()} · arriesgar ${fmt(lastPreview.plan.loss_if_stop)} USDT`;
+  b.innerHTML = ok
+    ? `${acc?.dry_run ? 'SIMULAR' : side.toUpperCase()} ${esc($('tSymbol').value.trim().toUpperCase())} · arriesgar ${fmt(lastPreview.plan.loss_if_stop)} USDT<small>toca para preparar</small>`
+    : !lastPreview?.plan ? 'Pon SL y TP' : otherErrors().length ? 'Bloqueado por las reglas de riesgo' : 'Completa el checklist';
   b.className = `tm-exec ${ok ? side : ''}`;
 }
 
+// Primer toque: prepara. Segundo toque en menos de 3 s: envia. Sin ventana aparte.
 window.execute = () => {
-  if (!lastPreview?.ok) return;
+  if (!canExecute()) return;
+  const b = $('execBtn');
+  if (armTimer) { clearTimeout(armTimer); armTimer = null; return sendOrder(); }
   const p = lastPreview.plan;
-  $('confirmBody').innerHTML = `
-    <div class="tm-confirm">
-      <div class="tm-confirm-big ${side === 'long' ? 'pos' : 'neg'}">${side.toUpperCase()} ${esc(p.symbol)}</div>
-      <div>${esc(p.exchange)} · ${p.market === 'spot' ? 'spot' : 'futuros'} · ${p.type === 'limit' ? 'limite ' + px(p.entry) : 'mercado'}</div>
-      <div>Cantidad <b>${fmt(p.qty, 4)}</b> · stop <b>${px(p.stop)}</b> · objetivo <b>${px(p.tp)}</b></div>
-      <div class="neg">Pierdes ${fmt(p.loss_if_stop)} USDT (${fmt(p.risk_pct)}%) si salta el stop. Es un resultado aceptado de antemano.</div>
-      ${p.dry_run ? '<div class="warn">Cuenta en simulacion: no se envia nada al exchange.</div>' : ''}
-    </div>`;
-  $('confirmModal').classList.remove('hidden');
+  b.className = `tm-exec ${side} arm`;
+  b.innerHTML = `CONFIRMAR ${side.toUpperCase()} · toca otra vez<small>${p.type === 'limit' ? 'limite ' + px(p.entry) : 'a mercado'} · ${fmt(p.qty, 4)} · pierdes ${fmt(p.loss_if_stop)} USDT (${fmt(p.risk_pct)}%) si salta el stop${p.dry_run ? ' · SIMULACION' : ''}</small><span class="tm-exec-bar"></span>`;
+  armTimer = setTimeout(() => { armTimer = null; updateExecButton(); }, 3000);
 };
-window.closeConfirm = () => $('confirmModal').classList.add('hidden');
-window.confirmExecute = async () => {
-  const btn = $('confirmGo');
+
+async function sendOrder() {
+  const btn = $('execBtn');
   btn.disabled = true;
+  btn.textContent = 'Enviando…';
   try {
     const r = await exec.order(currentOrder());
     if (r.ok) {
       toast(r.simulated ? 'Simulacion registrada en la bitacora' : 'Orden enviada con stop');
       if (!r.simulated) {
-        document.querySelectorAll('#checklist input').forEach(x => { x.checked = false; });
+        manualChecks.clear();
         $('tNotes').value = '';
       }
     } else toast(r.errors?.[0] || 'Rechazada', 'err');
-    closeConfirm();
     await loadStatus(true);
     loadEvents();
-    preview();
+    await preview();
   } catch (e) { toast(errMsg(e), 'err'); }
-  btn.disabled = false;
-};
+  updateExecButton();
+}
 
 // ── Mercado e indicadores ─────────────────────────────────────────────────────
 
@@ -542,9 +652,9 @@ function renderIndicators() {
   if (!s) { $('bands').innerHTML = '<div class="tm-sub">Sin velas</div>'; return; }
   renderStamp();
   const rows = [
-    ...[3, 2, 1].map(n => ({ label: `+${n}σ`, v: s.bands[n - 1].up, z: n })),
+    ...[3, 2, 1].map(n => ({ label: `Banda ${n} ↑`, v: s.bands[n - 1].up, z: n })),
     { label: 'VWAP', v: s.vwap, z: 0 },
-    ...[1, 2, 3].map(n => ({ label: `−${n}σ`, v: s.bands[n - 1].dn, z: -n })),
+    ...[1, 2, 3].map(n => ({ label: `Banda ${n} ↓`, v: s.bands[n - 1].dn, z: -n })),
   ];
   const at = Math.max(-3.5, Math.min(3.5, s.sigma));
   $('bands').innerHTML = rows.map(r => `
@@ -553,7 +663,10 @@ function renderIndicators() {
       <button class="tm-mini sl" onclick="setLevel('tStop', ${r.v})">SL</button>
       <button class="tm-mini tp" onclick="setLevel('tTp', ${r.v})">TP</button>
     </div>`).join('') +
-    `<div class="tm-band-now">Precio ${px(s.price)} · <b class="${Math.abs(s.sigma) >= 2 ? 'warn' : ''}">${s.sigma >= 0 ? '+' : ''}${s.sigma.toFixed(2)}σ</b></div>`;
+    `<div class="tm-band-now">Precio ${px(s.price)} · <b class="${Math.abs(s.sigma) >= 2 ? 'warn' : ''}">${bandWords(s.sigma)}</b></div>`;
+  renderQuick();
+  renderChecklist();
+  updateExecButton();
   const rsiCls = s.rsi6 >= 80 ? 'neg' : s.rsi6 <= 20 ? 'pos' : '';
   const stCls = s.stoch_k >= 80 ? 'neg' : s.stoch_k <= 20 ? 'pos' : '';
   $('osc').innerHTML = `
@@ -563,6 +676,14 @@ function renderIndicators() {
 }
 
 window.setLevel = (id, v) => { $(id).value = px(v); schedulePreview(); };
+// Contexto del ticket en una linea (exchange, mercado, simbolo, apalancamiento)
+function renderCtx() {
+  const lev = isSwing() ? S?.rules?.swing?.leverage : S?.rules?.leverage;
+  const mk = $('tMarket').selectedOptions[0]?.textContent || '';
+  $('ctxSum').innerHTML = [$('tExchange').selectedOptions[0]?.textContent || $('tExchange').value, $('tSymbol').value.toUpperCase(), mk]
+    .filter(Boolean).map(x => `<span class="chip">${esc(x)}</span>`).join('') +
+    (lev && $('tMarket').value !== 'spot' ? `<span class="chip lev">${lev}x</span>` : '');
+}
 
 // ── Grafico con SL / TP / limite arrastrables ─────────────────────────────────
 
@@ -573,21 +694,36 @@ const refPrice = () => ($('tType').value === 'limit' && +$('tEntry').value) || M
 function levelLabel(name, price) {
   const ref = refPrice();
   const d = ref ? (price / ref - 1) * 100 : 0;
-  if (name === 'entry') return `LIMITE ${px(price)}`;
-  if (name === 'sl') return `SL ${px(price)} · ${pct(d)}`;
+  const plan = lastPreview?.plan;
+  if (name === 'entry') {
+    // Orden limite: lado, SL y TP para arrastrar, cantidad, precio y × para quitarla
+    const qty = plan && plan.type === 'limit' ? fmt(plan.qty, 4) : '—';
+    return `<span class="p-side ${side}">${side === 'long' ? 'Compra' : 'Venta'}</span>` +
+      `<span class="p-btn tp" data-act="add-tp" title="Arrastra para poner el TP">TP</span>` +
+      `<span class="p-btn sl" data-act="add-sl" title="Arrastra para poner el SL">SL</span>` +
+      `<span class="p-qty">${qty}</span><span class="p-px"><span class="hm">Limite </span>${px(price)}</span>` +
+      `<span class="p-x" data-act="remove" title="Pasar a orden a mercado">×</span>`;
+  }
+  if (name === 'sl') {
+    const loss = plan && Math.abs(plan.stop - price) < 1e-9 ? `<span class="hm"> · −${fmt(plan.loss_if_stop)} USDT</span>` : '';
+    return `SL ${px(price)} · ${pct(d)}${loss}`;
+  }
   const stop = +$('tStop').value;
   const rr = ref && stop && Math.abs(ref - stop) > 0 ? Math.abs(price - ref) / Math.abs(ref - stop) : null;
-  return `TP ${px(price)} · ${pct(d)}${rr ? ` · ${rr.toFixed(2)}R` : ''}`;
+  const gain = plan && Math.abs(plan.tp - price) < 1e-9 ? `<span class="hm"> · +${fmt(plan.gain_if_tp)} USDT</span>` : '';
+  return `TP ${px(price)} · ${rr ? `${rr.toFixed(2)}R` : pct(d)}${gain}`;
 }
 
 const chart = new TicketChart($('tChart'), {
   labelOf: levelLabel,
   onDrag: (name, price) => { $(LEVEL_INPUT[name]).value = px(price); },
   onDrop: () => schedulePreview(),
+  onRemove: name => { if (name === 'entry') { $('tType').value = 'market'; onTypeChange(); } },
 });
 
 // Pasa al grafico lo que dicen los campos del ticket y la posicion abierta del simbolo
 function syncChart() {
+  renderCtx();
   chart.setLevel('sl', +$('tStop').value || null);
   chart.setLevel('tp', +$('tTp').value || null);
   chart.setLevel('entry', $('tType').value === 'limit' ? +$('tEntry').value || null : null);

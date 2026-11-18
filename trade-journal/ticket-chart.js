@@ -27,13 +27,16 @@ const EDITABLE = {
 };
 
 export class TicketChart {
-  // labelOf(name, price): texto del asa; onDrag(name, price) mientras se mueve;
-  // onDrop(name, price) al soltar
-  constructor(el, { labelOf, onDrag, onDrop }) {
+  // labelOf(name, price): HTML del asa; onDrag(name, price) mientras se mueve;
+  // onDrop(name, price) al soltar; onRemove(name) al tocar la × del asa.
+  // Dentro del asa, un elemento con data-act="add-sl" / "add-tp" crea esa linea
+  // en el precio del asa y la empieza a arrastrar (como en TradingView).
+  constructor(el, { labelOf, onDrag, onDrop, onRemove }) {
     this.el = el;
     this.labelOf = labelOf;
     this.onDrag = onDrag;
     this.onDrop = onDrop;
+    this.onRemove = onRemove;
     this.levels = {};      // nombre -> { price, line, handle }
     this.fixed = [];       // lineas de la posicion abierta
     this.fixedPrices = []; // sus precios, sin la liquidacion (a poco apalancamiento queda muy lejos)
@@ -140,7 +143,7 @@ export class TicketChart {
       });
       const handle = document.createElement('div');
       handle.className = `tc-handle tc-h-${name}`;
-      handle.addEventListener('pointerdown', e => this.startDrag(e, name));
+      handle.addEventListener('pointerdown', e => this.pointerDown(e, name));
       this.ov.appendChild(handle);
       this.levels[name] = { price, line, handle };
     }
@@ -171,8 +174,25 @@ export class TicketChart {
       // Fuera de la vista el asa queda pegada al borde para poder traerla
       lv.handle.style.top = `${Math.max(10, Math.min(h - 30, y))}px`;
       lv.handle.classList.toggle('off', y < 10 || y > h - 30);
-      if (!this.dragging || this.dragging !== name) lv.handle.innerHTML = `<span>⇕</span>${this.labelOf(name, lv.price)}`;
+      if (this.dragging !== name) this.paint(name, lv);
     }
+  }
+
+  paint(name, lv) {
+    const html = name === 'entry' ? this.labelOf(name, lv.price) : `<span>⇕</span>${this.labelOf(name, lv.price)}`;
+    if (lv.html !== html) { lv.handle.innerHTML = html; lv.html = html; }
+  }
+
+  pointerDown(e, name) {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'remove') { e.preventDefault(); e.stopPropagation(); this.onRemove?.(name); return; }
+    if (act === 'add-sl' || act === 'add-tp') {
+      const target = act === 'add-sl' ? 'sl' : 'tp';
+      if (!this.levels[target]) this.setLevel(target, this.levels[name].price);
+      this.startDrag(e, target);
+      return;
+    }
+    this.startDrag(e, name);
   }
 
   startDrag(e, name) {
@@ -194,7 +214,7 @@ export class TicketChart {
       lv.price = price;
       lv.line.applyOptions({ price });
       h.style.top = `${Math.max(10, Math.min(this.box.clientHeight - 30, y))}px`;
-      h.innerHTML = `<span>⇕</span>${this.labelOf(name, price)}`;
+      this.paint(name, lv);
       this.onDrag?.(name, price);
     };
     const end = () => {
