@@ -322,3 +322,38 @@ test('la perdida flotante no cierra el dia y se ven las ordenes limite puestas e
   delete api.openOrders;
   Date.now = realNow;
 });
+
+test('TP limite: el guardian lo pone si falta y se cancela al cerrar', async () => {
+  const calls = [];
+  const ex = {
+    placeTp: async (pos, tp) => { calls.push(['tp', pos.symbol, tp]); },
+    instrument: async () => ({ tick: 0.1, step: 0.001 }),
+    openOrders: async () => [
+      { reduce: true, symbol: 'BTCUSDT', side: 'short', order_id: '7' },
+      { reduce: false, symbol: 'BTCUSDT', side: 'short', order_id: '8' },   // limite de entrada: no se toca
+      { reduce: true, symbol: 'BTCUSDT', side: 'long', order_id: '9' },     // de otra posicion: no se toca
+    ],
+    cancelById: async (m, s, id) => { calls.push(['cancel', id]); },
+  };
+  const realAdapter = gw.adapter;
+  gw.adapter = () => ex;
+  const ctx = {
+    ledger: [
+      { status: 'open', market: 'futures', tp: 60000, exchange: 'bitget', symbol: 'BTCUSDT', side: 'short' },
+      { status: 'open', market: 'futures', tp: 3000, exchange: 'bitget', symbol: 'ETHUSDT', side: 'long' },
+    ],
+    positions: [
+      { exchange: 'bitget', market: 'futures', symbol: 'BTCUSDT', side: 'short', size: 1, tp: null },
+      { exchange: 'bitget', market: 'futures', symbol: 'ETHUSDT', side: 'long', size: 1, tp: 3000 },   // ya tiene TP
+    ],
+    swingPositions: [],
+  };
+  await gw.ensureTps(ctx, () => ({ exchange: 'bitget', dry_run: 1 }));
+  assert.deepEqual(calls, [], 'en simulacion no toca el exchange');
+  await gw.ensureTps(ctx, () => ({ exchange: 'bitget', dry_run: 0 }));
+  assert.deepEqual(calls, [['tp', 'BTCUSDT', 60000]]);
+  calls.length = 0;
+  await gw.cancelTpOrders(ex, 'BTCUSDT', 'short');
+  assert.deepEqual(calls, [['cancel', '7']]);
+  gw.adapter = realAdapter;
+});
