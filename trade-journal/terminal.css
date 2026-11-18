@@ -368,3 +368,6 @@
   .tc-handle .hm, .tc-h-entry .p-qty { display: none; }
   .tc-h-entry { right: 62px; }
 }
+
+.tc-h-entry.ghost { border-style: dashed; }
+.tc-h-entry.ghost .p-px { cursor: default; color: var(--muted2); }

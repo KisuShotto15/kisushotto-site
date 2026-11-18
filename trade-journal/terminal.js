@@ -638,7 +638,13 @@ window.loadMarket = async () => {
 
 let feedState = 'off';
 const feed = new LiveFeed({
-  onUpdate: snap => { if (M) { M.indicators = snap; renderIndicators(); chart.update(feed.candles); } },
+  onUpdate: snap => {
+    if (!M) return;
+    M.indicators = snap;
+    renderIndicators();
+    chart.update(feed.candles);
+    if ($('tType').value !== 'limit') chart.setLevel('entry', snap.price, { ghost: true });
+  },
   onStatus: st => { feedState = st; if (M?.indicators) renderStamp(); },
 });
 
@@ -684,13 +690,16 @@ function levelLabel(name, price) {
   const d = ref ? (price / ref - 1) * 100 : 0;
   const plan = lastPreview?.plan;
   if (name === 'entry') {
-    // Orden limite: lado, SL y TP para arrastrar, cantidad, precio y × para quitarla
-    const qty = plan && plan.type === 'limit' ? fmt(plan.qty, 4) : '—';
+    // Etiqueta de la orden: lado, SL y TP para arrastrar, cantidad y precio.
+    // Limite: el precio se arrastra y la × la pasa a mercado. Mercado: sigue al precio.
+    const limit = $('tType').value === 'limit';
+    const qty = plan && plan.type === (limit ? 'limit' : 'market') ? fmt(plan.qty, 4) : '—';
     return `<span class="p-side ${side}">${side === 'long' ? 'Compra' : 'Venta'}</span>` +
       `<span class="p-btn tp" data-act="add-tp" title="Arrastra para poner el TP">TP</span>` +
       `<span class="p-btn sl" data-act="add-sl" title="Arrastra para poner el SL">SL</span>` +
-      `<span class="p-qty">${qty}</span><span class="p-px"><span class="hm">Limite </span>${px(price)}</span>` +
-      `<span class="p-x" data-act="remove" title="Pasar a orden a mercado">×</span>`;
+      `<span class="p-qty">${qty}</span>` +
+      (limit ? `<span class="p-px"><span class="hm">Limite </span>${px(price)}</span><span class="p-x" data-act="remove" title="Pasar a orden a mercado">×</span>`
+             : '<span class="p-px">Mercado</span>');
   }
   if (name === 'sl') {
     const loss = plan && Math.abs(plan.stop - price) < 1e-9 ? `<span class="hm"> · −${fmt(plan.loss_if_stop)} USDT</span>` : '';
@@ -714,7 +723,8 @@ function syncChart() {
   renderCtx();
   chart.setLevel('sl', +$('tStop').value || null);
   chart.setLevel('tp', +$('tTp').value || null);
-  chart.setLevel('entry', $('tType').value === 'limit' ? +$('tEntry').value || null : null);
+  if ($('tType').value === 'limit') chart.setLevel('entry', +$('tEntry').value || null);
+  else chart.setLevel('entry', M?.indicators?.price || null, { ghost: true });
   const sym = $('tSymbol').value.trim().toUpperCase(), ex = $('tExchange').value;
   chart.setPosition(S ? positionsOf().find(p => p.symbol === sym && p.exchange === ex) : null);
 }

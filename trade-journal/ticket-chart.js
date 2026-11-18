@@ -126,8 +126,9 @@ export class TicketChart {
     });
   }
 
-  // price null quita la linea
-  setLevel(name, price) {
+  // price null quita la linea. ghost: solo la etiqueta, sin linea ni arrastre
+  // (la orden a mercado: la etiqueta sigue al precio y sirve para sacar SL y TP)
+  setLevel(name, price, { ghost = false } = {}) {
     const def = EDITABLE[name];
     const cur = this.levels[name];
     if (!(price > 0)) {
@@ -136,16 +137,18 @@ export class TicketChart {
     }
     if (cur) {
       cur.price = price;
+      if (cur.ghost !== ghost) { cur.ghost = ghost; cur.line.applyOptions({ lineVisible: !ghost, axisLabelVisible: !ghost }); cur.handle.classList.toggle('ghost', ghost); }
       cur.line.applyOptions({ price });
     } else {
       const line = this.series.createPriceLine({
-        price, color: def.color(), lineWidth: 1, lineStyle: def.style, axisLabelVisible: true, title: '',
+        price, color: def.color(), lineWidth: 1, lineStyle: def.style, axisLabelVisible: !ghost, lineVisible: !ghost, title: '',
       });
       const handle = document.createElement('div');
       handle.className = `tc-handle tc-h-${name}`;
       handle.addEventListener('pointerdown', e => this.pointerDown(e, name));
       this.ov.appendChild(handle);
-      this.levels[name] = { price, line, handle };
+      handle.classList.toggle('ghost', ghost);
+      this.levels[name] = { price, line, handle, ghost };
     }
     this.place();
   }
@@ -192,7 +195,7 @@ export class TicketChart {
       this.startDrag(e, target);
       return;
     }
-    this.startDrag(e, name);
+    if (!this.levels[name].ghost) this.startDrag(e, name);
   }
 
   startDrag(e, name) {
