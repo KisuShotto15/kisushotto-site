@@ -43,7 +43,7 @@ const positionsOf = () => (isSwing() ? S.swing_positions : S.positions) || [];
 // value = lo que se guarda (igual que antes, para no romper la analitica); label = lo que se ve
 const SETUPS = {
   vwap: [['VWAP 3σ reversion', 'Rebote en la banda 3'], ['VWAP 2σ reversion', 'Rebote en la banda 2'],
-         ['Rechazo en VWAP', 'Rechazo en el VWAP'], ['Ruptura y retest de banda', 'Ruptura y retest de banda']],
+         ['Reversion a VWAP', 'Reversión a VWAP'], ['Rechazo en VWAP', 'Rechazo en el VWAP'], ['Ruptura y retest de banda', 'Ruptura y retest de banda']],
   swing: ['Retest de soporte / resistencia', 'Ruptura con volumen', 'Pullback en tendencia', 'Rango: extremo a extremo', 'Otro'].map(x => [x, x]),
 };
 let setupTouched = false;   // si el usuario eligio el setup a mano, no se cambia solo

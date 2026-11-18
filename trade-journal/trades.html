@@ -43,85 +43,61 @@
     <h1>TRADE <span>LIST</span></h1>
   </div>
 
-  <!-- Filter bar -->
-  <div class="filter-bar">
-    <select id="fExchange" onchange="applyFilters()">
-      <option value="">Exchange</option>
-      <option value="bitget">Bitget</option>
-      <option value="binance">Binance</option>
-      <option value="bybit">Bybit</option>
-    </select>
-    <select id="fOrigin" onchange="applyFilters()" title="Por donde entro la operacion">
-      <option value="">Origen</option>
-      <option value="terminal">Terminal</option>
-      <option value="external">Fuera del terminal</option>
-    </select>
-    <select id="fCategory" onchange="applyFilters()">
-      <option value="">Categoría</option>
-      <option value="linear">Futuros USDT</option>
-      <option value="inverse">Futuros inverse</option>
-      <option value="spot">Spot</option>
-    </select>
-    <select id="fSide" onchange="applyFilters()">
-      <option value="">Lado</option>
-      <option value="long">Long</option>
-      <option value="short">Short</option>
-    </select>
-    <select id="fSession" onchange="applyFilters()">
-      <option value="">Sesión</option>
-      <option value="asia">Asia</option>
-      <option value="london">Londres</option>
-      <option value="ny">Nueva York</option>
-      <option value="other">Otra</option>
-    </select>
-    <select id="fStatus" onchange="applyFilters()">
-      <option value="">Estado</option>
-      <option value="closed">Cerrada</option>
-      <option value="open">Abierta</option>
-    </select>
-    <input type="text" id="fSymbol" placeholder="Símbolo" style="width:120px" oninput="applyFiltersDebounced()">
-    <input type="date" id="fFrom" onchange="applyFilters()" title="Desde">
-    <input type="date" id="fTo"   onchange="applyFilters()" title="Hasta">
-    <button class="btn btn-sm" onclick="resetFilters()">↺ Limpiar</button>
-    <button class="btn btn-sm" onclick="doExport()" title="Exportar CSV con los filtros de fecha aplicados">↓ CSV</button>
+  <!-- Estrategia y periodo -->
+  <div class="tl-bar">
+    <div class="tl-tabs" id="tlStrat">
+      <button data-v="vwap" onclick="setStrat('vwap')">VWAP</button>
+      <button data-v="swing" onclick="setStrat('swing')">Swing</button>
+      <button data-v="" onclick="setStrat('')">Todas</button>
+    </div>
+    <div class="tl-seg" id="tlRange">
+      <button data-v="today" onclick="setRange('today')">Hoy</button>
+      <button data-v="week" onclick="setRange('week')">Semana</button>
+      <button data-v="month" onclick="setRange('month')">Mes</button>
+      <button data-v="all" onclick="setRange('all')">Todo</button>
+    </div>
+  </div>
+  <div class="tl-bar">
+    <input type="text" id="fSymbol" class="tl-in" placeholder="Símbolo" oninput="applyFiltersDebounced()">
+    <button class="tl-btn" id="moreBtn" onclick="toggleMore()">Más filtros ▾</button>
+    <button class="tl-rev" id="reviewBtn" onclick="toggleReview()">Por revisar <span id="reviewCount">0</span></button>
+    <div class="tl-right">
+      <select id="fSort" class="tl-in" onchange="applyFilters()" title="Ordenar">
+        <option value="date">Ordenar: fecha</option>
+        <option value="pnl">Ordenar: resultado</option>
+        <option value="r">Ordenar: R</option>
+      </select>
+      <button class="tl-btn" onclick="toggleSelectMode()" id="selBtn" title="Etiquetar varios a la vez">Seleccionar</button>
+      <button class="tl-btn" onclick="doExport()" title="Exportar CSV con las fechas del filtro">↓ CSV</button>
+    </div>
   </div>
 
-  <!-- Mini summary -->
-  <div id="miniSummary" class="mini-summary"></div>
+  <div class="tl-more hidden" id="morePanel">
+    <select id="fExchange" onchange="applyFilters()"><option value="">Exchange</option><option value="bitget">Bitget</option><option value="binance">Binance</option></select>
+    <select id="fOrigin" onchange="applyFilters()" title="Por donde entro la operacion"><option value="">Origen</option><option value="terminal">Terminal</option><option value="external">Fuera del terminal</option></select>
+    <select id="fCategory" onchange="applyFilters()"><option value="">Mercado</option><option value="linear">Futuros USDT</option><option value="inverse">Futuros COIN-M</option><option value="spot">Spot</option></select>
+    <select id="fSide" onchange="applyFilters()"><option value="">Lado</option><option value="long">Long</option><option value="short">Short</option></select>
+    <select id="fSession" onchange="applyFilters()"><option value="">Sesión</option><option value="asia">Asia</option><option value="london">Londres</option><option value="ny">Nueva York</option><option value="other">Otra</option></select>
+    <select id="fStatus" onchange="applyFilters()"><option value="">Estado</option><option value="closed">Cerrada</option><option value="open">Abierta</option></select>
+    <label>Desde <input type="date" id="fFrom" onchange="customRange()"></label>
+    <label>Hasta <input type="date" id="fTo" onchange="customRange()"></label>
+    <button class="tl-btn" onclick="resetFilters()">↺ Limpiar filtros</button>
+  </div>
+
+  <div class="tl-cap">Totales de todo el filtro, no solo de lo que se ve en pantalla</div>
+  <div class="tl-kpis" id="kpis"></div>
 
   <!-- Etiquetado masivo -->
   <div class="bulk-bar" id="bulkBar">
     <span class="bulk-count" id="bulkCount">0 seleccionados</span>
-    <select id="bulkSetup" onchange="applyBulkTag('setup_tag', this.value); this.value=''">
-      <option value="">Setup…</option>
-    </select>
-    <select id="bulkStrategy" onchange="applyBulkTag('strategy_tag', this.value); this.value=''">
-      <option value="">Estrategia…</option>
-    </select>
+    <select id="bulkSetup" onchange="applyBulkTag('setup_tag', this.value); this.value=''"><option value="">Setup…</option></select>
+    <select id="bulkStrategy" onchange="applyBulkTag('strategy_tag', this.value); this.value=''"><option value="">Estrategia…</option></select>
     <button class="btn btn-sm" onclick="selectAllVisible()">Todos</button>
     <button class="btn btn-sm" onclick="clearSelection()">Limpiar</button>
   </div>
 
-  <!-- Trades list -->
-  <div class="trades-list">
-    <div class="tc-header">
-      <div class="tc-header-cell">Símbolo</div>
-      <div class="tc-header-cell">Lado</div>
-      <div class="tc-header-cell">Apertura → Cierre</div>
-      <div class="tc-header-cell">Entrada</div>
-      <div class="tc-header-cell">Salida</div>
-      <div class="tc-header-cell">P&L</div>
-      <div class="tc-header-cell">Duración</div>
-      <div></div>
-    </div>
-    <div id="tradesBody"><div class="loading">Cargando…</div></div>
-  </div>
-
-  <div class="pagination">
-    <button class="btn btn-sm" id="btnPrev" onclick="prevPage()">← Anterior</button>
-    <span id="pageInfo" style="color:var(--muted2)">Página 1</span>
-    <button class="btn btn-sm" id="btnNext" onclick="nextPage()">Siguiente →</button>
-  </div>
+  <div id="tradesBody"><div class="loading">Cargando…</div></div>
+  <button class="tl-more-btn hidden" id="loadMore" onclick="loadMore()">Cargar más</button>
 
 </div><!-- /container -->
 

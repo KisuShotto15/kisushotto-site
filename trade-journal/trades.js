@@ -1,32 +1,44 @@
 import { swr, invalidate } from './cache.js';
-import { getTrades, updateTrade, bulkTag, downloadCSV } from './api.js';
+import { getTrades, updateTrade, bulkTag, downloadCSV, exec } from './api.js';
+import { createChart, LineStyle } from 'lightweight-charts';
+import { vwapBands, utcAnchor } from '../workers/trade-journal-worker/src/indicators.js';
 
 const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const PAGE = 50;
 let page = 0;
+let trades = [];          // lo cargado hasta ahora (con "Cargar mas" se acumula)
 let filterDebounce = null;
 let currentTrade = null;
-const tradesMap = {};
-let currentTags = [];
 let currentScreenshots = [];
-let currentStrategy = null;
+let selectMode = false;
+const tradesMap = {};
 const selectedIds = new Set();
+const candleCache = new Map();
 
-// ── R-multiple ────────────────────────────────────────────────────────────────
+// ── Estado de filtros (se recuerda entre visitas) ─────────────────────────────
+const SAVED = (() => { try { return JSON.parse(localStorage.getItem('tl_filters') || '{}'); } catch { return {}; } })();
+let strat = SAVED.strat ?? 'vwap';
+let range = SAVED.range ?? 'week';
+let review = false;
+const FIELDS = ['fExchange', 'fOrigin', 'fCategory', 'fSide', 'fSession', 'fStatus', 'fFrom', 'fTo', 'fSymbol', 'fSort'];
+function saveFilters() {
+  const o = { strat, range };
+  for (const id of FIELDS) o[id] = $(id).value;
+  try { localStorage.setItem('tl_filters', JSON.stringify(o)); } catch { /* sin storage */ }
+}
+
+// ── R ─────────────────────────────────────────────────────────────────────────
 function riskOf(t) {
   if (t.risk_usd > 0) return t.risk_usd;
-  if (t.stop_price > 0 && t.entry_price > 0 && t.size > 0) {
-    return Math.abs(t.entry_price - t.stop_price) * t.size;
-  }
+  if (t.stop_price > 0 && t.entry_price > 0 && t.size > 0) return Math.abs(t.entry_price - t.stop_price) * t.size;
   return null;
 }
 function rOf(t) {
   const risk = riskOf(t);
   return risk && t.pnl != null ? t.pnl / risk : null;
 }
-function fmtR(t) {
-  const r = rOf(t);
-  return r == null ? '—' : (r >= 0 ? '+' : '') + r.toFixed(2) + 'R';
-}
+const fmtRv = r => r == null ? '—' : (r >= 0 ? '+' : '') + r.toFixed(2).replace('.', ',') + 'R';
 
 // Los screenshots vivian dentro de strategy_tag; se leen de ahi solo por compatibilidad.
 function screenshotsOf(t) {
@@ -36,587 +48,474 @@ function screenshotsOf(t) {
   }
   return [];
 }
-function strategyOf(t) {
-  return t.strategy_tag && !t.strategy_tag.startsWith('[') ? t.strategy_tag : null;
-}
+const strategyOf = t => t.strategy_tag && !t.strategy_tag.startsWith('[') ? t.strategy_tag : null;
 
-// ── Tag definitions ───────────────────────────────────────────────────────────
-// Setups de la estrategia VWAP (los mismos del ticket del terminal) y, al
-// final, los de antes para poder seguir leyendo el historial viejo.
-const SETUP_TAGS = [
-  'VWAP 3σ reversion', 'VWAP 2σ reversion', 'Rechazo en VWAP', 'Ruptura y retest de banda',
-  'FUERA DE PLAN',
-];
-const STRATEGY_TAGS = ['VWAP', 'Otra'];
-// La clave es lo que se guarda; la etiqueta es lo que se ve
+// ── Setups: valor guardado (igual que antes, para la analitica) y texto visible ─
+const SETUPS = {
+  VWAP: [
+    ['VWAP 3σ reversion', 'Rebote en la banda 3'], ['VWAP 2σ reversion', 'Rebote en la banda 2'],
+    ['Reversion a VWAP', 'Reversión a VWAP'], ['Rechazo en VWAP', 'Rechazo en el VWAP'],
+    ['Ruptura y retest de banda', 'Ruptura y retest de banda'], ['FUERA DE PLAN', 'Fuera de plan'],
+  ],
+  Swing: ['Retest de soporte / resistencia', 'Ruptura con volumen', 'Pullback en tendencia', 'Rango: extremo a extremo', 'Otro']
+    .map(x => [x, x]).concat([['FUERA DE PLAN', 'Fuera de plan']]),
+};
+const SETUP_LABEL = Object.fromEntries([...SETUPS.VWAP, ...SETUPS.Swing]);
+const setupLabel = v => v ? v.split(',').map(x => SETUP_LABEL[x.trim()] || x.trim()).join(', ') : '';
+const STRATEGY_TAGS = ['VWAP', 'Swing', 'Otra'];
 const EMOTION_TAGS = [
-  { key: 'calm',      label: 'Tranquilo',  color: '#4ade80' },
-  { key: 'confident', label: 'Confiado',   color: '#35c8f1' },
-  { key: 'anxious',   label: 'Ansioso',    color: '#fbbf24' },
-  { key: 'impatient', label: 'Impaciente', color: '#fbbf24' },
-  { key: 'tired',     label: 'Cansado',    color: '#9494aa' },
-  { key: 'fomo',      label: 'FOMO',       color: '#fb923c' },
-  { key: 'fear',      label: 'Miedo',      color: '#f87171' },
-  { key: 'greed',     label: 'Codicia',    color: '#fb923c' },
-  { key: 'revenge',   label: 'Revancha',   color: '#f87171' },
-  { key: 'neutral',   label: 'Neutral',    color: '#9494aa' },
+  { key: 'calm', label: 'Tranquilo' }, { key: 'confident', label: 'Confiado' }, { key: 'anxious', label: 'Ansioso' },
+  { key: 'impatient', label: 'Impaciente' }, { key: 'tired', label: 'Cansado' }, { key: 'fomo', label: 'FOMO' },
+  { key: 'fear', label: 'Miedo' }, { key: 'greed', label: 'Codicia' }, { key: 'revenge', label: 'Revancha' },
+  { key: 'neutral', label: 'Neutral' },
 ];
+const needsReview = t => t.status === 'closed' && (!t.notes || t.emotion == null || t.rule_score == null);
 
-// Senal guardada al entrar desde el terminal (sigma VWAP, RSI 6, estocastico)
-function signalOf(t) {
-  if (!t.signal) return null;
-  try { return JSON.parse(t.signal); } catch { return null; }
-}
-function signalText(sig) {
+// Senal guardada al entrar desde el terminal
+function signalText(t) {
+  let sig = null;
+  try { sig = t.signal ? JSON.parse(t.signal) : null; } catch { /* sin senal */ }
   if (!sig) return '';
   const parts = [];
-  if (sig.sigma != null) parts.push(`${sig.sigma >= 0 ? '+' : ''}${sig.sigma}σ VWAP`);
+  if (sig.sigma != null) parts.push(bandWords(sig.sigma));
   if (sig.rsi6 != null) parts.push(`RSI6 ${sig.rsi6}`);
-  if (sig.stoch_k != null) parts.push(`Estoc ${sig.stoch_k}/${sig.stoch_d ?? '—'}${sig.stoch_cross === 'up' ? ' ↑' : sig.stoch_cross === 'down' ? ' ↓' : ''}`);
+  if (sig.stoch_cross) parts.push(sig.stoch_cross === 'up' ? 'cruce alcista' : 'cruce bajista');
   if (sig.interval) parts.push(sig.interval);
   return parts.join(' · ');
 }
-const ORIGIN_LABEL = { terminal: 'terminal', external: 'externa' };
+function bandWords(z) {
+  const a = Math.abs(z), dir = z >= 0 ? 'arriba' : 'abajo';
+  if (a < 0.15) return 'precio en el VWAP';
+  if (a < 1) return `precio entre el VWAP y la banda 1 de ${dir}`;
+  if (a >= 3) return `precio por fuera de la banda 3 de ${dir}`;
+  const n = Math.floor(a);
+  return `precio entre la banda ${n} y la ${n + 1} de ${dir}`;
+}
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
+// ── Formato ───────────────────────────────────────────────────────────────────
 function toast(msg, type = 'ok') {
   const el = $('toast');
   el.textContent = msg;
   el.className = `toast show ${type}`;
   setTimeout(() => el.classList.remove('show'), 3000);
 }
+const num = (v, d = 2) => v == null || !Number.isFinite(+v) ? '—' : (+v).toLocaleString('es', { minimumFractionDigits: d, maximumFractionDigits: d });
+const usd = v => v == null ? '—' : (v >= 0 ? '+' : '−') + num(Math.abs(v));
+const pxf = v => v == null || !(+v) ? '—' : num(v, +v >= 1000 ? 1 : +v >= 1 ? 2 : 4);
+const hm = ts => new Date(ts * 1000).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+function holdTime(a, b) {
+  if (!b) return 'abierta';
+  const m = Math.round((b - a) / 60);
+  if (m < 60) return `${m} min`;
+  if (m < 1440) return `${Math.floor(m / 60)} h ${m % 60} min`;
+  return `${Math.floor(m / 1440)} d`;
+}
+const dayKey = ts => { const d = new Date(ts * 1000); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+function dayLabel(ts) {
+  const s = new Date(ts * 1000).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'short' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
 
-// ── Formatters ────────────────────────────────────────────────────────────────
-function fmtDate(ts) {
-  return new Date(ts * 1000).toLocaleString('es', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+// ── Filtros ───────────────────────────────────────────────────────────────────
+function rangeFrom() {
+  const now = new Date();
+  if (range === 'today') { now.setHours(0, 0, 0, 0); return Math.floor(now / 1000); }
+  if (range === 'week') return Math.floor(Date.now() / 1000) - 7 * 86400;
+  if (range === 'month') return Math.floor(Date.now() / 1000) - 30 * 86400;
+  return undefined;
 }
-// Las horas se muestran en la zona del navegador. Se expone cual es para que
-// una discrepancia con el exchange se detecte de un vistazo.
-const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
-function tzOffsetLabel() {
-  const min = -new Date().getTimezoneOffset();
-  const sign = min >= 0 ? '+' : '-';
-  const a = Math.abs(min);
-  return `UTC${sign}${Math.floor(a / 60)}${a % 60 ? ':' + String(a % 60).padStart(2, '0') : ''}`;
-}
-function fmtShortDate(ts) {
-  if (!ts) return '—';
-  const d = new Date(ts * 1000);
-  return d.toLocaleDateString('en', { month:'short', day:'numeric' }) + ' ' +
-         d.toLocaleTimeString('en', { hour:'2-digit', minute:'2-digit', hour12:false });
-}
-function fullDate(ts) {
-  if (!ts) return '';
-  return new Date(ts * 1000).toLocaleString('es', { dateStyle: 'full', timeStyle: 'long' }) + ` (${TZ})`;
-}
-function fmtNum(v, dec = 4) {
-  const n = parseFloat(v);
-  return isNaN(n) ? '—' : n.toFixed(dec);
-}
-function fmtPnl(v) {
-  const n = parseFloat(v);
-  if (isNaN(n) || v == null) return '—';
-  return (n >= 0 ? '+' : '') + n.toFixed(2);
-}
-function fmtHoldTime(entry, exit) {
-  if (!exit) return '—';
-  const mins = Math.round((exit - entry) / 60);
-  if (mins < 60)   return mins + 'm';
-  if (mins < 1440) return Math.floor(mins/60) + 'h ' + (mins%60) + 'm';
-  return Math.floor(mins/1440) + 'd';
-}
-
-// ── Filters ───────────────────────────────────────────────────────────────────
 function getFilters() {
+  const custom = $('fFrom').value || $('fTo').value;
   return {
+    strat: strat || undefined,
     exchange: $('fExchange').value || undefined,
     category: $('fCategory').value || undefined,
-    side:     $('fSide').value     || undefined,
-    session:  $('fSession').value  || undefined,
-    origin:   $('fOrigin').value   || undefined,
-    status:   $('fStatus').value   || undefined,
-    symbol:   $('fSymbol').value   || undefined,
-    from:     $('fFrom').value ? Math.floor(new Date($('fFrom').value).getTime() / 1000) : undefined,
-    to:       $('fTo').value   ? Math.floor(new Date($('fTo').value + 'T23:59:59').getTime() / 1000) : undefined,
-    page, limit: 50,
+    side: $('fSide').value || undefined,
+    session: $('fSession').value || undefined,
+    origin: $('fOrigin').value || undefined,
+    status: $('fStatus').value || undefined,
+    symbol: $('fSymbol').value.trim() || undefined,
+    from: custom ? ($('fFrom').value ? Math.floor(new Date($('fFrom').value + 'T00:00:00') / 1000) : undefined) : rangeFrom(),
+    to: custom && $('fTo').value ? Math.floor(new Date($('fTo').value + 'T23:59:59') / 1000) : undefined,
+    review: review ? 1 : undefined,
+    sort: $('fSort').value !== 'date' ? $('fSort').value : undefined,
   };
 }
-
-window.applyFilters = function() { page = 0; load(); };
-window.applyFiltersDebounced = function() {
-  clearTimeout(filterDebounce);
-  filterDebounce = setTimeout(applyFilters, 400);
-};
-window.resetFilters = function() {
-  ['fExchange','fOrigin','fCategory','fSide','fSession','fStatus','fFrom','fTo'].forEach(id => { $(id).value = ''; });
-  $('fSymbol').value = '';
-  page = 0;
-  load();
-};
-window.prevPage = function() { if (page > 0) { page--; load(); } };
-window.nextPage = function() { page++; load(); };
-
-// ── Load & render ─────────────────────────────────────────────────────────────
-function renderSummary(trades) {
-  const closed   = trades.filter(t => t.status === 'closed' && t.pnl != null);
-  const totalPnl = closed.reduce((s, t) => s + t.pnl, 0);
-  const wins     = closed.filter(t => t.pnl > 0);
-  $('miniSummary').innerHTML = [
-    `<span>${trades.length} trades</span>`,
-    closed.length ? `<span class="${totalPnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)} USDT</span>` : '',
-    closed.length ? `<span>${Math.round(wins.length / closed.length * 100)}% win</span>` : '',
-  ].join('<span style="color:var(--border2)"> · </span>');
+function paintControls() {
+  document.querySelectorAll('#tlStrat button').forEach(b => b.classList.toggle('on', b.dataset.v === strat));
+  const custom = $('fFrom').value || $('fTo').value;
+  document.querySelectorAll('#tlRange button').forEach(b => b.classList.toggle('on', !custom && b.dataset.v === range));
+  $('reviewBtn').classList.toggle('on', review);
+  const extra = ['fExchange', 'fOrigin', 'fCategory', 'fSide', 'fSession', 'fStatus', 'fFrom', 'fTo'].filter(id => $(id).value).length;
+  $('moreBtn').textContent = `Más filtros${extra ? ` (${extra})` : ''} ▾`;
 }
+window.setStrat = v => { strat = v; applyFilters(); };
+window.setRange = v => { range = v; $('fFrom').value = ''; $('fTo').value = ''; applyFilters(); };
+window.customRange = () => applyFilters();
+window.toggleReview = () => { review = !review; applyFilters(); };
+window.toggleMore = () => $('morePanel').classList.toggle('hidden');
+window.applyFilters = () => { page = 0; saveFilters(); paintControls(); load(); };
+window.applyFiltersDebounced = () => { clearTimeout(filterDebounce); filterDebounce = setTimeout(applyFilters, 400); };
+window.resetFilters = () => {
+  ['fExchange', 'fOrigin', 'fCategory', 'fSide', 'fSession', 'fStatus', 'fFrom', 'fTo', 'fSymbol'].forEach(id => { $(id).value = ''; });
+  $('fSort').value = 'date';
+  applyFilters();
+};
+window.loadMore = () => { page++; load(true); };
 
-async function load() {
-  $('tradesBody').innerHTML = `<div class="loading">Cargando…</div>`;
+// ── Carga ─────────────────────────────────────────────────────────────────────
+async function load(append = false) {
+  if (!append) $('tradesBody').innerHTML = '<div class="loading">Cargando…</div>';
+  const f = { ...getFilters(), page, limit: PAGE, totals: page === 0 ? 1 : undefined };
   try {
-    const f = getFilters();
-    const { trades } = await swr(`trades:${JSON.stringify(f)}`, () => getTrades(f), d => {
-      renderCards(d.trades); renderSummary(d.trades);
-    });
-    renderCards(trades);
-    renderSummary(trades);
-    $('pageInfo').textContent = `Página ${page + 1}`;
-    $('btnPrev').disabled = page === 0;
-    $('btnNext').disabled = trades.length < 50;
+    const show = d => {
+      trades = append ? [...trades.filter(t => !d.trades.some(x => x.id === t.id)), ...d.trades] : d.trades;
+      if (d.totals) renderKpis(d.totals);
+      renderList();
+      $('loadMore').classList.toggle('hidden', d.trades.length < PAGE);
+    };
+    const d = await swr(`trades:${JSON.stringify(f)}`, () => getTrades(f), show);
+    show(d);
   } catch (err) {
-    $('tradesBody').innerHTML = `<div style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size: 15px;padding:20px">${err.message}</div>`;
+    $('tradesBody').innerHTML = `<div class="tl-err">${esc(err.message)}</div>`;
     toast(err.message, 'err');
   }
 }
 
-function renderCards(trades) {
+function renderKpis(t) {
+  const n = t.n || 0, wins = t.wins || 0, losses = t.losses || 0;
+  const cls = v => v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+  const rAvg = t.r_n ? t.r_sum / t.r_n : null;
+  const k = (label, val, extra = '', c = '') => `<div class="tl-k"><span>${label}</span><b class="${c}">${val}</b>${extra ? `<small>${extra}</small>` : ''}</div>`;
+  $('kpis').innerHTML =
+    k('TRADES', n, `${plural(wins, 'ganada', 'ganadas')} · ${plural(losses, 'perdida', 'perdidas')}`) +
+    k('P&amp;L NETO', usd(t.pnl || 0), 'USDT', cls(t.pnl)) +
+    k('R TOTAL', fmtRv(t.r_n ? t.r_sum : null), t.r_n < n ? `${n - t.r_n} sin stop` : '', cls(t.r_sum)) +
+    k('ACIERTOS', wins + losses ? `${Math.round(wins / (wins + losses) * 100)}%` : '—') +
+    k('R PROMEDIO', fmtRv(rAvg), '', cls(rAvg)) +
+    k('COMISIONES', t.fees ? '−' + num(t.fees) : '—', t.fees ? 'USDT registradas' : '', t.fees ? 'neg' : '');
+  $('reviewCount').textContent = t.review || 0;
+  $('reviewBtn').classList.toggle('zero', !t.review);
+}
+
+function rowHtml(t) {
+  tradesMap[t.id] = t;
+  const r = rOf(t);
+  const long = t.side === 'long' || t.side === 'buy';
+  const res = t.pnl > 0 ? 'win' : t.pnl < 0 ? 'loss' : '';
+  const strat = strategyOf(t);
+  const tags = [
+    strat ? `<span class="tl-t ${strat === 'VWAP' ? 'v' : strat === 'Swing' ? 'sw' : ''}">${esc(strat)}</span>` : '',
+    t.setup_tag ? `<span class="tl-t">${esc(setupLabel(t.setup_tag))}</span>` : '',
+    t.rule_score != null ? `<span class="tl-t">disciplina ${t.rule_score}</span>` : '',
+    t.exec_type === 'external' ? '<span class="tl-t w">externa</span>' : '',
+    !riskOf(t) && t.status === 'closed' ? '<span class="tl-t w">sin stop</span>' : '',
+    needsReview(t) ? '<span class="tl-t rv">por revisar</span>' : '',
+    t.status === 'open' ? '<span class="tl-t">abierta</span>' : '',
+  ].join('');
+  return `<div class="tl-row ${res} ${currentTrade?.id === t.id ? 'open' : ''}" data-id="${t.id}">
+    <div class="tl-main" onclick="openPanel('${t.id}')">
+      ${selectMode ? `<input type="checkbox" class="tl-sel" ${selectedIds.has(t.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleSelect('${t.id}',this.checked)">` : ''}
+      <div class="tl-sym"><b>${esc(t.symbol)}</b><small>${hm(t.entry_time)} · ${esc(t.exchange || '')}</small></div>
+      <span class="tl-side ${long ? 'l' : 's'}">${long ? 'LONG' : 'SHORT'}</span>
+      <div class="tl-tags">${tags}</div>
+      <div class="tl-pnl ${res}">${t.pnl != null ? usd(t.pnl) + ' USDT' : '—'}</div>
+      <div class="tl-r ${res}">${fmtRv(r)}</div>
+      <div class="tl-dur">${holdTime(t.entry_time, t.exit_time)}</div>
+      <div class="tl-chev">›</div>
+    </div>
+    <div class="tl-detail"></div>
+  </div>`;
+}
+
+function renderList() {
   if (!trades.length) {
-    $('tradesBody').innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div>Sin trades con estos filtros</div>`;
+    $('tradesBody').innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div>${review ? 'No hay trades por revisar con estos filtros' : 'Sin trades con estos filtros'}</div>`;
     return;
   }
-  $('tradesBody').innerHTML = trades.map(t => {
-    const isWin  = t.pnl > 0;
-    const isLoss = t.pnl < 0;
-    const pnlClass  = isWin ? 'pos' : isLoss ? 'neg' : 'neu';
-    const isLong    = t.side === 'long' || t.side === 'buy';
-    const sideClass = isLong ? 'pos' : 'neg';
-    const sideArrow = isLong ? '↗' : '↘';
-    const sideLabel = { long: 'Long', short: 'Short', buy: 'Compra', sell: 'Venta' }[t.side] || t.side;
-    const iconChar  = t.symbol.replace(/USDT|USDC|BTC|PERP/g, '').charAt(0) || t.symbol.charAt(0);
-
-    let pctChange = 'neu';
-    let pctText   = '—';
-    if (t.entry_price && t.exit_price && t.entry_price !== 0) {
-      const pct = (t.exit_price - t.entry_price) / t.entry_price * 100;
-      pctText   = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
-      pctChange = pct >= 0 ? 'pos' : 'neg';
+  let html = '';
+  if ($('fSort').value === 'date') {
+    // Agrupados por dia, con el resultado de cada dia
+    const days = [];
+    for (const t of trades) {
+      const k = dayKey(t.entry_time);
+      if (!days.length || days[days.length - 1].k !== k) days.push({ k, ts: t.entry_time, list: [] });
+      days[days.length - 1].list.push(t);
     }
-
-    tradesMap[t.id] = t;
-    return `
-    <div class="tc ${isWin ? 'tc-win' : isLoss ? 'tc-loss' : ''}" data-id="${t.id}">
-      <div class="tc-body" onclick="openPanel('${t.id}')">
-        <div class="tc-symbol-col">
-          <input type="checkbox" class="tc-select" ${selectedIds.has(t.id) ? 'checked' : ''}
-            onclick="event.stopPropagation();toggleSelect('${t.id}',this.checked)" title="Seleccionar">
-          <div class="tc-icon ${sideClass}">${iconChar}</div>
-          <div class="tc-symbol-info">
-            <div class="tc-symbol">${t.symbol}${t.notes || t.setup_tag ? ' <span class="row-dot"></span>' : ''}</div>
-            <div class="tc-exchange">${t.exchange || ''}${ORIGIN_LABEL[t.exec_type] ? ' · ' + ORIGIN_LABEL[t.exec_type] : ''}${t.session ? ' · ' + t.session : ''}</div>
-          </div>
-        </div>
-        <div class="tc-side-col">
-          <span class="tc-arrow ${sideClass}">${sideArrow}</span>
-          <span class="tc-side-label ${sideClass}">${sideLabel}</span>
-        </div>
-        <div class="tc-times-col">
-          <span title="Apertura: ${fullDate(t.entry_time)}">${fmtShortDate(t.entry_time)}</span>
-          <span class="tc-time-sep">→</span>
-          <span title="Cierre: ${fullDate(t.exit_time)}">${t.exit_time ? fmtShortDate(t.exit_time) : '—'}</span>
-        </div>
-        <div class="tc-prices-col">
-          <span class="tc-price">${fmtNum(t.entry_price, 2)}</span>
-        </div>
-        <div class="tc-prices-col">
-          <span class="tc-price">${t.exit_price != null ? fmtNum(t.exit_price, 2) : '—'}</span>
-          <span class="tc-price-change ${pctChange}">${pctText}</span>
-        </div>
-        <div class="tc-pnl-col">
-          <span class="tc-pnl-badge ${pnlClass}">${fmtPnl(t.pnl)} USDT</span>
-          <span class="tc-r ${pnlClass}">${fmtR(t)}</span>
-        </div>
-        <div class="tc-duration-col">${fmtHoldTime(t.entry_time, t.exit_time)}</div>
-        <div class="tc-chevron">›</div>
-      </div>
-      <div class="tc-detail" style="display:none"></div>
-    </div>`;
-  }).join('');
+    for (const d of days) {
+      const closed = d.list.filter(t => t.pnl != null);
+      const pnl = closed.reduce((s, t) => s + t.pnl, 0);
+      const rs = closed.map(rOf).filter(r => r != null);
+      const w = closed.filter(t => t.pnl > 0).length, l = closed.filter(t => t.pnl < 0).length;
+      html += `<div class="tl-day"><b>${dayLabel(d.ts)}</b><span>${plural(d.list.length, 'trade', 'trades')} · ${plural(w, 'ganada', 'ganadas')} · ${plural(l, 'perdida', 'perdidas')}</span>
+        <span class="tl-day-r ${pnl > 0 ? 'pos' : pnl < 0 ? 'neg' : ''}">${usd(pnl)} USDT${rs.length ? ' · ' + fmtRv(rs.reduce((a, b) => a + b, 0)) : ''}</span></div>`;
+      html += d.list.map(rowHtml).join('');
+    }
+  } else {
+    html = trades.map(rowHtml).join('');
+  }
+  $('tradesBody').innerHTML = html;
   renderBulkBar();
+  // Si habia un trade abierto, se vuelve a abrir tras recargar
+  if (currentTrade && tradesMap[currentTrade.id]) renderDetail(tradesMap[currentTrade.id]);
 }
 
 // ── Seleccion multiple ────────────────────────────────────────────────────────
-window.toggleSelect = function(id, checked) {
-  if (checked) selectedIds.add(id); else selectedIds.delete(id);
-  renderBulkBar();
+window.toggleSelectMode = () => {
+  selectMode = !selectMode;
+  if (!selectMode) selectedIds.clear();
+  $('selBtn').classList.toggle('on', selectMode);
+  renderList();
 };
-
-window.clearSelection = function() {
-  selectedIds.clear();
-  document.querySelectorAll('.tc-select').forEach(c => { c.checked = false; });
-  renderBulkBar();
-};
-
-window.selectAllVisible = function() {
-  document.querySelectorAll('.tc[data-id]').forEach(c => {
-    selectedIds.add(c.dataset.id);
-    const box = c.querySelector('.tc-select');
-    if (box) box.checked = true;
-  });
-  renderBulkBar();
-};
-
+window.toggleSelect = (id, checked) => { if (checked) selectedIds.add(id); else selectedIds.delete(id); renderBulkBar(); };
+window.clearSelection = () => { selectedIds.clear(); document.querySelectorAll('.tl-sel').forEach(c => { c.checked = false; }); renderBulkBar(); };
+window.selectAllVisible = () => { trades.forEach(t => selectedIds.add(t.id)); document.querySelectorAll('.tl-sel').forEach(c => { c.checked = true; }); renderBulkBar(); };
 function renderBulkBar() {
-  const bar = $('bulkBar');
-  if (!bar) return;
-  bar.classList.toggle('show', selectedIds.size > 0);
+  $('bulkBar').classList.toggle('show', selectMode && selectedIds.size > 0);
   $('bulkCount').textContent = `${selectedIds.size} seleccionado${selectedIds.size !== 1 ? 's' : ''}`;
 }
-
-function bulkOptions(tags) {
-  return ['<option value="">— elegir —</option>', ...tags.map(t => `<option value="${t}">${t}</option>`),
-          '<option value="__clear__">(quitar)</option>'].join('');
-}
-
-window.applyBulkTag = async function(field, value) {
+const bulkOptions = list => ['<option value="">— elegir —</option>', ...list.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`),
+  '<option value="__clear__">(quitar)</option>'].join('');
+window.applyBulkTag = async (field, value) => {
   if (!value || !selectedIds.size) return;
-  const body = { ids: [...selectedIds] };
-  body[field] = value === '__clear__' ? null : value;
+  const body = { ids: [...selectedIds], [field]: value === '__clear__' ? null : value };
   try {
     const res = await bulkTag(body);
     invalidate();
     toast(`${res.updated} trades etiquetados`);
     clearSelection();
     load();
-  } catch (err) {
-    toast(err.message, 'err');
-  }
+  } catch (err) { toast(err.message, 'err'); }
 };
-
-window.doExport = async function() {
+window.doExport = async () => {
   const { from, to } = getFilters();
-  try {
-    await downloadCSV({ from, to });
-    toast('CSV descargado');
-  } catch (err) {
-    toast(err.message, 'err');
-  }
+  try { await downloadCSV({ from, to }); toast('CSV descargado'); } catch (err) { toast(err.message, 'err'); }
 };
 
-// ── Inline expand ─────────────────────────────────────────────────────────────
-window.openPanel = function(id) {
+// ── Detalle ───────────────────────────────────────────────────────────────────
+window.openPanel = id => {
   const t = tradesMap[id];
   if (!t) return;
-
-  const card = document.querySelector(`.tc[data-id="${id}"]`);
-  if (!card) return;
-
-  const isOpen = card.classList.contains('open');
-
-  document.querySelectorAll('.tc.open').forEach(c => {
-    c.classList.remove('open');
-    const d = c.querySelector('.tc-detail');
-    if (d) { d.style.display = 'none'; d.innerHTML = ''; }
-  });
-  currentTrade = null;
-
-  if (isOpen) return;
-
+  const wasOpen = currentTrade?.id === id;
+  closePanel();
+  if (wasOpen) return;
   currentTrade = t;
-  card.classList.add('open');
-  const detail = card.querySelector('.tc-detail');
-  detail.style.display = 'block';
-
-  // Init state
-  currentTags        = t.setup_tag ? t.setup_tag.split(',').map(s => s.trim()).filter(Boolean) : [];
-  currentScreenshots = screenshotsOf(t);
-  currentStrategy    = strategyOf(t);
-
-  const pnlClass = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : '';
-  const r = rOf(t);
-  const rClass = r == null ? '' : r >= 0 ? 'pnl-pos' : 'pnl-neg';
-  detail.innerHTML = `
-    <div class="td-stats-row">
-      <div class="td-stat"><div class="td-stat-label">Entrada</div><div class="td-stat-val">${fmtNum(t.entry_price, 4)}</div></div>
-      <div class="td-stat"><div class="td-stat-label">Salida</div><div class="td-stat-val">${t.exit_price != null ? fmtNum(t.exit_price, 4) : '—'}</div></div>
-      <div class="td-stat"><div class="td-stat-label">Tamaño</div><div class="td-stat-val">${fmtNum(t.size, 4)}</div></div>
-      <div class="td-stat"><div class="td-stat-label">PnL</div><div class="td-stat-val ${pnlClass}">${fmtPnl(t.pnl)} USDT</div></div>
-      <div class="td-stat"><div class="td-stat-label">R</div><div class="td-stat-val ${rClass}">${fmtR(t)}</div></div>
-      <div class="td-stat"><div class="td-stat-label">Duración</div><div class="td-stat-val">${fmtHoldTime(t.entry_time, t.exit_time)}</div></div>
-      <div class="td-stat"><div class="td-stat-label">Sesión</div><div class="td-stat-val">${t.session || '—'}</div></div>
-    </div>
-    ${signalOf(t) ? `<div class="td-signal">Señal al entrar: <b>${signalText(signalOf(t))}</b></div>` : ''}
-    ${t.exec_type === 'external' ? '<div class="td-signal warn">Operación hecha fuera del terminal: no pasó por las reglas ni el checklist. Revisa por qué.</div>' : ''}
-    <div class="td-divider"></div>
-    <div class="td-main-grid">
-
-      <!-- Tags + Emotion -->
-      <div class="td-col">
-        <div class="td-section-title">Setup</div>
-        <div class="td-chips" id="tagChips"></div>
-        <div class="tag-grid" id="setupPicks" style="margin:8px 0"></div>
-        <div class="td-input-row">
-          <input type="text" id="tagInput" class="td-text-input" placeholder="Agregar etiqueta…"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();addTag()}">
-          <button class="td-add-btn" onclick="addTag()">+</button>
-        </div>
-        <div class="td-section-title" style="margin-top:16px">Estrategia</div>
-        <div class="tag-grid" id="tagStrategy"></div>
-        <div class="td-section-title" style="margin-top:16px">Emoción</div>
-        <div class="tag-grid" id="tagEmotion"></div>
-      </div>
-
-      <!-- Notes -->
-      <div class="td-col">
-        <div class="td-section-title">Riesgo ${t.stop_source === 'exchange' ? '<span class="td-auto-badge">auto</span>' : ''}</div>
-        <div class="td-section-hint">${t.stop_source === 'exchange'
-          ? 'Stop tomado de tu exchange automaticamente. Solo editalo si quieres corregirlo.'
-          : 'Se toma solo del exchange si la posicion estaba abierta. Escribelo si falta.'}</div>
-        <div class="td-input-row" style="margin-bottom:10px">
-          <input type="number" step="any" id="panelStop" class="td-text-input" placeholder="Precio del stop…"
-            oninput="previewRisk()" onkeydown="if(event.key==='Enter'){event.preventDefault();savePanel()}">
-        </div>
-        <div class="td-risk-preview" id="riskPreview">—</div>
-        <div class="td-section-title" style="margin-top:16px">Notas</div>
-        <textarea id="panelNotes" class="panel-textarea td-notes-area" placeholder="¿Seguiste el plan? ¿Qué harías distinto?"></textarea>
-      </div>
-
-      <!-- Screenshots -->
-      <div class="td-col">
-        <div class="td-section-title">Capturas</div>
-        <div class="td-section-hint">Pega un enlace de TradingView, Gyazo o Imgur</div>
-        <div class="td-input-row" style="margin-bottom:10px">
-          <input type="text" id="screenshotInput" class="td-text-input" placeholder="https://…"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();addScreenshot()}">
-          <button class="td-add-btn" onclick="addScreenshot()">+</button>
-        </div>
-        <div class="td-screenshot-grid" id="screenshotGrid"></div>
-      </div>
-
-    </div>
-    <div class="td-divider"></div>
-    <div class="td-footer-row">
-      <div>
-        <div class="td-section-title" style="margin-bottom:8px">Disciplina (0–10): ¿cuánto seguiste el plan?</div>
-        <div class="rule-score-row" id="ruleScoreRow"></div>
-      </div>
-      <button class="btn btn-accent" onclick="savePanel()">Guardar</button>
-    </div>`;
-
-  renderChips();
-  $('setupPicks').innerHTML = SETUP_TAGS.map(tag =>
-    `<button class="tag-pill" onclick="pickSetup(${JSON.stringify(tag).replace(/"/g, '&quot;')})">${tag}</button>`).join('');
-  renderScreenshots();
-  renderStrategyGrid(currentStrategy);
-  renderEmotionGrid(t.emotion);
-  renderRuleScore(t.rule_score);
-  $('panelNotes').value = t.notes || '';
-  $('panelStop').value  = t.stop_price != null ? t.stop_price : '';
-  previewRisk();
-
-  requestAnimationFrame(() => detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  renderDetail(t);
 };
-
-window.closePanel = function() {
-  document.querySelectorAll('.tc.open').forEach(c => {
-    c.classList.remove('open');
-    const d = c.querySelector('.tc-detail');
-    if (d) { d.style.display = 'none'; d.innerHTML = ''; }
-  });
+window.closePanel = () => {
+  document.querySelectorAll('.tl-row.open').forEach(c => { c.classList.remove('open'); c.querySelector('.tl-detail').innerHTML = ''; });
   currentTrade = null;
 };
 
-// ── Tag chips ──────────────────────────────────────────────────────────────────
-function renderChips() {
-  const el = $('tagChips');
-  if (!el) return;
-  el.innerHTML = currentTags.map((tag, i) =>
-    `<span class="td-chip">${tag}<button class="td-chip-remove" onclick="removeTag(${i})">×</button></span>`
-  ).join('');
+function renderDetail(t) {
+  const row = document.querySelector(`.tl-row[data-id="${t.id}"]`);
+  if (!row) return;
+  row.classList.add('open');
+  currentScreenshots = screenshotsOf(t);
+  const strat = strategyOf(t) || (strat0() === 'swing' ? 'Swing' : 'VWAP');
+  const setups = SETUPS[strat] || SETUPS.VWAP;
+  const sel = (t.setup_tag || '').split(',').map(x => x.trim()).filter(Boolean)[0] || '';
+  const custom = sel && !setups.some(([v]) => v === sel) ? sel : '';
+  const sig = signalText(t);
+  row.querySelector('.tl-detail').innerHTML = `
+    <div class="tl-dg">
+      <div>
+        <div class="tl-chart" id="tlChart"><div class="tl-chart-msg">Cargando gráfico…</div></div>
+        <div class="tl-stats">
+          <div><span>ENTRADA</span><b class="c-entry">${pxf(t.entry_price)}</b></div>
+          <div><span>SALIDA</span><b>${pxf(t.exit_price)}</b></div>
+          <div><span>SL / TP</span><b><i class="neg">${pxf(t.stop_price)}</i> / <i class="pos">${pxf(t.tp_price)}</i></b></div>
+          <div><span>TAMAÑO</span><b>${num(t.size, 4)}</b></div>
+          <div><span>COMISIONES</span><b>${t.fees ? num(t.fees) : '—'}</b></div>
+          <div><span>DURACIÓN</span><b>${holdTime(t.entry_time, t.exit_time)}</b></div>
+        </div>
+        ${sig ? `<div class="tl-note">Señal al entrar: ${esc(sig)}</div>` : ''}
+        ${t.exec_type === 'external' ? '<div class="tl-note warn">Operación hecha fuera del terminal: no pasó por las reglas ni el checklist.</div>' : ''}
+      </div>
+      <div class="tl-form">
+        <span>SETUP</span>
+        <div class="tl-pills" id="pSetup">${setups.map(([v, l]) => `<button class="tl-pl ${v === sel ? 'on' : ''}" data-v="${esc(v)}" onclick="pick(this)">${esc(l)}</button>`).join('')}
+          <button class="tl-pl ${custom ? 'on' : ''}" data-v="${esc(custom)}" onclick="pickCustom(this)">${custom ? esc(custom) : '+ otro'}</button></div>
+        <span>EMOCIÓN</span>
+        <div class="tl-pills" id="pEmotion">${EMOTION_TAGS.map(e => `<button class="tl-pl ${t.emotion === e.key || t.emotion === e.label ? 'on' : ''}" data-v="${e.key}" onclick="pick(this)">${e.label}</button>`).join('')}</div>
+        <span>DISCIPLINA (0–10): ¿CUÁNTO SEGUISTE EL PLAN?</span>
+        <div class="tl-score" id="pScore">${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<button class="${t.rule_score === n ? 'on' : ''}" data-v="${n}" onclick="pick(this)">${n}</button>`).join('')}</div>
+        <span>NOTAS</span>
+        <textarea id="pNotes" placeholder="¿Seguiste el plan? ¿Qué harías distinto?">${esc(t.notes || '')}</textarea>
+        <div class="tl-two">
+          <div><span>STOP (PARA LA R)${t.stop_source === 'exchange' ? ' · tomado del exchange' : ''}</span>
+            <input type="number" step="any" id="pStop" class="tl-in" value="${t.stop_price ?? ''}" oninput="previewRisk()"><small id="pRisk"></small></div>
+          <div><span>ESTRATEGIA</span>
+            <div class="tl-pills" id="pStrat">${STRATEGY_TAGS.map(s => `<button class="tl-pl ${strategyOf(t) === s ? 'on' : ''}" data-v="${s}" onclick="pick(this)">${s}</button>`).join('')}</div></div>
+        </div>
+        <span>CAPTURAS</span>
+        <div class="tl-shots" id="pShots"></div>
+        <input type="text" id="pShotIn" class="tl-in" placeholder="Pega un enlace de TradingView, Gyazo o Imgur y pulsa Enter"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addShot()}">
+      </div>
+    </div>
+    <div class="tl-foot">
+      <button class="tl-btn" onclick="closePanel()">Cerrar</button>
+      <button class="tl-btn" onclick="savePanel(false)">Guardar</button>
+      <button class="tl-save" onclick="savePanel(true)">Guardar y siguiente por revisar →</button>
+    </div>`;
+  renderShots();
+  previewRisk();
+  drawTradeChart(t);
+  requestAnimationFrame(() => row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
 }
+const strat0 = () => strat;
 
-window.addTag = function() {
-  const input = $('tagInput');
-  const val = input.value.trim().toUpperCase();
-  if (!val || currentTags.includes(val)) { input.value = ''; return; }
-  currentTags.push(val);
-  input.value = '';
-  renderChips();
+window.pick = btn => {
+  const box = btn.parentElement;
+  const was = btn.classList.contains('on');
+  box.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+  if (!was) btn.classList.add('on');
+};
+window.pickCustom = btn => {
+  const v = prompt('Setup:', btn.dataset.v || '');
+  if (v === null) return;
+  btn.dataset.v = v.trim();
+  btn.textContent = v.trim() || '+ otro';
+  btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+  if (v.trim()) btn.classList.add('on');
+};
+const picked = id => $(id)?.querySelector('button.on')?.dataset.v ?? null;
+
+window.previewRisk = () => {
+  const t = currentTrade, el = $('pRisk');
+  if (!t || !el) return;
+  const stop = parseFloat($('pStop').value);
+  if (!(stop > 0) || !(t.entry_price > 0) || !(t.size > 0)) { el.textContent = 'Sin stop no hay R'; el.className = ''; return; }
+  const risk = Math.abs(t.entry_price - stop) * t.size;
+  const r = t.pnl != null && risk > 0 ? t.pnl / risk : null;
+  el.textContent = `Riesgo ${num(risk)} USDT${r != null ? ' · ' + fmtRv(r) : ''}`;
+  el.className = r == null ? '' : r >= 0 ? 'pos' : 'neg';
 };
 
-window.pickSetup = function(tag) {
-  if (!currentTags.includes(tag)) currentTags.push(tag);
-  renderChips();
-};
-
-window.removeTag = function(i) {
-  currentTags.splice(i, 1);
-  renderChips();
-};
-
-// ── Screenshots ────────────────────────────────────────────────────────────────
-function renderScreenshots() {
-  const el = $('screenshotGrid');
-  if (!el) return;
-  el.innerHTML = currentScreenshots.map((url, i) => `
-    <div class="td-screenshot">
-      <img src="${url}" alt="screenshot" style="cursor:zoom-in"
-        onclick="event.stopPropagation();openLightbox('${url.replace(/'/g,"\\\'")}')"
-        onerror="this.parentElement.querySelector('.td-ss-err').style.display='flex';this.style.display='none'">
-      <div class="td-ss-err" style="display:none">${url.length > 40 ? url.slice(0,40)+'…' : url}</div>
-      <button class="td-screenshot-remove" onclick="removeScreenshot(${i})">×</button>
-    </div>`).join('');
+function renderShots() {
+  $('pShots').innerHTML = currentScreenshots.map((url, i) => `<div class="tl-shot">
+    <img src="${esc(url)}" alt="" onclick="openLightbox(${i})" onerror="this.replaceWith(Object.assign(document.createElement('a'),{href:this.src,target:'_blank',textContent:'abrir enlace'}))">
+    <button onclick="removeShot(${i})">×</button></div>`).join('');
 }
-
-window.openLightbox = function(url) {
+window.addShot = () => {
+  const v = $('pShotIn').value.trim();
+  if (!v) return;
+  currentScreenshots.push(v);
+  $('pShotIn').value = '';
+  renderShots();
+};
+window.removeShot = i => { currentScreenshots.splice(i, 1); renderShots(); };
+window.openLightbox = i => {
+  const url = currentScreenshots[i];
   document.getElementById('td-lightbox')?.remove();
   const lb = document.createElement('div');
   lb.id = 'td-lightbox';
-  lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:500;cursor:zoom-out';
-  lb.innerHTML = `
-    <img src="${url}" alt="" style="max-width:90vw;max-height:88vh;object-fit:contain;border-radius:8px;box-shadow:0 20px 80px rgba(0,0,0,0.8);cursor:default" onclick="event.stopPropagation()">
-    <button style="position:absolute;top:16px;right:20px;background:none;border:none;color:rgba(255,255,255,0.7);font-size:32px;cursor:pointer;line-height:1" onclick="document.getElementById('td-lightbox').remove()">×</button>`;
+  lb.className = 'tl-lightbox';
+  lb.innerHTML = `<img src="${esc(url)}" alt="">`;
   lb.onclick = () => lb.remove();
   document.body.appendChild(lb);
 };
 
-window.addScreenshot = function() {
-  const input = $('screenshotInput');
-  const url = input.value.trim();
-  if (!url) return;
-  currentScreenshots.push(url);
-  input.value = '';
-  renderScreenshots();
-};
-
-window.removeScreenshot = function(i) {
-  currentScreenshots.splice(i, 1);
-  renderScreenshots();
-};
-
-function renderTagGrid(containerId, tags, selected, type) {
-  const el = $(containerId);
-  el.innerHTML = tags.map(tag => {
-    const active = selected === tag;
-    return `<button class="tag-pill ${active ? 'active' : ''}" data-type="${type}" data-val="${tag}" onclick="selectTag(this,'${type}')">${tag}</button>`;
-  }).join('') +
-  `<button class="tag-pill tag-pill-custom ${!selected || tags.includes(selected) ? '' : 'active'}" data-type="${type}" onclick="promptCustom(this,'${type}','${selected && !tags.includes(selected) ? selected : ''}')">${selected && !tags.includes(selected) ? selected : '+'}</button>`;
-}
-
-function renderStrategyGrid(selected) {
-  renderTagGrid('tagStrategy', STRATEGY_TAGS, selected, 'strategy');
-}
-
-window.previewRisk = function() {
-  const el = $('riskPreview');
-  if (!el || !currentTrade) return;
-  const stop = parseFloat($('panelStop').value);
-  if (!(stop > 0) || !(currentTrade.entry_price > 0) || !(currentTrade.size > 0)) {
-    el.textContent = 'Sin stop no hay R';
-    el.className   = 'td-risk-preview';
-    return;
-  }
-  const risk = Math.abs(currentTrade.entry_price - stop) * currentTrade.size;
-  const r    = currentTrade.pnl != null && risk > 0 ? currentTrade.pnl / risk : null;
-  el.textContent = `Riesgo ${risk.toFixed(2)} USDT` + (r != null ? ` · ${(r >= 0 ? '+' : '')}${r.toFixed(2)}R` : '');
-  el.className   = `td-risk-preview ${r == null ? '' : r >= 0 ? 'pos' : 'neg'}`;
-};
-
-function renderEmotionGrid(selected) {
-  const el = $('tagEmotion');
-  el.innerHTML = EMOTION_TAGS.map(e => {
-    const active = selected === e.key || selected === e.label;
-    return `<button class="tag-pill emotion-pill ${active ? 'active' : ''}" data-type="emotion" data-val="${e.key}" onclick="selectTag(this,'emotion')" style="--dot:${e.color}">${e.label}</button>`;
-  }).join('');
-}
-
-function renderRuleScore(current) {
-  const el = $('ruleScoreRow');
-  el.innerHTML = [0,1,2,3,4,5,6,7,8,9,10].map(n => {
-    const active = current === n;
-    return `<button class="score-btn ${active ? 'active' : ''}" onclick="selectScore(this,${n})">${n}</button>`;
-  }).join('');
-}
-
-window.selectTag = function(btn, type) {
-  const grid = btn.closest('.tag-grid');
-  grid.querySelectorAll(`.tag-pill[data-type="${type}"]`).forEach(b => b.classList.remove('active'));
-  const wasActive = btn.classList.contains('active');
-  if (!wasActive) btn.classList.add('active');
-};
-
-window.selectScore = function(btn) {
-  $('ruleScoreRow').querySelectorAll('.score-btn').forEach(b => b.classList.remove('active'));
-  if (!btn.classList.contains('active')) btn.classList.add('active');
-};
-
-window.promptCustom = function(btn, type, existing) {
-  const val = prompt(`Tag personalizado (${type}):`, existing || '');
-  if (val === null) return;
-  const trimmed = val.trim().toUpperCase();
-  if (!trimmed) {
-    btn.classList.remove('active');
-    btn.textContent = '+';
-    return;
-  }
-  btn.textContent = trimmed;
-  btn.dataset.val = trimmed;
-  // deselect others
-  btn.closest('.tag-grid').querySelectorAll(`.tag-pill[data-type="${type}"]`).forEach(b => {
-    if (b !== btn) b.classList.remove('active');
-  });
-  btn.classList.add('active');
-};
-
-window.savePanel = async function() {
-  if (!currentTrade) return;
-
-  const emotionBtn     = document.querySelector(`.tag-pill.active[data-type="emotion"]`);
-  const strategyBtn    = document.querySelector(`.tag-pill.active[data-type="strategy"]`);
-  const scoreBtnActive = $('ruleScoreRow').querySelector('.score-btn.active');
-  const stop           = parseFloat($('panelStop').value);
-
+window.savePanel = async next => {
+  const t = currentTrade;
+  if (!t) return;
+  const stop = parseFloat($('pStop').value);
+  const setup = picked('pSetup');
   const body = {
-    setup_tag:    currentTags.join(',') || null,
-    strategy_tag: strategyBtn ? (strategyBtn.dataset.val || strategyBtn.textContent.trim() || null) : null,
-    screenshots:  currentScreenshots.length ? JSON.stringify(currentScreenshots) : null,
-    emotion:      emotionBtn ? (emotionBtn.dataset.val || null) : null,
-    rule_score:   scoreBtnActive ? parseInt(scoreBtnActive.textContent) : null,
-    notes:        $('panelNotes').value.trim() || null,
-    stop_price:   stop > 0 ? stop : null,
+    setup_tag: setup || null,
+    strategy_tag: picked('pStrat'),
+    screenshots: currentScreenshots.length ? JSON.stringify(currentScreenshots) : null,
+    emotion: picked('pEmotion'),
+    rule_score: picked('pScore') != null ? +picked('pScore') : null,
+    notes: $('pNotes').value.trim() || null,
+    stop_price: stop > 0 ? stop : null,
   };
-
   try {
-    await updateTrade(currentTrade.id, body);
+    await updateTrade(t.id, body);
     invalidate();
-    toast('Trade actualizado');
-    currentTrade = { ...currentTrade, ...body };
-    // Update cache so re-opening shows latest data
-    tradesMap[currentTrade.id] = currentTrade;
-    load();
-  } catch (err) {
-    toast(err.message, 'err');
-  }
+    toast('Trade guardado');
+    const saved = { ...t, ...body };
+    tradesMap[t.id] = saved;
+    trades = trades.map(x => x.id === t.id ? saved : x);
+    // Siguiente por revisar: el proximo de la lista al que le falte algo
+    const i = trades.findIndex(x => x.id === t.id);
+    const nxt = next ? [...trades.slice(i + 1), ...trades.slice(0, i)].find(needsReview) : null;
+    currentTrade = nxt || (next ? null : saved);
+    renderList();
+    if (next && !nxt) toast('No quedan trades por revisar en esta lista');
+    load();   // refresca totales y el contador
+  } catch (err) { toast(err.message, 'err'); }
 };
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    document.getElementById('td-lightbox')?.remove();
-    closePanel();
+// ── Grafico del trade ─────────────────────────────────────────────────────────
+// Una peticion por trade abierto (se guarda en memoria mientras la pagina este abierta)
+async function drawTradeChart(t) {
+  const box = $('tlChart');
+  if (!box) return;
+  const end0 = (t.exit_time || Math.floor(Date.now() / 1000)) * 1000;
+  const dur = end0 - t.entry_time * 1000;
+  const interval = dur <= 3 * 3600e3 ? '5m' : dur <= 12 * 3600e3 ? '15m' : dur <= 3 * 86400e3 ? '1h' : '4h';
+  const end = Math.min(Date.now(), end0 + Math.max(dur * 0.4, 45 * 60e3));
+  // Desde las 00:00 UTC del dia de entrada (ancla del VWAP) o mas atras en operaciones largas
+  const dayStart = Math.floor(t.entry_time * 1000 / 86400000) * 86400000;
+  const start = ['5m', '15m'].includes(interval) ? dayStart : t.entry_time * 1000 - Math.max(dur * 0.5, 86400e3);
+  const market = t.category === 'spot' ? 'spot' : t.category === 'inverse' ? 'coinm' : 'futures';
+  const key = `${t.id}|${interval}`;
+  let candles = candleCache.get(key);
+  if (!candles) {
+    try {
+      const m = await exec.market({ exchange: t.exchange, market, symbol: t.symbol, interval, anchor: 'utc', start, end });
+      candles = (m.candles || []).map(([tt, o, h, l, c, v]) => ({ t: tt, o, h, l, c, v })).filter(k => k.t >= start);
+      candleCache.set(key, candles);
+    } catch (e) {
+      box.innerHTML = `<div class="tl-chart-msg">No se pudo cargar el gráfico: ${esc(e.message)}</div>`;
+      return;
+    }
   }
+  if (currentTrade?.id !== t.id || !document.body.contains(box)) return;
+  if (!candles.length) { box.innerHTML = '<div class="tl-chart-msg">Sin velas para este periodo</div>'; return; }
+  box.innerHTML = '';
+  const chart = createChart(box, {
+    autoSize: true,
+    layout: { background: { type: 'solid', color: '#0c0c0c' }, textColor: '#8a8a8a', fontFamily: 'IBM Plex Mono, monospace', fontSize: 10 },
+    grid: { vertLines: { visible: false }, horzLines: { visible: false } },
+    rightPriceScale: { borderColor: '#1f1f1f' }, timeScale: { borderColor: '#1f1f1f', timeVisible: true },
+  });
+  const s = chart.addCandlestickSeries({ upColor: '#c7c7cc', downColor: '#6b3fd4', wickUpColor: '#c7c7cc', wickDownColor: '#6b3fd4', borderVisible: false, priceLineVisible: false });
+  s.setData(candles.map(k => ({ time: Math.floor(k.t / 1000), open: k.o, high: k.h, low: k.l, close: k.c })));
+  const line = c => chart.addLineSeries({ color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  const b = vwapBands(candles, utcAnchor);
+  const pt = (i, value) => {
+    const d = { time: Math.floor(candles[i].t / 1000), value };
+    if (i + 1 < candles.length && utcAnchor(candles[i].t) !== utcAnchor(candles[i + 1].t)) d.color = 'transparent';
+    return d;
+  };
+  line('#3b6cf6').setData(b.map((x, i) => pt(i, x.vwap)));
+  [['#2fa84f', 1], ['#e3c430', 2], ['#e5484d', 3]].forEach(([c, n]) => {
+    line(c).setData(b.map((x, i) => pt(i, x.vwap + n * x.sd)));
+    line(c).setData(b.map((x, i) => pt(i, x.vwap - n * x.sd)));
+  });
+  const lvl = (price, color, title, style = LineStyle.Dashed) => price > 0 && s.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
+  lvl(t.entry_price, '#93c5fd', 'Entrada', LineStyle.Dotted);
+  lvl(t.stop_price, '#ef4444', 'SL');
+  lvl(t.tp_price, '#00c896', 'TP');
+  // Marcas en la vela de entrada y la de salida
+  const at = ts => { let best = candles[0]; for (const k of candles) if (k.t <= ts * 1000) best = k; return Math.floor(best.t / 1000); };
+  const long = t.side === 'long' || t.side === 'buy';
+  const marks = [{ time: at(t.entry_time), position: long ? 'belowBar' : 'aboveBar', color: '#93c5fd', shape: long ? 'arrowUp' : 'arrowDown', text: 'Entrada' }];
+  if (t.exit_time) marks.push({ time: at(t.exit_time), position: long ? 'aboveBar' : 'belowBar', color: t.pnl >= 0 ? '#00c896' : '#ef4444', shape: long ? 'arrowDown' : 'arrowUp', text: 'Salida' });
+  s.setMarkers(marks.sort((a, b2) => a.time - b2.time));
+  chart.timeScale().fitContent();
+}
+
+// ── Inicio ────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { document.getElementById('td-lightbox')?.remove(); closePanel(); renderList(); }
 });
-
-// La cabecera dice en que zona se estan mostrando las horas
-const th = [...document.querySelectorAll('.tc-header-cell')].find(e => /apertura/i.test(e.textContent));
-if (th) th.innerHTML = `Apertura → Cierre <span class="tc-tz">${tzOffsetLabel()}</span>`;
-
-$('bulkSetup').innerHTML    = bulkOptions(SETUP_TAGS);
-$('bulkStrategy').innerHTML = bulkOptions(STRATEGY_TAGS);
+for (const id of FIELDS) if (SAVED[id] != null) $(id).value = SAVED[id];
+$('bulkSetup').innerHTML = bulkOptions([...SETUPS.VWAP, ...SETUPS.Swing.filter(([v]) => v !== 'FUERA DE PLAN')]);
+$('bulkStrategy').innerHTML = bulkOptions(STRATEGY_TAGS.map(s => [s, s]));
+paintControls();
 load();

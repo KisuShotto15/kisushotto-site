@@ -321,16 +321,21 @@ export class ExchangeGateway {
     const exchange = p.get('exchange') || 'binance';
     const market = ['spot', 'coinm'].includes(p.get('market')) ? p.get('market') : 'futures';
     const symbol = String(p.get('symbol') || '').toUpperCase();
-    const interval = ['1m', '3m', '5m', '15m'].includes(p.get('interval')) ? p.get('interval') : '5m';
+    const interval = ['1m', '3m', '5m', '15m', '1h', '4h'].includes(p.get('interval')) ? p.get('interval') : '5m';
+    // end: velas que terminan en ese momento (ms), para ver una operacion pasada
+    const end = +p.get('end') || null;
     const anchor = p.get('anchor') === 'ny' ? 'ny' : 'utc';
     if (!symbol) throw bad('Falta el simbolo');
     const acc = (await this.loadAccounts()).find(a => a.exchange === exchange) || { exchange, key: '', secret: '' };
     const ex = this.adapter(acc);
-    const mins = { '1m': 1, '3m': 3, '5m': 5, '15m': 15 }[interval];
-    // Velas suficientes para cubrir desde el ancla mas 60 de calentamiento del RSI
-    const sinceAnchor = anchor === 'utc' ? (Date.now() % 86400000) / 60000 : 24 * 60;
+    const mins = { '1m': 1, '3m': 3, '5m': 5, '15m': 15, '1h': 60, '4h': 240 }[interval];
+    // Velas suficientes para cubrir desde el ancla mas 60 de calentamiento del RSI.
+    // Para una operacion pasada, desde 'start' (ms) si viene.
+    const ref = end || Date.now();
+    const start = +p.get('start') || null;
+    const sinceAnchor = start ? (ref - start) / 60000 : anchor === 'utc' ? (ref % 86400000) / 60000 : 24 * 60;
     const limit = Math.min(exchange === 'binance' && market !== 'spot' ? 1500 : 1000, Math.ceil(sinceAnchor / mins) + 60);
-    const [inst, candles] = await Promise.all([ex.instrument(market, symbol), ex.klines(market, symbol, interval, limit)]);
+    const [inst, candles] = await Promise.all([ex.instrument(market, symbol), ex.klines(market, symbol, interval, limit, end)]);
     const anchorOf = anchor === 'ny' ? nyOpenAnchor(nyParts) : utcAnchor;
     const snap = snapshot(candles, anchorOf);
     const lastAnchor = candles.length ? anchorOf(candles[candles.length - 1].t) : null;

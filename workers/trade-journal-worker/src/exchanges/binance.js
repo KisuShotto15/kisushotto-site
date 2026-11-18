@@ -266,10 +266,12 @@ export function binance({ key, secret, env = 'live' }) {
     return num((await S('GET', '/api/v3/ticker/price', { symbol }, false)).price);
   }
 
-  async function klines(market, symbol, interval = '5m', limit = 500) {
-    const rows = market === 'futures' ? await F('GET', '/fapi/v1/klines', { symbol, interval, limit }, false)
-      : market === 'coinm' ? await D('GET', '/dapi/v1/klines', { symbol, interval, limit: Math.min(limit, 1500) }, false)
-      : await S('GET', '/api/v3/klines', { symbol, interval, limit }, false);
+  // endMs: velas hasta ese momento (para ver una operacion pasada)
+  async function klines(market, symbol, interval = '5m', limit = 500, endMs = null) {
+    const endTime = endMs || undefined;
+    const rows = market === 'futures' ? await F('GET', '/fapi/v1/klines', { symbol, interval, limit, endTime }, false)
+      : market === 'coinm' ? await D('GET', '/dapi/v1/klines', { symbol, interval, limit: Math.min(limit, 1500), endTime }, false)
+      : await S('GET', '/api/v3/klines', { symbol, interval, limit: Math.min(limit, 1000), endTime }, false);
     return rows.map(r => ({ t: r[0], o: num(r[1]), h: num(r[2]), l: num(r[3]), c: num(r[4]), v: num(r[5]) }));
   }
 

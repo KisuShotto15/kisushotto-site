@@ -277,37 +277,77 @@ async function audit(env) {
 
 // ── Trades CRUD ───────────────────────────────────────────────────────────────
 
-async function listTrades(url, env) {
-  const p = url.searchParams;
-  let sql = 'SELECT * FROM trades WHERE 1=1';
+// R de un trade en SQL: con el riesgo guardado o, si falta, con el stop
+const R_SQL = 't.pnl / NULLIF(COALESCE(t.risk_usd, ABS(t.entry_price - t.stop_price) * t.size), 0)';
+// Le falta revision: cerrado y sin notas, emocion o disciplina
+const REVIEW_SQL = "(t.status = 'closed' AND (t.notes IS NULL OR t.notes = '' OR t.emotion IS NULL OR t.rule_score IS NULL))";
+
+async function tradeWhere(p, env, { review = true } = {}) {
+  let sql = ' WHERE 1=1';
   const args = [];
-
   const filters = [
-    ['symbol',       'symbol = ?',       v => v.toUpperCase()],
-    ['side',         'side = ?',         v => v],
-    ['setup',        'setup_tag = ?',    v => v],
-    ['strategy',     'strategy_tag = ?', v => v],
-    ['session',      'session = ?',      v => v],
-    ['status',       'status = ?',       v => v],
-    ['exchange',     'exchange = ?',     v => v],
-    ['category',     'category = ?',     v => v],
-    ['origin',       'exec_type = ?',    v => v],
-    ['from',         'entry_time >= ?',  v => parseInt(v)],
-    ['to',           'entry_time <= ?',  v => parseInt(v)],
+    ['symbol',   't.symbol = ?',       v => v.toUpperCase()],
+    ['side',     't.side = ?',         v => v],
+    ['setup',    't.setup_tag = ?',    v => v],
+    ['strategy', 't.strategy_tag = ?', v => v],
+    ['session',  't.session = ?',      v => v],
+    ['status',   't.status = ?',       v => v],
+    ['exchange', 't.exchange = ?',     v => v],
+    ['category', 't.category = ?',     v => v],
+    ['origin',   't.exec_type = ?',    v => v],
+    ['from',     't.entry_time >= ?',  v => parseInt(v)],
+    ['to',       't.entry_time <= ?',  v => parseInt(v)],
   ];
-
   for (const [key, clause, transform] of filters) {
     const v = p.get(key);
     if (v) { sql += ` AND ${clause}`; args.push(transform(v)); }
   }
+  // Pestana de estrategia: por la etiqueta y, si no tiene, por el exchange de la estrategia VWAP
+  const strat = p.get('strat');
+  if (strat === 'vwap' || strat === 'swing') {
+    let vwapEx = ['bitget'];
+    try {
+      const row = await env.DB.prepare("SELECT rules FROM risk_rules WHERE id = 'main'").first();
+      const r = row ? JSON.parse(row.rules) : null;
+      if (Array.isArray(r?.vwap_exchanges)) vwapEx = r.vwap_exchanges;
+    } catch { /* se usa el valor por defecto */ }
+    const inEx = vwapEx.length ? `t.exchange IN (${vwapEx.map(() => '?').join(',')})` : '0';
+    const untagged = "(t.strategy_tag IS NULL OR t.strategy_tag NOT IN ('VWAP', 'Swing'))";
+    sql += strat === 'vwap'
+      ? ` AND (t.strategy_tag = 'VWAP' OR (${untagged} AND ${inEx}))`
+      : ` AND (t.strategy_tag = 'Swing' OR (${untagged} AND NOT ${inEx}))`;
+    args.push(...vwapEx);
+  }
+  if (review && p.get('review') === '1') sql += ` AND ${REVIEW_SQL}`;
+  return { sql, args };
+}
 
-  sql += ' ORDER BY entry_time DESC';
+async function listTrades(url, env) {
+  const p = url.searchParams;
+  const where = await tradeWhere(p, env);
+  const order = { pnl: 't.pnl DESC', r: `${R_SQL} DESC`, date: 't.entry_time DESC' }[p.get('sort')] || 't.entry_time DESC';
   const limit  = Math.min(parseInt(p.get('limit') || 100), 1000);
   const offset = parseInt(p.get('page') || 0) * limit;
-  sql += ` LIMIT ${limit} OFFSET ${offset}`;
+  // El TP de las operaciones del terminal vive en exec_trades
+  const sql = `SELECT t.*, e.tp AS tp_price FROM trades t LEFT JOIN exec_trades e ON t.exchange_id = 'tj:' || e.id
+    ${where.sql} ORDER BY ${order}, t.entry_time DESC LIMIT ${limit} OFFSET ${offset}`;
+  const { results } = await env.DB.prepare(sql).bind(...where.args).all();
+  const out = { trades: results, page: +(p.get('page') || 0), limit };
 
-  const { results } = await env.DB.prepare(sql).bind(...args).all();
-  return json({ trades: results, page: +(p.get('page') || 0), limit });
+  // Totales de todo el filtro (no solo de la pagina) y cuantos faltan por revisar
+  if (p.get('totals') === '1') {
+    const all = await tradeWhere(p, env, { review: false });
+    const tot = await env.DB.prepare(`SELECT COUNT(*) AS n,
+        SUM(CASE WHEN t.pnl > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN t.pnl < 0 THEN 1 ELSE 0 END) AS losses,
+        SUM(t.pnl) AS pnl, SUM(t.fees) AS fees,
+        SUM(${R_SQL}) AS r_sum, COUNT(${R_SQL}) AS r_n,
+        SUM(CASE WHEN ${REVIEW_SQL} THEN 1 ELSE 0 END) AS review
+      FROM trades t ${where.sql}`).bind(...where.args).first();
+    const rev = await env.DB.prepare(`SELECT COUNT(*) AS n FROM trades t ${all.sql} AND ${REVIEW_SQL}`).bind(...all.args).first();
+    out.totals = { ...tot, review: rev?.n || 0 };
+  }
+  return json(out);
 }
 
 async function createTrade(request, env) {
@@ -947,3 +987,4 @@ async function runSync(env, params) {
 
   return json({ ok: true, ...result, stops_attached: stopped, plans_applied: planned, open_times: opened, backfill, equity: balance?.total_equity ?? null, synced_at: Date.now() });
 }
+export const _test = { listTrades };

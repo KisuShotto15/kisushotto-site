@@ -116,8 +116,11 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     return num(t.markPrice) || num(t.lastPrice);
   }
 
-  async function klines(market, symbol, interval = '5m', limit = 500) {
-    const d = await get('/api/v3/market/candles', { category: market === 'futures' ? PT : 'SPOT', symbol, interval, limit: Math.min(limit, 1000) }, false);
+  // endMs: velas hasta ese momento (para ver una operacion pasada)
+  async function klines(market, symbol, interval = '5m', limit = 500, endMs = null) {
+    const iv = /h$/.test(interval) ? interval.toUpperCase() : interval;   // Bitget usa 1H / 4H
+    const d = await get('/api/v3/market/candles', { category: market === 'futures' ? PT : 'SPOT', symbol, interval: iv, limit: Math.min(limit, 1000),
+                                                    endTime: endMs || undefined }, false);
     return listOf(d).map(r => ({ t: +r[0], o: num(r[1]), h: num(r[2]), l: num(r[3]), c: num(r[4]), v: num(r[5]) }))
       .sort((a, b) => a.t - b.t);
   }

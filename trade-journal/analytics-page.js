@@ -96,7 +96,11 @@ async function loadSymbols() {
 
 // ── Setups ────────────────────────────────────────────────────────────────────
 async function loadSetups() {
-  const { data } = await swr('a:bysetup', () => getBySetup());
+  const { data: rawData } = await swr('a:bysetup', () => getBySetup());
+  // Los setups se guardan con su nombre de siempre; aqui se muestran en palabras
+  const SETUP_LABEL = { 'VWAP 3σ reversion': 'Rebote en la banda 3', 'VWAP 2σ reversion': 'Rebote en la banda 2',
+    'Reversion a VWAP': 'Reversión a VWAP', 'Rechazo en VWAP': 'Rechazo en el VWAP', 'FUERA DE PLAN': 'Fuera de plan' };
+  const data = rawData.map(d => ({ ...d, label: SETUP_LABEL[d.label] || d.label }));
   drawBars($('setupPnlChart'), data.map(d => ({ label: d.label, value: d.totalPnl, count: d.count })));
   drawBars($('setupExpChart'), data.map(d => ({ label: d.label, value: d.avgPnl,   count: d.count })));
   $('setupTable').innerHTML = renderDimTable(data);
