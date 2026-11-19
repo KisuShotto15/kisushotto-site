@@ -2,7 +2,11 @@ package com.kisushotto.health.app;
 
 import android.Manifest;
 import android.app.NotificationChannel;
+import android.app.Notification;
 import android.app.NotificationManager;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -22,6 +26,26 @@ import org.json.JSONObject;
 public class PushService extends FirebaseMessagingService {
 
     static final String CHANNEL = "reminders";
+    // Avisos tipo alarma: suenan por el canal de alarma (tambien en silencio) y
+    // siguen sonando hasta que los tocas (FLAG_INSISTENT).
+    static final String ALARM = "alarms";
+
+    static void ensureAlarmChannel(Context c) {
+        if (Build.VERSION.SDK_INT < 26) return;
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        if (nm.getNotificationChannel(ALARM) != null) return;
+        NotificationChannel ch = new NotificationChannel(ALARM, "Alarmas de hábitos", NotificationManager.IMPORTANCE_HIGH);
+        ch.setSound(alarmSound(), new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+        ch.enableVibration(true);
+        ch.setVibrationPattern(new long[]{0, 600, 400, 600, 400, 600});
+        nm.createNotificationChannel(ch);
+    }
+
+    static Uri alarmSound() {
+        Uri u = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+        return u != null ? u : RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+    }
 
     static void ensureChannel(Context c) {
         if (Build.VERSION.SDK_INT < 26) return;
@@ -50,8 +74,10 @@ public class PushService extends FirebaseMessagingService {
         if (title == null) return;
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return;
         ensureChannel(this);
+        boolean alarm = "1".equals(d.get("alarm"));
+        if (alarm) ensureAlarmChannel(this);
         String tag = d.get("tag") != null ? d.get("tag") : "daily";
-        NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL)
+        NotificationCompat.Builder b = new NotificationCompat.Builder(this, alarm ? ALARM : CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_notify)
             .setColor(0xFF4F86FF)
             .setContentTitle(title)
@@ -72,7 +98,14 @@ public class PushService extends FirebaseMessagingService {
                 }
             } catch (JSONException ignored) {}
         }
-        NotificationManagerCompat.from(this).notify(tag, 0, b.build());
+        if (alarm) {
+            b.setCategory(NotificationCompat.CATEGORY_ALARM).setPriority(NotificationCompat.PRIORITY_MAX)
+             .setSound(alarmSound(), android.media.AudioManager.STREAM_ALARM)
+             .setVibrate(new long[]{0, 600, 400, 600, 400, 600});
+        }
+        Notification n = b.build();
+        if (alarm) n.flags |= Notification.FLAG_INSISTENT;
+        NotificationManagerCompat.from(this).notify(tag, 0, n);
     }
 
     // Un token nuevo lo registra la web la proxima vez que se abre la app (pushToken).

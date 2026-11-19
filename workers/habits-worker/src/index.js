@@ -362,7 +362,7 @@ async function sendFcm(env, token, p, v = 1) {
   if (!sa) return false;
   const data = { url: p.url || '/', tag: p.tag || 'health' };
   const message = v >= 2
-    ? { token, data: { ...data, title: p.title, body: p.body, kind: p.kind || '', quick: p.quick || '', actions: JSON.stringify(p.actions || []) },
+    ? { token, data: { ...data, title: p.title, body: p.body, kind: p.kind || '', quick: p.quick || '', actions: JSON.stringify(p.actions || []), alarm: p.alarm ? '1' : '' },
         android: { priority: 'HIGH' } }
     : { token, notification: { title: p.title, body: p.body }, data,
         android: { priority: 'HIGH', notification: { channel_id: 'reminders', tag: p.tag || 'health', icon: 'ic_stat_notify', color: '#4F86FF' } } };
@@ -376,7 +376,81 @@ async function sendFcm(env, token, p, v = 1) {
   } catch { return false; }
 }
 
+// ── Frases que duelen: rotan cada dia; se mezclan con las propias (Ajustes) ──
+// {rutina} {hora} {inicio} {fin} se reemplazan. alarm: suena aunque el telefono
+// este en silencio y sigue sonando hasta que lo tocas (app Android).
+const STINGS = {
+  wake: [
+    'Son las {hora}. Cada minuto en la cama es un minuto que le regalas a la versión de ti que no avanza.',
+    'Arriba. El que eras hace un año ya estaría de pie.',
+    'Si te quedas acostado, el día se decide solo. Levántate y decídelo tú.',
+    'Nadie va a venir a levantarte. Ni hoy ni nunca. Arriba.',
+    '"Cinco minutos más" se convierten en una mañana perdida. Ya conoces el final.',
+    'Tu yo de hace 12 meses no fallaba un día. Demuéstrale que sigue ahí.',
+    'Cada mañana que te levantas tarde, el día empieza perdiendo. Arriba.',
+    'Dormir de más no te va a quitar el cansancio. Levantarte a tu hora, sí.',
+  ],
+  jp: [
+    'No estudiar japonés hoy te aleja de Japón.',
+    'Cada día sin repasar, Anki se te acumula y Japón queda más lejos.',
+    'Tu yo en Japón depende de los repasos de hoy. 10 minutos.',
+    'Duolingo no cuenta. Bunpro y Anki, ahora.',
+    'Lo que no repasas hoy, lo olvidas mañana. Así funciona la memoria.',
+    'Japón no llega por desearlo. Llega por los repasos que haces hoy.',
+    'Ya dejaste Anki una vez y perdiste meses. No otra vez.',
+    'Cuando estés en Japón y no entiendas, vas a recordar este día.',
+  ],
+  rut: [
+    'Haz ejercicio, o te empeorará la rodilla.',
+    'La inactividad te quita años de vida. Hoy toca {rutina}.',
+    'Sin entreno, el superávit no se convierte en músculo: se convierte en nada.',
+    'Cada entreno que saltas es progreso que no vuelve.',
+    'Tu rodilla necesita músculo alrededor. Hoy toca {rutina}.',
+    '35 minutos. Es menos de lo que pasas en el teléfono.',
+    'El músculo que no entrenas, lo pierdes. Hoy toca {rutina}.',
+    'Existe el modo mínimo. No hay excusa para un día en cero.',
+    'Tu cuerpo de dentro de 5 años se construye hoy. O se destruye hoy.',
+  ],
+  rut2: [
+    'Sigues sin entrenar. Vas camino a un día en cero.',
+    'Dos horas después y nada. Modo mínimo: 15 minutos. Ahora.',
+    'Este día va a salir en el resumen que recibe tu persona de apoyo. Que sea uno bueno.',
+    'Te estás fallando a ti mismo. Todavía estás a tiempo: {rutina}.',
+    'Mañana te vas a arrepentir de esto. Hoy todavía no.',
+  ],
+  work: [
+    '¿Cumpliste tu bloque de {inicio} a {fin}? Sin ingresos no hay tranquilidad.',
+    'El dinero no se arregla solo. ¿Cumpliste tu bloque de {inicio} a {fin}?',
+    'Cada día que pierdes dinero sin cambiar nada es una decisión. ¿Cumpliste tu bloque?',
+  ],
+  food: [
+    '¿Seguiste el plan? Sin comida suficiente, el entreno no sirve de nada.',
+    'Sin superávit no hay músculo. ¿Cómo comiste hoy?',
+    'Entrenar y no comer es tirar el esfuerzo. ¿Seguiste el plan?',
+  ],
+  night: [
+    'Si no duermes, mañana fallas el despertar. Rutina de noche y a la cama.',
+    'Dormir tarde es lo que te rompió la constancia. 16 minutos y a dormir.',
+    'Tu rodilla y tu espalda te lo cobran. Estira 16 minutos.',
+    'Mañana a las {hora}. Si te acuestas ahora, llegas.',
+    'El teléfono puede esperar. Tu sueño no.',
+  ],
+};
+const ALARM_POOLS = ['wake', 'jp', 'rut', 'rut2', 'night'];
+function sting(pool, date, r, vars) {
+  const own = (r?.day?.phrases || []).filter(x => typeof x === 'string' && x.trim());
+  const list = [...(STINGS[pool] || []), ...own];
+  if (!list.length) return null;
+  const day = Math.floor(new Date(date + 'T00:00:00Z') / 864e5), salt = [...pool].reduce((a, c) => a + c.charCodeAt(0), 0);
+  return list[(day * 7 + salt) % list.length].replace(/\{(\w+)\}/g, (m, k) => vars?.[k] ?? m);
+}
 async function sendHealthPush(env, user, payload) {
+  if (payload.pool) { // el texto de la frase del dia y, si se eligio, tipo alarma
+    const r = await healthGet(env, user, 'reminder'), date = localParts(r?.tz).date, cfg = dayCfg(r);
+    const t = r?.day?.harsh === false ? null : sting(payload.pool, date, r,
+      { rutina: payload.rutina || 'tu rutina', hora: cfg.wake, inicio: cfg.workStart, fin: cfg.workEnd });
+    payload = { ...payload, body: t || payload.body, alarm: r?.day?.alarm !== false && ALARM_POOLS.includes(payload.pool) };
+  }
   const subs = (await healthGet(env, user, 'push')) || [];
   let sent = 0;
   for (const s of subs) if (await (s.fcm ? sendFcm(env, s.fcm, payload, s.v) : sendWebPush(env, s, payload))) sent++;
@@ -398,7 +472,7 @@ async function checkinPush(env, user, date) {
     body:  'Responde aquí mismo: Sí, Más o menos o No.',
     tag:   'health-checkin',
     url:   '/#hoy',
-    kind:  'checkin',
+    kind:  'checkin', pool: 'food',
     actions: [{ action: 'si', title: 'Sí' }, { action: 'parcial', title: 'Más o menos' }, { action: 'no', title: 'No' }],
     quick: `https://habits-worker.efrenalejandro2010.workers.dev/health/quick?u=${encodeURIComponent(user)}&d=${date}&s=${s}`,
   };
@@ -435,7 +509,7 @@ function rutinaPush2(rutina, date) {
     title: `${name || 'Tu rutina'} te espera`,
     body:  n ? `Llevas ${n} ${n === 1 ? 'día' : 'días'} seguidos. Aunque sea el modo mínimo (10 min): cuenta.` : 'Aunque sea el modo mínimo (10 min): cuenta para la racha.',
     tag:   'health-rutina',
-    url:   '/#rutina',
+    url:   '/#rutina', pool: 'rut2', rutina: name,
   };
 }
 const addMin = (hhmm, m) => { const t = (+hhmm.slice(0, 2) * 60 + +hhmm.slice(3) + m) % 1440; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
@@ -448,7 +522,7 @@ function rutinaPush(rutina, date) {
     title: 'Rutina de hoy',
     body:  `${name || 'Tu rutina'} te espera. No pierdas la racha.`,
     tag:   'health-rutina',
-    url:   '/#rutina',
+    url:   '/#rutina', pool: 'rut', rutina: name,
   };
 }
 
@@ -490,7 +564,7 @@ async function habitPush(env, user, date, h, cfg) {
     work:  { title: 'Bloque de trabajo', body: `¿Cumpliste tu bloque de ${cfg.workStart} a ${cfg.workEnd}?`, actions: [{ action: '1', title: 'Sí' }, { action: '0', title: 'No' }], url: '/#hoy' },
     night: { title: 'Rutina de noche 🌙', body: '16 min para soltar el cuerpo y a dormir. Mínimo: 9 min.', actions: [{ action: '1', title: 'Hecha' }], url: '/#rutina' },
   }[h];
-  return { ...P, tag: 'health-' + h, kind: 'habit', quick: await quickUrl(env, user, date, h) };
+  return { ...P, tag: 'health-' + h, kind: 'habit', pool: h, quick: await quickUrl(env, user, date, h) };
 }
 
 // ── Health: tu novia por Telegram (resumen semanal y aviso si fallas 2 dias) ──

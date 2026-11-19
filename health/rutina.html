@@ -403,12 +403,16 @@ const firstPending=()=>items.findIndex((_,i)=>!done()[i]);
 const SYNC_URL='https://habits-worker.efrenalejandro2010.workers.dev/health/rutina';
 let syncTimer=null,syncPending=false;
 function snapshot(){
+  // Hoy y los avisos hablan del entreno: con la rutina de noche abierta, la ultima de entreno
+  const r=getR(),tr=r.builtin&&saved.lastTrain&&routines().find(x=>x.id===saved.lastTrain)||r;
+  const its=tr.id===active?items:compile(tr,mini,isDeload(tr)),dn=tr.id===active?done():(doneBy[tr.id]||{});
   // list: para que Hoy muestre los siguientes ejercicios sin conocer la rutina
-  const list=items.map(it=>({name:it.name,dose:it.dose,dur:dur(it)}));
-  const r=getR(),nx=nDone()===items.length&&r.next&&routines().find(x=>x.id===r.next)||r;
+  const list=its.map(it=>({name:it.name,dose:it.dose,dur:dur(it)}));
+  const all=its.length&&its.every((_,i)=>dn[i]);
+  const nx=all&&tr.next&&routines().find(x=>x.id===tr.next)||tr;
   const nextDay={name:nx.name,list:listOf(nx)};
-  return {date:today(),routine:active,name:getR().name,doneBy,done:done(),total:items.length,list,nextDay,routines:custom,
-    mini:mini?today():null,t0,t1,nightDate:saved.nightDate||null,lastTrain:getR().builtin?(saved.lastTrain||null):active,prefs:{voice:state.voice,sound:state.sound,auto:state.auto,restDay:state.restDay},history:hist,updated:saved.updated||0};
+  return {date:today(),routine:active,name:tr.name,doneBy,done:dn,total:its.length,list,nextDay,routines:custom,
+    mini:mini?today():null,t0,t1,nightDate:saved.nightDate||null,lastTrain:r.builtin?(saved.lastTrain||null):active,prefs:{voice:state.voice,sound:state.sound,auto:state.auto,restDay:state.restDay},history:hist,updated:saved.updated||0};
 }
 function writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(snapshot()));}catch(e){}}
 function pushRemote(){

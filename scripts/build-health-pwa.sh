@@ -85,6 +85,9 @@ self.addEventListener('push', e => {
     badge: '/icons/health-192.png',
     // "¿Seguiste el plan?": Si / Mas o menos / No se responden sin abrir la app
     actions: (d.actions || []).slice(0, 3),
+    // tipo alarma: no se cierra sola y vibra fuerte (en la app Android suena aunque este en silencio)
+    requireInteraction: !!d.alarm,
+    vibrate: d.alarm ? [600, 400, 600, 400, 600] : undefined,
     data: { url: d.url || '/#rutina', quick: d.quick || '' },
   }));
 });

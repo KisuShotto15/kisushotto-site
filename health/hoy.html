@@ -372,6 +372,12 @@
         <label>Trabajo hasta<select class="tm" id="day-we"></select></label>
         <label>Rutina de noche<select class="tm" id="day-night"></select></label>
       </div>
+      <div class="opt"><div><b>Frases que duelen</b><div class="sub">Los avisos te dicen lo que pierdes si no lo haces (cambian cada día)</div></div>
+        <label class="switch"><input type="checkbox" id="day-harsh" checked><span></span></label></div>
+      <div class="opt"><div><b>Tipo alarma</b><div class="sub">Despertar, japonés, entreno y noche suenan aunque el teléfono esté en silencio, hasta que los toques (app Android)</div></div>
+        <label class="switch"><input type="checkbox" id="day-alarm" checked><span></span></label></div>
+      <label class="sub" for="day-phrases" style="display:block;margin-top:12px">Tus frases (una por línea, se mezclan con las de la app)</label>
+      <textarea id="day-phrases" rows="3" placeholder="Ej.: Prometiste estar en Tokio en 2027." style="width:100%;margin-top:6px;background:var(--h-bg);border:1px solid var(--line2);color:var(--text);border-radius:10px;padding:9px 11px;font:inherit;font-size:14px;resize:vertical"></textarea>
       <button class="link" id="day-test" style="margin-top:10px">Probar aviso de despertar</button>
     </div>
     <div class="sec">
@@ -1078,7 +1084,8 @@ async function saveReminder(e) {
   dcfg = { ...dcfg, wake: $('day-wake').value, jp: $('day-jp').value, workStart: $('day-ws').value, workEnd: $('day-we').value, night: $('day-night').value };
   const r = { enabled: $('rem-on').checked, weekly: $('rem-weekly').checked, time: $('rem-time').value || '19:00',
     checkin: $('rem-check').checked, checkinTime: $('rem-ctime').value || '21:30', tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    day: { on: $('day-on').checked, ...dcfg } };
+    day: { on: $('day-on').checked, ...dcfg, harsh: $('day-harsh').checked, alarm: $('day-alarm').checked,
+      phrases: $('day-phrases').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 30) } };
   paintDay();
   try {
     if (r.enabled || r.weekly || r.checkin || r.day.on) await subscribe();
@@ -1101,7 +1108,7 @@ const DAY_SEL = { 'day-wake': 'wake', 'day-jp': 'jp', 'day-ws': 'workStart', 'da
 const fillDay = () => Object.entries(DAY_SEL).forEach(([id, k]) => fillTimes(id, dcfg[k]));
 fillDay();
 Object.keys(DAY_SEL).forEach(id => $(id).onchange = saveReminder);
-['rem-on', 'rem-weekly', 'rem-check', 'day-on'].forEach(id => $(id).onchange = saveReminder);
+['rem-on', 'rem-weekly', 'rem-check', 'day-on', 'day-harsh', 'day-alarm', 'day-phrases'].forEach(id => $(id).onchange = saveReminder);
 $('day-test').onclick = () => testPush('wake', () => 'Aviso de prueba enviado: tócalo desde la notificación')();
 ['rem-time', 'rem-ctime'].forEach(id => $(id).onchange = () => { if ($('rem-on').checked || $('rem-weekly').checked || $('rem-check').checked) saveReminder(); });
 const testPush = (kind, ok) => async () => {
@@ -1120,6 +1127,8 @@ async function loadReminder() {
     if (data) {
       dcfg = { ...DEF_DAY, ...(data.day || {}) }; fillDay(); paintDay();
       $('day-on').checked = data.day ? data.day.on !== false : !!data.enabled;
+      $('day-harsh').checked = data.day?.harsh !== false; $('day-alarm').checked = data.day?.alarm !== false;
+      $('day-phrases').value = (data.day?.phrases || []).join('\n');
       $('rem-on').checked = !!data.enabled; $('rem-weekly').checked = !!data.weekly; $('rem-check').checked = !!data.checkin;
       if (data.time) fillTimes('rem-time', data.time);
       if (data.checkinTime) fillTimes('rem-ctime', data.checkinTime);
