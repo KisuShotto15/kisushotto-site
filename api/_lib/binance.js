@@ -176,3 +176,94 @@ export const chatCredential = (key, secret) =>
   c2c(key, secret, 'GET', '/sapi/v1/c2c/chat/retrieveChatCredential');
 export const chatMessages = (key, secret, orderNo, rows = 20) =>
   c2c(key, secret, 'GET', '/sapi/v1/c2c/chat/retrieveChatMessagesWithPagination', { query: { orderNo, page: 1, rows } });
+export const markOrderPaid = (key, secret, orderNo, payId) =>
+  c2c(key, secret, 'POST', '/sapi/v1/c2c/orderMatch/markOrderAsPaid', { body: { orderNumber: String(orderNo), payId: payId != null ? Number(payId) : undefined } });
+
+// Mensajes del chat: misma forma que devuelve retrieveChatMessagesWithPagination
+// (type/uuid/orderNo/content | imageUrl...). uuid con el mismo prefijo que usa la app.
+const rnd = () => Math.floor(Math.random() * 1e6);
+export function chatText(orderNo, content) {
+  return { type: 'text', uuid: `msg_${Date.now()}_${rnd()}`, orderNo: String(orderNo), content: String(content),
+           self: true, clientType: 'web', createTime: Date.now(), sendStatus: 0 };
+}
+export function chatImage(orderNo, imageUrl, width, height) {
+  return { type: 'image', uuid: `img_${Date.now()}_${rnd()}`, orderNo: String(orderNo), imageUrl, thumbnailUrl: imageUrl,
+           imageType: 'jpeg', width: width || 500, height: height || 500, self: true, clientType: 'web', createTime: Date.now(), sendStatus: 0 };
+}
+// Envia mensajes por el WebSocket del chat: conecta, manda y cierra (serverless no
+// puede mantener la conexion). Node 22 trae WebSocket global; si no, el paquete ws.
+export async function chatSend(key, secret, msgs) {
+  const cred = await chatCredential(key, secret);
+  if (!cred.ok || !cred.data || !cred.data.chatWssUrl) return { ok: false, msg: 'credencial del chat: ' + (cred.msg || cred.code || cred.status) };
+  const { chatWssUrl, listenKey, listenToken } = cred.data;
+  const WS = globalThis.WebSocket || (await import('ws')).default;
+  const url = `${chatWssUrl}/${listenKey}?token=${encodeURIComponent(listenToken)}&clientType=web`;
+  return new Promise(resolve => {
+    let done = false, ws;
+    const fin = r => { if (done) return; done = true; clearTimeout(t); try { ws.close(); } catch (e) {} resolve(r); };
+    const t = setTimeout(() => fin({ ok: false, msg: 'el chat no respondio (timeout)' }), 8000);
+    try { ws = new WS(url); } catch (e) { fin({ ok: false, msg: e.message }); return; }
+    ws.onopen = () => {
+      try { for (const m of msgs) ws.send(JSON.stringify(m)); } catch (e) { fin({ ok: false, msg: e.message }); return; }
+      setTimeout(() => fin({ ok: true }), 700); // margen para que salgan antes de cerrar
+    };
+    ws.onerror = () => fin({ ok: false, msg: 'error de conexion con el chat' });
+  });
+}
+// Confirma que los mensajes quedaron en el chat (por uuid).
+export async function chatDelivered(key, secret, orderNo, uuids) {
+  const r = await chatMessages(key, secret, orderNo, 30);
+  if (!r.ok || !Array.isArray(r.data)) return null;
+  const have = new Set(r.data.map(m => m && m.uuid));
+  return uuids.every(u => have.has(u));
+}
+// Comprobante: URL prefirmada → PUT de los bytes → imageUrl para el mensaje.
+export async function chatUploadImage(key, secret, buf, name) {
+  const p = await c2c(key, secret, 'POST', '/sapi/v1/c2c/chat/image/pre-signed-url', { body: { imageName: name || `comprobante_${Date.now()}.jpg` } });
+  const d = p.data || {};
+  const put = d.preSignedUrl || d.uploadUrl || d.url;
+  const img = d.imageUrl || d.fileUrl || d.downloadUrl;
+  if (!p.ok || !put || !img) return { ok: false, msg: 'url de subida: ' + (p.msg || p.code || 'campos ' + Object.keys(d).join(',')) };
+  const r = await fx(put, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: buf }, 20000);
+  if (!r.ok) return { ok: false, msg: 'subida de la imagen: HTTP ' + r.status };
+  return { ok: true, imageUrl: img };
+}
+
+// Datos para pagar del detalle de orden: el metodo elegido (o el de BDV) con sus
+// campos, la cuenta (20 digitos) y el titular si viene.
+export function pickPayInfo(det) {
+  const pms = Array.isArray(det && det.payMethods) ? det.payMethods : [];
+  const pm = pms.find(p => det.selectedPayId != null && p.id === det.selectedPayId)
+          || pms.find(p => /venezuela/i.test(p.identifier || p.tradeMethodName || '')) || pms[0];
+  if (!pm) return null;
+  const fields = (Array.isArray(pm.fields) ? pm.fields : []).map(f => ({
+    name: String(f.fieldName || f.name || ''), type: String(f.fieldContentType || f.type || ''),
+    value: String(f.fieldValue != null ? f.fieldValue : (f.value != null ? f.value : '')),
+  })).filter(f => f.value);
+  const acc = fields.find(f => /^\d{20}$/.test(f.value.replace(/[\s-]/g, '')));
+  const holder = fields.find(f => f.type === 'payee' || /nombre|titular|name|beneficiar/i.test(f.name));
+  return { payId: pm.id, method: pm.tradeMethodName || pm.identifier || '', fields,
+           account: acc ? acc.value.replace(/[\s-]/g, '') : null, holder: holder ? holder.value : null };
+}
+// ¿El titular de la cuenta es el vendedor verificado? Compara palabras del nombre
+// (sin acentos). null = no hay con que comparar.
+export function holderMatches(holder, kycName) {
+  if (!holder || !kycName) return null;
+  const words = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().split(/[^A-Z]+/).filter(w => w.length > 2);
+  const k = new Set(words(kycName));
+  return words(holder).filter(w => k.has(w)).length >= 2;
+}
+// Plantillas: {nombre} {monto} {cola}
+export function fillTpl(tpl, vars) {
+  return String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? vars[k] : m));
+}
+export function queueText(ahead) {
+  return ahead <= 0 ? 'Eres el siguiente en la cola de pagos.' : `Tienes ${ahead} pago${ahead === 1 ? '' : 's'} por delante, te pago en breve.`;
+}
+export const PAY_TPL = {
+  greet: 'Hola {nombre}, gracias por tu orden de {monto} Bs. {cola}',
+  processing: 'Procesando tu pago 🔄',
+  paid: 'Pago realizado ✅ Te adjunto el comprobante. Por favor verifica y libera los USDT. ¡Gracias!',
+};
+// Ordenes donde me toca pagar: compro y siguen en curso.
+export const isUnpaidBuy = o => o && o.tradeType === 'BUY' && /^(TRADING|PENDING|1)$/i.test(String(o.orderStatus));

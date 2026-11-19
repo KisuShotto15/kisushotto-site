@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
 import { requireAllowedUser } from './_lib/auth.js';
-import { sql, ensureSchema, ensureMarketHist, ensureOkxCreds } from './_lib/db.js';
+import { sql, ensureSchema, ensureMarketHist, ensureOkxCreds, ensureP2pPay } from './_lib/db.js';
 import { histMap } from './_lib/monitor.js';
 import { DEFAULT_FIAT, safeTz, zonedMidnight } from './_lib/market.js';
-import { tradeMethods, listOrders, getOrderDetail, chatCredential, chatMessages } from './_lib/binance.js';
+import { tradeMethods, listOrders, getOrderDetail, chatCredential, chatMessages, chatSend, chatText, chatImage, chatDelivered, chatUploadImage, markOrderPaid, fillTpl, PAY_TPL } from './_lib/binance.js';
 import { okxBasicInfo, okxActiveAds, okxMarketplace, splitMarketplace } from './_lib/okx.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
@@ -615,6 +615,62 @@ export default async function handler(req, res) {
 
   // Metodos de pago de una moneda, segun Binance (no requiere creds Binance). El
   // cliente los muestra debajo de su lista curada y los cachea 24h.
+  // ── Asistente de pago P2P ───────────────────────────
+  // El tick detecta las ordenes de compra, saluda y guarda los datos para pagar; aca
+  // la app lista lo pendiente, avisa "procesando" y, con el comprobante, lo sube al
+  // chat y marca la orden pagada. Marcar pagado SOLO con comprobante del usuario.
+  if (path === '/p2p-pending' || path === '/p2p-processing' || path === '/p2p-paid') {
+    try {
+      await ensureP2pPay();
+      if (path === '/p2p-pending') {
+        const rows = await sql`SELECT order_no, status, info, created_at FROM p2p_pay
+          WHERE user_id = ${user.uid} AND status IN ('greeted', 'processing') AND created_at > now() - interval '3 hours'
+          ORDER BY created_at`;
+        return res.status(200).json({ orders: rows.map(r => ({ orderNo: r.order_no, status: r.status, ...(r.info || {}) })) });
+      }
+      const no = String((params && params.orderNo) || '');
+      const own = await sql`SELECT status, info FROM p2p_pay WHERE order_no = ${no} AND user_id = ${user.uid}`;
+      if (!own.length) return res.status(404).json({ error: 'Orden no encontrada' });
+      const cr = await sql`SELECT enc_key, iv_key, tag_key, enc_secret, iv_secret, tag_secret FROM binance_creds WHERE user_id = ${user.uid}`;
+      if (!cr.length) return res.status(400).json({ error: 'Conecta Binance primero' });
+      const key = decrypt({ ct: cr[0].enc_key, iv: cr[0].iv_key, tag: cr[0].tag_key });
+      const secret = decrypt({ ct: cr[0].enc_secret, iv: cr[0].iv_secret, tag: cr[0].tag_secret });
+      const st = await sql`SELECT config FROM bot_state WHERE user_id = ${user.uid}`;
+      const tpl = { ...PAY_TPL, ...((st[0] && st[0].config && st[0].config.payTpl) || {}) };
+      if (path === '/p2p-processing') {
+        if (own[0].status !== 'greeted') return res.status(200).json({ ok: true, skipped: true });
+        const r = await chatSend(key, secret, [chatText(no, tpl.processing)]);
+        if (r.ok) await sql`UPDATE p2p_pay SET status = 'processing', updated_at = now() WHERE order_no = ${no}`;
+        return res.status(200).json({ ok: r.ok, error: r.ok ? null : r.msg });
+      }
+      // /p2p-paid: comprobante (jpeg base64) → chat → mensaje → marcar pagada
+      if (own[0].status === 'paid') return res.status(200).json({ ok: true, already: true });
+      const b64 = String((params && params.image) || '').replace(/^data:image\/\w+;base64,/, '');
+      if (b64.length < 1000) return res.status(400).json({ error: 'Falta el comprobante' });
+      const buf = Buffer.from(b64, 'base64');
+      const steps = {};
+      const up = await chatUploadImage(key, secret, buf, `comprobante_${no.slice(-6)}.jpg`);
+      steps.upload = up.ok ? 'ok' : up.msg;
+      if (!up.ok) return res.status(502).json({ error: 'No se pudo subir el comprobante: ' + up.msg, steps });
+      const img = chatImage(no, up.imageUrl, Number(params.w) || 500, Number(params.h) || 500);
+      const txt = chatText(no, tpl.paid);
+      const sent = await chatSend(key, secret, [img, txt]);
+      steps.chat = sent.ok ? 'ok' : sent.msg;
+      if (sent.ok) {
+        const del = await chatDelivered(key, secret, no, [img.uuid, txt.uuid]).catch(() => null);
+        steps.delivered = del;
+      }
+      const payId = own[0].info && own[0].info.payId;
+      const mk = await markOrderPaid(key, secret, no, payId);
+      steps.markPaid = mk.ok ? 'ok' : ((mk.code || mk.status) + ' ' + (mk.msg || ''));
+      if (!mk.ok) return res.status(502).json({ error: 'Comprobante enviado, pero Binance no marcó la orden pagada: ' + steps.markPaid + '. Márcala a mano.', steps });
+      await sql`UPDATE p2p_pay SET status = 'paid', updated_at = now() WHERE order_no = ${no}`;
+      return res.status(200).json({ ok: true, steps });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   // Diagnostico (solo admin) de la API de ordenes y chat P2P antes de automatizar
   // pagos: que endpoints acepta la key y que forma tienen las respuestas. Todo lo
   // sensible sale enmascarado (cuentas: ultimos 4; tokens: nunca).

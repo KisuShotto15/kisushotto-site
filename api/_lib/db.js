@@ -221,6 +221,22 @@ export async function ensureOkxCreds() {
   okxCredsReady = true;
 }
 
+// Asistente de pago P2P: una fila por orden de compra donde me toca pagar.
+// status: greeted (saludo enviado) → processing → paid | closed (se cerro sin pagar aqui).
+let p2pPayReady = false;
+export async function ensureP2pPay() {
+  if (p2pPayReady) return;
+  await sql`CREATE TABLE IF NOT EXISTS p2p_pay (
+    order_no TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'greeted',
+    info JSONB,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+  )`;
+  p2pPayReady = true;
+}
+
 let histMapsReady = false;
 export async function ensureHistMaps() {
   if (histMapsReady) return;
