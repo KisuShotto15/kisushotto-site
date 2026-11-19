@@ -489,7 +489,8 @@ async function tickPayAssist(row, log) {
   const st = new Map(known.map(k => [k.order_no, k.status]));
   const openSet = new Set(open.map(o => String(o.orderNumber)));
   // Las que ya no estan en curso (pagadas desde Binance, canceladas...) salen de la cola.
-  const gone = known.filter(k => !openSet.has(k.order_no) && (k.status === 'greeted' || k.status === 'processing')).map(k => k.order_no);
+  // No se tocan las que el telefono tiene en curso (paying/confirmed): esas las cierra el.
+  const gone = known.filter(k => !openSet.has(k.order_no) && ['greeted', 'processing', 'filled', 'manual'].includes(k.status)).map(k => k.order_no);
   for (const g of gone) await sql`UPDATE p2p_pay SET status = 'closed', updated_at = now() WHERE order_no = ${g}`;
   const unpaid = open.filter(o => st.get(String(o.orderNumber)) !== 'paid');
   const fresh = open.filter(o => !st.has(String(o.orderNumber)));

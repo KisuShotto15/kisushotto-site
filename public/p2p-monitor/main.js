@@ -2293,15 +2293,44 @@ var PAY_TPL_DEF = {
   paid: 'Pago realizado ✅ Te adjunto el comprobante. Por favor verifica y libera los USDT. ¡Gracias!'
 };
 var PAY = { orders: [], seen: {}, proc: {}, timer: null, tick: null, busy: null };
+var PAY_ST = { processing: 'procesando', paying: '📱 pagando', filled: '🧪 lista para confirmar en BDV', confirmed: '📱 confirmando', manual: '✋ manual' };
 function payAsstFill() {
   var cb = document.getElementById('cfg-pay-asst');
   if (!cb) return;
   cb.checked = !!BOT_CFG.payAssist;
+  var pa = document.getElementById('cfg-pay-auto');
+  if (pa) pa.value = BOT_CFG.payAuto || 'off';
+  payDevStatus();
   var t = BOT_CFG.payTpl || {};
   ['greet', 'processing', 'paid'].forEach(function(k) {
     var el = document.getElementById('cfg-tpl-' + k);
     el.value = t[k] || PAY_TPL_DEF[k]; el.placeholder = PAY_TPL_DEF[k];
   });
+}
+function payAutoSave() {
+  BOT_CFG.payAuto = document.getElementById('cfg-pay-auto').value;
+  try { localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG)); } catch (e) {}
+  botCallWorker('/pay-mode', { mode: BOT_CFG.payAuto }).catch(function(e) { alert(e.message); });
+  saveUserSettings();
+}
+async function payPairCode() {
+  var st = document.getElementById('pay-dev-st');
+  try {
+    var d = await botCallWorker('/pay-pair-code');
+    st.innerHTML = 'Código en KS Pagos: <b style="color:var(--gold);font-size:16px;letter-spacing:.1em">' + esc(d.code) + '</b> (10 min)';
+  } catch (e) { st.textContent = '⚠ ' + e.message; }
+}
+async function payDevStatus() {
+  var st = document.getElementById('pay-dev-st');
+  if (!st || !SESSION.token) return;
+  try {
+    var d = await botCallWorker('/pay-devices');
+    var dv = (d.devices || [])[0];
+    if (!dv) { st.textContent = 'Ningún teléfono vinculado'; return; }
+    var ago = dv.last_seen ? (Date.now() - new Date(dv.last_seen).getTime()) / 1000 : null;
+    st.textContent = esc(dv.name || 'Teléfono') + (ago == null ? '' : ago < 60 ? ' · ● en línea' : ' · visto hace ' + fmtDur(ago));
+    st.style.color = ago != null && ago < 60 ? '#1D9E75' : '';
+  } catch (e) {}
 }
 function payAsstSave() {
   BOT_CFG.payAssist = document.getElementById('cfg-pay-asst').checked;
@@ -2325,8 +2354,12 @@ async function payPoll() {
   try {
     var d = await botCallWorker('/p2p-pending');
     PAY.orders = (d && d.orders) || [];
-    var fresh = PAY.orders.some(function(o) { return !PAY.seen[o.orderNo]; });
-    PAY.orders.forEach(function(o) { PAY.seen[o.orderNo] = 1; });
+    // Con el telefono pagando solo, la ficha se abre sola solo para lo que pide una mano.
+    var phone = BOT_CFG.payAuto === 'dry' || BOT_CFG.payAuto === 'auto';
+    var fresh = PAY.orders.some(function(o) {
+      return !PAY.seen[o.orderNo + o.status] && (!phone || o.status === 'manual' || o.status === 'filled');
+    });
+    PAY.orders.forEach(function(o) { PAY.seen[o.orderNo + o.status] = 1; });
     var m = document.getElementById('pay-modal');
     if (fresh) { try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch (e) {} openPaySheet(); }
     else if (m.style.display !== 'none') renderPaySheet();
@@ -2363,7 +2396,7 @@ function renderPaySheet() {
       return '<div class="pay-row"><span class="pay-k">' + esc(f.name || f.type) + '</span><span class="pay-v" style="font-weight:400">' + esc(f.value) + '</span></div>';
     }).join('');
     return '<div class="pay-ord' + (i === 0 ? ' next' : '') + '">' +
-      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-bottom:4px"><span>' + (i === 0 ? '▶ Siguiente' : '#' + (i + 1)) + ' · orden …' + esc(o.orderNo.slice(-6)) + (o.status === 'processing' ? ' · procesando' : '') + '</span>' +
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-bottom:4px"><span>' + (i === 0 ? '▶ Siguiente' : '#' + (i + 1)) + ' · orden …' + esc(o.orderNo.slice(-6)) + (PAY_ST[o.status] ? ' · ' + PAY_ST[o.status] : '') + '</span>' +
         (o.payEnd ? '<span data-payend="' + Number(o.payEnd) + '"></span>' : '') + '</div>' +
       '<div class="pay-row"><span class="pay-k">Monto</span><span class="pay-v pay-big">' + payAmtTxt(o.amount) + ' Bs</span>' + copyBtn('amount', 'Copiar') + '</div>' +
       '<div class="pay-row"><span class="pay-k">Cuenta</span><span class="pay-v">' + (o.account ? esc(o.account.replace(/(\d{4})(?=\d)/g, '$1 ')) : '<span style="color:var(--red)">no vino en la orden</span>') + '</span>' + (o.account ? copyBtn('account', 'Copiar') : '') + '</div>' +
@@ -2371,7 +2404,10 @@ function renderPaySheet() {
       extra +
       (o.match === false ? '<div class="pay-warn">⚠ El titular de la cuenta no coincide con el nombre verificado del vendedor (' + esc(o.sellerName || '') + '). Revisa antes de pagar: puede ser una cuenta de terceros.</div>' : '') +
       '<div style="font-size:12px;color:var(--text-3);margin:4px 0 8px">' + Number(o.usdt || 0).toFixed(2) + ' USDT a ' + fmtP(o.price || 0) + ' · ' + esc(o.method || '') + '</div>' +
-      '<button class="btn btn-gold" type="button" style="width:100%" onclick="payPick(\'' + no + '\')">📎 Subir comprobante y marcar pagada</button>' +
+      (o.status === 'manual' && o.reason ? '<div class="pay-warn">✋ ' + esc(o.reason) + '</div>' : '') +
+      (o.status === 'paying' || o.status === 'confirmed' || o.status === 'filled'
+        ? '<div class="sub-help" style="margin:0">📱 El teléfono se está encargando de esta orden.</div>'
+        : '<button class="btn btn-gold" type="button" style="width:100%" onclick="payPick(\'' + no + '\')">📎 Subir comprobante y marcar pagada</button>') +
       '<div class="sub-help" id="pay-st-' + no + '" style="margin:6px 0 0"></div>' +
     '</div>';
   }).join('');
@@ -4558,6 +4594,7 @@ function botServerConfig() {
     verifiedOnly: CFG.verifiedOnly !== false,
     payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [PAY_SEL[botFiat()] || ACTIVE_PAY],
     payAssist: !!BOT_CFG.payAssist,
+    payAuto: BOT_CFG.payAuto || 'off',
     payTpl: BOT_CFG.payTpl || null,
     fiat: botFiat() // auto-deteccion del anuncio en el servidor (sin adNo)
   };

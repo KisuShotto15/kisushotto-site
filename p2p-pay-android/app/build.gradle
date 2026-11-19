@@ -7,8 +7,8 @@ android {
         applicationId 'com.kisushotto.pagos'
         minSdk 30          // capturas desde el servicio de accesibilidad (Android 11+)
         targetSdk 34
-        versionCode 1
-        versionName '0.1-aprendizaje'
+        versionCode 2
+        versionName '0.2'
     }
     // Firma fija en el repo: asi cada APK nuevo se instala encima del anterior
     // (con la firma de debug, que cambia por maquina, habria que desinstalar).
