@@ -103,9 +103,9 @@ public class PushService extends FirebaseMessagingService {
              .setSound(alarmSound(), android.media.AudioManager.STREAM_ALARM)
              .setVibrate(new long[]{0, 600, 400, 600, 400, 600});
         }
-        Notification n = b.build();
-        if (alarm) n.flags |= Notification.FLAG_INSISTENT;
-        NotificationManagerCompat.from(this).notify(tag, 0, n);
+        Notification built = b.build();
+        if (alarm) built.flags |= Notification.FLAG_INSISTENT;
+        NotificationManagerCompat.from(this).notify(tag, 0, built);
     }
 
     // Un token nuevo lo registra la web la proxima vez que se abre la app (pushToken).
