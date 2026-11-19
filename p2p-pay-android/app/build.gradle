@@ -1,0 +1,30 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.kisushotto.pagos'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.kisushotto.pagos'
+        minSdk 30          // capturas desde el servicio de accesibilidad (Android 11+)
+        targetSdk 34
+        versionCode 1
+        versionName '0.1-aprendizaje'
+    }
+    // Firma fija en el repo: asi cada APK nuevo se instala encima del anterior
+    // (con la firma de debug, que cambia por maquina, habria que desinstalar).
+    signingConfigs {
+        rel {
+            storeFile file('../ks-pagos.keystore')
+            storePassword 'kspagos2026'
+            keyAlias 'kspagos'
+            keyPassword 'kspagos2026'
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.rel }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
