@@ -180,5 +180,5 @@ export async function deviceRoute(req, path, params) {
 function job(r) {
   const i = r.info || {};
   return { orderNo: r.order_no, account: i.account, amount: i.amount, cents: cents(i.amount),
-           sellerName: i.sellerName, holder: i.holder, concept: 'pago', payEnd: i.payEnd || null };
+           sellerName: i.sellerName, holder: i.holder, concept: r.order_no, payEnd: i.payEnd || null }; // concepto = numero de orden
 }

@@ -148,16 +148,58 @@ final class Driver {
                         AccessibilityNodeInfo a = first(ns, n -> n.isEditable() && startsWith(n.getHintText(), "Cuenta destino"));
                         AccessibilityNodeInfo m = first(ns, n -> n.isEditable() && startsWith(n.getHintText(), "Monto"));
                         String accTxt = digits(textOf(a));
-                        if (!accTxt.equals(digits(account))) { busy = false; fail("la cuenta no quedó bien escrita en BDV"); return; }
-                        if (centsOf(textOf(m)) != cents) { busy = false; fail("el monto no quedó bien escrito en BDV (" + textOf(m) + ")"); return; }
-                        log.log("Datos escritos: cuenta …" + last(accTxt, 4) + ", monto " + textOf(m));
-                        setStage(Stage.FORM_SENT);
-                        clickDesc(ns, "Transferir");
-                        busy = false; next(1500);
+                        if (!accTxt.equals(digits(account)) || centsOf(textOf(m)) != cents) { pasteTry(0); return; }
+                        sendForm(ns, "escritos");
                     }, 700 + rnd.nextInt(400));
                 }, 600 + rnd.nextInt(400));
             }, 700 + rnd.nextInt(400));
         }, 700 + rnd.nextInt(500));
+    }
+
+    private void sendForm(List<AccessibilityNodeInfo> ns, String how) {
+        AccessibilityNodeInfo a = first(ns, n -> n.isEditable() && startsWith(n.getHintText(), "Cuenta destino"));
+        AccessibilityNodeInfo m = first(ns, n -> n.isEditable() && startsWith(n.getHintText(), "Monto"));
+        log.log("Datos " + how + ": cuenta …" + last(digits(textOf(a)), 4) + ", monto " + textOf(m));
+        setStage(Stage.FORM_SENT);
+        clickDesc(ns, "Transferir");
+        busy = false; next(1500);
+    }
+
+    // Plan B: el boton "Pegar datos" de BDV llena cuenta y monto desde el portapapeles.
+    // No se sabe que formato espera: se prueban varios y se registra cual sirvio.
+    private void pasteTry(int i) {
+        long cents = job.optLong("cents");
+        String account = job.optString("account");
+        String amt = (cents / 100) + "," + String.format(java.util.Locale.ROOT, "%02d", cents % 100);
+        String[] fmts = { account + "\n" + amt, account + " " + amt, "Cuenta: " + account + "\nMonto: " + amt, account + ";" + amt };
+        if (i >= fmts.length) { busy = false; fail("no pude escribir cuenta y monto (ni con Pegar datos)"); return; }
+        android.content.ClipboardManager cm = (android.content.ClipboardManager) svc.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("pago", fmts[i]));
+        List<AccessibilityNodeInfo> ns = flatten(svc.getRootInActiveWindow());
+        // El rotulo "Pegar datos" no es tocable: el boton es el icono a su izquierda.
+        AccessibilityNodeInfo lbl = first(ns, n -> "Pegar datos".equals(desc(n) == null ? null : desc(n).trim()));
+        AccessibilityNodeInfo btn = null;
+        if (lbl != null) {
+            Rect lr = new Rect(); lbl.getBoundsInScreen(lr);
+            for (AccessibilityNodeInfo n : ns) {
+                if (!n.isClickable()) continue;
+                Rect r = new Rect(); n.getBoundsInScreen(r);
+                if (r.right <= lr.left + 4 && r.bottom >= lr.top && r.top <= lr.bottom && r.width() < 250) { btn = n; break; }
+            }
+            if (btn == null) btn = lbl;
+        }
+        if (btn == null) { busy = false; fail("no encontré Pegar datos"); return; }
+        click(btn);
+        h.postDelayed(() -> {
+            List<AccessibilityNodeInfo> n2 = flatten(svc.getRootInActiveWindow());
+            AccessibilityNodeInfo a = first(n2, n -> n.isEditable() && startsWith(n.getHintText(), "Cuenta destino"));
+            AccessibilityNodeInfo m = first(n2, n -> n.isEditable() && startsWith(n.getHintText(), "Monto"));
+            if (digits(textOf(a)).equals(digits(account)) && centsOf(textOf(m)) == cents) {
+                log.log("Pegar datos sirvió con el formato " + (i + 1));
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("", ""));
+                sendForm(n2, "pegados");
+            } else pasteTry(i + 1);
+        }, 1300);
     }
 
     private void confirm(List<AccessibilityNodeInfo> nodes) {
