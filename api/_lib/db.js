@@ -90,13 +90,19 @@ function isConnErr(e) {
 
 // Reintento unico: descarta el cliente muerto y reconecta de cero. Evita que un
 // socket cerrado por el pooler tumbe una request entera con "CONNECTION_DESTROYED".
+// Solo se descarta el cliente que fallo: con varias peticiones a la vez en la misma
+// instancia (Vercel las comparte), cerrar "el cliente actual" mataba la conexion que
+// otra peticion acababa de abrir en su reintento, y esa fallaba tambien con
+// CONNECTION_DESTROYED (cascada).
 export async function sql(...args) {
+  let c;
   try {
-    const c = live();
+    c = live();
     return await guarded(c, c(...args));
   } catch (e) {
     if (!isConnErr(e)) throw e;
-    if (client) { client.end({ timeout: 0 }).catch(() => {}); client = null; }
+    if (client === c) { client = null; }
+    if (c) c.end({ timeout: 0 }).catch(() => {});
     const c2 = live();
     return await guarded(c2, c2(...args));
   }

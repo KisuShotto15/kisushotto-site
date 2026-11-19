@@ -43,6 +43,7 @@ public class MainActivity extends Activity {
     private Button perm, pause, rec, share, pkgBtn;
     private LinearLayout pairBox;
     private Uri lastFile;
+    private String pairMsg; // ultimo resultado de vincular (si no, el refresco lo tapaba)
     private final Handler h = new Handler(Looper.getMainLooper());
     private final Runnable tick = new Runnable() { @Override public void run() { refresh(); h.postDelayed(this, 1000); } };
 
@@ -130,8 +131,8 @@ public class MainActivity extends Activity {
         status.setTextColor(on ? 0xFF1D9E75 : 0xFFE24B4A);
         perm.setVisibility(on ? View.GONE : View.VISIBLE);
         boolean paired = Store.token(this) != null;
-        pairSt.setText(paired ? "✓ Vinculado" : "Sin vincular");
-        pairSt.setTextColor(paired ? 0xFF1D9E75 : 0xFFB0B8C4);
+        pairSt.setText(paired ? "✓ Vinculado" : (pairMsg != null ? pairMsg : "Sin vincular"));
+        pairSt.setTextColor(paired ? 0xFF1D9E75 : (pairMsg != null && pairMsg.startsWith("✗") ? 0xFFE24B4A : 0xFFB0B8C4));
         pairBox.setVisibility(paired ? View.GONE : View.VISIBLE);
         pwSt.setText(Store.hasPassword(this) ? "✓ Clave guardada" : "Sin clave guardada");
         String pk = Store.pkg(this);
@@ -152,17 +153,17 @@ public class MainActivity extends Activity {
 
     private void pair() {
         String c = code.getText().toString().trim();
-        if (c.length() != 6) { pairSt.setText("El código tiene 6 dígitos"); return; }
-        pairSt.setText("Vinculando…");
+        if (c.length() != 6) { pairMsg = "✗ El código tiene 6 dígitos"; refresh(); return; }
+        pairMsg = "Vinculando…"; refresh();
         Executors.newSingleThreadExecutor().execute(() -> {
             String msg;
             try {
                 JSONObject r = Api.call(null, "/dev-pair", new JSONObject().put("code", c).put("name", Build.MANUFACTURER + " " + Build.MODEL));
                 if (r.optString("token", null) != null) { Store.token(this, r.getString("token")); msg = "✓ Vinculado"; }
-                else msg = "✗ " + r.optString("error", "no se pudo vincular");
+                else msg = "✗ " + r.optString("error", "no se pudo vincular") + " (HTTP " + r.optInt("_status") + ")";
             } catch (Exception e) { msg = "✗ " + e.getMessage(); }
             String fm = msg;
-            h.post(() -> { pairSt.setText(fm); code.setText(""); refresh(); });
+            h.post(() -> { pairMsg = fm; code.setText(""); refresh(); });
         });
     }
 
