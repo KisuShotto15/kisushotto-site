@@ -3,7 +3,7 @@ import { requireAllowedUser } from './_lib/auth.js';
 import { sql, ensureSchema, ensureMarketHist, ensureOkxCreds } from './_lib/db.js';
 import { histMap } from './_lib/monitor.js';
 import { DEFAULT_FIAT, safeTz, zonedMidnight } from './_lib/market.js';
-import { tradeMethods } from './_lib/binance.js';
+import { tradeMethods, listOrders, getOrderDetail, chatCredential, chatMessages } from './_lib/binance.js';
 import { okxBasicInfo, okxActiveAds, okxMarketplace, splitMarketplace } from './_lib/okx.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
@@ -615,6 +615,56 @@ export default async function handler(req, res) {
 
   // Metodos de pago de una moneda, segun Binance (no requiere creds Binance). El
   // cliente los muestra debajo de su lista curada y los cachea 24h.
+  // Diagnostico (solo admin) de la API de ordenes y chat P2P antes de automatizar
+  // pagos: que endpoints acepta la key y que forma tienen las respuestas. Todo lo
+  // sensible sale enmascarado (cuentas: ultimos 4; tokens: nunca).
+  if (path === '/p2p-probe') {
+    const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    if (!adminEmail || user.email !== adminEmail) return res.status(403).json({ error: 'No autorizado' });
+    try {
+      const rows = await sql`SELECT enc_key, iv_key, tag_key, enc_secret, iv_secret, tag_secret FROM binance_creds WHERE user_id = ${user.uid}`;
+      if (!rows.length) return res.status(400).json({ error: 'Conecta Binance primero' });
+      const r0 = rows[0];
+      const key = decrypt({ ct: r0.enc_key, iv: r0.iv_key, tag: r0.tag_key });
+      const secret = decrypt({ ct: r0.enc_secret, iv: r0.iv_secret, tag: r0.tag_secret });
+      const mask = v => {
+        const s = String(v == null ? '' : v);
+        if (/^\d{6,}$/.test(s.replace(/[\s-]/g, ''))) return '…' + s.replace(/[\s-]/g, '').slice(-4);
+        return s.length > 24 ? s.slice(0, 24) + '…' : s;
+      };
+      // Estructura con valores enmascarados (hasta 3 niveles, arrays recortados).
+      const shape = (v, d) => {
+        if (Array.isArray(v)) return v.slice(0, 3).map(x => shape(x, d + 1));
+        if (v && typeof v === 'object') {
+          if (d > 3) return '{…}';
+          const o = {};
+          for (const [k, x] of Object.entries(v)) {
+            o[k] = /token|key|secret|sign/i.test(k) ? '<oculto>' : shape(x, d + 1);
+          }
+          return o;
+        }
+        return typeof v === 'number' || typeof v === 'boolean' || v == null ? v : mask(v);
+      };
+      const st = r => ({ ok: r.ok, status: r.status, code: r.code, msg: r.msg });
+      const out = {};
+      const cred = await chatCredential(key, secret).catch(e => ({ ok: false, msg: e.message }));
+      out.chatCredential = { ...st(cred), fields: cred.data ? Object.keys(cred.data) : null,
+        wssHost: cred.data && cred.data.chatWssUrl ? String(cred.data.chatWssUrl).replace(/^(wss?:\/\/[^/]+).*/, '$1') : null };
+      const lo = await listOrders(key, secret, 7 * 24 * 3600 * 1000).catch(e => ({ ok: false, orders: [], raw: { message: e.message } }));
+      out.orders = { ok: lo.ok, n: lo.orders.length, sample: lo.orders.slice(0, 3).map(o => shape(o, 0)) };
+      const no = params && params.orderNo ? String(params.orderNo) : (lo.orders[0] && String(lo.orders[0].orderNumber));
+      if (no) {
+        const det = await getOrderDetail(key, secret, no).catch(e => ({ ok: false, msg: e.message }));
+        out.detail = { ...st(det), data: det.data ? shape(det.data, 0) : null };
+        const cm = await chatMessages(key, secret, no).catch(e => ({ ok: false, msg: e.message }));
+        out.chat = { ...st(cm), data: cm.data ? shape(cm.data, 0) : null };
+      }
+      return res.status(200).json(out);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   if (path === '/trade-methods') {
     const fiat = String((params && params.fiat) || '').toUpperCase();
     if (!/^[A-Z]{3,4}$/.test(fiat)) return res.status(400).json({ error: 'Moneda inválida' });

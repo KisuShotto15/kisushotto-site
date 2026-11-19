@@ -2282,6 +2282,24 @@ function applyExchangeTabs() {
   botTab(OKX.connected ? bt : 'bnc');
 }
 
+// Diagnostico (solo admin) de la API de ordenes y chat P2P de Binance: muestra el
+// resultado (ya enmascarado por el servidor) con un boton para copiarlo.
+async function p2pProbe() {
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:3100;background:rgba(0,0,0,.85);display:flex;flex-direction:column;padding:16px;gap:10px';
+  wrap.innerHTML = '<div style="display:flex;gap:8px;align-items:center"><b style="flex:1;color:var(--gold)">Diagnóstico API de pagos</b>' +
+    '<button class="btn btn-sm" type="button" id="p2pp-copy">Copiar</button><button class="btn btn-sm" type="button" id="p2pp-x">✕</button></div>' +
+    '<pre id="p2pp-out" style="flex:1;overflow:auto;margin:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;white-space:pre-wrap;word-break:break-all;color:var(--text-2)">Consultando a Binance…</pre>';
+  document.body.appendChild(wrap);
+  var out = wrap.querySelector('#p2pp-out');
+  wrap.querySelector('#p2pp-x').onclick = function() { wrap.remove(); };
+  wrap.querySelector('#p2pp-copy').onclick = function() {
+    try { navigator.clipboard.writeText(out.textContent); this.textContent = '✓ Copiado'; } catch (e) {}
+  };
+  try { out.textContent = JSON.stringify(await botCallWorker('/p2p-probe'), null, 1); }
+  catch (e) { out.textContent = 'Error: ' + e.message; }
+}
+
 // Formatea una duracion en segundos de forma legible (seg / min / h).
 function fmtDur(s) {
   if (s == null) return '—';

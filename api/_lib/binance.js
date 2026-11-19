@@ -154,3 +154,25 @@ export async function tradeMethods(fiat) {
   tmCache.set(fiat, { ts: Date.now(), list });
   return list;
 }
+
+// ── Ordenes y chat P2P (API de comerciante; endpoints no documentados en publico) ──
+// Generico: params de query firmados (+timestamp) y, si hay, body JSON aparte.
+export async function c2c(key, secret, method, path, { query, body } = {}) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(query || {})) if (v != null && v !== '') q.append(k, String(v));
+  q.append('recvWindow', '10000');
+  q.append('timestamp', String(Date.now()));
+  const qs = q.toString();
+  const r = await fx(`${BINANCE}${path}?${qs}&signature=${sign(secret, qs)}`, {
+    method, headers: headers(key), body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await r.json().catch(() => null);
+  const ok = r.ok && !!data && (data.code == null || data.code === '000000' || data.code === 0) && data.success !== false;
+  return { ok, status: r.status, code: data && data.code, msg: data && (data.message || data.msg), data: data && data.data, raw: data };
+}
+export const getOrderDetail = (key, secret, orderNo) =>
+  c2c(key, secret, 'POST', '/sapi/v1/c2c/orderMatch/getUserOrderDetail', { body: { adOrderNo: String(orderNo) } });
+export const chatCredential = (key, secret) =>
+  c2c(key, secret, 'GET', '/sapi/v1/c2c/chat/retrieveChatCredential');
+export const chatMessages = (key, secret, orderNo, rows = 20) =>
+  c2c(key, secret, 'GET', '/sapi/v1/c2c/chat/retrieveChatMessagesWithPagination', { query: { orderNo, page: 1, rows } });

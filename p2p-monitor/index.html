@@ -591,6 +591,8 @@
             <span id="bnc-st" style="display:block;font-size:13px;color:var(--text-2);margin-top:6px"></span>
             <div style="font-size:12px;color:var(--text-2);margin-top:7px;line-height:1.45">Sin permiso de retiro: tus fondos no se pueden mover. <a href="#" onclick="openApiKeyModal();return false" style="color:var(--gold);text-decoration:underline">Cómo crear la API key</a></div>
           </div>
+          <!-- Solo admin: prueba de la API de ordenes/chat antes de automatizar pagos -->
+          <button class="btn btn-sm admin-only" type="button" style="display:none;width:100%;margin-top:8px" onclick="p2pProbe()">🔎 Diagnóstico API de pagos</button>
           <!-- OKX: las tres partes de la key. El bot se controla desde el panel. -->
           <div class="ptitle" style="margin:12px 0 6px">OKX <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-3)">· beta</span></div>
           <div id="okx-connected" style="display:none;align-items:center;justify-content:space-between;gap:8px;background:var(--surf-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 11px">
@@ -754,7 +756,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=141"></script>
+<script src="/p2p-monitor/main.js?v=142"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es
