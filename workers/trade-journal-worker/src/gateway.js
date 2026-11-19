@@ -838,9 +838,15 @@ export class ExchangeGateway {
         }
         if (a.type === 'check_pending') { await this.checkPending(a.trade, ex, a.cancel); continue; }
 
+        // Una posicion externa que se cierra (o se cerraria en simulacion) queda en el
+        // libro para que, al cerrarse, entre al journal con su resultado
+        const untracked = a.type === 'close' && a.pos && !ctx.ledger.some(t => (t.status === 'open' || t.status === 'pending') &&
+          t.exchange === a.pos.exchange && (t.market || 'futures') === (a.pos.market || 'futures') && t.symbol === a.pos.symbol && t.side === a.pos.side);
+
         // Acciones que tocan el exchange: en simulacion solo se avisan
         if (acc.dry_run) {
           await this.logOnce('guardian_sim', `[simulacion] ${sym}: ${a.reason} (accion: ${a.type})`, 'warn');
+          if (untracked) await this.adopt(a.pos, ctx, a.strategy);
           continue;
         }
         if (a.type === 'set_stop') await ex.setStop(a.pos, a.stop);
@@ -851,7 +857,11 @@ export class ExchangeGateway {
             .bind(a.pos.size - a.qty, posRisk({ ...a.pos, size: a.pos.size - a.qty, notional: a.pos.notional * (1 - a.qty / a.pos.size) }),
                   a.pos.exchange, a.pos.market, a.pos.symbol, a.pos.side).run();
         }
-        if (a.type === 'close')    await ex.closePosition(a.pos);
+        if (a.type === 'close') {
+          await ex.closePosition(a.pos);
+          // Solo despues de cerrarla: si el cierre fallara, la siguiente vuelta lo reintenta
+          if (untracked) await this.adopt(a.pos, ctx, a.strategy);
+        }
         await this.log('guardian', `${sym}: ${a.reason}`, a.type === 'close' ? 'critical' : 'warn', { action: a.type, stop: a.stop, qty: a.qty });
         acted.push(a.type);
       } catch (e) {

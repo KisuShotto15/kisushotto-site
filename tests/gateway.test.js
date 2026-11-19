@@ -187,6 +187,14 @@ test('guardian: posicion abierta por fuera mientras esta bloqueado se cierra', a
   assert.deepEqual(st.calls.at(-1), ['close', 'SOLUSDT']);
   const ev = DB.raw.prepare("SELECT * FROM risk_events WHERE kind='guardian' ORDER BY id DESC").get();
   assert.match(ev.message, /fuera del sistema/);
+  // Queda en el libro como externa y, en la vuelta siguiente, pasa al journal
+  const row = DB.raw.prepare("SELECT * FROM exec_trades WHERE symbol='SOLUSDT'").get();
+  assert.equal(row.external, 1);
+  clock += 120000;   // pasado el margen de 90 s tras abrir
+  await call('/guardian', {});
+  const j = DB.raw.prepare("SELECT * FROM trades WHERE symbol='SOLUSDT'").get();
+  assert.ok(j, 'debe entrar al journal');
+  assert.equal(j.exec_type, 'external');
 });
 
 test('dia de noticias: no se opera', async () => {
