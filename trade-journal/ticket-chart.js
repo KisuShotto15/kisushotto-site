@@ -13,9 +13,11 @@ const toBar = k => ({ time: Math.floor(k.t / 1000), open: k.o, high: k.h, low: k
 // velas gris claro / violeta, VWAP azul y bandas solidas verde, amarillo y rojo.
 const TV = {
   bg: '#0c0c0c', text: '#8a8a8a', border: '#1f1f1f',
-  up: '#c7c7cc', down: '#6b3fd4',
+  // Velas como en el TradingView del usuario: cuerpo al 30% y borde/mecha solidos
+  up: 'rgba(181,160,227,0.3)', upLine: '#b5a0e3', upWick: '#b5a0e3',
+  down: 'rgba(126,85,200,0.3)', downLine: '#7e55c8', downWick: '#5b31b0',
   vwap: '#3b6cf6', band: ['#2fa84f', '#e3c430', '#e5484d'],
-  volUp: 'rgba(199,199,204,0.35)', volDown: 'rgba(107,63,212,0.55)',
+  volUp: 'rgba(181,160,227,0.35)', volDown: 'rgba(91,49,176,0.55)',
 };
 const toVol = k => ({ time: Math.floor(k.t / 1000), value: k.v, color: k.c >= k.o ? TV.volUp : TV.volDown });
 
@@ -61,8 +63,8 @@ export class TicketChart {
     this.volume = this.chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false });
     this.chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
     this.series = this.chart.addCandlestickSeries({
-      upColor: TV.up, downColor: TV.down, wickUpColor: TV.up, wickDownColor: TV.down,
-      borderUpColor: TV.up, borderDownColor: TV.down, borderVisible: true,
+      upColor: TV.up, downColor: TV.down, wickUpColor: TV.upWick, wickDownColor: TV.downWick,
+      borderUpColor: TV.upLine, borderDownColor: TV.downLine, borderVisible: true,
       priceLineVisible: true, priceLineStyle: LineStyle.Dotted, priceLineColor: '#5a5a5a', priceLineWidth: 1,
       // La escala incluye SL, TP, limite y la posicion abierta para que siempre se vean.
       // Mientras se arrastra se usa el precio inicial para que la escala no se mueva bajo el dedo.

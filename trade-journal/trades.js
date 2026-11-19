@@ -483,7 +483,9 @@ async function drawTradeChart(t) {
     grid: { vertLines: { visible: false }, horzLines: { visible: false } },
     rightPriceScale: { borderColor: '#1f1f1f' }, timeScale: { borderColor: '#1f1f1f', timeVisible: true },
   });
-  const s = chart.addCandlestickSeries({ upColor: '#c7c7cc', downColor: '#6b3fd4', wickUpColor: '#c7c7cc', wickDownColor: '#6b3fd4', borderVisible: false, priceLineVisible: false });
+  // Mismas velas que el terminal: cuerpo al 30%, borde y mecha solidos
+  const s = chart.addCandlestickSeries({ upColor: 'rgba(181,160,227,0.3)', downColor: 'rgba(126,85,200,0.3)', borderVisible: true,
+    borderUpColor: '#b5a0e3', borderDownColor: '#7e55c8', wickUpColor: '#b5a0e3', wickDownColor: '#5b31b0', priceLineVisible: false });
   s.setData(candles.map(k => ({ time: Math.floor(k.t / 1000), open: k.o, high: k.h, low: k.l, close: k.c })));
   const line = c => chart.addLineSeries({ color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
   const b = vwapBands(candles, utcAnchor);

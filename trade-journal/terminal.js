@@ -37,7 +37,7 @@ let S = null;          // ultimo /exec/status
 let strat = (() => { try { return localStorage.getItem('tm_strat') === 'swing' ? 'swing' : 'vwap'; } catch { return 'vwap'; } })();
 const isSwing = () => strat === 'swing';
 const gatesOf = () => isSwing() ? S.swing_gates : S.gates;
-const rulesOf = () => isSwing() ? S.rules.swing : S.rules;
+const rulesOf = () => isSwing() ? S?.rules?.swing : S?.rules;
 const positionsOf = () => (isSwing() ? S.swing_positions : S.positions) || [];
 
 // value = lo que se guarda (igual que antes, para no romper la analitica); label = lo que se ve
