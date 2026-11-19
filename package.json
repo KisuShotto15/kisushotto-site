@@ -12,7 +12,8 @@
     "@anthropic-ai/sdk": "^0.91.1",
     "lightweight-charts": "^4.2.0",
     "postgres": "^3.4.9",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "sharp": "^0.34.5",

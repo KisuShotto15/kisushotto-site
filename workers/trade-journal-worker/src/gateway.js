@@ -9,7 +9,7 @@
 //     clics rapidos no pueden abrir dos operaciones saltandose el limite.
 
 import {
-  normalizeRules, splitChange, sessionWindow, newsStatus, parseCalendar, validateOrder,
+  normalizeRules, splitChange, sessionWindow, newsStatus, isMajorNews, parseCalendar, validateOrder,
   evaluateGates, lockFromGates, sizeOrder, chooseLeverage, guardianPlan, todayStats, nyParts,
   weekStart, addDays, rOf, CHANGE_DELAY_SEC, HARD, DEFAULT_RULES, evaluateSwingGates, sizeInverse, SWING_HARD,
 } from './risk.js';
@@ -187,11 +187,18 @@ export class ExchangeGateway {
       const ex = this.adapter(acc);
       // Si falla solo spot (p. ej. la llave no tiene permiso de spot), los
       // futuros se siguen vigilando; el error igual bloquea ordenes nuevas.
-      const [eq, pos, spot, cm] = await Promise.all([
+      const [eq, pos, spot, cm, orders] = await Promise.all([
         ex.equity(), ex.futuresPositions(), ex.spotHoldings().catch(e => e),
         acc.profile === 'swing' && ex.coinm ? ex.coinm().catch(e => e) : null,
+        // Ordenes limite abiertas, tambien las puestas fuera del terminal (solo se muestran)
+        ex.openOrders ? ex.openOrders().catch(e => { console.error('ordenes abiertas', e.message); return []; }) : [],
       ]);
-      const out = { acc, profile: acc.profile, eq, pos, spot, coinm: [] };
+      // El TP limite (orden de solo cierre) se muestra como TP de su posicion
+      for (const p of pos) {
+        const tpo = orders.find(o => o.reduce && o.symbol === p.symbol && o.side === p.side);
+        if (tpo) { p.tp_order = tpo.order_id; if (!p.tp) p.tp = tpo.price; }
+      }
+      const out = { acc, profile: acc.profile, eq, pos, spot, coinm: [], orders: orders.filter(o => !o.reduce).map(o => ({ ...o, profile: acc.profile })) };
       if (spot instanceof Error) {
         eq.errors = [...(eq.errors || []), `spot: ${spot.message}`];
         Object.assign(out, { spot: [], spotError: true });
@@ -213,6 +220,10 @@ export class ExchangeGateway {
     const vwapAccounts = accounts.filter(a => a.profile === 'vwap');
     const readOk = vwapAccounts.length > 0 && errors.length === 0;
     const equityNow = readOk ? vwapLive.reduce((s, x) => s + x.eq.total, 0) : (state.equity_now || 0);
+    // Los limites de perdida diaria y semanal se miden con lo realizado: la
+    // perdida flotante de una posicion abierta no cierra el dia (su stop ya
+    // limita cuanto puede perder y ese riesgo se descuenta del presupuesto).
+    const realizedNow = equityNow - positions.reduce((s, p) => s + (p.upnl || 0), 0);
 
     // Capital al abrir el dia y la semana (NY). Solo se fija con una lectura completa.
     // Si cambia que cuentas forman la estrategia, la base se vuelve a tomar:
@@ -224,9 +235,9 @@ export class ExchangeGateway {
       patch.equity_now = equityNow; patch.equity_at = nowSec();
       const rescope = (state.equity_scope || '') !== scope;
       if (rescope) patch.equity_scope = scope;
-      if (rescope || state.day !== win.date) { patch.day = win.date; patch.day_start_equity = equityNow; }
+      if (rescope || state.day !== win.date) { patch.day = win.date; patch.day_start_equity = realizedNow; }
       if (state.day !== win.date) patch.news_confirmed_day = null;
-      if (rescope || state.week !== wk) { patch.week = wk; patch.week_start_equity = equityNow; }
+      if (rescope || state.week !== wk) { patch.week = wk; patch.week_start_equity = realizedNow; }
     }
     if (Object.keys(patch).length) { await this.patchState(patch); Object.assign(state, patch); }
 
@@ -238,13 +249,13 @@ export class ExchangeGateway {
     const key = x => `${x.exchange}|${x.market}|${x.symbol}|${x.side}`;
     const ledgerOpen = vwapLedger.filter(t => t.status === 'open' || t.status === 'pending');
     const ledgerKeys = new Set(ledgerOpen.map(key));
-    const base = Math.min(state.day_start_equity || equityNow, equityNow);
+    const base = Math.min(state.day_start_equity || realizedNow, realizedNow);
     // Lo abierto fuera del terminal tambien consume riesgo
     const external = positions.filter(p => !ledgerKeys.has(key(p))).map(p => ({
       symbol: p.symbol, side: p.side,
       risk_usd: p.stop ? Math.abs(p.entry - p.stop) * p.size : base * HARD.risk_pct.max / 100,
     }));
-    const equity = { now: equityNow, day_start: state.day_start_equity, week_start: state.week_start_equity };
+    const equity = { now: readOk ? realizedNow : equityNow, total: equityNow, day_start: state.day_start_equity, week_start: state.week_start_equity };
     const gateArgs = { now, rules, window: win, news: newsSt, lock, equity, today };
     const gates = evaluateGates({ ...gateArgs, open: [...ledgerOpen, ...external] });
     if (!readOk) gates.blocks.push({ code: 'read', msg: vwapAccounts.length ? `No se pudo leer: ${errors.join(' | ')}` : `Conecta la cuenta de la estrategia VWAP (${rules.vwap_exchanges.join(', ') || 'ninguna'})` }), gates.ok = false;
@@ -286,7 +297,7 @@ export class ExchangeGateway {
     const accounts = (await this.db.prepare('SELECT exchange, env, mode, dry_run, enabled, last_error, updated_at FROM exec_accounts').all()).results;
     return {
       now: ctx.now, rules: ctx.rules, pending: ctx.pending, pending_at: ctx.pending_at, hard: HARD, swing_hard: SWING_HARD,
-      window: ctx.window, news: ctx.news, news_list: ctx.newsList.slice(0, 20), news_meta: ctx.newsMeta,
+      window: ctx.window, news: ctx.news, news_list: ctx.newsList.slice(0, 20).map(e => ({ ...e, major: isMajorNews(e) })), news_meta: ctx.newsMeta,
       lock: ctx.state.lock_until > nowSec() ? { until: ctx.state.lock_until, reason: ctx.state.lock_reason } : null,
       equity: ctx.equity, today: ctx.today, gates: ctx.gates, errors: ctx.errors,
       accounts: accounts.map(a => ({ ...a, profile: ctx.rules.vwap_exchanges.includes(a.exchange) ? 'vwap' : 'swing',
@@ -295,6 +306,8 @@ export class ExchangeGateway {
       swing_errors: ctx.swingErrors, swing_gates: ctx.swingGates, swing_equity: ctx.swingEquity,
       positions: ctx.positions.map(p => ({ ...p, trade: ctx.ledger.find(t => t.status === 'open' && t.exchange === p.exchange && t.market === 'futures' && t.symbol === p.symbol && t.side === p.side) || null })),
       spot: ctx.spot,
+      open_orders: ctx.live.flatMap(x => x.orders || []).map(o => ({
+        ...o, trade_id: ctx.ledger.find(t => t.status === 'pending' && t.client_id && t.client_id === o.cid)?.id || null })),
       open_trades: ctx.ledger.filter(t => t.status === 'open' || t.status === 'pending'),
       guardian_at: ctx.state.guardian_at, guardian_error: ctx.state.guardian_error,
       egress: ctx.state.egress ? JSON.parse(ctx.state.egress) : null,
@@ -308,16 +321,21 @@ export class ExchangeGateway {
     const exchange = p.get('exchange') || 'binance';
     const market = ['spot', 'coinm'].includes(p.get('market')) ? p.get('market') : 'futures';
     const symbol = String(p.get('symbol') || '').toUpperCase();
-    const interval = ['1m', '3m', '5m', '15m'].includes(p.get('interval')) ? p.get('interval') : '5m';
+    const interval = ['1m', '3m', '5m', '15m', '1h', '4h'].includes(p.get('interval')) ? p.get('interval') : '5m';
+    // end: velas que terminan en ese momento (ms), para ver una operacion pasada
+    const end = +p.get('end') || null;
     const anchor = p.get('anchor') === 'ny' ? 'ny' : 'utc';
     if (!symbol) throw bad('Falta el simbolo');
     const acc = (await this.loadAccounts()).find(a => a.exchange === exchange) || { exchange, key: '', secret: '' };
     const ex = this.adapter(acc);
-    const mins = { '1m': 1, '3m': 3, '5m': 5, '15m': 15 }[interval];
-    // Velas suficientes para cubrir desde el ancla mas 60 de calentamiento del RSI
-    const sinceAnchor = anchor === 'utc' ? (Date.now() % 86400000) / 60000 : 24 * 60;
+    const mins = { '1m': 1, '3m': 3, '5m': 5, '15m': 15, '1h': 60, '4h': 240 }[interval];
+    // Velas suficientes para cubrir desde el ancla mas 60 de calentamiento del RSI.
+    // Para una operacion pasada, desde 'start' (ms) si viene.
+    const ref = end || Date.now();
+    const start = +p.get('start') || null;
+    const sinceAnchor = start ? (ref - start) / 60000 : anchor === 'utc' ? (ref % 86400000) / 60000 : 24 * 60;
     const limit = Math.min(exchange === 'binance' && market !== 'spot' ? 1500 : 1000, Math.ceil(sinceAnchor / mins) + 60);
-    const [inst, candles] = await Promise.all([ex.instrument(market, symbol), ex.klines(market, symbol, interval, limit)]);
+    const [inst, candles] = await Promise.all([ex.instrument(market, symbol), ex.klines(market, symbol, interval, limit, end)]);
     const anchorOf = anchor === 'ny' ? nyOpenAnchor(nyParts) : utcAnchor;
     const snap = snapshot(candles, anchorOf);
     const lastAnchor = candles.length ? anchorOf(candles[candles.length - 1].t) : null;
@@ -434,8 +452,9 @@ export class ExchangeGateway {
     let res;
     try {
       res = o.market !== 'spot'
-        ? await ex.openFutures({ market: o.market, symbol: o.symbol, side: o.side, qty: plan.qty, type: o.type, price: o.entry, stop: o.stop, tp: o.tp,
-                                 leverage: plan.leverage, cid, inst })
+        ? await ex.openFutures({ market: o.market, symbol: o.symbol, side: o.side, qty: plan.qty, type: o.type, price: o.entry, stop: o.stop,
+                                 // En USDT-M el TP va como limite de solo cierre (ver placeTp); en COIN-M sigue como trigger
+                                 tp: tpAsLimit(ex, o.market) ? null : o.tp, leverage: plan.leverage, cid, inst })
         : await ex.openSpot({ symbol: o.symbol, qty: plan.qty, stop: o.stop, tp: o.tp, cid, inst, ref_price: plan.price });
     } catch (e) {
       // Con un rechazo explicito del exchange la orden no existe. Con un error de red
@@ -494,6 +513,10 @@ export class ExchangeGateway {
     }
     const risk = posRisk(pos, o.stop);
     await upd({ status: 'open', qty: pos.size, entry: pos.entry, risk_usd: risk });
+    if (tpAsLimit(ex, o.market) && o.tp) {
+      try { await ex.placeTp(pos, o.tp, inst); }
+      catch (e) { await this.log('warn', `${o.symbol}: no se pudo poner el TP limite (${e.message}); el guardian lo reintentara`, 'warn'); }
+    }
     await this.log('order', `${o.side.toUpperCase()} ${o.symbol} ${pos.size} @ ${pos.entry} SL ${o.stop} TP ${o.tp} ${plan.leverage}x riesgo ${risk.toFixed(2)} USDT (${(risk / plan.base_equity * 100).toFixed(2)}%)`, 'info', { id });
     return { ok: true, id, plan, result: { ...res, entry: pos.entry, qty: pos.size } };
   }
@@ -560,6 +583,18 @@ export class ExchangeGateway {
   }
 
   async cancelPending(b) {
+    // Orden limite puesta fuera del terminal: se cancela por su id, solo si sigue abierta
+    if (b.order_id) {
+      const acc = (await this.loadAccounts()).find(a => a.exchange === b.exchange);
+      if (!acc) throw bad('Cuenta no conectada');
+      const ex = this.adapter(acc);
+      const o = (await ex.openOrders()).find(x => x.order_id === String(b.order_id));
+      if (!o) throw bad('La orden ya no esta abierta en el exchange');
+      await ex.cancelById(o.market, o.symbol, o.order_id);
+      await this.log('cancel', `${o.symbol}: limite externa cancelada (${o.side} ${o.qty} @ ${o.price})`);
+      this.ctxCache = null;
+      return { ok: true };
+    }
     const t = await this.db.prepare("SELECT * FROM exec_trades WHERE id = ? AND status = 'pending'").bind(b.id).first();
     if (!t) throw bad('Orden pendiente no encontrada');
     const acc = (await this.loadAccounts()).find(a => a.exchange === t.exchange);
@@ -803,9 +838,15 @@ export class ExchangeGateway {
         }
         if (a.type === 'check_pending') { await this.checkPending(a.trade, ex, a.cancel); continue; }
 
+        // Una posicion externa que se cierra (o se cerraria en simulacion) queda en el
+        // libro para que, al cerrarse, entre al journal con su resultado
+        const untracked = a.type === 'close' && a.pos && !ctx.ledger.some(t => (t.status === 'open' || t.status === 'pending') &&
+          t.exchange === a.pos.exchange && (t.market || 'futures') === (a.pos.market || 'futures') && t.symbol === a.pos.symbol && t.side === a.pos.side);
+
         // Acciones que tocan el exchange: en simulacion solo se avisan
         if (acc.dry_run) {
           await this.logOnce('guardian_sim', `[simulacion] ${sym}: ${a.reason} (accion: ${a.type})`, 'warn');
+          if (untracked) await this.adopt(a.pos, ctx, a.strategy);
           continue;
         }
         if (a.type === 'set_stop') await ex.setStop(a.pos, a.stop);
@@ -816,7 +857,11 @@ export class ExchangeGateway {
             .bind(a.pos.size - a.qty, posRisk({ ...a.pos, size: a.pos.size - a.qty, notional: a.pos.notional * (1 - a.qty / a.pos.size) }),
                   a.pos.exchange, a.pos.market, a.pos.symbol, a.pos.side).run();
         }
-        if (a.type === 'close')    await ex.closePosition(a.pos);
+        if (a.type === 'close') {
+          await ex.closePosition(a.pos);
+          // Solo despues de cerrarla: si el cierre fallara, la siguiente vuelta lo reintenta
+          if (untracked) await this.adopt(a.pos, ctx, a.strategy);
+        }
         await this.log('guardian', `${sym}: ${a.reason}`, a.type === 'close' ? 'critical' : 'warn', { action: a.type, stop: a.stop, qty: a.qty });
         acted.push(a.type);
       } catch (e) {
@@ -825,6 +870,10 @@ export class ExchangeGateway {
     }
 
     await this.guardSpot(ctx).catch(e => this.log('guardian_error', `spot: ${e.message}`, 'error'));
+    // TP limite que falte (no en posiciones que esta vuelta se mandaron a cerrar)
+    const closing = new Set(plan.filter(a => a.type === 'close' && a.pos).map(a => `${a.pos.exchange}|${a.pos.symbol}|${a.pos.side}`));
+    acted.push(...await this.ensureTps({ ...ctx, positions: ctx.positions.filter(p => !closing.has(`${p.exchange}|${p.symbol}|${p.side}`)) }, accOf)
+      .catch(e => { console.error('tp', e.message); return []; }));
 
     // Fuera de la ventana las posiciones siguen abiertas con su stop, pero se
     // recomienda cerrarlas. El aviso se repite cada 30 min mientras sigan abiertas.
@@ -887,6 +936,7 @@ export class ExchangeGateway {
     const confirmed = t.market === 'spot' || (res && (res.exit_price != null || res.closed_at != null));
     if (!confirmed && !force) return false;
     if (t.market !== 'spot') await ex.cleanup(t.symbol, t.market);
+    if (tpAsLimit(ex, t.market)) await this.cancelTpOrders(ex, t.symbol, t.side);
     const pnl = res?.pnl ?? null;
     const r = rOf(pnl, t.risk_usd);
     const closedAt = res?.closed_at || nowSec();
@@ -896,6 +946,36 @@ export class ExchangeGateway {
     await this.log('closed', `${t.symbol} ${t.side} cerrada: ${pnl == null ? 'PnL pendiente' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT`}${r != null ? ` (${r.toFixed(2)}R)` : ''}`,
       pnl != null && pnl < 0 ? 'warn' : 'info', { id: t.id });
     return true;
+  }
+
+  // Ordenes de solo cierre que queden de una posicion ya cerrada
+  async cancelTpOrders(ex, symbol, side) {
+    try {
+      for (const o of (await ex.openOrders()).filter(x => x.reduce && x.symbol === symbol && x.side === side)) {
+        await ex.cancelById('futures', symbol, o.order_id).catch(e => console.error('cancel tp', e.message));
+      }
+    } catch (e) { console.error('tp orders', e.message); }
+  }
+
+  // Posiciones del terminal con TP en el libro pero sin orden de TP en el
+  // exchange (limite que se lleno, TP que fallo, cierre parcial): se pone el TP limite
+  async ensureTps(ctx, accOf) {
+    const out = [];
+    for (const t of ctx.ledger.filter(x => x.status === 'open' && x.market === 'futures' && x.tp > 0)) {
+      const pos = [...ctx.positions, ...ctx.swingPositions].find(p => p.exchange === t.exchange && p.market === 'futures' && p.symbol === t.symbol && p.side === t.side);
+      if (!pos || pos.tp) continue;
+      const acc = accOf(t.exchange);
+      if (!acc || acc.broken || acc.dry_run) continue;
+      const ex = this.adapter(acc);
+      if (!tpAsLimit(ex, 'futures')) continue;
+      try {
+        const inst = await ex.instrument('futures', t.symbol);
+        await ex.placeTp(pos, t.tp, inst);
+        await this.log('guardian', `${t.symbol}: TP limite puesto en ${t.tp}`);
+        out.push('tp');
+      } catch (e) { await this.logOnce('guardian_tp', `${t.symbol}: no se pudo poner el TP limite: ${e.message}`, 'warn'); }
+    }
+    return out;
   }
 
   async toJournal(t) {
@@ -919,14 +999,16 @@ export class ExchangeGateway {
   async syncHistory(ctx, force = false) {
     const st = ctx.state;
     if (!force && st.history_at && nowSec() - st.history_at < 1800) return { skipped: true };
-    const since = (st.history_at ? st.history_at - 3600 : nowSec() - 7 * 86400) * 1000;
+    // Siempre 7 dias atras: si una lectura fallo o el exchange tardo en publicar
+    // el cierre, la siguiente lo recupera. Los repetidos no se duplican (ON CONFLICT).
+    const since = (nowSec() - 7 * 86400) * 1000;
     const ledger = await this.loadLedger();
     const ins = this.db.prepare(`INSERT INTO trades (id, symbol, category, side, entry_price, exit_price, size, pnl, fees,
       entry_time, exit_time, session, exec_type, status, exchange, exchange_id, created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'external','closed',?,?,?)
       ON CONFLICT(exchange, exchange_id) WHERE exchange_id IS NOT NULL DO UPDATE SET
         pnl=excluded.pnl, fees=excluded.fees, exit_price=excluded.exit_price, exit_time=excluded.exit_time, size=excluded.size`);
-    let added = 0;
+    let added = 0, read = 0, skipped = 0;
     const errors = [];
     for (const l of ctx.vwapLive) {
       const ex = this.adapter(l.acc);
@@ -934,18 +1016,21 @@ export class ExchangeGateway {
       let rows;
       try { rows = await ex.closedHistory(since, ctx.rules.symbols.length ? ctx.rules.symbols : ['BTCUSDT']); }
       catch (e) { errors.push(`${l.acc.exchange}: ${e.message}`); continue; }
+      read += rows.length;
       const mine = ledger.filter(t => t.exchange === l.acc.exchange && t.market === 'futures' && t.status !== 'rejected' && t.status !== 'cancelled');
       const stmts = [];
       for (const r of rows) {
         const fromTerminal = mine.some(t => t.symbol === r.symbol && t.side === r.side && r.exit_time >= t.opened_at - 600 &&
           (t.closed_at == null || Math.abs(t.closed_at - r.exit_time) < 600));
-        if (fromTerminal) continue;
+        if (fromTerminal) { skipped++; continue; }
         stmts.push(ins.bind(crypto.randomUUID(), r.symbol, r.category, r.side, r.entry_price, r.exit_price, r.size, r.pnl, r.fees || 0,
           r.entry_time, r.exit_time, sessionOf(r.entry_time), r.exchange, r.exchange_id, nowSec()));
       }
       if (stmts.length) { await this.db.batch(stmts); added += stmts.length; }
     }
     await this.patchState({ history_at: nowSec() });
+    // Una linea por lectura (sin repetir la misma en 30 min) para poder revisar que entra
+    await this.logOnce('history', `Historial: ${read} cierres leidos en 7 dias, ${skipped} ya estaban por el terminal, ${added} guardados/actualizados`);
     if (errors.length) await this.logOnce('history_error', `Historial: ${errors.join(' | ')}`, 'error');
     return { ok: true, added, errors };
   }
@@ -1020,6 +1105,9 @@ export function afterHoursAdvice(win, positions) {
 }
 
 // Riesgo en USD si salta el stop. COIN-M va en contratos: se usa el valor en USD.
+// En futuros USDT-M el TP se pone como limite de solo cierre (comision de maker)
+function tpAsLimit(ex, market) { return market === 'futures' && typeof ex.placeTp === 'function'; }
+
 function posRisk(p, stop = p.stop) {
   if (!(stop > 0) || !(p.entry > 0)) return null;
   const base = p.market === 'coinm' && p.notional ? p.notional / p.entry : p.size;

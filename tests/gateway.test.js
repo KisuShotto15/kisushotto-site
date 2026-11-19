@@ -187,6 +187,14 @@ test('guardian: posicion abierta por fuera mientras esta bloqueado se cierra', a
   assert.deepEqual(st.calls.at(-1), ['close', 'SOLUSDT']);
   const ev = DB.raw.prepare("SELECT * FROM risk_events WHERE kind='guardian' ORDER BY id DESC").get();
   assert.match(ev.message, /fuera del sistema/);
+  // Queda en el libro como externa y, en la vuelta siguiente, pasa al journal
+  const row = DB.raw.prepare("SELECT * FROM exec_trades WHERE symbol='SOLUSDT'").get();
+  assert.equal(row.external, 1);
+  clock += 120000;   // pasado el margen de 90 s tras abrir
+  await call('/guardian', {});
+  const j = DB.raw.prepare("SELECT * FROM trades WHERE symbol='SOLUSDT'").get();
+  assert.ok(j, 'debe entrar al journal');
+  assert.equal(j.exec_type, 'external');
 });
 
 test('dia de noticias: no se opera', async () => {
@@ -292,4 +300,68 @@ test('guardian: fuera de la ventana y sin nada abierto revisa cada 5 min', async
   clock += 60000;
   assert.equal((await call('/guardian', {})).skipped, undefined);
   Date.now = realNow;
+});
+
+test('la perdida flotante no cierra el dia y se ven las ordenes limite puestas en el exchange', async () => {
+  Date.now = () => clock;
+  clock = Date.UTC(2026, 10, 16, 15, 0);   // lunes nuevo: dia y semana nuevos
+  DB.raw.exec('UPDATE risk_state SET lock_until = 0');
+  // Posicion abierta perdiendo 6% en flotante: el capital total baja, lo realizado no
+  st.positions = [{ exchange: 'bitget', market: 'futures', symbol: 'ETHUSDT', side: 'long', size: 1, entry: 100, stop: 90, upnl: -60, stop_refs: [] }];
+  st.equity = 940;
+  api.openOrders = async () => [{ exchange: 'bitget', market: 'futures', symbol: 'BTCUSDT', side: 'long', qty: 0.01, price: 90000, stop: 89000, tp: null, cid: 'manual1', order_id: '9', ts: 1 }];
+  const s = await call('/status?fresh=1');
+  assert.equal(s.lock, null);
+  assert.ok(!s.gates.blocks.some(b => b.code === 'daily_loss'), JSON.stringify(s.gates.blocks));
+  assert.equal(Math.round(s.equity.now), 1000);
+  assert.equal(s.open_orders.length, 1);
+  assert.equal(s.open_orders[0].trade_id, null);
+  assert.equal(s.open_orders[0].profile, 'vwap');
+  let cancelled = null;
+  api.cancelById = async (market, symbol, id) => { cancelled = [market, symbol, id]; };
+  await assert.rejects(() => gw.cancelPending({ exchange: 'bitget', order_id: 'nope' }), /ya no esta abierta/);
+  assert.equal((await call('/cancel', { exchange: 'bitget', order_id: '9' })).ok, true);
+  assert.deepEqual(cancelled, ['futures', 'BTCUSDT', '9']);
+  // Si la perdida se realiza, el dia si se cierra
+  st.positions = [];
+  clock += 60000;
+  const s2 = await call('/status?fresh=1');
+  assert.ok(s2.lock, 'perdida realizada del 6% debe bloquear');
+  delete api.openOrders;
+  Date.now = realNow;
+});
+
+test('TP limite: el guardian lo pone si falta y se cancela al cerrar', async () => {
+  const calls = [];
+  const ex = {
+    placeTp: async (pos, tp) => { calls.push(['tp', pos.symbol, tp]); },
+    instrument: async () => ({ tick: 0.1, step: 0.001 }),
+    openOrders: async () => [
+      { reduce: true, symbol: 'BTCUSDT', side: 'short', order_id: '7' },
+      { reduce: false, symbol: 'BTCUSDT', side: 'short', order_id: '8' },   // limite de entrada: no se toca
+      { reduce: true, symbol: 'BTCUSDT', side: 'long', order_id: '9' },     // de otra posicion: no se toca
+    ],
+    cancelById: async (m, s, id) => { calls.push(['cancel', id]); },
+  };
+  const realAdapter = gw.adapter;
+  gw.adapter = () => ex;
+  const ctx = {
+    ledger: [
+      { status: 'open', market: 'futures', tp: 60000, exchange: 'bitget', symbol: 'BTCUSDT', side: 'short' },
+      { status: 'open', market: 'futures', tp: 3000, exchange: 'bitget', symbol: 'ETHUSDT', side: 'long' },
+    ],
+    positions: [
+      { exchange: 'bitget', market: 'futures', symbol: 'BTCUSDT', side: 'short', size: 1, tp: null },
+      { exchange: 'bitget', market: 'futures', symbol: 'ETHUSDT', side: 'long', size: 1, tp: 3000 },   // ya tiene TP
+    ],
+    swingPositions: [],
+  };
+  await gw.ensureTps(ctx, () => ({ exchange: 'bitget', dry_run: 1 }));
+  assert.deepEqual(calls, [], 'en simulacion no toca el exchange');
+  await gw.ensureTps(ctx, () => ({ exchange: 'bitget', dry_run: 0 }));
+  assert.deepEqual(calls, [['tp', 'BTCUSDT', 60000]]);
+  calls.length = 0;
+  await gw.cancelTpOrders(ex, 'BTCUSDT', 'short');
+  assert.deepEqual(calls, [['cancel', '7']]);
+  gw.adapter = realAdapter;
 });

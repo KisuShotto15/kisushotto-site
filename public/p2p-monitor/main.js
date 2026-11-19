@@ -2282,6 +2282,172 @@ function applyExchangeTabs() {
   botTab(OKX.connected ? bt : 'bnc');
 }
 
+// ── Asistente de pago ─────────────────────────────────
+// El servidor (bot-tick) detecta cada orden de compra, saluda en el chat con el
+// lugar en la cola y guarda cuenta y monto. Aca: la ficha para copiar y pagar, el
+// "procesando" al copiar el primer dato y, con el comprobante, subirlo al chat y
+// marcar la orden pagada. Mismos textos por defecto que PAY_TPL en el servidor.
+var PAY_TPL_DEF = {
+  greet: 'Hola {nombre}, gracias por tu orden de {monto} Bs. {cola}',
+  processing: 'Procesando tu pago 🔄',
+  paid: 'Pago realizado ✅ Te adjunto el comprobante. Por favor verifica y libera los USDT. ¡Gracias!'
+};
+var PAY = { orders: [], seen: {}, proc: {}, timer: null, tick: null, busy: null };
+function payAsstFill() {
+  var cb = document.getElementById('cfg-pay-asst');
+  if (!cb) return;
+  cb.checked = !!BOT_CFG.payAssist;
+  var t = BOT_CFG.payTpl || {};
+  ['greet', 'processing', 'paid'].forEach(function(k) {
+    var el = document.getElementById('cfg-tpl-' + k);
+    el.value = t[k] || PAY_TPL_DEF[k]; el.placeholder = PAY_TPL_DEF[k];
+  });
+}
+function payAsstSave() {
+  BOT_CFG.payAssist = document.getElementById('cfg-pay-asst').checked;
+  var t = {};
+  ['greet', 'processing', 'paid'].forEach(function(k) { t[k] = document.getElementById('cfg-tpl-' + k).value.trim() || PAY_TPL_DEF[k]; });
+  BOT_CFG.payTpl = t;
+  try { localStorage.setItem('p2p_bot_cfg', JSON.stringify(BOT_CFG)); } catch (e) {}
+  if (BOT.running) botCallWorker('/bot-config', { config: botServerConfig() }).catch(function() {});
+  saveUserSettings();
+  payPollStart();
+}
+function payPollStart() {
+  clearInterval(PAY.timer);
+  if (!BOT_CFG.payAssist) return;
+  payPoll();
+  PAY.timer = setInterval(function() { if (!document.hidden) payPoll(); }, 10000);
+}
+document.addEventListener('visibilitychange', function() { if (!document.hidden && BOT_CFG.payAssist) payPoll(); });
+async function payPoll() {
+  if (!SESSION.token || !BOT_CFG.payAssist) return;
+  try {
+    var d = await botCallWorker('/p2p-pending');
+    PAY.orders = (d && d.orders) || [];
+    var fresh = PAY.orders.some(function(o) { return !PAY.seen[o.orderNo]; });
+    PAY.orders.forEach(function(o) { PAY.seen[o.orderNo] = 1; });
+    var m = document.getElementById('pay-modal');
+    if (fresh) { try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch (e) {} openPaySheet(); }
+    else if (m.style.display !== 'none') renderPaySheet();
+  } catch (e) {}
+}
+function openPaySheet() {
+  var m = document.getElementById('pay-modal');
+  if (m.style.display === 'none') { m.style.display = 'flex'; modalOpened('pay-modal'); }
+  renderPaySheet();
+  clearInterval(PAY.tick);
+  PAY.tick = setInterval(renderPayTimers, 1000);
+}
+function closePaySheet() {
+  var m = document.getElementById('pay-modal');
+  m.style.display = 'none'; modalClosed('pay-modal');
+  clearInterval(PAY.tick);
+}
+function payAmtTxt(n) { return Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function renderPayTimers() {
+  document.querySelectorAll('[data-payend]').forEach(function(el) {
+    var left = Math.round((Number(el.getAttribute('data-payend')) - Date.now()) / 1000);
+    el.textContent = left > 0 ? Math.floor(left / 60) + ':' + ('0' + left % 60).slice(-2) : 'vencido';
+    el.style.color = left < 180 ? 'var(--red)' : 'var(--text-3)';
+  });
+}
+function renderPaySheet() {
+  var box = document.getElementById('pay-body');
+  document.getElementById('pay-count').textContent = PAY.orders.length ? '(' + PAY.orders.length + ')' : '';
+  if (!PAY.orders.length) { box.innerHTML = '<div class="sub-help">No hay órdenes por pagar.</div>'; return; }
+  box.innerHTML = PAY.orders.map(function(o, i) {
+    var no = esc(o.orderNo);
+    var copyBtn = function(kind, label) { return '<button class="btn btn-sm" type="button" onclick="payCopy(\'' + no + '\',\'' + kind + '\',this)">' + label + '</button>'; };
+    var extra = (o.fields || []).filter(function(f) { return f.value !== o.account && f.value !== o.holder; }).map(function(f) {
+      return '<div class="pay-row"><span class="pay-k">' + esc(f.name || f.type) + '</span><span class="pay-v" style="font-weight:400">' + esc(f.value) + '</span></div>';
+    }).join('');
+    return '<div class="pay-ord' + (i === 0 ? ' next' : '') + '">' +
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-bottom:4px"><span>' + (i === 0 ? '▶ Siguiente' : '#' + (i + 1)) + ' · orden …' + esc(o.orderNo.slice(-6)) + (o.status === 'processing' ? ' · procesando' : '') + '</span>' +
+        (o.payEnd ? '<span data-payend="' + Number(o.payEnd) + '"></span>' : '') + '</div>' +
+      '<div class="pay-row"><span class="pay-k">Monto</span><span class="pay-v pay-big">' + payAmtTxt(o.amount) + ' Bs</span>' + copyBtn('amount', 'Copiar') + '</div>' +
+      '<div class="pay-row"><span class="pay-k">Cuenta</span><span class="pay-v">' + (o.account ? esc(o.account.replace(/(\d{4})(?=\d)/g, '$1 ')) : '<span style="color:var(--red)">no vino en la orden</span>') + '</span>' + (o.account ? copyBtn('account', 'Copiar') : '') + '</div>' +
+      '<div class="pay-row"><span class="pay-k">Titular</span><span class="pay-v" style="font-weight:600">' + esc(o.holder || o.sellerName || o.sellerNick || '—') + '</span></div>' +
+      extra +
+      (o.match === false ? '<div class="pay-warn">⚠ El titular de la cuenta no coincide con el nombre verificado del vendedor (' + esc(o.sellerName || '') + '). Revisa antes de pagar: puede ser una cuenta de terceros.</div>' : '') +
+      '<div style="font-size:12px;color:var(--text-3);margin:4px 0 8px">' + Number(o.usdt || 0).toFixed(2) + ' USDT a ' + fmtP(o.price || 0) + ' · ' + esc(o.method || '') + '</div>' +
+      '<button class="btn btn-gold" type="button" style="width:100%" onclick="payPick(\'' + no + '\')">📎 Subir comprobante y marcar pagada</button>' +
+      '<div class="sub-help" id="pay-st-' + no + '" style="margin:6px 0 0"></div>' +
+    '</div>';
+  }).join('');
+  renderPayTimers();
+}
+function payFind(no) { for (var i = 0; i < PAY.orders.length; i++) if (PAY.orders[i].orderNo === no) return PAY.orders[i]; return null; }
+async function payCopy(no, kind, btn) {
+  var o = payFind(no); if (!o) return;
+  // Monto con coma decimal y sin separador de miles: como se escribe en BDV.
+  var v = kind === 'amount' ? Number(o.amount || 0).toFixed(2).replace('.', ',') : o.account;
+  try { await navigator.clipboard.writeText(v); }
+  catch (e) {
+    var ta = document.createElement('textarea'); ta.value = v; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e2) {} ta.remove();
+  }
+  btn.textContent = '✓'; setTimeout(function() { btn.textContent = 'Copiar'; }, 1500);
+  // Primer dato copiado = empezaste a pagar: "procesando" al chat (una vez).
+  if (!PAY.proc[no] && o.status === 'greeted') {
+    PAY.proc[no] = 1;
+    botCallWorker('/p2p-processing', { orderNo: no }).then(function(r) { if (r && r.ok) o.status = 'processing'; }).catch(function() { PAY.proc[no] = 0; });
+  }
+}
+function payPick(no) { PAY.busy = no; var f = document.getElementById('pay-file'); f.value = ''; f.click(); }
+// Comprobante a JPEG de hasta 1280 px (cabe holgado en el limite de Vercel).
+function payCompress(file) {
+  return new Promise(function(res, rej) {
+    var img = new Image(), url = URL.createObjectURL(file);
+    img.onload = function() {
+      var k = Math.min(1, 1280 / Math.max(img.width, img.height));
+      var c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res({ data: c.toDataURL('image/jpeg', 0.82), w: c.width, h: c.height });
+    };
+    img.onerror = function() { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen')); };
+    img.src = url;
+  });
+}
+async function payUpload(input) {
+  var no = PAY.busy, file = input.files && input.files[0];
+  if (!no || !file) return;
+  var st = document.getElementById('pay-st-' + no);
+  var say = function(t, c) { if (st) { st.textContent = t; st.style.color = c || 'var(--text-2)'; } };
+  say('Subiendo comprobante y marcando la orden…');
+  try {
+    var img = await payCompress(file);
+    var r = await botCallWorker('/p2p-paid', { orderNo: no, image: img.data, w: img.w, h: img.h });
+    if (r && r.error) throw new Error(r.error);
+    var warn = r && r.steps && r.steps.delivered === false ? ' (el comprobante no aparece en el chat: revísalo)' : '';
+    say('✓ Orden marcada pagada' + warn, warn ? 'var(--gold)' : '#1D9E75');
+    setTimeout(function() {
+      PAY.orders = PAY.orders.filter(function(o) { return o.orderNo !== no; });
+      if (PAY.orders.length) renderPaySheet(); else closePaySheet();
+    }, 1800);
+  } catch (e) { say('⚠ ' + e.message, 'var(--red)'); }
+}
+
+// Diagnostico (solo admin) de la API de ordenes y chat P2P de Binance: muestra el
+// resultado (ya enmascarado por el servidor) con un boton para copiarlo.
+async function p2pProbe() {
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:3100;background:rgba(0,0,0,.85);display:flex;flex-direction:column;padding:16px;gap:10px';
+  wrap.innerHTML = '<div style="display:flex;gap:8px;align-items:center"><b style="flex:1;color:var(--gold)">Diagnóstico API de pagos</b>' +
+    '<button class="btn btn-sm" type="button" id="p2pp-copy">Copiar</button><button class="btn btn-sm" type="button" id="p2pp-x">✕</button></div>' +
+    '<pre id="p2pp-out" style="flex:1;overflow:auto;margin:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;white-space:pre-wrap;word-break:break-all;color:var(--text-2)">Consultando a Binance…</pre>';
+  document.body.appendChild(wrap);
+  var out = wrap.querySelector('#p2pp-out');
+  wrap.querySelector('#p2pp-x').onclick = function() { wrap.remove(); };
+  wrap.querySelector('#p2pp-copy').onclick = function() {
+    try { navigator.clipboard.writeText(out.textContent); this.textContent = '✓ Copiado'; } catch (e) {}
+  };
+  try { out.textContent = JSON.stringify(await botCallWorker('/p2p-probe'), null, 1); }
+  catch (e) { out.textContent = 'Error: ' + e.message; }
+}
+
 // Formatea una duracion en segundos de forma legible (seg / min / h).
 function fmtDur(s) {
   if (s == null) return '—';
@@ -3965,6 +4131,7 @@ async function botApplyMethods(silent, skipIfSame) {
 // llegaba aca) y tenia que adivinar seis numeros para arrancar. Los defaults de
 // BOT_CFG ya eran razonables, solo que no llegaban a la pantalla.
 function fillBotInputs() {
+  try { payAsstFill(); } catch (e) {}
   var sel = document.getElementById('cfg-bot-adsel');
   if (BOT_CFG.adNo && !Array.prototype.some.call(sel.options, function(o){ return o.value === BOT_CFG.adNo; })) {
     var o = document.createElement('option'); o.value = BOT_CFG.adNo; o.textContent = 'Ad ' + BOT_CFG.adNo; sel.appendChild(o);
@@ -4390,6 +4557,8 @@ function botServerConfig() {
     commission: CFG.commission || 0,
     verifiedOnly: CFG.verifiedOnly !== false,
     payTypes: (BOT.adPayTypes && BOT.adPayTypes.length) ? BOT.adPayTypes : [PAY_SEL[botFiat()] || ACTIVE_PAY],
+    payAssist: !!BOT_CFG.payAssist,
+    payTpl: BOT_CFG.payTpl || null,
     fiat: botFiat() // auto-deteccion del anuncio en el servidor (sin adNo)
   };
 }
@@ -6074,7 +6243,7 @@ function initBuySection() {
   setBuyCollapsed(saved === null ? window.innerWidth <= 760 : saved === '1');
 }
 
-loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); applyHeroFold(); okxRenderBot(); applyExchangeTabs(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
+loadConfig(); syncFilterInputs(); loadBotConfig(); loadPayMethod(); applyFiatUnits(); applyHeroFold(); okxRenderBot(); applyExchangeTabs(); payAsstFill(); payPollStart(); loadActivityGuard(); updateCommissionLabels(); updNotifSt(); renderAlerts(); refreshAuthUI(); refreshPushState(); renderDecisionIdle(); loadHist24();
 // Grafico: libreria y cache al dia en un momento ocioso, para que abra al instante.
 setTimeout(function() { try { hxPrefetch(); } catch (e) {} }, 4000);
 initBuySection();

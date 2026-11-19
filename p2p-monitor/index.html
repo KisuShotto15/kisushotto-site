@@ -17,7 +17,7 @@
      onload la activa al llegar. El <noscript> cubre el caso sin JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="/p2p-monitor/style.css?v=53">
+<link rel="stylesheet" href="/p2p-monitor/style.css?v=54">
 </head>
 <body>
 
@@ -102,6 +102,18 @@
 <!-- Suscripcion -->
 <!-- Primeros pasos. Al activar la prueba el usuario caia en la app sin Binance,
      sin Telegram y sin nada que le dijera por donde empezar. -->
+<!-- Ficha de pago: ordenes de compra en curso (las detecta el bot) -->
+<div id="pay-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3060;align-items:flex-end;justify-content:center;padding:0" onclick="if(event.target===this)closePaySheet()">
+  <div class="sub-card pay-card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="font-size:17px;font-weight:700;color:var(--gold);flex:1">Por pagar <span id="pay-count" style="color:var(--text-3);font-weight:400"></span></div>
+      <button class="btn btn-sm" type="button" onclick="closePaySheet()">✕</button>
+    </div>
+    <div id="pay-body"></div>
+    <input type="file" id="pay-file" accept="image/*" style="display:none" onchange="payUpload(this)">
+  </div>
+</div>
+
 <div id="onboard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3050;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeOnboard()">
   <div class="sub-card">
     <div style="font-size:20px;font-weight:700;color:var(--gold);margin-bottom:4px">Primeros pasos</div>
@@ -591,6 +603,8 @@
             <span id="bnc-st" style="display:block;font-size:13px;color:var(--text-2);margin-top:6px"></span>
             <div style="font-size:12px;color:var(--text-2);margin-top:7px;line-height:1.45">Sin permiso de retiro: tus fondos no se pueden mover. <a href="#" onclick="openApiKeyModal();return false" style="color:var(--gold);text-decoration:underline">Cómo crear la API key</a></div>
           </div>
+          <!-- Solo admin: prueba de la API de ordenes/chat antes de automatizar pagos -->
+          <button class="btn btn-sm admin-only" type="button" style="display:none;width:100%;margin-top:8px" onclick="p2pProbe()">🔎 Diagnóstico API de pagos</button>
           <!-- OKX: las tres partes de la key. El bot se controla desde el panel. -->
           <div class="ptitle" style="margin:12px 0 6px">OKX <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-3)">· beta</span></div>
           <div id="okx-connected" style="display:none;align-items:center;justify-content:space-between;gap:8px;background:var(--surf-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 11px">
@@ -673,6 +687,17 @@
 
       <!-- Salud del bot (ultimo tick / reprice del servidor) -->
       <div id="bot-health" style="display:none;justify-content:space-between;font-size:12px;color:var(--text-3);margin:8px 2px 0;font-variant-numeric:tabular-nums"><span id="bh-tick">Tick: —</span><span id="bh-reprice">Reprice: —</span></div>
+        <!-- Asistente de pago: saludo con la cola, datos para pagar y comprobante -->
+        <div class="pay-asst">
+          <label class="cfg-row" style="border:0;padding:0;cursor:pointer"><span title="Al entrar una orden de compra: saluda en el chat con tu lugar en la cola, te avisa con la cuenta y el monto, y con tu comprobante lo sube al chat y marca la orden pagada">Asistente de pago</span><input type="checkbox" id="cfg-pay-asst" onchange="payAsstSave()" style="width:18px;height:18px;accent-color:var(--gold);cursor:pointer"></label>
+          <details style="margin-top:6px">
+            <summary style="cursor:pointer;font-size:12px;color:var(--text-3)">Mensajes automáticos</summary>
+            <div class="sub-help" style="margin:6px 0">Variables: {nombre} {monto} {cola}</div>
+            <textarea id="cfg-tpl-greet" class="pay-tpl" rows="2" onchange="payAsstSave()"></textarea>
+            <textarea id="cfg-tpl-processing" class="pay-tpl" rows="1" onchange="payAsstSave()"></textarea>
+            <textarea id="cfg-tpl-paid" class="pay-tpl" rows="2" onchange="payAsstSave()"></textarea>
+          </details>
+        </div>
       </div>
       <div id="botl-det-okx" style="display:none">
         <div class="bot-chips" style="margin-bottom:8px"><span class="bchip">sin fee</span></div>
@@ -754,7 +779,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=141"></script>
+<script src="/p2p-monitor/main.js?v=143"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

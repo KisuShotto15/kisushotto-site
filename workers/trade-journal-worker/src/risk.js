@@ -290,8 +290,14 @@ export function sessionWindow(ms, rules) {
 // coverage: {from, to} fechas NY que cubre el ultimo calendario descargado.
 // Si el calendario no cubre el dia, no se sabe si hay noticias: se bloquea
 // salvo que el usuario confirme que lo reviso a mano (queda registrado).
+// Solo bloquean el dia las publicaciones que mueven fuerte el precio. Los
+// discursos de miembros de la Fed y el resto de datos de impacto alto no.
+// Los dias agregados a mano bloquean siempre.
+export const MAJOR_NEWS = /\b(core )?CPI\b|\b(core )?PPI\b|Non-Farm Employment|Unemployment Rate|Federal Funds Rate|FOMC (Statement|Press Conference|Meeting Minutes)|Core PCE|Advance GDP/i;
+export const isMajorNews = e => e.source === 'manual' || MAJOR_NEWS.test(e.title || '');
+
 export function newsStatus(date, events, coverage, confirmedManual = false) {
-  const today = events.filter(e => e.date === date);
+  const today = events.filter(e => e.date === date && isMajorNews(e));
   if (today.length) return { blocked: true, unknown: false, events: today, reason: `Dia de noticias: ${today.map(e => e.title).join(', ')}` };
   const covered = coverage?.from && coverage?.to && date >= coverage.from && date <= coverage.to;
   if (!covered && !confirmedManual) {

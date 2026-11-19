@@ -1,3 +1,46 @@
+  // Ordenes limite en el libro (puestas en el terminal o en Bitget). reduce=true
+  // son las de solo cierre (el TP limite); side es el lado de la POSICION.
+  async function openOrders() {
+    const d = uta ? await get('/api/v3/trade/unfilled-orders', { category: PT })
+                  : await get('/api/v2/mix/order/orders-pending', { productType: PT });
+    const rows = uta ? listOf(d) : (d?.entrustedList || []);
+    return rows.filter(o => String(o.orderType).toLowerCase() === 'limit').map(o => {
+      const reduce = String(o.reduceOnly).toLowerCase() === 'yes' || o.reduceOnly === true || /close/.test(String(o.tradeSide || ''));
+      const posSide = ['long', 'short'].includes(o.posSide) ? o.posSide : null;
+      const buy = o.side === 'buy';
+      return {
+        exchange: 'bitget', market: 'futures', symbol: o.symbol, reduce,
+        side: posSide || (reduce ? (buy ? 'short' : 'long') : (buy ? 'long' : 'short')),
+        qty: num(uta ? o.qty : o.size) - num(uta ? o.cumExecQty : o.baseVolume), price: num(o.price),
+        stop: num(uta ? o.stopLoss : o.presetStopLossPrice) || null, tp: num(uta ? o.takeProfit : o.presetStopSurplusPrice) || null,
+        cid: o.clientOid || null, order_id: String(o.orderId || ''), ts: Math.floor(num(uta ? o.createdTime : o.cTime) / 1000) || null,
+      };
+    });
+  }
+
+  // TP como orden limite de solo cierre por el tamano de la posicion: paga
+  // comision de maker y se llena en el precio exacto.
+  async function placeTp(pos, tp, inst) {
+    const isHedge = await hedge(pos.symbol);
+    const price = fmt(roundTick(tp, inst.tick), inst.tick);
+    const size = fmt(floorStep(pos.size, inst.step), inst.step);
+    const closeSide = pos.side === 'long' ? 'sell' : 'buy';
+    if (uta) {
+      return post('/api/v3/trade/place-order', {
+        category: PT, symbol: pos.symbol, qty: size, side: closeSide, posSide: isHedge ? pos.side : undefined,
+        orderType: 'limit', price, timeInForce: 'gtc', reduceOnly: isHedge ? undefined : 'yes',
+        marginMode: pos.margin_mode || 'isolated',
+      });
+    }
+    // Modo cobertura: el cierre lleva el lado de la posicion y tradeSide=close
+    return post('/api/v2/mix/order/place-order', {
+      symbol: pos.symbol, productType: PT, marginMode: pos.margin_mode || 'isolated', marginCoin: 'USDT',
+      size, price, orderType: 'limit', force: 'gtc',
+      side: isHedge ? (pos.side === 'long' ? 'buy' : 'sell') : closeSide,
+      tradeSide: isHedge ? 'close' : undefined, reduceOnly: isHedge ? undefined : 'YES',
+    });
+  }
+
 // Bitget: futuros USDT-M y spot. Soporta las dos clases de cuenta:
 //  - classic: API v2 (/api/v2/mix, /api/v2/spot)
 //  - uta (cuenta unificada): API v3 (/api/v3/...)
@@ -73,8 +116,11 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     return num(t.markPrice) || num(t.lastPrice);
   }
 
-  async function klines(market, symbol, interval = '5m', limit = 500) {
-    const d = await get('/api/v3/market/candles', { category: market === 'futures' ? PT : 'SPOT', symbol, interval, limit: Math.min(limit, 1000) }, false);
+  // endMs: velas hasta ese momento (para ver una operacion pasada)
+  async function klines(market, symbol, interval = '5m', limit = 500, endMs = null) {
+    const iv = /h$/.test(interval) ? interval.toUpperCase() : interval;   // Bitget usa 1H / 4H
+    const d = await get('/api/v3/market/candles', { category: market === 'futures' ? PT : 'SPOT', symbol, interval: iv, limit: Math.min(limit, 1000),
+                                                    endTime: endMs || undefined }, false);
     return listOf(d).map(r => ({ t: +r[0], o: num(r[1]), h: num(r[2]), l: num(r[3]), c: num(r[4]), v: num(r[5]) }))
       .sort((a, b) => a.t - b.t);
   }
@@ -315,7 +361,29 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     return post('/api/v2/spot/trade/cancel-order', { symbol, clientOid: cid });
   }
 
+  async function cancelById(market, symbol, orderId) {
+    if (uta) return post('/api/v3/trade/cancel-order', { orderId, category: market === 'futures' ? PT : 'SPOT', symbol });
+    if (market === 'futures') return post('/api/v2/mix/order/cancel-order', { symbol, productType: PT, orderId });
+    return post('/api/v2/spot/trade/cancel-order', { symbol, orderId });
+  }
+
   async function cleanup() { /* el TP/SL de posicion desaparece con la posicion */ }
+
+  // Ordenes limite de apertura que siguen en el libro (puestas en el terminal o en Bitget)
+  async function openOrders() {
+    const d = uta ? await get('/api/v3/trade/unfilled-orders', { category: PT })
+                  : await get('/api/v2/mix/order/orders-pending', { productType: PT });
+    const rows = uta ? listOf(d) : (d?.entrustedList || []);
+    return rows.filter(o => String(o.orderType).toLowerCase() === 'limit' && o.reduceOnly !== 'yes' && o.reduceOnly !== true &&
+                            o.tradeSide !== 'close' && o.tradeSide !== 'reduce_close_long' && o.tradeSide !== 'reduce_close_short')
+      .map(o => ({
+        exchange: 'bitget', market: 'futures', symbol: o.symbol,
+        side: ['long', 'short'].includes(o.posSide) ? o.posSide : o.side === 'sell' ? 'short' : 'long',
+        qty: num(uta ? o.qty : o.size) - num(uta ? o.cumExecQty : o.baseVolume), price: num(o.price),
+        stop: num(uta ? o.stopLoss : o.presetStopLossPrice) || null, tp: num(uta ? o.takeProfit : o.presetStopSurplusPrice) || null,
+        cid: o.clientOid || null, order_id: String(o.orderId || ''), ts: Math.floor(num(uta ? o.createdTime : o.cTime) / 1000) || null,
+      }));
+  }
 
   async function closedPnl(symbol, side, sinceMs) {
     const d = uta
@@ -333,8 +401,8 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
   // fuera. Las usa el journal para no perder operaciones.
   async function closedHistory(sinceMs) {
     const d = uta
-      ? await get('/api/v3/position/history-position', { category: PT, startTime: String(sinceMs), limit: '100' })
-      : await get('/api/v2/mix/position/history-position', { productType: PT, startTime: String(sinceMs), limit: '100' });
+      ? await get('/api/v3/position/history-position', { category: PT, startTime: String(sinceMs), endTime: String(Date.now()), limit: '100' })
+      : await get('/api/v2/mix/position/history-position', { productType: PT, startTime: String(sinceMs), endTime: String(Date.now()), limit: '100' });
     return listOf(d).map(p => ({
       symbol: p.symbol, category: 'linear',
       side: (uta ? p.posSide : p.holdSide) === 'short' ? 'short' : 'long',
@@ -418,7 +486,7 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
   }
 
   return {
-    name: 'bitget', equity, futuresPositions, spotHoldings, instrument, price, klines,
+    name: 'bitget', equity, futuresPositions, openOrders, placeTp, cancelById, spotHoldings, instrument, price, klines,
     openFutures, setStop, reduce, closePosition, orderState, cancelOrder, cleanup, closedPnl,
     spotStopOrders, spotPlaceStop, openSpot, spotClose, spotPnl, diag, closedHistory,
   };

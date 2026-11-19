@@ -80,6 +80,16 @@ test('calendario: solo USD alto impacto; sin calendario se bloquea', () => {
   assert.equal(newsStatus('2026-11-16', events, coverage, true).blocked, false);
 });
 
+test('noticias: solo las de mayor impacto bloquean el dia', () => {
+  const cov = { from: '2026-11-15', to: '2026-11-21' };
+  const ev = (title, source = 'ff') => [{ date: '2026-11-16', title, time: '12:00', source }];
+  assert.equal(newsStatus('2026-11-16', ev('Fed Chairman Warsh Speaks'), cov).blocked, false);
+  assert.equal(newsStatus('2026-11-16', ev('ISM Manufacturing PMI'), cov).blocked, false);
+  for (const t of ['CPI m/m', 'Core CPI m/m', 'Non-Farm Employment Change', 'Federal Funds Rate', 'FOMC Press Conference', 'Core PCE Price Index m/m', 'PPI m/m', 'Advance GDP q/q'])
+    assert.equal(newsStatus('2026-11-16', ev(t), cov).blocked, true, t);
+  assert.equal(newsStatus('2026-11-16', ev('Lo que sea', 'manual'), cov).blocked, true);
+});
+
 test('validacion: stop obligatorio, lados correctos, R:R minimo, checklist completo', () => {
   const ok = { symbol: 'BTCUSDT', side: 'long', market: 'futures', entry: 100, stop: 98, tp: 104, checklist: R.checklist };
   assert.deepEqual(validateOrder(ok, R).errs, []);

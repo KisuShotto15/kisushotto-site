@@ -1,9 +1,9 @@
 // Ejecutor server-side del bot. Lo dispara el Durable Object de Cloudflare cada ~15s.
 // Protegido por secreto compartido (x-bot-secret). NO usa JWT.
-import { sql, ensureMarketHist, ensureBotAdMinLimit, ensureHistMaps, ensureOkxCreds } from './_lib/db.js';
+import { sql, ensureMarketHist, ensureBotAdMinLimit, ensureHistMaps, ensureOkxCreds, ensureP2pPay } from './_lib/db.js';
 import { okxActiveAds, okxMarketplace, okxPendingOrders, okxUpdatePrice, okxSetAdStatus, okxAdForReprice, okxRawForReprice, okxBuyAds, okxRoundPrice, mapOkxAd } from './_lib/okx.js';
 import { decrypt } from './_lib/crypto.js';
-import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders } from './_lib/binance.js';
+import { getMyAds, updateAdPrice, updateMinLimit, publicSearch, setAdStatus, listOrders, getOrderDetail, chatSend, chatText, chatDelivered, pickPayInfo, holderMatches, fillTpl, queueText, PAY_TPL, isUnpaidBuy } from './_lib/binance.js';
 import { computeReprice, adPayTypes, isAdHidden } from './_lib/reprice.js';
 import { computeAlerts, topMedianRate, topAvail, histMap, bestOf, HIST24_MS, HIST24_STEP_MS, HISTLONG_MS, HISTLONG_STEP_MS } from './_lib/monitor.js';
 import { sendTelegram, resolveTelegram } from './_lib/telegram.js';
@@ -472,6 +472,60 @@ async function tickUser(row) {
   return { enabled: row.enabled, status, log, adNumber, currentPrice, lastReprice, adAmount, adHidden, adSeenAt, adMinLimit };
 }
 
+// ── Asistente de pago ─────────────────────────────────
+// Cada tick: ordenes de compra en curso (me toca pagar). A cada una nueva le manda
+// el saludo con su lugar en la cola, guarda los datos para pagar y avisa por push;
+// la app muestra la ficha para copiar cuenta y monto y subir el comprobante.
+// Devuelve el log actualizado (o el mismo si no hubo nada).
+async function tickPayAssist(row, log) {
+  const cfg = row.config || {};
+  const key = decrypt({ ct: row.enc_key, iv: row.iv_key, tag: row.tag_key });
+  const secret = decrypt({ ct: row.enc_secret, iv: row.iv_secret, tag: row.tag_secret });
+  const lo = await listOrders(key, secret, 6 * 3600 * 1000);
+  if (!lo.ok) return log;
+  await ensureP2pPay();
+  const open = lo.orders.filter(isUnpaidBuy).sort((a, b) => Number(a.createTime) - Number(b.createTime));
+  const known = await sql`SELECT order_no, status FROM p2p_pay WHERE user_id = ${row.user_id} AND created_at > now() - interval '12 hours'`;
+  const st = new Map(known.map(k => [k.order_no, k.status]));
+  const openSet = new Set(open.map(o => String(o.orderNumber)));
+  // Las que ya no estan en curso (pagadas desde Binance, canceladas...) salen de la cola.
+  const gone = known.filter(k => !openSet.has(k.order_no) && (k.status === 'greeted' || k.status === 'processing')).map(k => k.order_no);
+  for (const g of gone) await sql`UPDATE p2p_pay SET status = 'closed', updated_at = now() WHERE order_no = ${g}`;
+  const unpaid = open.filter(o => st.get(String(o.orderNumber)) !== 'paid');
+  const fresh = open.filter(o => !st.has(String(o.orderNumber)));
+  const tpl = { ...PAY_TPL, ...(cfg.payTpl || {}) };
+  for (const o of fresh) {
+    const no = String(o.orderNumber);
+    const det = await getOrderDetail(key, secret, no);
+    const d = det.data || {};
+    const pay = det.ok ? pickPayInfo(d) : null;
+    const ahead = unpaid.findIndex(x => String(x.orderNumber) === no);
+    const amount = parseFloat(d.totalPrice || o.totalPrice) || 0;
+    const name = String(d.sellerName || '').split(/\s+/).filter(Boolean).slice(-2).join(' ') || d.sellerNickname || o.counterPartNickName || '';
+    const info = {
+      amount, usdt: parseFloat(d.amount || o.amount) || 0, price: parseFloat(d.price || o.unitPrice) || 0,
+      sellerName: d.sellerName || null, sellerNick: d.sellerNickname || o.counterPartNickName || null,
+      payId: pay ? pay.payId : null, method: pay ? pay.method : (o.payMethodName || ''), account: pay ? pay.account : null,
+      holder: pay ? pay.holder : null, fields: pay ? pay.fields : [], match: pay ? holderMatches(pay.holder, d.sellerName) : null,
+      createTime: Number(o.createTime) || Date.now(), payEnd: d.notifyPayEndTime || null,
+    };
+    // Primero se registra (aunque el saludo falle, la orden ya queda en la ficha de pago).
+    const ins = await sql`INSERT INTO p2p_pay (order_no, user_id, status, info) VALUES (${no}, ${row.user_id}, 'greeted', ${JSON.stringify(info)}::jsonb)
+      ON CONFLICT (order_no) DO NOTHING RETURNING order_no`;
+    if (!ins.length) continue; // otro tick concurrente ya la tomo
+    const amtTxt = amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const msg = chatText(no, fillTpl(tpl.greet, { nombre: name, monto: amtTxt, cola: queueText(ahead) }));
+    const sent = await chatSend(key, secret, [msg]).catch(e => ({ ok: false, msg: e.message }));
+    const okDel = sent.ok ? await chatDelivered(key, secret, no, [msg.uuid]).catch(() => null) : false;
+    log = pushLog(log, sent.ok && okDel !== false
+      ? '💬 Orden …' + no.slice(-4) + ': saludo enviado (' + (ahead <= 0 ? 'siguiente' : ahead + ' por delante') + ')'
+      : '⚠ Orden …' + no.slice(-4) + ': el saludo no llegó al chat (' + (sent.msg || 'no aparece en el historial') + ')', sent.ok && okDel !== false ? 'info' : 'warn');
+    await sendPush(row.user_id, '💸 Por pagar: ' + amtTxt + ' Bs', (info.holder || name) + (info.account ? ' · …' + info.account.slice(-4) : '') +
+      (info.match === false ? ' · ⚠ titular distinto' : '')).catch(() => {});
+  }
+  return log;
+}
+
 // Notifica por Telegram las ordenes nuevas del usuario (24/7, app cerrada). Throttle ~60s.
 // Primera vez: siembra known_orders sin notificar. Devuelve { known, checkedAt, log } o null.
 async function maybeCheckOrders(row, now, notify = true) {
@@ -760,6 +814,10 @@ export default async function handler(req, res) {
         out = { enabled: row.enabled, status: 'Error: ' + e.message, log: pushLog(row.log, 'Error: ' + e.message, 'error'),
                 adNumber: row.ad_number, currentPrice: row.current_price, lastReprice: row.last_reprice,
                 adAmount: row.ad_amount, adHidden: row.ad_hidden, adSeenAt: row.ad_seen_at };
+      }
+      // Asistente de pago (activable en el panel): saludo + datos para pagar.
+      if (out.enabled && row.config && row.config.payAssist) {
+        try { out.log = await tickPayAssist(row, out.log); } catch (e) { out.log = pushLog(out.log, 'Asistente de pago: ' + e.message, 'warn'); }
       }
       // Notificacion de ordenes nuevas (independiente del reprice; usa el log ya actualizado).
       let knownOrders = row.known_orders, ordersCheckedAt = row.orders_checked_at;

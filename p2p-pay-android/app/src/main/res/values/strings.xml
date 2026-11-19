@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_desc">KS Pagos lee y maneja la app de tu banco para pagar las órdenes P2P. En modo aprendizaje solo graba la estructura de las pantallas de BDV (botones y campos), con los números enmascarados.</string>
+</resources>

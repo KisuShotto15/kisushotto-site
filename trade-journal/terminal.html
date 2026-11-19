@@ -119,6 +119,26 @@
     </div>
   </section>
 
+  <!-- Grafico a todo el ancho: es referencia de toda la terminal, no un
+       campo del ticket, y dentro de la columna del ticket solo tenia la mitad
+       del ancho de la pagina. -->
+  <div class="tm-ind" id="ind">
+      <div class="tm-ind-head">
+        <select id="tInterval" onchange="loadMarket()"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option></select>
+        <select id="tAnchor" onchange="loadMarket()"><option value="utc">VWAP 00:00 UTC</option><option value="ny">VWAP apertura NY</option></select>
+        <button class="btn btn-sm" onclick="loadMarket()">↻</button>
+        <span class="tm-ind-stamp" id="indStamp"></span>
+      </div>
+      <div class="tc-tools">
+        <button class="tm-mini" onclick="chartAdd('entry')">Limite</button>
+        <span class="tc-legend"><i class="v"></i>VWAP <i class="s1"></i>banda 1 <i class="s2"></i>banda 2 <i class="s3"></i>banda 3</span>
+        <span class="tc-hint">Arrastra TP o SL desde la etiqueta de la orden para ponerlos; luego arrastra las lineas para moverlos.</span>
+      </div>
+      <div id="tChart"></div>
+      <div class="tm-bands" id="bands"><div class="tm-sub">Elige un simbolo</div></div>
+      <div class="tm-osc" id="osc"></div>
+    </div>
+
   <div class="tm-main">
     <!-- Ticket -->
     <section class="tm-panel tm-ticket">
@@ -127,6 +147,8 @@
         <span class="tm-mode" id="ticketMode">—</span>
       </div>
 
+      <details class="tm-ctx" id="ctxBox">
+        <summary><span id="ctxSum">—</span><span class="tm-ctx-chg">cambiar</span></summary>
       <div class="form-row three">
         <div class="form-field"><label>Exchange</label><select id="tExchange" onchange="loadMarket()"></select></div>
         <div class="form-field"><label>Mercado</label>
@@ -134,17 +156,9 @@
         </div>
         <div class="form-field"><label>Simbolo</label><input id="tSymbol" value="BTCUSDT" autocomplete="off" onchange="loadMarket()"></div>
       </div>
+      </details>
 
-      <div class="tm-ind" id="ind">
-        <div class="tm-ind-head">
-          <select id="tInterval" onchange="loadMarket()"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option></select>
-          <select id="tAnchor" onchange="loadMarket()"><option value="utc">VWAP 00:00 UTC</option><option value="ny">VWAP apertura NY</option></select>
-          <button class="btn btn-sm" onclick="loadMarket()">↻</button>
-          <span class="tm-ind-stamp" id="indStamp"></span>
-        </div>
-        <div class="tm-bands" id="bands"><div class="tm-sub">Elige un simbolo</div></div>
-        <div class="tm-osc" id="osc"></div>
-      </div>
+      <div class="tm-quick" id="quick"></div>
 
       <div class="tm-sides">
         <button class="tm-side long active" data-side="long" onclick="setSide('long')">LONG</button>
@@ -156,11 +170,6 @@
           <select id="tType" onchange="onTypeChange()"><option value="market">Mercado</option><option value="limit">Limite</option></select>
         </div>
         <div class="form-field"><label>Precio limite</label><input id="tEntry" type="number" step="any" disabled oninput="schedulePreview()"></div>
-        <div class="form-field"><label>Setup</label>
-          <select id="tSetup">
-            <option>VWAP 3σ reversion</option><option>VWAP 2σ reversion</option><option>Rechazo en VWAP</option><option>Ruptura y retest de banda</option>
-          </select>
-        </div>
       </div>
       <div class="form-row">
         <div class="form-field"><label>Stop loss <b class="tm-req">obligatorio</b></label><input id="tStop" type="number" step="any" oninput="schedulePreview()"></div>
@@ -170,16 +179,22 @@
       <div class="tm-preview" id="preview"><div class="tm-sub">Pon stop y objetivo para ver el tamano</div></div>
 
       <div class="tm-checklist">
-        <div class="tm-card-title">CHECKLIST · todos obligatorios</div>
+        <div class="tm-card-title">CHECKLIST <span class="tm-sub" id="ckSub"></span></div>
         <div id="checklist"></div>
       </div>
 
+      <details class="tm-opt">
+        <summary>Detalles (opcional): setup <b id="setupSum"></b> · emocion · notas</summary>
       <div class="form-row">
+        <div class="form-field"><label>Setup</label><select id="tSetup" onchange="setupTouched = true; renderSetupSum()"></select></div>
         <div class="form-field"><label>Estado emocional</label>
           <select id="tEmotion"><option value="">—</option><option value="calm">Tranquilo</option><option value="confident">Confiado</option><option value="anxious">Ansioso</option><option value="impatient">Impaciente</option><option value="tired">Cansado</option></select>
         </div>
-        <div class="form-field"><label>Por que esta operacion</label><input id="tNotes" placeholder="Ej: toque de -3σ con RSI6 en 12 y cruce del estocastico"></div>
       </div>
+      <div class="form-row">
+        <div class="form-field"><label>Por que esta operacion</label><input id="tNotes" placeholder="Ej: toque de la banda 3 de abajo con RSI6 en 12 y cruce del estocastico"></div>
+      </div>
+      </details>
 
       <button class="tm-exec" id="execBtn" disabled onclick="execute()">Revisa las reglas</button>
     </section>
@@ -227,7 +242,7 @@
   <!-- Noticias -->
   <details class="tm-panel tm-details">
     <summary>CALENDARIO ECONOMICO</summary>
-    <div class="tm-note">Se descarga solo cada 6 horas (eventos de alto impacto en USD). Puedes agregar dias a mano; quitar no se puede.</div>
+    <div class="tm-note">Se descarga solo cada 6 horas. Solo bloquean el dia CPI, PPI, empleo (NFP y desempleo), decision de tasas y FOMC, PCE subyacente y PIB adelantado; los discursos de la Fed no. Puedes agregar dias a mano; quitar no se puede.</div>
     <div id="newsList"></div>
     <div class="form-row three">
       <div class="form-field"><label>Fecha</label><input id="nDate" type="date"></div>
@@ -303,19 +318,6 @@
       </ul>
     </div>
   </details>
-</div>
-
-<div class="modal-backdrop hidden" id="confirmModal">
-  <div class="modal">
-    <div class="modal-header"><span>Confirmar operacion</span><button class="modal-close" onclick="closeConfirm()">×</button></div>
-    <div class="modal-body">
-      <div id="confirmBody"></div>
-      <div class="tm-row">
-        <button class="btn" onclick="closeConfirm()">Cancelar</button>
-        <button class="btn btn-accent" id="confirmGo" onclick="confirmExecute()">Enviar orden</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
