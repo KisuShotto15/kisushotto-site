@@ -26,7 +26,7 @@ jobs:
           q "SELECT unixepoch() - guardian_at AS guardian_hace_seg, guardian_error, day, day_start_equity, equity_now, lock_until, lock_reason FROM risk_state"
           q "SELECT exchange, env, mode, dry_run, enabled, last_error, updated_at FROM exec_accounts"
           q "SELECT json_extract(rules,'$.symbols') AS simbolos, json_extract(rules,'$.leverage') AS lev, json_extract(rules,'$.max_margin_pct') AS margen, pending FROM risk_rules"
-          q "SELECT datetime(ts,'unixepoch') AS utc, severity, kind, substr(message,1,160) AS mensaje FROM risk_events ORDER BY id DESC LIMIT 20"
+          q "SELECT datetime(ts,'unixepoch') AS utc, severity, kind, substr(message,1,160) AS mensaje FROM risk_events WHERE kind <> 'guardian_alert' ORDER BY id DESC LIMIT 25"
           q "SELECT id, exchange, symbol, side, status, external, qty, entry, stop, risk_usd, pnl, datetime(opened_at,'unixepoch') AS abierta, datetime(closed_at,'unixepoch') AS cerrada, close_reason FROM exec_trades ORDER BY opened_at DESC LIMIT 10"
           q "SELECT datetime(history_at,'unixepoch') AS historial_utc FROM risk_state"
           q "SELECT symbol, side, exchange, exec_type, strategy_tag, pnl, size, datetime(entry_time,'unixepoch') AS entrada_utc, datetime(exit_time,'unixepoch') AS salida_utc, exchange_id FROM trades ORDER BY entry_time DESC LIMIT 12"

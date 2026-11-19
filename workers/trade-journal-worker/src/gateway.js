@@ -998,7 +998,7 @@ export class ExchangeGateway {
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'external','closed',?,?,?)
       ON CONFLICT(exchange, exchange_id) WHERE exchange_id IS NOT NULL DO UPDATE SET
         pnl=excluded.pnl, fees=excluded.fees, exit_price=excluded.exit_price, exit_time=excluded.exit_time, size=excluded.size`);
-    let added = 0, read = 0;
+    let added = 0, read = 0, skipped = 0;
     const errors = [];
     for (const l of ctx.vwapLive) {
       const ex = this.adapter(l.acc);
@@ -1012,15 +1012,15 @@ export class ExchangeGateway {
       for (const r of rows) {
         const fromTerminal = mine.some(t => t.symbol === r.symbol && t.side === r.side && r.exit_time >= t.opened_at - 600 &&
           (t.closed_at == null || Math.abs(t.closed_at - r.exit_time) < 600));
-        if (fromTerminal) continue;
+        if (fromTerminal) { skipped++; continue; }
         stmts.push(ins.bind(crypto.randomUUID(), r.symbol, r.category, r.side, r.entry_price, r.exit_price, r.size, r.pnl, r.fees || 0,
           r.entry_time, r.exit_time, sessionOf(r.entry_time), r.exchange, r.exchange_id, nowSec()));
       }
       if (stmts.length) { await this.db.batch(stmts); added += stmts.length; }
     }
     await this.patchState({ history_at: nowSec() });
-    const known = added ? (await this.db.prepare("SELECT COUNT(*) AS n FROM trades WHERE exec_type = 'external' AND exchange_id NOT LIKE 'tj:%'").first())?.n : null;
-    if (force || added) await this.log('history', `Historial: ${read} cierres leidos del exchange en 7 dias${known != null ? `, ${known} externos en el journal` : ''}`);
+    // Una linea por lectura (sin repetir la misma en 30 min) para poder revisar que entra
+    await this.logOnce('history', `Historial: ${read} cierres leidos en 7 dias, ${skipped} ya estaban por el terminal, ${added} guardados/actualizados`);
     if (errors.length) await this.logOnce('history_error', `Historial: ${errors.join(' | ')}`, 'error');
     return { ok: true, added, errors };
   }
