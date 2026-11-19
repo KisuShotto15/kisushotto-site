@@ -619,8 +619,12 @@ window.loadMarket = async () => {
   if (!symbol) return;
   $('indStamp').textContent = 'cargando…';
   try {
-    M = await exec.market({ exchange: $('tExchange').value, market: $('tMarket').value, symbol,
+    // VWAP: el grafico y los indicadores salen siempre del perpetuo de Binance (el de
+    // mas volumen), aunque la orden vaya a Bitget. Swing: el del exchange elegido.
+    const src = chartSource();
+    M = await exec.market({ exchange: src.exchange, market: src.market, symbol,
                             interval: $('tInterval').value, anchor: $('tAnchor').value });
+    $('tcSrc').textContent = `${src.exchange === 'binance' ? 'Binance' : 'Bitget'} · ${symbol}${src.market === 'futures' ? '.P' : src.market === 'coinm' ? ' COIN-M' : ' spot'}`;
     renderIndicators();
     chart.setData(M.candles.map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v })), M.anchor, M.instrument?.tick);
     syncChart();
@@ -643,7 +647,7 @@ const feed = new LiveFeed({
     M.indicators = snap;
     renderIndicators();
     chart.update(feed.candles);
-    if ($('tType').value !== 'limit') chart.setLevel('entry', snap.price, { ghost: true });
+    if ($('tType').value !== 'limit') syncChart();
   },
   onStatus: st => { feedState = st; if (M?.indicators) renderStamp(); },
 });
@@ -722,15 +726,43 @@ const chart = new TicketChart($('tChart'), {
   },
 });
 
+const chartSource = () => isSwing()
+  ? { exchange: $('tExchange').value, market: $('tMarket').value }
+  : { exchange: 'binance', market: $('tMarket').value === 'spot' ? 'spot' : 'futures' };
+
+// Textos de la caja de la posicion abierta (lado, resultado, SL, TP)
+function positionLabels(p) {
+  const narrow = window.innerWidth < 700;
+  const pct = v => `${v >= 0 ? '+' : ''}${fmt(v)}%`;
+  const r0 = p.trade?.risk_usd || posRiskUsd(p);
+  const rNow = r0 > 0 ? p.upnl / r0 : null;
+  const risk = posRiskUsd(p);
+  const rr = p.stop && p.tp && Math.abs(p.entry - p.stop) > 0 ? Math.abs(p.tp - p.entry) / Math.abs(p.entry - p.stop) : null;
+  const S_ = p.side.toUpperCase();
+  return {
+    pnl: `${S_} · ${sign(p.upnl)} USDT${rNow != null ? ` · ${sign(rNow)}R` : ''}${p.stop ? '' : ' · SIN STOP'}`,
+    pnlPos: p.upnl >= 0,
+    ep: `${S_} ${narrow ? '' : (p.market === 'coinm' ? fmt(p.size, 0) + ' ct' : fmt(p.size, 4)) + ' · '}${px(p.entry)}`,
+    sl: p.stop ? (narrow ? `SL ${px(p.stop)}${risk > 0 ? ` · −${fmt(risk)}` : ''}`
+                         : `SL ${px(p.stop)} · ${pct((p.stop / p.entry - 1) * 100)}${risk > 0 ? ` · −${fmt(risk)} USDT` : ' · en ganancia'}`) : null,
+    tp: p.tp ? (narrow ? `TP ${px(p.tp)}${rr ? ` · ${fmt(rr, 1)}R` : ''}`
+                       : `TP ${px(p.tp)} · ${pct((p.tp / p.entry - 1) * 100)}${rr ? ` · ${fmt(rr, 1)}R` : ''}`) : null,
+  };
+}
+
 // Pasa al grafico lo que dicen los campos del ticket y la posicion abierta del simbolo
 function syncChart() {
   renderCtx();
   chart.setLevel('sl', +$('tStop').value || null);
   chart.setLevel('tp', +$('tTp').value || null);
-  if ($('tType').value === 'limit') chart.setLevel('entry', +$('tEntry').value || null);
-  else chart.setLevel('entry', M?.indicators?.price || null, { ghost: true });
   const sym = $('tSymbol').value.trim().toUpperCase(), ex = $('tExchange').value;
-  chart.setPosition(S ? positionsOf().find(p => p.symbol === sym && p.exchange === ex) : null);
+  // VWAP: sus posiciones ya son solo de su exchange; en swing tambien se cruza el exchange
+  const pos = S ? positionsOf().find(p => p.symbol === sym && (!isSwing() || p.exchange === ex)) : null;
+  // Con una posicion abierta en el simbolo no se puede abrir otra (no se promedia):
+  // la etiqueta de orden a mercado no se muestra para no tapar la caja
+  if ($('tType').value === 'limit') chart.setLevel('entry', +$('tEntry').value || null);
+  else chart.setLevel('entry', pos ? null : M?.indicators?.price || null, { ghost: true });
+  chart.setPosition(pos ? { ...pos, opened_at: pos.opened_at || pos.trade?.opened_at } : null, pos ? positionLabels(pos) : {});
 }
 
 window.chartAdd = name => {

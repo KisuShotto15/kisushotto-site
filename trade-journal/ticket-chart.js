@@ -98,9 +98,12 @@ export class TicketChart {
     this.series.applyOptions({ priceFormat: { type: 'price', precision: dec, minMove: this.tick } });
     this.anchorOf = anchor === 'ny' ? nyOpenAnchor(nyParts) : utcAnchor;
     this.series.setData(candles.map(toBar));
+    this.times = candles.map(k => Math.floor(k.t / 1000));
     this.volume.setData(candles.map(toVol));
     this.drawBands(candles);
-    this.chart.timeScale().fitContent();
+    // Como TradingView: se abren las ultimas ~150 velas (con scroll se ve el resto)
+    if (candles.length > 150) this.chart.timeScale().setVisibleLogicalRange({ from: candles.length - 150, to: candles.length + 4 });
+    else this.chart.timeScale().fitContent();
     this.place();
   }
 
@@ -108,6 +111,8 @@ export class TicketChart {
   update(candles) {
     if (!candles?.length) return;
     this.series.update(toBar(candles[candles.length - 1]));
+    const lt = Math.floor(candles[candles.length - 1].t / 1000);
+    if (this.times && this.times[this.times.length - 1] !== lt) this.times.push(lt);
     this.volume.update(toVol(candles[candles.length - 1]));
     this.drawBands(candles);
   }
@@ -155,22 +160,86 @@ export class TicketChart {
     this.place();
   }
 
-  // Entrada, SL, TP y liquidacion de una posicion abierta en este simbolo
-  setPosition(p) {
-    for (const l of this.fixed) this.series.removePriceLine(l);
-    this.fixed = [];
+  // Posicion abierta en este simbolo, dibujada como la herramienta larga/corta de
+  // TradingView: desde la vela de entrada, zona roja hasta el SL y verde hasta el TP.
+  // labels: { pnl, pnlPos, ep, sl, tp } con los textos ya formateados.
+  setPosition(p, labels = {}) {
+    const sig = p ? [p.entry, p.stop, p.tp, p.liq, p.side].join('|') : '';
+    if (sig !== this.posSig) {
+      this.posSig = sig;
+      for (const l of this.fixed) this.series.removePriceLine(l);
+      this.fixed = [];
+      const add = (price, color, style, line = false) => {
+        if (price > 0) this.fixed.push(this.series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, lineVisible: line, axisLabelVisible: true, title: '' }));
+      };
+      if (p) {
+        // Solo la etiqueta en el eje: la caja dibuja los bordes. La liquidacion si va como linea.
+        add(p.entry, cssVar('--lv-entry', '#93c5fd'), LineStyle.Dashed);
+        add(p.stop, cssVar('--lv-sl', '#ef4444'), LineStyle.Solid);
+        add(p.tp, cssVar('--lv-tp', '#00c896'), LineStyle.Solid);
+        add(p.liq, cssVar('--lv-liq', '#e879f9'), LineStyle.Dashed, true);
+      }
+    }
+    this.pos = p;
+    this.posLabels = labels;
     this.fixedPrices = p ? [p.entry, p.stop, p.tp] : [];
-    if (!p) return;
-    const add = (price, color, title, style) => {
-      if (price > 0) this.fixed.push(this.series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }));
+    this.placePos();
+  }
+
+  placePos() {
+    if (!this.posLayer) {
+      this.posLayer = document.createElement('div');
+      this.posLayer.className = 'tc-pos';
+      this.ov.prepend(this.posLayer);   // debajo de las asas del ticket
+    }
+    const L = this.posLayer, p = this.pos;
+    if (!p) { L.innerHTML = ''; L.dataset.built = ''; return; }
+    if (!L.dataset.built) {
+      L.innerHTML = '<div class="z sl"></div><div class="z tp"></div><div class="b sl"></div><div class="b tp"></div><div class="b ep"></div>' +
+        '<div class="l sl"></div><div class="l tp"></div><div class="l ep"></div><div class="pnl"></div>';
+      L.dataset.built = '1';
+    }
+    const q = c => L.querySelector(c);
+    const y = v => (v > 0 ? this.series.priceToCoordinate(v) : null);
+    const W = this.box.clientWidth - (this.chart.priceScale('right').width() || 0);
+    // Vela de entrada: la ultima que empieza antes de la apertura (o el borde izquierdo)
+    let x0 = 0;
+    if (p.opened_at && this.times?.length) {
+      let t = null;
+      for (const tt of this.times) { if (tt <= p.opened_at) t = tt; else break; }
+      const x = t != null ? this.chart.timeScale().timeToCoordinate(t) : null;
+      if (x != null) x0 = Math.max(0, x);
+    }
+    const yE = y(p.entry), yS = y(p.stop), yT = y(p.tp), short = p.side === 'short';
+    const show = (el, on) => { el.style.display = on ? '' : 'none'; return on; };
+    const zone = (el, a, b) => { if (show(el, a != null && b != null)) Object.assign(el.style, { left: `${x0}px`, width: `${Math.max(0, W - x0)}px`, top: `${Math.min(a, b)}px`, height: `${Math.abs(a - b)}px` }); };
+    const border = (el, yy) => { if (show(el, yy != null)) Object.assign(el.style, { left: `${x0}px`, width: `${Math.max(0, W - x0)}px`, top: `${yy}px` }); };
+    zone(q('.z.sl'), yE, yS);
+    zone(q('.z.tp'), yE, yT);
+    border(q('.b.sl'), yS);
+    border(q('.b.tp'), yT);
+    border(q('.b.ep'), yE);
+    // SL por fuera de la caja de su lado; TP igual; la entrada dentro, del lado del TP
+    const label = (el, text, yy, above) => {
+      if (!show(el, !!text && yy != null)) return;
+      if (el.textContent !== text) el.textContent = text;
+      // Dentro del area de velas: si no cabe desde la entrada, se corre a la izquierda
+      el.style.left = `${Math.max(4, Math.min(x0 + 4, W - el.offsetWidth - 4))}px`;
+      el.style.top = `${above ? yy - el.offsetHeight - 2 : yy + 2}px`;
     };
-    add(p.entry, cssVar('--lv-entry', '#93c5fd'), 'POS', LineStyle.Dotted);
-    add(p.stop, cssVar('--lv-sl', '#ef4444'), 'SL pos', LineStyle.Dotted);
-    add(p.tp, cssVar('--lv-tp', '#00c896'), 'TP pos', LineStyle.Dotted);
-    add(p.liq, cssVar('--lv-liq', '#e879f9'), 'LIQ', LineStyle.Dashed);
+    const lb = this.posLabels || {};
+    label(q('.l.sl'), lb.sl, yS, short);
+    label(q('.l.tp'), lb.tp, yT, !short);
+    label(q('.l.ep'), lb.ep, yE, !short);
+    const pnl = q('.pnl');
+    if (show(pnl, !!lb.pnl)) {
+      if (pnl.textContent !== lb.pnl) pnl.textContent = lb.pnl;
+      pnl.classList.toggle('neg', !lb.pnlPos);
+    }
   }
 
   place() {
+    this.placePos();
     for (const [name, lv] of Object.entries(this.levels)) {
       const y = this.series.priceToCoordinate(lv.price);
       const h = this.box.clientHeight;
