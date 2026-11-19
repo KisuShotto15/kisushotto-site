@@ -125,13 +125,22 @@ export const DATA=[
          "Talón trasero completamente pegado al piso.",
          "Empuja la pared mientras acercas la cadera hacia ella.",
          "Dedos del pie trasero apuntando al frente, no hacia afuera."],
-  watch:"Si el talón se levanta, acerca el pie. Esa es la señal de que fuiste muy lejos."}
+  watch:"Si el talón se levanta, acerca el pie. Esa es la señal de que fuiste muy lejos."},
+
+ {name:"Respiración para dormir",dose:"1 min · 4-7-8",q:"4-7-8 breathing technique",
+  phases:[{l:"Respira 4-7-8",s:60,cues:[{t:20,say:"Suelta los hombros"},{t:40,say:"Una más, lento"}]}],
+  steps:["Acostado o sentado, una mano en el abdomen.",
+         "Inhala por la nariz contando 4.",
+         "Aguanta el aire contando 7.",
+         "Exhala lento por la boca contando 8. Repite 3 o 4 veces."],
+  watch:"Si te mareas, acorta la retención. La idea es bajar el pulso, no forzar."}
 ]}];
 
 /* ---------- rutinas: la de estiramiento viene incluida; las demas las crea el usuario ---------- */
-export const BLOCK_NAMES=['Activación','Equilibrio funcional','Estiramiento estático'];
-export const BUILTIN={id:'estiramiento',name:'Equilibrio + estiramiento',builtin:true,
-  note:'Orden fijo: activación → equilibrio → estático. Nunca estiramiento estático antes de entrenar con pesas.',
+export const BLOCK_NAMES=['Movilidad','Equilibrio','Estiramiento y respiración'];
+// Rutina de noche (wind-down): todos los ejercicios, una serie de cada uno
+export const BUILTIN={id:'estiramiento',name:'Rutina de noche',builtin:true,
+  note:'Para cerrar el día: movilidad suave → equilibrio → estiramiento → respiración. Una serie de cada uno; después, a dormir.',
   blocks:DATA.map((b,k)=>({name:BLOCK_NAMES[k]||b.block,items:b.items}))};
 
 // Ejercicio propio: {name,type:'reps'|'time',sets,reps,secs,rest,kg,sides,note}
@@ -154,7 +163,12 @@ export const doseOf=x=>`${x.sets} × ${x.fail?'al fallo':x.type==='time'?x.secs+
 // deload: semana de descarga (mitad de las series, mismo peso)
 export function compile(r,mini=false,deload=false){
   if(r.builtin){
-    const its=r.blocks.flatMap(b=>b.items.map(it=>({...it,block:b.name})));
+    // una serie de cada ejercicio: fuera las repeticiones ("Serie 2 · …")
+    // y la movilidad (bloque 1) a la mitad: de noche solo es para soltar
+    const half=p=>({...p,s:Math.max(15,Math.round(p.s/2)),cues:p.cues?.map(c=>({...c,t:Math.round(c.t/2)}))});
+    const its=r.blocks.flatMap((b,bi)=>b.items.map(it=>({...it,block:b.name,
+      phases:it.phases.filter(p=>!/^Serie [2-9]/.test(p.l)).map(p=>({...(bi===0?half(p):p),l:p.l.replace(/^Serie 1 · /,'')})),
+      dose:bi===0?it.dose.replace(/1 min/,'60 s').replace(/(\d+) s/,(m,n)=>Math.max(15,Math.round(n/2))+' s'):it.dose.replace(/^\d+ × /,'')})));
     return mini?its.map(it=>({...it,phases:it.phases.map(p=>({...p,s:Math.max(15,Math.round(p.s/2)),
       cues:p.cues?.map(c=>({...c,t:Math.round(c.t/2)}))}))})):its;
   }

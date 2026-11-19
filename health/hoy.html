@@ -75,6 +75,12 @@
   .chip.done b{color:var(--c);}
   .chip.ask{border-color:color-mix(in srgb,var(--c) 55%,transparent);}
   .chip.ask .ci{border-color:var(--c);color:var(--c);}
+  .rescue{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;padding:12px 16px;border-radius:14px;
+    background:var(--h-warn-soft);border:1px solid rgba(251,191,36,.35);font-size:13px;color:var(--text2);}
+  .rescue b{color:var(--warn);font-size:14px;}
+  .tgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+  .tgrid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);}
+  .tgrid select{max-width:none;width:100%;}
   .askbox{background:var(--card2);border:1px solid var(--line);border-radius:13px;padding:12px;display:flex;flex-direction:column;gap:10px;}
   .askbox .q{font-size:13px;color:var(--text2);}
   .seg3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
@@ -249,17 +255,11 @@
     <button class="me" id="me" aria-label="Cuenta"></button>
   </div>
 
-  <!-- Lo de hoy: el anillo se cierra con rutina + comida registrada + peso de la semana -->
+  <div class="rescue" id="rescue" hidden></div>
+  <!-- Lo de hoy: el anillo se cierra con los 6 habitos no negociables -->
   <section class="card hero rise">
     <div class="ringbox" id="ringbox">
-      <svg viewBox="0 0 100 100" class="dring" id="dring">
-        <circle class="tr" cx="50" cy="50" r="42" pathLength="300" stroke-dasharray="92 208" stroke-dashoffset="-4"/>
-        <circle class="tr" cx="50" cy="50" r="42" pathLength="300" stroke-dasharray="92 208" stroke-dashoffset="-104"/>
-        <circle class="tr" cx="50" cy="50" r="42" pathLength="300" stroke-dasharray="92 208" stroke-dashoffset="-204"/>
-        <circle class="fl" id="a-rut" cx="50" cy="50" r="42" pathLength="300" stroke-dashoffset="-4" style="stroke:var(--rut)"/>
-        <circle class="fl" id="a-food" cx="50" cy="50" r="42" pathLength="300" stroke-dashoffset="-104" style="stroke:var(--nut)"/>
-        <circle class="fl" id="a-w" cx="50" cy="50" r="42" pathLength="300" stroke-dashoffset="-204" style="stroke:var(--met)"/>
-      </svg>
+      <svg viewBox="0 0 100 100" class="dring" id="dring"></svg>
       <div class="rc" id="rc"><b id="d-n">0/3</b><span id="d-t">del día</span></div>
     </div>
     <div class="hinfo">
@@ -269,11 +269,7 @@
       <button class="btn go" id="r-go">Empezar →</button>
     </div>
     <div class="checks">
-      <div class="chips3">
-        <button class="chip" id="c-rut" style="--c:var(--rut)"><i class="ci">○</i><b>Rutina</b><span id="c-rut-t">—</span></button>
-        <button class="chip" id="c-food" style="--c:var(--nut)"><i class="ci">?</i><b>Comida</b><span id="c-food-t">—</span></button>
-        <button class="chip" id="c-w" style="--c:var(--met)"><i class="ci">○</i><b>Peso</b><span id="c-w-t">—</span></button>
-      </div>
+      <div class="chips3" id="chips"></div>
       <div class="askbox" id="food-ask" hidden>
         <div class="q" id="food-q">¿Seguiste el plan hoy?</div>
         <div class="seg3" id="food-seg">
@@ -365,6 +361,29 @@
 <dialog id="set-dlg">
   <div class="sh">
     <div class="row between"><h2>Ajustes</h2><button class="x" id="set-close" aria-label="Cerrar">×</button></div>
+    <div class="sec">
+      <div class="label">Mi día</div>
+      <div class="opt"><div><b>Avisos de mi día</b><div class="sub">Despertar, japonés, fin del trabajo y rutina de noche (solo si aún no los marcaste)</div></div>
+        <label class="switch"><input type="checkbox" id="day-on"><span></span></label></div>
+      <div class="tgrid">
+        <label>Despertar<select class="tm" id="day-wake"></select></label>
+        <label>Japonés<select class="tm" id="day-jp"></select></label>
+        <label>Trabajo desde<select class="tm" id="day-ws"></select></label>
+        <label>Trabajo hasta<select class="tm" id="day-we"></select></label>
+        <label>Rutina de noche<select class="tm" id="day-night"></select></label>
+      </div>
+      <button class="link" id="day-test" style="margin-top:10px">Probar aviso de despertar</button>
+    </div>
+    <div class="sec">
+      <div class="label">Tu persona de apoyo (Telegram)</div>
+      <div class="sub" id="tg-st" style="margin-top:6px">Recibe tu resumen semanal y un aviso si fallas 2 días seguidos.</div>
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn sm" id="tg-link">Crear enlace para ella</button>
+        <button class="btn sm" id="tg-test" hidden>Enviar prueba</button>
+        <button class="link" id="tg-off" hidden>Desvincular</button>
+      </div>
+      <div class="msg" id="tg-msg" style="word-break:break-all"></div>
+    </div>
     <div class="sec">
       <div class="label">Recordatorios</div>
       <div class="opt">
@@ -469,13 +488,35 @@ let bm = null;         // estado de Metricas (peso, meta, sesiones)
 
 const weights = () => (bm?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
 const profile = () => nState?.profiles?.[nState.activeProfile];
-// Un dia esta completo con: rutina + comida registrada + algun peso en esa semana (7 dias)
+// Un dia esta completo con los 6 habitos no negociables (los mismos que cuenta el servidor
+// para el aviso a tu persona de apoyo). El peso semanal va aparte, en su tarjeta.
 // El dia de descanso de la semana (Rutina > Opciones) cuenta como rutina hecha
 const restDayOf = d => Number.isInteger(rut.prefs?.restDay) && rut.prefs.restDay >= 0 && new Date(d + 'T00:00:00').getDay() === rut.prefs.restDay;
 const rDone = d => rutinaHist.includes(d) || restDayOf(d);
 const fDone = d => !!nlog[d];
 const wDone = d => weights().some(e => e.date <= d && e.date > shift(d, -7));
-const full = d => rDone(d) && fDone(d) && wDone(d);
+const DEF_DAY = { wake: '08:00', jp: '08:10', workStart: '09:30', workEnd: '13:00', night: '22:30', workDays: [1, 2, 3, 4, 5] };
+let dcfg = { ...DEF_DAY }, daylog = {};
+const addMin = (hm, m) => { const t = ((+hm.slice(0, 2)) * 60 + (+hm.slice(3)) + m + 1440) % 1440; return pad(Math.floor(t / 60)) + ':' + pad(t % 60); };
+const nowHM = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const dl = d => daylog[d] || {};
+const wakeOk = d => typeof dl(d).wake === 'string' && dl(d).wake <= addMin(dcfg.wake, 60);
+const workDay = d => dcfg.workDays.includes(new Date(d + 'T00:00:00').getDay());
+const HABITS = [
+  { k: 'wake', name: 'Despertar', c: '#fbbf24', done: wakeOk },
+  { k: 'jp', name: 'Japonés', c: '#f472b6', done: d => !!dl(d).jp },
+  { k: 'rut', name: 'Entreno', c: 'var(--rut)', done: d => rDone(d) },
+  { k: 'work', name: 'Trabajo', c: '#38bdf8', done: d => !workDay(d) || !!dl(d).work },
+  { k: 'food', name: 'Comida', c: 'var(--nut)', done: d => fDone(d) },
+  { k: 'night', name: 'Noche', c: 'var(--met)', done: d => !!dl(d).night },
+];
+const partsOf = d => HABITS.map(h => h.done(d));
+const full = d => partsOf(d).every(Boolean);
+const score = d => partsOf(d).filter(Boolean).length / HABITS.length;
+const SEG = 300 / HABITS.length, segDash = `${SEG - 6} ${300 - SEG + 6}`;
+$('dring').innerHTML = HABITS.map((h, k) => `<circle class="tr" cx="50" cy="50" r="42" pathLength="300" stroke-dasharray="${segDash}" stroke-dashoffset="${-(k * SEG + 3)}"/>`).join('')
+  + HABITS.map((h, k) => `<circle class="fl" id="a-${h.k}" cx="50" cy="50" r="42" pathLength="300" stroke-dashoffset="${-(k * SEG + 3)}" style="stroke:${h.c}"/>`).join('');
+$('chips').innerHTML = HABITS.map(h => `<button class="chip" id="c-${h.k}" style="--c:${h.c}"><i class="ci">○</i><b>${h.name}</b><span id="c-${h.k}-t">—</span></button>`).join('');
 function fullStreak() {
   let d = today(), n = 0;
   if (!full(d)) d = shift(d, -1); // hoy aun cuenta si se cierra
@@ -483,7 +524,7 @@ function fullStreak() {
   return n;
 }
 function bestFull() {
-  const all = [...rutinaHist, ...Object.keys(nlog)].sort();
+  const all = [...rutinaHist, ...Object.keys(nlog), ...Object.keys(daylog)].sort();
   if (!all.length) return 0;
   let best = 0, run = 0;
   for (let d = all[0]; d <= today(); d = shift(d, 1)) { run = full(d) ? run + 1 : 0; best = Math.max(best, run); }
@@ -493,15 +534,17 @@ function bestFull() {
 /* ======================= anillo del dia ======================= */
 let wasFull = null;
 function paintDay() {
-  const t = today(), parts = [rDone(t), fDone(t), wDone(t)], n = parts.filter(Boolean).length;
+  const t = today(), parts = partsOf(t), n = parts.filter(Boolean).length, N = HABITS.length;
   // vacio: invisible (con la punta redonda, un trazo de largo 0 se veria como un punto)
-  ['a-rut', 'a-food', 'a-w'].forEach((id, i) => { $(id).style.strokeDasharray = parts[i] ? '92 208' : '0 300'; $(id).style.opacity = parts[i] ? 1 : 0; });
-  ['c-rut', 'c-food', 'c-w'].forEach((id, i) => { $(id).classList.toggle('done', parts[i]); $(id).querySelector('.ci').textContent = parts[i] ? '✓' : i === 1 ? '?' : '○'; });
-  paintStep();
-  const isFull = n === 3;
+  HABITS.forEach((h, i) => {
+    $('a-' + h.k).style.strokeDasharray = parts[i] ? segDash : '0 300'; $('a-' + h.k).style.opacity = parts[i] ? 1 : 0;
+    $('c-' + h.k).classList.toggle('done', parts[i]); $('c-' + h.k).querySelector('.ci').textContent = parts[i] ? '✓' : h.k === 'food' ? '?' : '○';
+  });
+  paintChips(); paintStep(); paintRescue();
+  const isFull = n === N;
   $('dring').classList.toggle('full', isFull);
   $('rc').classList.toggle('full', isFull);
-  $('d-n').textContent = isFull ? '✓' : `${n}/3`;
+  $('d-n').textContent = isFull ? '✓' : `${n}/${N}`;
   $('d-t').textContent = isFull ? 'Día completo' : 'del día';
   if (wasFull === false && isFull) celebrateDay();
   wasFull = isFull;
@@ -558,6 +601,7 @@ function paintRutina(r) {
   $('r-meta').textContent = `${plural(total, 'ejercicio', 'ejercicios')} · ~${mins} min` + (r.mini === today() ? ' · ⚡ modo mínimo' : '');
   $('r-go').textContent = completed ? 'Completada ✓' : n ? `Continuar · ${n}/${total} →` : 'Empezar →';
   $('r-go').classList.toggle('done', completed);
+  rutHero = { name: $('r-name').textContent, meta: $('r-meta').textContent, go: $('r-go').textContent, done: completed };
   const took = r.date === today() && r.t0 && r.t1 ? Math.max(1, Math.round((r.t1 - r.t0) / 60000)) : null;
   $('c-rut-t').textContent = completed ? (took ? `${took} min` : 'Hecha') : restDayOf(today()) && !n ? 'Descanso' : n ? `${n}/${total}` : `~${mins} min`;
   $('r-left').hidden = !list.length;
@@ -586,22 +630,74 @@ const goTab = tab => () => toParent({ type: 'health:tab', tab });
 const openWeight = () => { toggleWeight(true); $('w-input').focus(); $('w-input').select(); };
 let goAct = null;    // que hace el boton de la tarjeta (segun el siguiente paso)
 let foodOpen = null; // la pregunta de la comida: null = se abre sola cuando toca
-$('r-go').onclick = () => (goAct || goTab('rutina'))();
-$('c-rut').onclick = goTab('rutina');
-$('c-w').onclick = openWeight;
+$('r-go').onclick = () => (goAct || openRutina('__train'))();
+$('c-rut').onclick = () => openRutina('__train')();
 $('c-food').onclick = () => { foodOpen = $('food-ask').hidden; haptic('tick'); paintStep(); };
 
+/* ---------- Mi dia: marcar despertar, japones, trabajo y noche ---------- */
+function paintChips() {
+  const t = today(), d = dl(t);
+  $('c-wake-t').textContent = d.wake ? (wakeOk(t) ? d.wake : 'Tarde · ' + d.wake) : nowHM() > addMin(dcfg.wake, 60) ? 'No marcado' : 'a las ' + dcfg.wake;
+  $('c-jp-t').textContent = d.jp ? 'Hecho' : '10 min mín.';
+  $('c-work-t').textContent = !workDay(t) ? 'Libre' : d.work ? 'Hecho' : d.work === 0 ? 'No' : `${dcfg.workStart}–${dcfg.workEnd}`;
+  $('c-night-t').textContent = d.night ? 'Hecha' : '~16 min';
+}
+async function markDay(key, val) {
+  const t = today();
+  daylog[t] = { ...dl(t), [key]: val };
+  haptic(); paintDay(); paintWeek();
+  try { await api('/day', { method: 'POST', body: JSON.stringify({ date: t, key, val }) }); } catch {}
+}
+async function loadDay() {
+  try { const { data } = await api('/day'); daylog = data || {}; paintDay(); paintWeek(); } catch {}
+}
+$('c-wake').onclick = () => {
+  const t = today(), was = dl(t).wake;
+  if (was) return toast(`Marcado a las ${was}`, () => markDay('wake', 0));
+  const v = nowHM(); markDay('wake', v);
+  toast(wakeOk(t) ? `Despierto a las ${v} ☀️` : `Marcado a las ${v} (tarde)`, () => markDay('wake', 0));
+};
+const toggleDay = (k, ok, label) => () => {
+  if (k === 'work' && !workDay(today())) return toast('Hoy no te toca bloque de trabajo');
+  const on = !dl(today())[k]; markDay(k, on ? 1 : 0);
+  toast(on ? ok : label, () => markDay(k, on ? 0 : 1));
+};
+$('c-jp').onclick = toggleDay('jp', 'Japonés ✓ がんばって', 'Japonés desmarcado');
+$('c-work').onclick = toggleDay('work', 'Bloque de trabajo ✓', 'Trabajo desmarcado');
+// Noche y entreno abren Rutina con la rutina que corresponde
+const openRutina = id => () => { try { localStorage.setItem('health_rutina_pick', id); } catch {} goTab('rutina')(); };
+$('c-night').onclick = () => dl(today()).night ? toast('Rutina de noche hecha ✓') : openRutina('estiramiento')();
+// Nunca dos seguidos: si ayer fallaste, hoy solo se piden los minimos
+function paintRescue() {
+  const t = today(), y = shift(t, -1), using = Object.keys(daylog).some(k => k < y);
+  const on = using && score(y) < 0.5 && !full(t);
+  $('rescue').hidden = !on;
+  if (on) $('rescue').innerHTML = `<b>Ayer no cumpliste (${partsOf(y).filter(Boolean).length}/${HABITS.length}). Hoy: nunca dos seguidos.</b>
+    <span>No te pido todo, solo los mínimos: ☀️ levántate · あ 10 min · 🏋️ modo mínimo · 💼 tu bloque · 🍽 registra · 🌙 versión corta (⚡).</span>`;
+}
+
 /* ---------- Siguiente paso: la tarjeta dice que falta segun la hora y lo hecho ---------- */
+let rutHero = null; // lo que paintRutina pone en la tarjeta (cuando el paso es entrenar)
 function paintStep() {
-  const t = today(), r = rDone(t), w = wDone(t), f = fDone(t);
-  const auto = !f && ((r && w) || hr >= 17);
-  $('food-ask').hidden = !(foodOpen ?? auto);
-  $('c-food').classList.toggle('ask', !f && !$('food-ask').hidden);
+  const t = today(), d = dl(t), P = Object.fromEntries(HABITS.map(h => [h.k, h.done(t)])), now = nowHM();
   let st = null;
-  if (!r) { $('r-lbl').textContent = 'Hoy toca'; $('r-go').hidden = false; goAct = null; return; }
-  if (!w) st = { lbl: 'Siguiente paso', title: 'Pésate', sub: 'Rutina lista ✓ · falta el peso de la semana', go: 'Registrar peso', act: openWeight };
-  else if (!f) st = { lbl: 'Siguiente paso', title: '¿Seguiste el plan?', sub: 'Rutina y peso listos' };
+  if (!P.wake && !d.wake && now < '12:00') st = { lbl: 'Primero', title: 'Levántate ☀️', sub: `Tu hora: ${dcfg.wake}. Márcalo y arranca.`, go: 'Ya estoy despierto', act: () => $('c-wake').click() };
+  else if (!P.jp) st = { lbl: 'Siguiente paso', title: 'Japonés あ', sub: 'Bunpro + Anki · mínimo 10 min', go: 'Hecho', act: () => $('c-jp').click() };
+  else if (!P.rut) st = null; // entrenar: lo que dice la rutina
+  else if (!P.work && now < dcfg.workEnd) st = { lbl: 'Ahora', title: 'Bloque de trabajo', sub: `${dcfg.workStart}–${dcfg.workEnd} · lo demás ya está, enfócate` };
+  else if (!P.work) st = { lbl: 'Siguiente paso', title: '¿Cumpliste tu bloque?', sub: `${dcfg.workStart}–${dcfg.workEnd}`, go: 'Sí, cumplí', act: () => $('c-work').click() };
+  else if (!P.food) st = { lbl: 'Siguiente paso', title: '¿Seguiste el plan?', sub: 'Responde aquí abajo' };
+  else if (!P.night) st = { lbl: 'Para cerrar', title: 'Rutina de noche 🌙', sub: '~16 min y a dormir', go: 'Empezar', act: () => $('c-night').click() };
   else st = { lbl: 'Día completo ✨', title: 'Todo listo por hoy', sub: rut.nextDay?.name ? `Mañana toca ${rut.nextDay.name}` : 'Descansa bien', go: 'Ver mi semana', act: () => openWeek() };
+  const auto = !P.food && (st?.title === '¿Seguiste el plan?' || hr >= 17);
+  $('food-ask').hidden = !(foodOpen ?? auto);
+  $('c-food').classList.toggle('ask', !P.food && !$('food-ask').hidden);
+  if (!st) {
+    $('r-lbl').textContent = 'Hoy toca'; goAct = null;
+    if (rutHero) { $('r-name').textContent = rutHero.name; $('r-meta').textContent = rutHero.meta; $('r-go').textContent = rutHero.go; }
+    $('r-go').hidden = false; $('r-go').classList.toggle('done', !!rutHero?.done);
+    return;
+  }
   $('r-lbl').textContent = st.lbl; $('r-name').textContent = st.title; $('r-meta').textContent = st.sub;
   $('r-go').hidden = !st.go; $('r-go').classList.remove('done');
   if (st.go) $('r-go').textContent = st.go;
@@ -651,7 +747,6 @@ function paintWeight() {
   const es = weights(), last = es[es.length - 1], t = today();
   // tarea de la semana
   const wk = es.filter(e => e.date > shift(t, -7)).pop();
-  $('c-w-t').textContent = wk ? `${wk.weight} kg` : 'Pendiente';
   if (!last) {
     $('w-last').innerHTML = '—<small>kg</small>';
     $('w-sub').innerHTML = 'Pésate para empezar a ver tu progreso';
@@ -933,9 +1028,9 @@ $('wk-dlg').onclick = e => { if (e.target === $('wk-dlg')) $('wk-dlg').close(); 
 // El widget de la pantalla de inicio muestra lo que toca, el anillo y la racha.
 function updateWidget() {
   const n = nativeApp(); if (!n?.widget) return; // APK viejo: sin widget
-  const t = today(), parts = [rDone(t), fDone(t), wDone(t)];
-  n.widget({ title: rut.name || 'Tu rutina', ring: parts.filter(Boolean).length, rut: parts[0], food: parts[1], weight: parts[2],
-    streak: fullStreak() }).catch(() => {});
+  const t = today(), P = partsOf(t);
+  n.widget({ title: rut.name || 'Tu rutina', ring: P.filter(Boolean).length, total: HABITS.length, rut: rDone(t), food: fDone(t), weight: wDone(t),
+    checks: HABITS.map((h, i) => (P[i] ? '✓' : '○') + ' ' + h.name).join('  '), streak: fullStreak() }).catch(() => {});
 }
 
 /* ======================= recordatorios ======================= */
@@ -980,10 +1075,13 @@ function remStatus(r) {
   return parts.length ? parts.join(' · ').replace(/^./, c => c.toUpperCase()) : 'Recordatorios desactivados';
 }
 async function saveReminder(e) {
+  dcfg = { ...dcfg, wake: $('day-wake').value, jp: $('day-jp').value, workStart: $('day-ws').value, workEnd: $('day-we').value, night: $('day-night').value };
   const r = { enabled: $('rem-on').checked, weekly: $('rem-weekly').checked, time: $('rem-time').value || '19:00',
-    checkin: $('rem-check').checked, checkinTime: $('rem-ctime').value || '21:30', tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
+    checkin: $('rem-check').checked, checkinTime: $('rem-ctime').value || '21:30', tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    day: { on: $('day-on').checked, ...dcfg } };
+  paintDay();
   try {
-    if (r.enabled || r.weekly || r.checkin) await subscribe();
+    if (r.enabled || r.weekly || r.checkin || r.day.on) await subscribe();
     await api('/reminder', { method: 'PUT', body: JSON.stringify(r) });
     remMsg(remStatus(r));
   } catch (err) {
@@ -999,7 +1097,12 @@ function fillTimes(id, value) {
   $(id).innerHTML = opts.map(o => `<option${o === value ? ' selected' : ''}>${o}</option>`).join('');
 }
 fillTimes('rem-time', '19:00'); fillTimes('rem-ctime', '21:30');
-['rem-on', 'rem-weekly', 'rem-check'].forEach(id => $(id).onchange = saveReminder);
+const DAY_SEL = { 'day-wake': 'wake', 'day-jp': 'jp', 'day-ws': 'workStart', 'day-we': 'workEnd', 'day-night': 'night' };
+const fillDay = () => Object.entries(DAY_SEL).forEach(([id, k]) => fillTimes(id, dcfg[k]));
+fillDay();
+Object.keys(DAY_SEL).forEach(id => $(id).onchange = saveReminder);
+['rem-on', 'rem-weekly', 'rem-check', 'day-on'].forEach(id => $(id).onchange = saveReminder);
+$('day-test').onclick = () => testPush('wake', () => 'Aviso de prueba enviado: tócalo desde la notificación')();
 ['rem-time', 'rem-ctime'].forEach(id => $(id).onchange = () => { if ($('rem-on').checked || $('rem-weekly').checked || $('rem-check').checked) saveReminder(); });
 const testPush = (kind, ok) => async () => {
   try {
@@ -1015,6 +1118,8 @@ async function loadReminder() {
   try {
     const { data } = await api('/reminder');
     if (data) {
+      dcfg = { ...DEF_DAY, ...(data.day || {}) }; fillDay(); paintDay();
+      $('day-on').checked = data.day ? data.day.on !== false : !!data.enabled;
       $('rem-on').checked = !!data.enabled; $('rem-weekly').checked = !!data.weekly; $('rem-check').checked = !!data.checkin;
       if (data.time) fillTimes('rem-time', data.time);
       if (data.checkinTime) fillTimes('rem-ctime', data.checkinTime);
@@ -1024,6 +1129,34 @@ async function loadReminder() {
     if ((data?.enabled || data?.weekly || data?.checkin) && nativeApp()) subscribe().catch(() => {});
   } catch {}
 }
+
+/* ======================= persona de apoyo (Telegram) ======================= */
+const tgMsg = (t, err) => { $('tg-msg').innerHTML = t; $('tg-msg').className = 'msg' + (err ? ' err' : ''); };
+async function paintTg() {
+  try {
+    const p = await api('/partner');
+    if (!p.ready) { $('tg-st').textContent = 'Falta configurar el bot de Telegram (una sola vez).'; $('tg-link').disabled = true; return; }
+    $('tg-link').disabled = false;
+    $('tg-st').textContent = p.linked ? `Vinculado con ${p.name || 'tu persona de apoyo'} ✓ Recibe tu resumen los lunes y un aviso si fallas 2 días seguidos.`
+      : 'Recibe tu resumen semanal y un aviso si fallas 2 días seguidos.';
+    $('tg-link').textContent = p.linked ? 'Crear otro enlace' : 'Crear enlace para ella';
+    $('tg-test').hidden = $('tg-off').hidden = !p.linked;
+  } catch {}
+}
+$('tg-link').onclick = async () => {
+  try {
+    const { url } = await api('/partner/link', { method: 'POST', body: '{}' });
+    tgMsg(`Envíale este enlace (vale 7 días). Ella lo abre y toca <b>Iniciar</b>:<br><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`);
+    if (navigator.share) navigator.share({ text: 'Abre esto y toca Iniciar para recibir mi progreso en Health:', url }).catch(() => {});
+    else navigator.clipboard?.writeText(url).then(() => tgMsg($('tg-msg').innerHTML + '<br>Copiado ✓')).catch(() => {});
+  } catch (e) { tgMsg('No se pudo crear el enlace: ' + e.message, true); }
+};
+$('tg-test').onclick = async () => {
+  try { const r = await api('/partner/test', { method: 'POST', body: '{}' }); tgMsg(r.ok ? 'Prueba enviada ✓' : 'No se pudo enviar', !r.ok); }
+  catch (e) { tgMsg(e.message, true); }
+};
+$('tg-off').onclick = async () => { await api('/partner', { method: 'DELETE' }).catch(() => {}); tgMsg('Desvinculado'); paintTg(); };
+paintTg();
 
 /* ======================= cuenta y passkeys ======================= */
 $('acc-email').textContent = currentEmail();
@@ -1049,7 +1182,7 @@ $('pk-add').onclick = async () => {
   catch (e) { $('acc-msg').textContent = e?.name === 'NotAllowedError' ? 'Cancelado' : e.message; $('acc-msg').className = 'msg err'; }
 };
 
-function loadAll() { loadRutina(); loadWeight(); loadNutrition(); loadLog(); }
+function loadAll() { loadRutina(); loadWeight(); loadNutrition(); loadLog(); loadDay(); }
 loadAll(); loadReminder(); loadHabits();
 // El shell avisa al volver a esta pestana para refrescar lo que cambio en las otras
 window.addEventListener('message', e => {

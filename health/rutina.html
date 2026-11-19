@@ -361,10 +361,12 @@ const doneByOf=r=>r.date===today()?(r.doneBy||(r.done?{[r.routine||'estiramiento
 let doneBy=doneByOf(saved);
 // Alternancia (A-B-A-B): si el ultimo dia se completo una rutina con "Despues
 // sigue", hoy toca esa. Si no se completo, se repite la misma.
+// La rutina de noche no cuenta: manda la ultima de entreno (lastTrain).
 function rotated(s){
+  const rid=s?.routine==='estiramiento'&&s.lastTrain?s.lastTrain:s?.routine;
   if(!s?.date||s.date===today())return s?.routine;
-  const r=(s.routines||[]).find(x=>x.id===s.routine),d=s.doneBy?.[s.routine];
-  return r?.next&&d&&compile(r).every((_,i)=>d[i])?r.next:s.routine;
+  const r=(s.routines||[]).find(x=>x.id===rid),d=s.doneBy?.[rid];
+  return r?.next&&d&&compile(r).every((_,i)=>d[i])?r.next:rid;
 }
 active=rotated(saved)||active;
 const state={voice:true,sound:true,auto:true,wake:null,restDay:-1};
@@ -406,7 +408,7 @@ function snapshot(){
   const r=getR(),nx=nDone()===items.length&&r.next&&routines().find(x=>x.id===r.next)||r;
   const nextDay={name:nx.name,list:listOf(nx)};
   return {date:today(),routine:active,name:getR().name,doneBy,done:done(),total:items.length,list,nextDay,routines:custom,
-    mini:mini?today():null,t0,t1,prefs:{voice:state.voice,sound:state.sound,auto:state.auto,restDay:state.restDay},history:hist,updated:saved.updated||0};
+    mini:mini?today():null,t0,t1,nightDate:saved.nightDate||null,lastTrain:getR().builtin?(saved.lastTrain||null):active,prefs:{voice:state.voice,sound:state.sound,auto:state.auto,restDay:state.restDay},history:hist,updated:saved.updated||0};
 }
 function writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(snapshot()));}catch(e){}}
 function pushRemote(){
@@ -415,7 +417,20 @@ function pushRemote(){
     body:JSON.stringify(snapshot())}).then(r=>{syncPending=!r.ok;}).catch(()=>{syncPending=true;});},1200);
 }
 addEventListener('online',()=>{if(syncPending)pushRemote();});
-function save(){saved.updated=Date.now();writeLocal();pushRemote();}
+function save(){if(!getR().builtin)saved.lastTrain=active;saved.updated=Date.now();writeLocal();pushRemote();}
+// Habitos del dia de Hoy (la rutina de noche marca "Noche")
+function markDay(key,val){
+  window.healthFetch(SYNC_URL.replace(/rutina$/,'day'),{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({date:today(),key,val})}).then(()=>{if(window.parent!==window)parent.postMessage({type:'health:reload',tab:'hoy'},location.origin);}).catch(()=>{});
+}
+// Hoy puede pedir una rutina (p. ej. la de noche) antes de abrir esta pestana
+function pickRequested(){
+  let id=null;try{id=localStorage.getItem('health_rutina_pick');localStorage.removeItem('health_rutina_pick');}catch(e){}
+  // "__train": la de entreno que toca hoy (si estaba abierta la de noche)
+  if(id==='__train')id=getR().builtin?(routines().some(r=>r.id===saved.lastTrain)?saved.lastTrain:custom[0]?.id):null;
+  if(id&&id!==active&&routines().some(r=>r.id===id)&&T.i===null){active=id;sel=null;load();save();renderAll();}
+}
+addEventListener('storage',e=>{if(e.key==='health_rutina_pick'&&e.newValue)pickRequested();});
 
 function streakCount(){
   const set=new Set(hist);let n=0;const d=new Date();
@@ -592,8 +607,12 @@ function setDone(i,v){
   if(v)done()[i]=true;else delete done()[i];
   if(!v&&sel===null)sel=i;
   if(v&&sel===i)sel=null;
-  if(nDone()===items.length&&!t1)t1=Date.now();
-  if(nDone()===items.length&&!hist.includes(today())){hist.push(today());if(ready)celebrate();}
+  if(nDone()===items.length&&getR().builtin){ // la rutina de noche es su propio habito, no un entreno
+    if(saved.nightDate!==today()){saved.nightDate=today();markDay('night',1);if(ready)celebrate();}
+  }else{
+    if(nDone()===items.length&&!t1)t1=Date.now();
+    if(nDone()===items.length&&!hist.includes(today())){hist.push(today());if(ready)celebrate();}
+  }
   save();renderAll();
 }
 function pick(id){
@@ -1137,7 +1156,7 @@ $('edDel').onclick=()=>{
 
 /* ---------- arranque ---------- */
 let ready=false;
-load();renderAll();ready=true;
+load();renderAll();ready=true;pickRequested();
 
 /* ---------- traer el estado de la nube y fusionarlo ---------- */
 // window.healthFetch lo define un modulo, que corre antes del evento load

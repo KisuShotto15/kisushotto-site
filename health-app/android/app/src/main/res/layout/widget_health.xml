@@ -59,7 +59,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:maxLines="1"
+            android:maxLines="2"
             android:textColor="#B4B6BF"
             android:textSize="12sp" />
         <TextView

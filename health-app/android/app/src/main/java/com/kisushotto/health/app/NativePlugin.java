@@ -184,6 +184,8 @@ public class NativePlugin extends Plugin {
             .putString("day", new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date()))
             .putString("title", call.getString("title", "Tu rutina"))
             .putInt("ring", call.getInt("ring", 0))
+            .putInt("total", call.getInt("total", 3))
+            .putString("checks", call.getString("checks", ""))
             .putBoolean("rut", call.getBoolean("rut", false))
             .putBoolean("food", call.getBoolean("food", false))
             .putBoolean("weight", call.getBoolean("weight", false))

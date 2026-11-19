@@ -114,3 +114,18 @@ jobs:
           else
             echo "Sin USDA_API_KEY: la busqueda de alimentos usa DEMO_KEY"
           fi
+
+      # Health: el bot de Telegram que le manda tu progreso a quien elijas. El
+      # token vive en el secret TELEGRAM_BOT_TOKEN; aqui se copia al worker y se
+      # registra el webhook (con una clave derivada del token).
+      - name: Telegram
+        if: matrix.worker == 'habits-worker'
+        env:
+          TG: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          if [ -z "$TG" ]; then echo "Sin TELEGRAM_BOT_TOKEN: no hay avisos por Telegram"; exit 0; fi
+          printf '%s' "$TG" | npx --yes wrangler@4 secret put TELEGRAM_BOT_TOKEN
+          SECRET=$(printf '%s' "$TG" | sha256sum | cut -c1-32)
+          curl -fsS "https://api.telegram.org/bot$TG/setWebhook" \
+            -d url=https://habits-worker.efrenalejandro2010.workers.dev/health/tg \
+            -d secret_token="$SECRET" -d 'allowed_updates=["message"]' >/dev/null && echo "Webhook de Telegram registrado"

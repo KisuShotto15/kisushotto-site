@@ -405,6 +405,15 @@ async function checkinPush(env, user, date) {
 }
 async function quickLog(url, env) {
   const u = url.searchParams.get('u') || '', d = url.searchParams.get('d') || '', v = url.searchParams.get('v') || '';
+  const h = url.searchParams.get('h');
+  if (h) { // habito del dia (despertar, japones, trabajo, noche)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !DAY_KEYS.includes(h) || !['1', '0'].includes(v)) return err('bad request');
+    if (url.searchParams.get('s') !== await quickSig(env, u, d)) return err('firma invalida', 403);
+    const val = v === '0' ? 0 : h === 'wake' ? localParts((await healthGet(env, u, 'reminder'))?.tz).hhmm : 1;
+    await dayMark(env, u, d, h, val);
+    const label = v === '0' ? 'Registrado. Mañana otra vez.' : { wake: `Despierto a las ${val}. A por el día.`, jp: 'Japonés ✓', work: 'Trabajo ✓', night: 'Rutina de noche ✓ A dormir.' }[h];
+    return json({ ok: true, label });
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !['si', 'parcial', 'no'].includes(v)) return err('bad request');
   if (url.searchParams.get('s') !== await quickSig(env, u, d)) return err('firma invalida', 403);
   const n = await healthGet(env, u, 'nutrition');
@@ -441,6 +450,113 @@ function rutinaPush(rutina, date) {
     tag:   'health-rutina',
     url:   '/#rutina',
   };
+}
+
+// ── Health: mi dia (habitos no negociables) ──────────────────────────────────
+// daylog: { 'YYYY-MM-DD': { wake: 'HH:MM', jp: 1, work: 1, night: 1 } } (0 = no lo hizo).
+// Entrenar sale de rutina.history (o el dia de descanso) y comer de nutrition_log.
+const DAY_KEYS = ['wake', 'jp', 'work', 'night'];
+const DEF_DAY = { wake: '08:00', jp: '08:10', workStart: '09:30', workEnd: '13:00', night: '22:30', workDays: [1, 2, 3, 4, 5] };
+const dayCfg = r => ({ ...DEF_DAY, ...(r?.day || {}) });
+const dayOn = r => (r?.day ? r.day.on !== false : !!r?.enabled);
+const wakeOk = (t, target) => typeof t === 'string' && t <= addMin(target, 60);
+async function dayMark(env, user, date, key, val) {
+  const log = (await healthGet(env, user, 'daylog')) || {};
+  log[date] = { ...(log[date] || {}), [key]: val };
+  const keep = Object.keys(log).sort().slice(-120);
+  await healthSet(env, user, 'daylog', Object.fromEntries(keep.map(k => [k, log[k]])));
+}
+async function dayData(env, user) {
+  const [log, rutina, nlog, r] = await Promise.all(['daylog', 'rutina', 'nutrition_log', 'reminder'].map(k => healthGet(env, user, k)));
+  return { log: log || {}, rutina, nlog: nlog || {}, cfg: dayCfg(r) };
+}
+// Lo mismo que el anillo de Hoy: cuantos de los 6 se cumplieron ese dia
+function dayParts(date, { log, rutina, nlog, cfg }) {
+  const dow = new Date(date + 'T00:00:00Z').getUTCDay(), d = log[date] || {};
+  const rest = Number.isInteger(rutina?.prefs?.restDay) && rutina.prefs.restDay === dow;
+  return {
+    wake: wakeOk(d.wake, cfg.wake), jp: !!d.jp, rut: rest || (rutina?.history || []).includes(date),
+    work: !cfg.workDays.includes(dow) || !!d.work, food: !!nlog[date], night: !!d.night,
+  };
+}
+const dayScore = (date, data) => { const v = Object.values(dayParts(date, data)); return v.filter(Boolean).length / v.length; };
+async function quickUrl(env, user, date, h) {
+  return `https://habits-worker.efrenalejandro2010.workers.dev/health/quick?u=${encodeURIComponent(user)}&d=${date}&s=${await quickSig(env, user, date)}${h ? '&h=' + h : ''}`;
+}
+async function habitPush(env, user, date, h, cfg) {
+  const P = {
+    wake:  { title: 'Buenos días ☀️', body: `Son las ${cfg.wake}. Toca "Ya estoy despierto" y arranca: japonés → entreno → desayuno.`, actions: [{ action: '1', title: 'Ya estoy despierto' }], url: '/#hoy' },
+    jp:    { title: 'Japonés 🇯🇵', body: 'Bunpro + Anki antes de entrenar. Mínimo: 10 minutos.', actions: [{ action: '1', title: 'Hecho' }], url: '/#hoy' },
+    work:  { title: 'Bloque de trabajo', body: `¿Cumpliste tu bloque de ${cfg.workStart} a ${cfg.workEnd}?`, actions: [{ action: '1', title: 'Sí' }, { action: '0', title: 'No' }], url: '/#hoy' },
+    night: { title: 'Rutina de noche 🌙', body: '16 min para soltar el cuerpo y a dormir. Mínimo: 9 min.', actions: [{ action: '1', title: 'Hecha' }], url: '/#rutina' },
+  }[h];
+  return { ...P, tag: 'health-' + h, kind: 'habit', quick: await quickUrl(env, user, date, h) };
+}
+
+// ── Health: tu novia por Telegram (resumen semanal y aviso si fallas 2 dias) ──
+async function tg(env, method, body) {
+  if (!env.TELEGRAM_BOT_TOKEN) return null;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return await r.json();
+  } catch { return null; }
+}
+// Clave del webhook: los primeros 32 hex del SHA-256 del token (el despliegue la calcula igual)
+async function tgSecret(env) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(env.TELEGRAM_BOT_TOKEN || ''));
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+async function tgBotName(env) {
+  let n = await env.PUSH_KV.get('tg:botname');
+  if (!n) { n = (await tg(env, 'getMe', {}))?.result?.username || ''; if (n) await env.PUSH_KV.put('tg:botname', n, { expirationTtl: 86400 }); }
+  return n;
+}
+async function tgWebhook(request, env) {
+  if (!env.TELEGRAM_BOT_TOKEN || request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== await tgSecret(env)) return err('no', 403);
+  const msg = (await request.json().catch(() => ({})))?.message;
+  const text = msg?.text || '', chat = msg?.chat?.id;
+  if (!chat) return json({ ok: true });
+  const code = (text.match(/^\/start\s+([a-f0-9]{16})$/) || [])[1];
+  const user = code && await env.PUSH_KV.get('tglink:' + code);
+  if (!user) {
+    await tg(env, 'sendMessage', { chat_id: chat, text: 'Hola 👋 Para recibir el progreso de alguien, abre el enlace que te comparte desde su app Health.' });
+    return json({ ok: true });
+  }
+  await env.PUSH_KV.delete('tglink:' + code);
+  await healthSet(env, user, 'partner_tg', { chat, name: msg.from?.first_name || '' });
+  await tg(env, 'sendMessage', { chat_id: chat, text: `Listo ✅ Desde ahora te llega el resumen semanal de ${await userName(env, user)} y un aviso si falla 2 días seguidos. Gracias por ayudarle 💪` });
+  return json({ ok: true });
+}
+async function userName(env, user) {
+  const n = await healthGet(env, user, 'nutrition');
+  return n?.profiles?.[n.activeProfile]?.name || user.split('@')[0];
+}
+async function partnerWeekly(env, user, today) {
+  const data = await dayData(env, user), days = [...Array(7)].map((_, i) => shiftISO(today, i - 7)); // los 7 dias anteriores
+  const P = days.map(d => dayParts(d, data)), n = k => P.filter(x => x[k]).length;
+  const workDays = days.filter(d => data.cfg.workDays.includes(new Date(d + 'T00:00:00Z').getUTCDay())).length;
+  const full = days.filter(d => dayScore(d, data) === 1).length;
+  const fd = d => new Date(d + 'T00:00:00Z').toLocaleDateString('es', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const comp = ((await healthGet(env, user, 'bodymetrics'))?.bodyComp || []).filter(e => e.weight).sort((a, b) => a.date.localeCompare(b.date));
+  const last = comp[comp.length - 1], prev = last && [...comp].reverse().find(e => e.date <= shiftISO(last.date, -7));
+  const lines = [
+    `📊 Semana de ${await userName(env, user)} (${fd(days[0])} – ${fd(days[6])})`,
+    `✅ Días completos: ${full}/7`,
+    `⏰ Se levantó a tiempo: ${n('wake')}/7`,
+    `🇯🇵 Japonés: ${n('jp')}/7 · 🏋️ Entreno: ${n('rut')}/7`,
+    `💼 Trabajo: ${P.filter((x, i) => x.work && data.cfg.workDays.includes(new Date(days[i] + 'T00:00:00Z').getUTCDay())).length}/${workDays} · 🍽 Comida: ${n('food')}/7`,
+    `🌙 Rutina de noche: ${n('night')}/7`,
+  ];
+  if (last) lines.push(`⚖️ Peso: ${last.weight} kg${prev ? ` (${last.weight - prev.weight >= 0 ? '+' : ''}${(last.weight - prev.weight).toFixed(1)} en la semana)` : ''}`);
+  lines.push(full >= 5 ? '\nGran semana. Díselo 🙌' : full >= 3 ? '\nVa construyendo. Un empujón ayuda.' : '\nSemana floja: tu apoyo cuenta mucho esta semana.');
+  return lines.join('\n');
+}
+async function partnerAlert(env, user, today) {
+  const data = await dayData(env, user), y = shiftISO(today, -1), yy = shiftISO(today, -2);
+  if (dayScore(y, data) >= 0.5 || dayScore(yy, data) >= 0.5) return null;
+  const v = Object.values(dayParts(y, data)).filter(Boolean).length;
+  return `⚠️ ${await userName(env, user)} lleva 2 días seguidos sin cumplir sus hábitos (ayer: ${v} de 6). Un mensaje tuyo puede hacer la diferencia hoy 💪`;
 }
 
 // ── Health: vinculo con Habits ────────────────────────────────────────────────
@@ -507,10 +623,40 @@ async function handleHealth(path, request, env) {
   const method = request.method;
   if (path === '/health/vapid' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null, fcm: !!serviceAccount(env) });
   if (path === '/health/quick' && method === 'POST') return quickLog(new URL(request.url), env);
+  if (path === '/health/tg' && method === 'POST') return tgWebhook(request, env);
   const user = await healthUser(request, env);
   if (!user) return err('Sesion invalida', 401);
 
   if (path === '/health/me' && method === 'GET') return json({ email: user });
+  // Mi dia: marcar despertar, japones, trabajo y rutina de noche
+  if (path === '/health/day' && method === 'GET') return json({ data: (await healthGet(env, user, 'daylog')) || {} });
+  if (path === '/health/day' && method === 'POST') {
+    const b = await request.json().catch(() => ({}));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(b?.date || '') || !DAY_KEYS.includes(b.key)) return err('bad request');
+    const val = b.key === 'wake' ? (typeof b.val === 'string' && /^\d{2}:\d{2}$/.test(b.val) ? b.val : 0) : (b.val ? 1 : 0);
+    await dayMark(env, user, b.date, b.key, val);
+    return json({ ok: true });
+  }
+  // Tu novia por Telegram
+  if (path === '/health/partner' && method === 'GET') {
+    const p = await healthGet(env, user, 'partner_tg');
+    return json({ ready: !!env.TELEGRAM_BOT_TOKEN, linked: !!p, name: p?.name || '' });
+  }
+  if (path === '/health/partner/link' && method === 'POST') {
+    const bot = await tgBotName(env);
+    if (!bot) return err('Telegram aun no esta configurado', 503);
+    const code = [...crypto.getRandomValues(new Uint8Array(8))].map(b => b.toString(16).padStart(2, '0')).join('');
+    await env.PUSH_KV.put('tglink:' + code, user, { expirationTtl: 7 * 86400 });
+    return json({ url: `https://t.me/${bot}?start=${code}` });
+  }
+  if (path === '/health/partner' && method === 'DELETE') { await healthSet(env, user, 'partner_tg', null); return json({ ok: true }); }
+  if (path === '/health/partner/test' && method === 'POST') {
+    const p = await healthGet(env, user, 'partner_tg');
+    if (!p) return err('Sin Telegram vinculado', 404);
+    const r = await healthGet(env, user, 'reminder');
+    const res = await tg(env, 'sendMessage', { chat_id: p.chat, text: '(Prueba) ' + await partnerWeekly(env, user, localParts(r?.tz).date) });
+    return json({ ok: !!res?.ok });
+  }
   // USDA (buscar alimentos y micronutrientes): la llave es del worker (secret
   // USDA_API_KEY), asi nadie la pone a mano. Solo para cuentas con sesion.
   if (path === '/health/usda/search' && method === 'GET') {
@@ -553,6 +699,7 @@ async function handleHealth(path, request, env) {
     const date = localParts(r?.tz).date;
     const payload = b?.kind === 'weekly' ? await weeklySummary(env, user, date)
       : b?.kind === 'checkin' ? await checkinPush(env, user, date)
+      : DAY_KEYS.includes(b?.kind) ? await habitPush(env, user, date, b.kind, dayCfg(r))
       : rutinaPush(await healthGet(env, user, 'rutina'), date);
     return json({ sent: await sendHealthPush(env, user, payload), payload });
   }
@@ -612,6 +759,29 @@ async function dispatchHealthReminder(env) {
       await healthSet(env, user, 'checkin_sent', date);
       const nlog = (await healthGet(env, user, 'nutrition_log')) || {};
       if (!nlog[date]) await sendHealthPush(env, user, await checkinPush(env, user, date));
+    }
+    // Mi dia: despertar, japones, fin del bloque de trabajo y rutina de noche (si aun no se marcaron)
+    const cfg = dayCfg(r), dow = new Date(date + 'T00:00:00Z').getUTCDay();
+    if (dayOn(r)) for (const [h, at] of [['wake', cfg.wake], ['jp', cfg.jp], ['work', cfg.workEnd], ['night', cfg.night]]) {
+      if (hhmm !== at || (h === 'work' && !cfg.workDays.includes(dow))) continue;
+      if ((await healthGet(env, user, 'sent_' + h)) === date) continue;
+      await healthSet(env, user, 'sent_' + h, date);
+      if (!(await healthGet(env, user, 'daylog'))?.[date]?.[h]) await sendHealthPush(env, user, await habitPush(env, user, date, h, cfg));
+    }
+    // Tu novia por Telegram: aviso a las 12:00 si ayer y anteayer fallaste; resumen los lunes 10:00
+    if (hhmm === '12:00' || (hhmm === '10:00' && dow === 1)) {
+      const p = await healthGet(env, user, 'partner_tg');
+      if (p) {
+        if (hhmm === '12:00' && (await healthGet(env, user, 'tg_alert')) !== date) {
+          await healthSet(env, user, 'tg_alert', date);
+          const t = await partnerAlert(env, user, date);
+          if (t) await tg(env, 'sendMessage', { chat_id: p.chat, text: t });
+        }
+        if (hhmm === '10:00' && (await healthGet(env, user, 'tg_weekly')) !== date) {
+          await healthSet(env, user, 'tg_weekly', date);
+          await tg(env, 'sendMessage', { chat_id: p.chat, text: await partnerWeekly(env, user, date) });
+        }
+      }
     }
     // Dia de descanso de la semana (Rutina > Opciones): sin avisos de rutina
     const restDay = async () => { const ru = await healthGet(env, user, 'rutina'); const d = ru?.prefs?.restDay;
