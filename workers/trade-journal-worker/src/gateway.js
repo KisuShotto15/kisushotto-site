@@ -1008,7 +1008,7 @@ export class ExchangeGateway {
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'external','closed',?,?,?)
       ON CONFLICT(exchange, exchange_id) WHERE exchange_id IS NOT NULL DO UPDATE SET
         pnl=excluded.pnl, fees=excluded.fees, exit_price=excluded.exit_price, exit_time=excluded.exit_time, size=excluded.size`);
-    let added = 0, read = 0, skipped = 0;
+    let added = 0, read = 0, skipped = 0, raw = 0;
     const errors = [];
     for (const l of ctx.vwapLive) {
       const ex = this.adapter(l.acc);
@@ -1017,6 +1017,8 @@ export class ExchangeGateway {
       try { rows = await ex.closedHistory(since, ctx.rules.symbols.length ? ctx.rules.symbols : ['BTCUSDT']); }
       catch (e) { errors.push(`${l.acc.exchange}: ${e.message}`); continue; }
       read += rows.length;
+      raw += rows.raw ?? rows.length;
+      if (rows.raw != null && rows.raw !== rows.length) errors.push(`${l.acc.exchange}: ${rows.raw - rows.length} cierres sin fecha o precio${rows.fields ? ` (campos: ${rows.fields})` : ''}`);
       const mine = ledger.filter(t => t.exchange === l.acc.exchange && t.market === 'futures' && t.status !== 'rejected' && t.status !== 'cancelled');
       const stmts = [];
       for (const r of rows) {
@@ -1030,7 +1032,7 @@ export class ExchangeGateway {
     }
     await this.patchState({ history_at: nowSec() });
     // Una linea por lectura (sin repetir la misma en 30 min) para poder revisar que entra
-    await this.logOnce('history', `Historial: ${read} cierres leidos en 7 dias, ${skipped} ya estaban por el terminal, ${added} guardados/actualizados`);
+    await this.logOnce('history', `Historial: ${raw} filas del exchange, ${read} cierres validos en 7 dias, ${skipped} ya estaban por el terminal, ${added} guardados/actualizados`);
     if (errors.length) await this.logOnce('history_error', `Historial: ${errors.join(' | ')}`, 'error');
     return { ok: true, added, errors };
   }

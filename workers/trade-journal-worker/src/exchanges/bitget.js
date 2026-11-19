@@ -385,15 +385,27 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
       }));
   }
 
+  // El historial de posiciones no nombra igual los campos en v2 y v3 (ni siempre
+  // con la misma mayuscula): se lee el que venga
+  const hp = {
+    side: p => p.posSide || p.holdSide,
+    open: p => num(p.openAvgPrice ?? p.openPriceAvg),
+    close: p => num(p.closeAvgPrice ?? p.closePriceAvg) || null,
+    opened: p => num(p.cTime ?? p.ctime ?? p.createdTime ?? p.createTime),
+    closed: p => num(p.uTime ?? p.utime ?? p.updatedTime ?? p.updateTime),
+    fees: p => Math.abs(num(p.openFee ?? p.openFeeTotal)) + Math.abs(num(p.closeFee ?? p.closeFeeTotal)),
+    size: p => num(p.closeTotalPos ?? p.closeTotalSize) || num(p.openTotalPos ?? p.openTotalSize),
+  };
+
   async function closedPnl(symbol, side, sinceMs) {
     const d = uta
       ? await get('/api/v3/position/history-position', { category: PT, symbol, startTime: String(sinceMs - 60000) })
       : await get('/api/v2/mix/position/history-position', { productType: PT, symbol, startTime: String(sinceMs - 60000) });
-    const rows = listOf(d).filter(p => (uta ? p.posSide : p.holdSide) === side);
+    const rows = listOf(d).filter(p => hp.side(p) === side);
     if (!rows.length) return null;
     const pnl = rows.reduce((s, p) => s + num(p.netProfit), 0);
-    const last = rows.reduce((m, p) => Math.max(m, num(uta ? p.updatedTime : p.uTime)), 0);
-    const exit = num(uta ? rows[0].closePriceAvg : rows[0].closeAvgPrice) || null;
+    const last = rows.reduce((m, p) => Math.max(m, hp.closed(p)), 0);
+    const exit = hp.close(rows[0]);
     return { pnl, exit_price: exit, closed_at: last ? Math.floor(last / 1000) : null };
   }
 
@@ -403,18 +415,19 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
     const d = uta
       ? await get('/api/v3/position/history-position', { category: PT, startTime: String(sinceMs), endTime: String(Date.now()), limit: '100' })
       : await get('/api/v2/mix/position/history-position', { productType: PT, startTime: String(sinceMs), endTime: String(Date.now()), limit: '100' });
-    return listOf(d).map(p => ({
+    const raw = listOf(d);
+    const out = raw.map(p => ({
       symbol: p.symbol, category: 'linear',
-      side: (uta ? p.posSide : p.holdSide) === 'short' ? 'short' : 'long',
-      entry_price: num(uta ? p.openPriceAvg : p.openAvgPrice),
-      exit_price: num(uta ? p.closePriceAvg : p.closeAvgPrice) || null,
-      size: num(p.closeTotalPos) || num(p.openTotalPos),
-      pnl: num(p.netProfit),
-      fees: Math.abs(num(uta ? p.openFeeTotal : p.openFee)) + Math.abs(num(uta ? p.closeFeeTotal : p.closeFee)),
-      entry_time: Math.floor(num(uta ? p.createdTime : p.cTime) / 1000),
-      exit_time: Math.floor(num(uta ? p.updatedTime : p.uTime) / 1000),
+      side: hp.side(p) === 'short' ? 'short' : 'long',
+      entry_price: hp.open(p), exit_price: hp.close(p), size: hp.size(p),
+      pnl: num(p.netProfit), fees: hp.fees(p),
+      entry_time: Math.floor(hp.opened(p) / 1000), exit_time: Math.floor(hp.closed(p) / 1000),
       exchange: 'bitget', exchange_id: String(p.positionId),
     })).filter(t => t.entry_price > 0 && t.exit_time > 0);
+    // Para el registro: cuantas filas llegaron y, si se descartaron, que campos traian
+    out.raw = raw.length;
+    if (raw.length && !out.length) out.fields = Object.keys(raw[0]).join(',');
+    return out;
   }
 
   // ── Spot ───────────────────────────────────────────────────────────────────
