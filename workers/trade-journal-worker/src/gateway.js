@@ -989,14 +989,16 @@ export class ExchangeGateway {
   async syncHistory(ctx, force = false) {
     const st = ctx.state;
     if (!force && st.history_at && nowSec() - st.history_at < 1800) return { skipped: true };
-    const since = (st.history_at ? st.history_at - 3600 : nowSec() - 7 * 86400) * 1000;
+    // Siempre 7 dias atras: si una lectura fallo o el exchange tardo en publicar
+    // el cierre, la siguiente lo recupera. Los repetidos no se duplican (ON CONFLICT).
+    const since = (nowSec() - 7 * 86400) * 1000;
     const ledger = await this.loadLedger();
     const ins = this.db.prepare(`INSERT INTO trades (id, symbol, category, side, entry_price, exit_price, size, pnl, fees,
       entry_time, exit_time, session, exec_type, status, exchange, exchange_id, created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'external','closed',?,?,?)
       ON CONFLICT(exchange, exchange_id) WHERE exchange_id IS NOT NULL DO UPDATE SET
         pnl=excluded.pnl, fees=excluded.fees, exit_price=excluded.exit_price, exit_time=excluded.exit_time, size=excluded.size`);
-    let added = 0;
+    let added = 0, read = 0;
     const errors = [];
     for (const l of ctx.vwapLive) {
       const ex = this.adapter(l.acc);
@@ -1004,6 +1006,7 @@ export class ExchangeGateway {
       let rows;
       try { rows = await ex.closedHistory(since, ctx.rules.symbols.length ? ctx.rules.symbols : ['BTCUSDT']); }
       catch (e) { errors.push(`${l.acc.exchange}: ${e.message}`); continue; }
+      read += rows.length;
       const mine = ledger.filter(t => t.exchange === l.acc.exchange && t.market === 'futures' && t.status !== 'rejected' && t.status !== 'cancelled');
       const stmts = [];
       for (const r of rows) {
@@ -1016,6 +1019,8 @@ export class ExchangeGateway {
       if (stmts.length) { await this.db.batch(stmts); added += stmts.length; }
     }
     await this.patchState({ history_at: nowSec() });
+    const known = added ? (await this.db.prepare("SELECT COUNT(*) AS n FROM trades WHERE exec_type = 'external' AND exchange_id NOT LIKE 'tj:%'").first())?.n : null;
+    if (force || added) await this.log('history', `Historial: ${read} cierres leidos del exchange en 7 dias${known != null ? `, ${known} externos en el journal` : ''}`);
     if (errors.length) await this.logOnce('history_error', `Historial: ${errors.join(' | ')}`, 'error');
     return { ok: true, added, errors };
   }

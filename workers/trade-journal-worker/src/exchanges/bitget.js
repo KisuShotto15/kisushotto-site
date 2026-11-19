@@ -401,8 +401,8 @@ export function bitget({ key, secret, passphrase, mode = 'classic' }) {
   // fuera. Las usa el journal para no perder operaciones.
   async function closedHistory(sinceMs) {
     const d = uta
-      ? await get('/api/v3/position/history-position', { category: PT, startTime: String(sinceMs), limit: '100' })
-      : await get('/api/v2/mix/position/history-position', { productType: PT, startTime: String(sinceMs), limit: '100' });
+      ? await get('/api/v3/position/history-position', { category: PT, startTime: String(sinceMs), endTime: String(Date.now()), limit: '100' })
+      : await get('/api/v2/mix/position/history-position', { productType: PT, startTime: String(sinceMs), endTime: String(Date.now()), limit: '100' });
     return listOf(d).map(p => ({
       symbol: p.symbol, category: 'linear',
       side: (uta ? p.posSide : p.holdSide) === 'short' ? 'short' : 'long',
