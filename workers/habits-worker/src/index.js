@@ -618,7 +618,7 @@ async function partnerWeekly(env, user, today) {
     `📊 Semana de ${await userName(env, user)} (${fd(days[0])} – ${fd(days[6])})`,
     `✅ Días completos: ${full}/7`,
     `⏰ Se levantó a tiempo: ${n('wake')}/7`,
-    `🇯🇵 Japonés: ${n('jp')}/7 · 🏋️ Entreno: ${n('rut')}/7`,
+    `🇯🇵 Japonés: ${n('jp')}/7 · 🏋️ Entreno: ${days.filter(d => (data.rutina?.history || []).includes(d)).length}/${7 - days.filter(d => data.rutina?.prefs?.restDay === new Date(d + 'T00:00:00Z').getUTCDay()).length}`,
     `💼 Trabajo: ${P.filter((x, i) => x.work && data.cfg.workDays.includes(new Date(days[i] + 'T00:00:00Z').getUTCDay())).length}/${workDays} · 🍽 Comida: ${n('food')}/7`,
     `🌙 Rutina de noche: ${n('night')}/7`,
   ];

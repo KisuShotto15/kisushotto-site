@@ -453,7 +453,8 @@ const current=()=>T.i!==null?T.i:(sel!==null&&sel<items.length?sel:firstPending(
 function renderHead(){
   const r=getR(),n=nDone(),s=streakCount();
   $('title').textContent=r.name;
-  const total=Math.round(items.reduce((a,it)=>a+dur(it),0)/60);
+  const total=items.some(it=>it.phases.some(p=>p.reps))?items.reduce((a,it)=>a+Math.max(1,Math.round(dur(it)/60)),0)
+    :Math.round(items.reduce((a,it)=>a+dur(it),0)/60);
   $('meta').textContent=[s?`🔥 ${s} ${s===1?'día':'días'} entrenando`:'',`${n}/${items.length} hechos`,`~${total} min`,mini?'⚡ modo mínimo':'',deload?'🔻 semana de descarga':''].filter(Boolean).join(' · ');
   $('picker').innerHTML=routines().map(x=>`<button class="rchip${x.id===active?' on':''}" data-r="${esc(x.id)}">${esc(x.name)}</button>`).join('')+
     (r.builtin?'':'<button class="rchip edit" id="edit">✎ Editar</button>')+
@@ -687,14 +688,14 @@ function nativeTimer(){
     body:ph.between?`Sigue: ${items[T.i+1]?.name||''}`:ph.rest?`${exOf(it,nx).name} · ${nx?.l||'sigue'}`:`Terminó ${ph.l}`+(nx?` · sigue ${nx.l}`:'')}).catch(()=>{});
 }
 function nextPhase(){
-  if(T.i===null)return;
+  if(T.i===null||T.going)return; // ya va a la siguiente fase (doble toque o "Ya" justo al terminar)
   clearInterval(T.id);
   const i=T.i,it=items[i],ph=it.phases[T.p],next=T.p+1;
   if(!ph.reps){beep(2);if(navigator.vibrate)navigator.vibrate([220,110,220]);}
   else{haptic();if(!ph.warm){T.kgBy[ph.ex??0]=T.kg;logSet(exOf(it,ph),T.kg,T.reps,ph.side);}}
   if(next<it.phases.length){
     if(ph.reps)start(i,next);
-    else{T.left=0;T.end=0;nativeTimer();drawTime();T.to=setTimeout(()=>start(i,next),700);}
+    else{T.going=true;T.left=0;T.end=0;nativeTimer();drawTime();clearTimeout(T.to);T.to=setTimeout(()=>start(i,next),700);}
     return;
   }
   Object.entries(T.kgBy||{}).forEach(([k,kg])=>rememberKg(exList(it)[k],kg));
@@ -740,8 +741,8 @@ function lastTime(it){
   const when=new Date(s.date+'T00:00:00').toLocaleDateString('es',{day:'numeric',month:'short'});
   const sets=s.sets.filter(z=>z.exerciseId===ex.id);
   const top=it.range?+String(it.range).split('-').pop():15;
-  const up=it.range?(sets.length&&sets.every(z=>z.reps>=top)?'<span class="up">↑ Hiciste el tope del rango: sube el peso</span>':'')
-    :sets.some(z=>z.reps>=15)?'<span class="up">↑ Llegaste a 15+ reps: hazlo más difícil</span>':'';
+  const up=/-/.test(it.range||'')?(sets.length&&sets.every(z=>z.reps>=top)?'<span class="up">↑ Hiciste el tope del rango: sube el peso</span>':'')
+    :!it.range&&sets.some(z=>z.reps>=15)?'<span class="up">↑ Llegaste a 15+ reps: hazlo más difícil</span>':'';
   return `<div class="last">La vez pasada (${when}): <b>${sets.map(z=>z.weight?z.weight+'×'+z.reps:z.reps+' reps').join(' · ')}</b>${up}</div>`;
 }
 // Series de este ejercicio en Metricas: la ultima sesion antes de hoy, las de
@@ -844,10 +845,10 @@ function summaryHtml(){
     const m=todayMarks(it);if(!m.length)continue;
     const {last,lastDate}=exSets(it);
     const tr=m.reduce((a,z)=>a+z.reps,0),lr=last.reduce((a,z)=>a+z.reps,0);
-    sets+=m.length;reps+=tr;recs+=m.filter(z=>z.rec).length;
+    sets+=m.filter(z=>z.side!=='izquierdo').length;reps+=tr;recs+=m.filter(z=>z.rec).length;
     if(lastDate&&(!prevDate||lastDate>prevDate))prevDate=lastDate;
     rows.push({name:it.name,tr,d:last.length?tr-lr:null});
-    if(it.range?m.every(z=>z.reps>=+String(it.range).split('-').pop()):m.some(z=>!z.weight&&z.reps>=15))lvl.push(it.name);
+    if(/-/.test(it.range||'')?m.every(z=>z.reps>=+String(it.range).split('-').pop()):!it.range&&m.some(z=>!z.weight&&z.reps>=15))lvl.push(it.name);
   }
   const nx=r.next&&routines().find(x=>x.id===r.next);
   return `<div class="sum">
@@ -1176,6 +1177,10 @@ window.addEventListener('load',()=>window.healthFetch(SYNC_URL).then(r=>r.ok?r.j
     if(r.routine)active=rotated(r)||r.routine;
     doneBy=doneByOf(r);
     if(r.prefs)['voice','sound','auto'].forEach(k=>{if(typeof r.prefs[k]==='boolean')state[k]=r.prefs[k];});
+    if(Number.isInteger(r.prefs?.restDay))state.restDay=r.prefs.restDay; // el dia de descanso tambien viaja
+    if(r.lastTrain)saved.lastTrain=r.lastTrain;
+    if(r.nightDate)saved.nightDate=r.nightDate;
+    if(r.date===today()){t0=r.t0||t0;t1=r.t1||t1;}
     saved.updated=r.updated;
     sel=null;load();
   }

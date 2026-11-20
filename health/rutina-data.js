@@ -199,7 +199,7 @@ export function compile(r,mini=false,deload=false){
           s:y.type==='time'?y.secs:0,reps:y.type==='reps'?y.reps:0,set:s,side:sd||null,ex:k}));});
       if(rest&&s<n)ph.push({l:'Descanso',s:rest,rest:true});
     }
-    return {src:g.list[0].j,exs,ss:g.ss,name:exs.map(e=>e.name).join(' + '),dose:`Superserie ${g.ss} · ${n} rondas`,
+    return {src:g.list[0].j,exs,ss:g.ss,name:exs.map(e=>e.name).join(' + '),dose:`Superserie ${g.ss} · ${n} ${n===1?'ronda':'rondas'}`,
       phases:[...ph,...tail],steps:[],note:'',q:exs[0].name+' exercise',block:'',sets:n,reps:0};
   });
 }

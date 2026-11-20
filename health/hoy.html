@@ -609,11 +609,15 @@ function paintRutina(r) {
   const total = list.length || r.total || 15;
   const n = Object.values(done).filter(Boolean).length;
   const pending = list.map((x, i) => ({ ...x, i })).filter(x => !done[x.i]);
-  const mins = Math.max(1, Math.round(list.reduce((a, x) => a + x.dur, 0) / 60));
-  const left = Math.max(1, Math.round(pending.reduce((a, x) => a + x.dur, 0) / 60));
+  const m1 = x => Math.max(1, Math.round(x.dur / 60)), byItem = list.some(x => / reps|al fallo|rondas/.test(x.dose || ''));
+  const sumMin = xs => byItem ? xs.reduce((a, x) => a + m1(x), 0) : Math.max(1, Math.round(xs.reduce((a, x) => a + x.dur, 0) / 60));
+  const mins = sumMin(list), left = sumMin(pending);
+  // superseries: "4 superseries · 8 ejercicios"
+  const nEx = list.reduce((a, x) => a + String(x.name).split(' + ').length, 0);
+  const howMany = nEx > list.length ? `${plural(list.length, 'superserie', 'superseries')} · ${nEx} ejercicios` : plural(total, 'ejercicio', 'ejercicios');
   const completed = rutinaHist.includes(today());
-  $('r-name').textContent = r.name || 'Equilibrio + estiramiento';
-  $('r-meta').textContent = `${plural(total, 'ejercicio', 'ejercicios')} · ~${mins} min` + (r.mini === today() ? ' · ⚡ modo mínimo' : '');
+  $('r-name').textContent = r.name || 'Tu rutina';
+  $('r-meta').textContent = `${howMany} · ~${mins} min` + (r.mini === today() ? ' · ⚡ modo mínimo' : '');
   $('r-go').textContent = completed ? 'Completada ✓' : n ? `Continuar · ${n}/${total} →` : 'Empezar →';
   $('r-go').classList.toggle('done', completed);
   rutHero = { name: $('r-name').textContent, meta: $('r-meta').textContent, go: $('r-go').textContent, done: completed };
@@ -897,7 +901,7 @@ function paintNutrition(S) {
   $('n-body').hidden = empty; $('n-empty').hidden = !empty;
   $('n-title').textContent = pi ? `Nutrición · ${pi.day.label || 'Día'}` : 'Nutrición';
   if (!empty) {
-    const k = v => Math.round(v).toLocaleString('en');
+    const k = v => String(Math.round(v)); // igual que en Nutricion: 1830
     $('n-kcal').innerHTML = `<b>${k(pi.kcal)}</b> ${pi.target ? '/ ' + k(pi.target) + ' kcal' : 'kcal'}`;
     $('n-bar').style.width = pi.target ? Math.min(100, pi.kcal / pi.target * 100) + '%' : '0';
     const falta = pi.target ? Math.round((pi.target - pi.kcal) / 50) * 50 : 0;
@@ -986,7 +990,7 @@ const planScore = d => !nlog[d] || nlog[d].skipped ? 0 : nlog[d].partial ? 0.5 :
 let selDay = null; // dia tocado en la franja
 function paintWeek() {
   const isos = [...Array(7)].map((_, i) => shift(today(), i - 6));
-  $('wk-r').textContent = `${isos.filter(d => rutinaHist.includes(d)).length}/7`;
+  $('wk-r').textContent = `${isos.filter(d => rutinaHist.includes(d)).length}/${7 - isos.filter(restDayOf).length}`;
   const ps = isos.reduce((a, d) => a + planScore(d), 0);
   $('wk-n').textContent = `${+ps.toFixed(1)}/7`;
   const es = weights(), last = es[es.length - 1];
@@ -1024,9 +1028,9 @@ function openWeek() {
   $('wk-range').textContent = `${dshort(from)} – ${dshort(t)}`;
   $('wk-title').textContent = fullN >= 5 ? 'Semana enorme 🏆' : trains >= 5 ? 'Buena semana 💪' : trains >= 3 ? 'Vas construyendo 🧱' : 'Semana nueva, página nueva 🌱';
   $('wk-grid').innerHTML = [
-    [`${fullN}/7`, 'días completos'], [`${trains}/7`, 'entrenos'], [`${ps}/7`, 'plan cumplido'],
+    [`${fullN}/7`, 'días completos'], [`${trains}/${7 - isos.filter(restDayOf).length}`, 'entrenos'], [`${ps}/7`, 'plan cumplido'],
     [dw == null ? '—' : `<span class="delta ${deltaClass(dw)}">${dw > 0 ? '+' : ''}${dw} kg</span>`, 'peso en la semana'],
-    [recs, recs === 1 ? 'récord nuevo' : 'récords nuevos'], [wkSets.length ? `${wkSets.length}` : '—', reps ? `series · ${reps} reps` : 'series'],
+    [recs, recs === 1 ? 'récord nuevo' : 'récords nuevos'], [wkSets.length ? `${wkSets.filter(z => z.side !== 'izquierdo').length}` : '—', reps ? `series · ${reps} reps` : 'series'],
   ].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join('');
   const goal = bm?.goal?.weight;
   $('wk-msg').textContent = fullN === 7 ? 'Siete de siete. Esto ya es un hábito.'
