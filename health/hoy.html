@@ -74,6 +74,9 @@
   .chip.done .ci{background:var(--c);border-color:var(--c);color:#fff;}
   .chip.done b{color:var(--c);}
   .chip.ask{border-color:color-mix(in srgb,var(--c) 55%,transparent);}
+  .chip.late{background:rgba(249,115,22,.12);border-color:transparent;}
+  .chip.late .ci{border-color:#f97316;color:#f97316;font-size:12px;}
+  .chip.late b,.chip.late span{color:#f97316;}
   .chip.ask .ci{border-color:var(--c);color:var(--c);}
   .rescue{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;padding:12px 16px;border-radius:14px;
     background:var(--h-warn-soft);border:1px solid rgba(251,191,36,.35);font-size:13px;color:var(--text2);}
@@ -542,9 +545,15 @@ let wasFull = null;
 function paintDay() {
   const t = today(), parts = partsOf(t), n = parts.filter(Boolean).length, N = HABITS.length;
   // vacio: invisible (con la punta redonda, un trazo de largo 0 se veria como un punto)
+  // Despertar tarde: queda registrado (medio segmento naranja) pero no cuenta para el dia completo
+  const late = !parts[0] && typeof dl(t).wake === 'string';
   HABITS.forEach((h, i) => {
-    $('a-' + h.k).style.strokeDasharray = parts[i] ? segDash : '0 300'; $('a-' + h.k).style.opacity = parts[i] ? 1 : 0;
-    $('c-' + h.k).classList.toggle('done', parts[i]); $('c-' + h.k).querySelector('.ci').textContent = parts[i] ? '✓' : h.k === 'food' ? '?' : '○';
+    const half = i === 0 && late, a = $('a-' + h.k);
+    a.style.strokeDasharray = parts[i] ? segDash : half ? `${(SEG - 6) / 2} ${300 - (SEG - 6) / 2}` : '0 300';
+    a.style.opacity = parts[i] || half ? 1 : 0;
+    a.style.stroke = half ? '#f97316' : h.c;
+    $('c-' + h.k).classList.toggle('done', parts[i]); $('c-' + h.k).classList.toggle('late', half);
+    $('c-' + h.k).querySelector('.ci').textContent = parts[i] ? '✓' : half ? '½' : h.k === 'food' ? '?' : '○';
   });
   paintChips(); paintStep(); paintRescue();
   const isFull = n === N;
@@ -661,7 +670,7 @@ $('c-wake').onclick = () => {
   const t = today(), was = dl(t).wake;
   if (was) return toast(`Marcado a las ${was}`, () => markDay('wake', 0));
   const v = nowHM(); markDay('wake', v);
-  toast(wakeOk(t) ? `Despierto a las ${v} ☀️` : `Marcado a las ${v} (tarde)`, () => markDay('wake', 0));
+  toast(wakeOk(t) ? `Despierto a las ${v} ☀️` : `Tarde (${v}): queda a medias, no cuenta para el día completo`, () => markDay('wake', 0));
 };
 const toggleDay = (k, ok, label) => () => {
   if (k === 'work' && !workDay(today())) return toast('Hoy no te toca bloque de trabajo');
