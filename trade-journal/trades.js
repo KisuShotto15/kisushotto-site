@@ -466,7 +466,9 @@ async function drawTradeChart(t) {
   let candles = candleCache.get(key);
   if (!candles) {
     try {
-      const m = await exec.market({ exchange: t.exchange, market, symbol: t.symbol, interval, anchor: 'utc', start, end });
+      // Los futuros USDT se ven sobre el perpetuo de Binance (el de mas volumen), como en el terminal
+      const src = market === 'futures' ? 'binance' : t.exchange;
+      const m = await exec.market({ exchange: src, market, symbol: t.symbol, interval, anchor: 'utc', start, end });
       candles = (m.candles || []).map(([tt, o, h, l, c, v]) => ({ t: tt, o, h, l, c, v })).filter(k => k.t >= start);
       candleCache.set(key, candles);
     } catch (e) {

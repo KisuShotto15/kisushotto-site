@@ -376,3 +376,23 @@
 .tc-h-entry.ghost .p-px { cursor: default; color: var(--muted2); }
 .tc-handle .h-x { margin-left: 4px; padding: 0 2px 0 8px; border-left: 1px solid rgba(0,0,0,.25); cursor: pointer; opacity: .85; }
 .tc-handle .h-x:hover { opacity: 1; }
+
+/* Fuente del grafico y caja de la posicion abierta (como la herramienta larga/corta de TradingView) */
+.tc-src { font: 12px 'IBM Plex Mono', monospace; color: #f0b90b; border: 1px solid #f0b90b66; border-radius: 6px; padding: 3px 8px; }
+.tc-src:empty { display: none; }
+.tc-pos { position: absolute; inset: 0; pointer-events: none; }
+.tc-pos .z { position: absolute; }
+.tc-pos .z.sl { background: rgba(239, 68, 68, .2); }
+.tc-pos .z.tp { background: rgba(0, 200, 150, .2); }
+.tc-pos .b { position: absolute; height: 0; }
+.tc-pos .b.sl { border-top: 1px solid var(--lv-sl); }
+.tc-pos .b.tp { border-top: 1px solid var(--lv-tp); }
+.tc-pos .b.ep { border-top: 1px dashed var(--lv-entry); }
+.tc-pos .l { position: absolute; font: 600 11px 'IBM Plex Mono', monospace; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.tc-pos .l.sl { background: var(--lv-sl); color: #fff; }
+.tc-pos .l.tp { background: var(--lv-tp); color: #062a20; }
+.tc-pos .l.ep { background: #0c0c0c; border: 1px solid var(--lv-entry); color: #cfe0ff; }
+.tc-pos .pnl { position: absolute; left: 8px; top: 8px; font: 700 12px 'IBM Plex Mono', monospace; padding: 2px 7px; border-radius: 4px;
+  background: #0c0c0c; border: 1px solid var(--green); color: var(--green); }
+.tc-pos .pnl.neg { border-color: var(--red); color: var(--red); }
+@media (max-width: 700px) { .tc-pos .l { font-size: 10px; padding: 2px 5px; } }

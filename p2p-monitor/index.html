@@ -690,6 +690,12 @@
         <!-- Asistente de pago: saludo con la cola, datos para pagar y comprobante -->
         <div class="pay-asst">
           <label class="cfg-row" style="border:0;padding:0;cursor:pointer"><span title="Al entrar una orden de compra: saluda en el chat con tu lugar en la cola, te avisa con la cuenta y el monto, y con tu comprobante lo sube al chat y marca la orden pagada">Asistente de pago</span><input type="checkbox" id="cfg-pay-asst" onchange="payAsstSave()" style="width:18px;height:18px;accent-color:var(--gold);cursor:pointer"></label>
+          <div class="cfg-row" style="border:0;padding:6px 0 0"><span title="Con la app KS Pagos en un teléfono Android: paga en BDV solo. Ensayo = llena todo y se detiene antes de confirmar">Pago en el teléfono</span>
+            <select id="cfg-pay-auto" onchange="payAutoSave()" style="font-size:13px"><option value="off">Apagado</option><option value="dry">Ensayo</option><option value="auto">Automático</option></select></div>
+          <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+            <button class="btn btn-sm" type="button" onclick="payPairCode()">📱 Vincular teléfono</button>
+            <span id="pay-dev-st" class="sub-help" style="margin:0;flex:1;min-width:0"></span>
+          </div>
           <details style="margin-top:6px">
             <summary style="cursor:pointer;font-size:12px;color:var(--text-3)">Mensajes automáticos</summary>
             <div class="sub-help" style="margin:6px 0">Variables: {nombre} {monto} {cola}</div>
@@ -779,7 +785,7 @@
      en produccion algo (redirect/proxy/CDN, sin identificar aun) devolvia esos dos
      archivos sueltos como text/html en vez de JS, y el motor de decision nunca
      cargaba. Una sola request a main.js, que sabemos que siempre llega bien. -->
-<script src="/p2p-monitor/main.js?v=143"></script>
+<script src="/p2p-monitor/main.js?v=144"></script>
 <script>
 if("serviceWorker"in navigator){
   // Registra el SW (PWA/push). NO recargamos al cambiar de controller: la navegacion es

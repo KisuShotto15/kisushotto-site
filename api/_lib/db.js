@@ -90,13 +90,19 @@ function isConnErr(e) {
 
 // Reintento unico: descarta el cliente muerto y reconecta de cero. Evita que un
 // socket cerrado por el pooler tumbe una request entera con "CONNECTION_DESTROYED".
+// Solo se descarta el cliente que fallo: con varias peticiones a la vez en la misma
+// instancia (Vercel las comparte), cerrar "el cliente actual" mataba la conexion que
+// otra peticion acababa de abrir en su reintento, y esa fallaba tambien con
+// CONNECTION_DESTROYED (cascada).
 export async function sql(...args) {
+  let c;
   try {
-    const c = live();
+    c = live();
     return await guarded(c, c(...args));
   } catch (e) {
     if (!isConnErr(e)) throw e;
-    if (client) { client.end({ timeout: 0 }).catch(() => {}); client = null; }
+    if (client === c) { client = null; }
+    if (c) c.end({ timeout: 0 }).catch(() => {});
     const c2 = live();
     return await guarded(c2, c2(...args));
   }
@@ -233,6 +239,20 @@ export async function ensureP2pPay() {
     info JSONB,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
+  )`;
+  // Pago automatico en el telefono (app KS Pagos): avance que reporta el telefono.
+  await sql`ALTER TABLE p2p_pay ADD COLUMN IF NOT EXISTS dev JSONB`;
+  await sql`ALTER TABLE p2p_pay ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ`;
+  // Telefonos vinculados (token guardado como hash) y codigos de vinculacion.
+  await sql`CREATE TABLE IF NOT EXISTS pay_devices (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT, created_at TIMESTAMPTZ DEFAULT now(), last_seen TIMESTAMPTZ
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS pay_pair (
+    code_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL
   )`;
   p2pPayReady = true;
 }

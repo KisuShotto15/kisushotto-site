@@ -4,6 +4,7 @@ import { sql, ensureSchema, ensureMarketHist, ensureOkxCreds, ensureP2pPay } fro
 import { histMap } from './_lib/monitor.js';
 import { DEFAULT_FIAT, safeTz, zonedMidnight } from './_lib/market.js';
 import { tradeMethods, listOrders, getOrderDetail, chatCredential, chatMessages, chatSend, chatText, chatImage, chatDelivered, chatUploadImage, markOrderPaid, fillTpl, PAY_TPL } from './_lib/binance.js';
+import { deviceRoute, newPairCode } from './_lib/paydevice.js';
 import { okxBasicInfo, okxActiveAds, okxMarketplace, splitMarketplace } from './_lib/okx.js';
 import { decrypt, encrypt } from './_lib/crypto.js';
 import { sendPush, vapidPublicKey } from './_lib/push.js';
@@ -64,10 +65,17 @@ function mergeTg(c, prevConfig) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-device-token');
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // Telefono de pagos (app KS Pagos): se autentica con su propio token, no con JWT.
+  const dpath = req.body && req.body.path;
+  if (typeof dpath === 'string' && dpath.startsWith('/dev-')) {
+    try { const r = await deviceRoute(req, dpath, (req.body && req.body.params) || {}); return res.status(r.status).json(r.body); }
+    catch (e) { return res.status(500).json({ error: e.message }); }
+  }
 
   let user;
   try { user = requireAllowedUser(req); } catch (e) { return res.status(e.status || 401).json({ error: e.message }); }
@@ -619,14 +627,30 @@ export default async function handler(req, res) {
   // El tick detecta las ordenes de compra, saluda y guarda los datos para pagar; aca
   // la app lista lo pendiente, avisa "procesando" y, con el comprobante, lo sube al
   // chat y marca la orden pagada. Marcar pagado SOLO con comprobante del usuario.
+  if (path === '/pay-pair-code' || path === '/pay-devices' || path === '/pay-mode') {
+    try {
+      await ensureP2pPay();
+      if (path === '/pay-pair-code') return res.status(200).json({ code: await newPairCode(user.uid) });
+      if (path === '/pay-mode') {
+        const mode = ['off', 'dry', 'auto'].includes(params && params.mode) ? params.mode : 'off';
+        await sql`INSERT INTO bot_state (user_id, enabled, config) VALUES (${user.uid}, false, ${JSON.stringify({ payAuto: mode })}::jsonb)
+          ON CONFLICT (user_id) DO UPDATE SET config = COALESCE(bot_state.config, '{}'::jsonb) || ${JSON.stringify({ payAuto: mode })}::jsonb`;
+        return res.status(200).json({ ok: true, mode });
+      }
+      const d = await sql`SELECT name, last_seen FROM pay_devices WHERE user_id = ${user.uid} ORDER BY last_seen DESC NULLS LAST LIMIT 5`;
+      return res.status(200).json({ devices: d });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
   if (path === '/p2p-pending' || path === '/p2p-processing' || path === '/p2p-paid') {
     try {
       await ensureP2pPay();
       if (path === '/p2p-pending') {
-        const rows = await sql`SELECT order_no, status, info, created_at FROM p2p_pay
-          WHERE user_id = ${user.uid} AND status IN ('greeted', 'processing') AND created_at > now() - interval '3 hours'
+        const rows = await sql`SELECT order_no, status, info, dev, created_at FROM p2p_pay
+          WHERE user_id = ${user.uid} AND status IN ('greeted', 'processing', 'paying', 'filled', 'confirmed', 'manual') AND created_at > now() - interval '3 hours'
           ORDER BY created_at`;
-        return res.status(200).json({ orders: rows.map(r => ({ orderNo: r.order_no, status: r.status, ...(r.info || {}) })) });
+        return res.status(200).json({ orders: rows.map(r => ({ orderNo: r.order_no, status: r.status, ...(r.info || {}), reason: (r.dev && r.dev.reason) || null })) });
       }
       const no = String((params && params.orderNo) || '');
       const own = await sql`SELECT status, info FROM p2p_pay WHERE order_no = ${no} AND user_id = ${user.uid}`;
