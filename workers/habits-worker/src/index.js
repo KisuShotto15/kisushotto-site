@@ -321,6 +321,23 @@ async function healthSet(env, user, k, v) {
   ).bind(user + '|' + k, JSON.stringify(v), Date.now()).run();
 }
 
+// Cambiar un solo dia de un registro ({ 'YYYY-MM-DD': ... }) en una sola sentencia,
+// sin leer y reescribir todo: dos marcas a la vez (dos chips seguidos, o la
+// notificacion con la app abierta) ya no se pisan. merge: se suman campos al dia;
+// si no, el dia se reemplaza (null lo borra).
+async function healthDay(env, user, k, date, val, merge = false) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('fecha invalida');
+  const key = user + '|' + k, path = `$."${date}"`, j = JSON.stringify(val), now = Date.now();
+  if (val == null) {
+    await env.DB.prepare('UPDATE health_kv SET v = json_remove(v, ?), updated_at = ? WHERE k = ?').bind(path, now, key).run();
+    return;
+  }
+  const upd = merge ? "json_set(v, ?, json_patch(coalesce(json_extract(v, ?), '{}'), json(?)))" : 'json_set(v, ?, json(?))';
+  const binds = merge ? [path, path, j] : [path, j];
+  await env.DB.prepare(`INSERT INTO health_kv (k, v, updated_at) VALUES (?, json_object(?, json(?)), ?)
+    ON CONFLICT(k) DO UPDATE SET v = ${upd}, updated_at = excluded.updated_at`).bind(key, date, j, now, ...binds).run();
+}
+
 // ── Push a la app Android de Health por FCM (API HTTP v1) ────────────────────
 // Un JWT firmado con la cuenta de servicio se cambia por un access token de OAuth.
 // La cuenta de servicio es el secret FIREBASE_SERVICE_ACCOUNT (el JSON entero de
@@ -494,9 +511,7 @@ async function quickLog(url, env) {
   const p = n?.profiles?.[n.activeProfile];
   const day = (p?.days || []).find(x => x.id === p.activeDay) || (p?.days || [])[0];
   const base = day ? { dayId: day.id, label: day.label, profile: p.name } : {};
-  const nlog = (await healthGet(env, u, 'nutrition_log')) || {};
-  nlog[d] = v === 'no' ? { skipped: true } : v === 'parcial' ? { ...base, partial: true } : base;
-  await healthSet(env, u, 'nutrition_log', nlog);
+  await healthDay(env, u, 'nutrition_log', d, v === 'no' ? { skipped: true } : v === 'parcial' ? { ...base, partial: true } : base);
   return json({ ok: true, label: v === 'no' ? 'No seguiste el plan' : v === 'parcial' ? 'Más o menos' : 'Plan cumplido' });
 }
 // Segundo aviso, 2 h despues, si la rutina sigue sin hacerse
@@ -535,10 +550,7 @@ const dayCfg = r => ({ ...DEF_DAY, ...(r?.day || {}) });
 const dayOn = r => (r?.day ? r.day.on !== false : !!r?.enabled);
 const wakeOk = (t, target) => typeof t === 'string' && t <= addMin(target, 60);
 async function dayMark(env, user, date, key, val) {
-  const log = (await healthGet(env, user, 'daylog')) || {};
-  log[date] = { ...(log[date] || {}), [key]: val };
-  const keep = Object.keys(log).sort().slice(-120);
-  await healthSet(env, user, 'daylog', Object.fromEntries(keep.map(k => [k, log[k]])));
+  await healthDay(env, user, 'daylog', date, { [key]: val }, true);
 }
 async function dayData(env, user) {
   const [log, rutina, nlog, r] = await Promise.all(['daylog', 'rutina', 'nutrition_log', 'reminder'].map(k => healthGet(env, user, k)));
@@ -709,6 +721,13 @@ async function handleHealth(path, request, env) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(b?.date || '') || !DAY_KEYS.includes(b.key)) return err('bad request');
     const val = b.key === 'wake' ? (typeof b.val === 'string' && /^\d{2}:\d{2}$/.test(b.val) ? b.val : 0) : (b.val ? 1 : 0);
     await dayMark(env, user, b.date, b.key, val);
+    return json({ ok: true });
+  }
+  // Comida de un dia (Si / Mas o menos / No) sin reescribir todo el registro
+  if (path === '/health/nutrition_log/day' && method === 'POST') {
+    const b = await request.json().catch(() => ({}));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(b?.date || '')) return err('bad request');
+    await healthDay(env, user, 'nutrition_log', b.date, b.entry && typeof b.entry === 'object' ? b.entry : null);
     return json({ ok: true });
   }
   // Tu novia por Telegram

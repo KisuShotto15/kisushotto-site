@@ -333,7 +333,7 @@
 
 <script type="module">
 import {BUILTIN,compile,dur,phasesOf,doseOf,listOf,TEMPLATES,OLD_AB} from './rutina-data.js';
-import {loadLocal as bmLoad,saveLocal as bmSave,pull as bmPull,push as bmPush} from './metricas/sync.js';
+import {loadLocal as bmLoad,saveLocal as bmSave,pull as bmPull,push as bmPush,dedupeRutina} from './metricas/sync.js';
 // App Android (Capacitor, health-app/): sus plugins propios; null en la web.
 // Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
 const nativeApp=()=>{try{const c=(window.parent!==window&&parent.Capacitor)||window.Capacitor;return c?.isNativePlatform?.()&&c.Plugins?.Native||null;}catch(e){return null;}};
@@ -424,6 +424,7 @@ addEventListener('online',()=>{if(syncPending)pushRemote();});
 function save(){if(!getR().builtin)saved.lastTrain=active;saved.updated=Date.now();writeLocal();pushRemote();}
 // Habitos del dia de Hoy (la rutina de noche marca "Noche")
 function markDay(key,val){
+  try{const p=JSON.parse(localStorage.getItem('health_day_pend'))||{};p[today()]={...(p[today()]||{}),[key]:val};localStorage.setItem('health_day_pend',JSON.stringify(p));}catch(e){}
   window.healthFetch(SYNC_URL.replace(/rutina$/,'day'),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({date:today(),key,val})}).then(()=>{if(window.parent!==window)parent.postMessage({type:'health:reload',tab:'hoy'},location.origin);}).catch(()=>{});
 }
@@ -726,7 +727,9 @@ function stopAll(){
 /* ---------- series hechas -> Metricas (PRs y volumen) ---------- */
 // Cada "Serie hecha" con peso queda en la sesion de hoy de Metricas.
 let bm=null;
-bmPull().then(r=>{const l=bmLoad();bm=r&&(r.lastModified||0)>(l?.lastModified||0)?r:(l||r);if(ready)renderHero();}).catch(()=>{});
+bmPull().then(r=>{const l=bmLoad();bm=r&&(r.lastModified||0)>(l?.lastModified||0)?r:(l||r);
+  if(dedupeRutina(bm)){bmSave(bm);bmPush(bm);} // series guardadas dos veces (bug del boton "Ya")
+  if(ready)renderHero();}).catch(()=>{});
 // En una superserie cada fase es de uno de sus ejercicios (ph.ex)
 const exOf=(it,ph)=>ph&&ph.ex!=null&&it.exs?it.exs[ph.ex]:it;
 const exList=it=>it.exs||[it];
@@ -872,7 +875,9 @@ function logSet(it,kg,reps,side){
   kg=kg>0?kg:0;
   if(it.range){if(reps>+String(it.range).split('-').pop())hintNext='Pasaste el rango: la próxima, sube el peso. ';}
   else if(reps>=15)hintNext='Quince o más repeticiones: la próxima vez, hazlo más difícil. ';
-  bm=bm||bmLoad()||{bodyComp:[],sessions:[],exercises:[],lastModified:0};
+  const fresh=bmLoad(); // Metricas u Hoy pudieron cambiarlo despues de que se cargo aqui
+  if(fresh&&(fresh.lastModified||0)>(bm?.lastModified||0))bm=fresh;
+  bm=bm||{bodyComp:[],sessions:[],exercises:[],lastModified:0};
   bm.exercises=bm.exercises?.length?bm.exercises:[...BM_DEFAULT];
   bm.sessions=bm.sessions||[];
   let ex=bm.exercises.find(e=>norm(e.name)===norm(it.name));

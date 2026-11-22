@@ -1,6 +1,7 @@
 // Datos de Metricas (Body Metrics) por cuenta: se guardan en el backend de
 // Health (habits-worker, /health/bodymetrics) con el token del usuario.
 import { authFetch } from '../auth.js';
+import { TEMPLATES } from '../rutina-data.js';
 
 const DATA_URL = 'https://habits-worker.efrenalejandro2010.workers.dev/health/bodymetrics';
 const LS_KEY   = 'body_metrics_v1';
@@ -38,6 +39,33 @@ export async function push(state) {
     if (!r.ok) throw new Error(r.status);
     localStorage.removeItem(DIRTY_KEY);
   } catch { try { localStorage.setItem(DIRTY_KEY, '1'); } catch {} }
+}
+
+// Limpieza de las series que la Rutina guardo dos veces (boton "Ya" doble o justo
+// al terminar el descanso, nov 2026). En una superserie, la misma serie (ejercicio
+// y lado) dos veces seguidas solo puede ser ese error: entre una y otra siempre va
+// el otro ejercicio o el otro lado. Devuelve cuantas borro (0 = nada que tocar).
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+export function dedupeRutina(state) {
+  if (!state?.sessions?.length) return 0;
+  const ss = new Set();
+  const add = list => (list || []).forEach(it => { if (it.ss) ss.add(norm(it.name)); });
+  TEMPLATES.forEach(t => add(t.items));
+  try { (JSON.parse(localStorage.getItem('health_rutina_v1'))?.routines || []).forEach(r => add(r.items)); } catch {}
+  const nameOf = {}; (state.exercises || []).forEach(e => { nameOf[e.id] = norm(e.name); });
+  let removed = 0;
+  for (const s of state.sessions) {
+    if (s.from !== 'rutina' || s.date < '2026-11-15') continue;
+    const keep = [];
+    for (const z of s.sets) {
+      const prev = keep[keep.length - 1];
+      if (prev && prev.exerciseId === z.exerciseId && (prev.side || null) === (z.side || null) && ss.has(nameOf[z.exerciseId])) { removed++; continue; }
+      keep.push(z);
+    }
+    s.sets = keep;
+  }
+  if (removed) state.lastModified = Date.now();
+  return removed;
 }
 
 function retryPending() {

@@ -661,14 +661,31 @@ function paintChips() {
   $('c-work-t').textContent = !workDay(t) ? 'Libre' : d.work ? 'Hecho' : d.work === 0 ? 'No' : `${dcfg.workStart}–${dcfg.workEnd}`;
   $('c-night-t').textContent = d.night ? 'Hecha' : '~16 min';
 }
+// Pendientes: cambios de un dia que aun no llegan al servidor (sin red o en camino).
+// Se aplican encima de lo que trae el servidor, asi recargar Hoy no los borra.
+const PEND = { nlog: 'health_nlog_pend2', day: 'health_day_pend' };
+const pendGet = k => { try { return JSON.parse(localStorage.getItem(PEND[k])) || {}; } catch { return {}; } };
+const pendSet = (k, v) => { try { Object.keys(v).length ? localStorage.setItem(PEND[k], JSON.stringify(v)) : localStorage.removeItem(PEND[k]); } catch {} };
 async function markDay(key, val) {
   const t = today();
   daylog[t] = { ...dl(t), [key]: val };
+  const p = pendGet('day'); p[t] = { ...(p[t] || {}), [key]: val }; pendSet('day', p);
   haptic(); paintDay(); paintWeek();
-  try { await api('/day', { method: 'POST', body: JSON.stringify({ date: t, key, val }) }); } catch {}
+  flushDay();
+}
+async function flushDay() {
+  for (const [date, keys] of Object.entries(pendGet('day'))) for (const [key, val] of Object.entries(keys)) {
+    try {
+      await api('/day', { method: 'POST', body: JSON.stringify({ date, key, val }) });
+      const p = pendGet('day'); // quitarlo solo si no cambio mientras tanto
+      if (p[date] && JSON.stringify(p[date][key]) === JSON.stringify(val)) { delete p[date][key]; if (!Object.keys(p[date]).length) delete p[date]; pendSet('day', p); }
+    } catch { return; } // sin red: se reintenta despues
+  }
 }
 async function loadDay() {
-  try { const { data } = await api('/day'); daylog = data || {}; paintDay(); paintWeek(); } catch {}
+  try { const { data } = await api('/day'); daylog = data || {}; } catch {}
+  for (const [date, keys] of Object.entries(pendGet('day'))) daylog[date] = { ...(daylog[date] || {}), ...keys };
+  paintDay(); paintWeek(); flushDay();
 }
 $('c-wake').onclick = () => {
   const t = today(), was = dl(t).wake;
@@ -676,10 +693,12 @@ $('c-wake').onclick = () => {
   const v = nowHM(); markDay('wake', v);
   toast(wakeOk(t) ? `Despierto a las ${v} ☀️` : `Tarde (${v}): queda a medias, no cuenta para el día completo`, () => markDay('wake', 0));
 };
+// Tocar un chip marca; uno ya marcado no se desmarca con otro toque (solo con "Deshacer")
 const toggleDay = (k, ok, label) => () => {
   if (k === 'work' && !workDay(today())) return toast('Hoy no te toca bloque de trabajo');
-  const on = !dl(today())[k]; markDay(k, on ? 1 : 0);
-  toast(on ? ok : label, () => markDay(k, on ? 0 : 1));
+  if (dl(today())[k]) return toast('Ya está marcado ✓', () => { markDay(k, 0); toast(label); });
+  markDay(k, 1);
+  toast(ok, () => markDay(k, 0));
 };
 $('c-jp').onclick = toggleDay('jp', 'Japonés ✓ がんばって', 'Japonés desmarcado');
 $('c-work').onclick = toggleDay('work', 'Bloque de trabajo ✓', 'Trabajo desmarcado');
@@ -945,34 +964,42 @@ function paintFood() {
 $('food-seg').querySelectorAll('[data-f]').forEach(b => b.onclick = () => {
   const cur = nlog[today()], p = profile(), f = b.dataset.f;
   const kind = !cur ? null : cur.skipped ? 'no' : cur.partial ? 'parcial' : 'si';
-  toast(kind === f ? 'Respuesta quitada' : 'Comida registrada', () => setLog(cur || null));
-  foodOpen = kind !== f && f !== 'no' && (p?.days || []).length >= 2 ? true : null;
-  if (kind === f) return setLog(null); // tocar de nuevo lo quita
+  // tocar la misma respuesta no la quita (antes si, y se borraba sin querer)
+  if (kind === f) return toast('Ya respondiste ✓', () => setLog(null));
+  toast('Comida registrada', () => setLog(cur || null));
+  foodOpen = f !== 'no' && (p?.days || []).length >= 2 ? true : null;
   const day = (p?.days || []).find(d => d.id === (cur?.dayId || p.activeDay)) || (p?.days || [])[0];
   const base = day ? { dayId: day.id, label: day.label, profile: p.name } : {};
   setLog(f === 'no' ? { skipped: true } : f === 'parcial' ? { ...base, partial: true } : base);
 });
+// Solo se sube el dia que cambio (antes se reescribia todo el registro y pisaba
+// lo que respondiste desde la notificacion). Sin red queda pendiente.
 async function setLog(entry) {
   haptic();
-  if (entry) nlog[today()] = entry; else delete nlog[today()];
-  // conservar solo los ultimos ~4 meses
-  nlog = Object.fromEntries(Object.entries(nlog).sort(([a], [b]) => a.localeCompare(b)).slice(-120));
+  const t = today();
+  if (entry) nlog[t] = entry; else delete nlog[t];
+  const p = pendGet('nlog'); p[t] = entry || null; pendSet('nlog', p);
   paintFood(); paintWeek(); paintDay();
-  await pushLog();
+  await flushLog();
 }
-// Sin conexion el registro queda guardado aqui y se sube al volver la red
-async function pushLog() {
-  try { localStorage.setItem('health_nlog_pending', JSON.stringify(nlog)); } catch {}
-  try { await api('/nutrition_log', { method: 'PUT', body: JSON.stringify(nlog) }); localStorage.removeItem('health_nlog_pending'); } catch {}
+async function flushLog() {
+  // formato viejo: todo el registro pendiente (de antes de este cambio)
+  try { const old = localStorage.getItem('health_nlog_pending'); if (old) { await api('/nutrition_log', { method: 'PUT', body: old }); localStorage.removeItem('health_nlog_pending'); } } catch { return; }
+  for (const [date, entry] of Object.entries(pendGet('nlog'))) {
+    try {
+      await api('/nutrition_log/day', { method: 'POST', body: JSON.stringify({ date, entry }) });
+      const p = pendGet('nlog');
+      if (JSON.stringify(p[date]) === JSON.stringify(entry)) { delete p[date]; pendSet('nlog', p); }
+    } catch { return; }
+  }
 }
 async function loadLog() {
-  let pending = null;
-  try { pending = JSON.parse(localStorage.getItem('health_nlog_pending')); } catch {}
-  if (pending) { nlog = pending; pushLog(); }
-  else { try { const { data } = await api('/nutrition_log'); nlog = data || {}; } catch {} }
+  try { const { data } = await api('/nutrition_log'); nlog = data || {}; } catch {}
+  for (const [date, entry] of Object.entries(pendGet('nlog'))) { if (entry) nlog[date] = entry; else delete nlog[date]; }
   paintFood(); paintWeek(); paintDay();
+  flushLog();
 }
-addEventListener('online', () => { if (localStorage.getItem('health_nlog_pending')) pushLog(); });
+addEventListener('online', () => { flushLog(); flushDay(); });
 
 /* ---------- Aviso con "Deshacer" (5 s) ---------- */
 let toastT = null;

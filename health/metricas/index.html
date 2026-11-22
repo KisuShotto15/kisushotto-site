@@ -378,7 +378,7 @@ select.inp{cursor:pointer}
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { loadLocal, saveLocal, pull, push } from './sync.js';
+import { loadLocal, saveLocal, pull, push, dedupeRutina } from './sync.js';
 import { authFetch } from '../auth.js';
 
 // ── Fotos de progreso (habits-worker /health/photo, una por mes) ─────────────
@@ -473,6 +473,9 @@ async function init() {
     saveLocal(S);
     render();
   }
+  // series duplicadas por el bug del boton "Ya" de la Rutina: se borran solas
+  const n = dedupeRutina(S);
+  if (n) { save(); render(); toast(`Borré ${n} ${n === 1 ? 'serie duplicada' : 'series duplicadas'} de la Rutina`); }
 }
 
 init();
