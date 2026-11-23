@@ -1631,7 +1631,9 @@ async function loadSubscription() {
   } catch (e) {}
 }
 
-function schedulePoll() { if (!_subPollT) _subPollT = setInterval(loadSubscription, 8000); }
+// Solo corre mientras hay un pago del monitor pendiente de aprobar. Una vez al dia
+// para no gastar CPU en Vercel; al abrir o recargar la pagina se consulta igual.
+function schedulePoll() { if (!_subPollT) _subPollT = setInterval(loadSubscription, 24 * 3600 * 1000); }
 function stopPoll() { if (_subPollT) { clearInterval(_subPollT); _subPollT = null; } }
 
 // El boton solo se muestra si /admin-pending responde 200 (o sea, si el usuario es
