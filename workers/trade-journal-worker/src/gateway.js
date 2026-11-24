@@ -456,6 +456,8 @@ export class ExchangeGateway {
       await this.log('simulated', `Simulacion ${o.side.toUpperCase()} ${o.symbol} ${plan.qty} @ ${entry} riesgo ${plan.risk_usd.toFixed(2)} USDT`, 'info', plan);
       return { ok: true, simulated: true, plan };
     }
+    // Con una orden nueva el guardian vuelve a revisar cada minuto desde ya
+    this.flatAt = null;
     return this.execute(ex, acc, o, plan, inst, ctx);
   }
 
@@ -784,14 +786,12 @@ export class ExchangeGateway {
   // ── Guardian ───────────────────────────────────────────────────────────────
 
   async guardian() {
-    // Cadencia adaptativa para gastar menos en Vercel: cada minuto dentro de la
-    // ventana o con algo abierto; fuera de la ventana y sin nada abierto, cada
-    // 5 min (una posicion abierta por fuera se detecta en 5 min como maximo).
+    // Cadencia adaptativa para gastar menos en Vercel: cada minuto con una posicion
+    // VWAP abierta o una orden pendiente; sin nada abierto, cada 5 min tambien dentro
+    // de la ventana (una posicion abierta por fuera se detecta en 5 min como maximo).
+    // Una orden del terminal vuelve de inmediato a la cadencia de un minuto.
     const now = Date.now();
-    if (this.flatAt && now - this.lastFull < GUARD_IDLE_MS) {
-      const { rules } = await this.loadRules();
-      if (!sessionWindow(now, rules).in_window) return { ok: true, skipped: true };
-    }
+    if (this.flatAt && now - this.lastFull < GUARD_IDLE_MS) return { ok: true, skipped: true };
     this.lastFull = now;
     await this.refreshCalendar().catch(e => console.error('calendar', e));
     const ctx = await this.context(true);

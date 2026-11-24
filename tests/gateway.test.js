@@ -299,6 +299,16 @@ test('guardian: fuera de la ventana y sin nada abierto revisa cada 5 min', async
   await call('/guardian', {});
   clock += 60000;
   assert.equal((await call('/guardian', {})).skipped, undefined);
+  // Dentro de la ventana y sin nada abierto tambien espacia a 5 min
+  st.positions = [];
+  clock = Date.UTC(2026, 10, 16, 16, 0);   // lunes 11:00 NY
+  await call('/guardian', {});               // cierra en el libro la operacion del paso anterior
+  clock += 60000;
+  await call('/guardian', {});               // ya sin nada abierto
+  clock += 60000;
+  assert.equal((await call('/guardian', {})).skipped, true);
+  clock += 5 * 60000;
+  assert.equal((await call('/guardian', {})).skipped, undefined);
   Date.now = realNow;
 });
 
