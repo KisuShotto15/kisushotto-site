@@ -24,6 +24,9 @@ const RELAY_URL = 'https://kisushotto-site.vercel.app/api/exchange-relay';
 const CAL_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 const CAL_TTL = 6 * 3600;
 const CTX_TTL = 8000;
+// Capital y spot cambian poco: se releen cada 5 min, o al instante si cambian las
+// posiciones o se envia una orden. Ahorra llamadas al relay (CPU en Vercel).
+const EQ_TTL = 5 * 60 * 1000;
 const GUARD_IDLE_MS = 5 * 60 * 1000;
 
 const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json' } });
@@ -39,6 +42,7 @@ export class ExchangeGateway {
     this.queue = Promise.resolve();
     this.ctxCache = null;
     this.missing = new Map();   // revisiones seguidas en que una operacion del libro no aparece
+    this.eqCache = new Map();   // capital y spot por cuenta (ver EQ_TTL)
     // Inyectable para las pruebas (tests/gateway.test.js)
     this.adapter = env.ADAPTER || adapter;
     this.detectMode = env.DETECT_MODE || detectBitgetMode;
@@ -168,8 +172,10 @@ export class ExchangeGateway {
 
   // ── Contexto: todo lo que hace falta para decidir ─────────────────────────
 
-  async context(fresh = false) {
-    if (!fresh && this.ctxCache && Date.now() - this.ctxCache.t < CTX_TTL) return this.ctxCache.ctx;
+  // opts.maxAge: cuanto puede tener la lectura guardada (el terminal reusa la del
+  // guardian); opts.equity: releer capital y spot aunque esten en cache.
+  async context(fresh = false, opts = {}) {
+    if (!fresh && this.ctxCache && Date.now() - this.ctxCache.t < (opts.maxAge ?? CTX_TTL)) return this.ctxCache.ctx;
     const now = Date.now();
     const [r, state, accounts, ledger, news] = await Promise.all([
       this.loadRules(), this.loadState(), this.loadAccounts(), this.loadLedger(), this.loadNews(),
@@ -187,12 +193,29 @@ export class ExchangeGateway {
       const ex = this.adapter(acc);
       // Si falla solo spot (p. ej. la llave no tiene permiso de spot), los
       // futuros se siguen vigilando; el error igual bloquea ordenes nuevas.
-      const [eq, pos, spot, cm, orders] = await Promise.all([
-        ex.equity(), ex.futuresPositions(), ex.spotHoldings().catch(e => e),
+      const readEq = async () => { const [e, sp] = await Promise.all([ex.equity(), ex.spotHoldings().catch(err => err)]); return { eq: e, spot: sp }; };
+      const cached = this.eqCache.get(acc.exchange);
+      const reuse = !opts.equity && cached && Date.now() - cached.t < EQ_TTL;
+      const [pos, cm, orders, fresh0] = await Promise.all([
+        ex.futuresPositions(),
         acc.profile === 'swing' && ex.coinm ? ex.coinm().catch(e => e) : null,
         // Ordenes limite abiertas, tambien las puestas fuera del terminal (solo se muestran)
         ex.openOrders ? ex.openOrders().catch(e => { console.error('ordenes abiertas', e.message); return []; }) : [],
+        reuse ? null : readEq(),
       ]);
+      let eq, spot;
+      if (fresh0) ({ eq, spot } = fresh0);
+      else if (posSig(pos) === cached.sig) {
+        // Mismo capital realizado: solo cambia el resultado flotante de las posiciones
+        const d = upnlOf(pos) - cached.upnl;
+        eq = { ...structuredClone(cached.eq), total: cached.eq.total + d, futures_equity: (cached.eq.futures_equity || 0) + d };
+        spot = structuredClone(cached.spot);
+      } else ({ eq, spot } = await readEq());   // se abrio o cerro algo: capital al dia
+      if (fresh0 || !reuse || posSig(pos) !== cached?.sig) {
+        if (!(spot instanceof Error) && !(eq.errors || []).length) {
+          this.eqCache.set(acc.exchange, { t: Date.now(), eq: structuredClone(eq), spot: structuredClone(spot), sig: posSig(pos), upnl: upnlOf(pos) });
+        } else this.eqCache.delete(acc.exchange);
+      }
       // El TP limite (orden de solo cierre) se muestra como TP de su posicion
       for (const p of pos) {
         const tpo = orders.find(o => o.reduce && o.symbol === p.symbol && o.side === p.side);
@@ -293,7 +316,8 @@ export class ExchangeGateway {
   }
 
   async status(fresh) {
-    const ctx = await this.context(fresh);
+    // Sin pedir datos frescos, el terminal reusa la lectura del guardian (cada minuto)
+    const ctx = await this.context(fresh, { maxAge: 55000, equity: !!fresh });
     const accounts = (await this.db.prepare('SELECT exchange, env, mode, dry_run, enabled, last_error, updated_at FROM exec_accounts').all()).results;
     return {
       now: ctx.now, rules: ctx.rules, pending: ctx.pending, pending_at: ctx.pending_at, hard: HARD, swing_hard: SWING_HARD,
@@ -360,7 +384,7 @@ export class ExchangeGateway {
     };
     if (o.market === 'spot' && o.type === 'limit') throw bad('En spot solo se admiten entradas a mercado (el stop se coloca al llenarse)');
 
-    const ctx = await this.context(!previewOnly);
+    const ctx = await this.context(!previewOnly, { equity: !previewOnly });
     const acc = ctx.accounts.find(a => a.exchange === o.exchange);
     if (!acc) throw bad(`No hay cuenta ${o.exchange} conectada`);
     if (acc.profile !== strategy) throw bad(`${o.exchange} es una cuenta de ${acc.profile === 'vwap' ? 'la estrategia VWAP' : 'swing'}: usa su pestana`);
@@ -1109,6 +1133,9 @@ export function afterHoursAdvice(win, positions) {
 // Riesgo en USD si salta el stop. COIN-M va en contratos: se usa el valor en USD.
 // En futuros USDT-M el TP se pone como limite de solo cierre (comision de maker)
 function tpAsLimit(ex, market) { return market === 'futures' && typeof ex.placeTp === 'function'; }
+
+const posSig = ps => (ps || []).map(p => `${p.symbol}|${p.side}|${p.size}`).sort().join(',');
+const upnlOf = ps => (ps || []).reduce((s, p) => s + (p.upnl || 0), 0);
 
 function posRisk(p, stop = p.stop) {
   if (!(stop > 0) || !(p.entry > 0)) return null;
