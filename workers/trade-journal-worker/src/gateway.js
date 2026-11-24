@@ -46,7 +46,9 @@ export class ExchangeGateway {
     // Inyectable para las pruebas (tests/gateway.test.js)
     this.adapter = env.ADAPTER || adapter;
     this.detectMode = env.DETECT_MODE || detectBitgetMode;
-    if (env.JWT_SECRET && !env.ADAPTER && env.RELAY !== 'off') useRelay(env.RELAY_URL || RELAY_URL, env.JWT_SECRET);
+    // Relay de salida: Cloud Run si estan RELAY_URL y RELAY_SECRET; si no, Vercel con JWT_SECRET
+    const relaySecret = env.RELAY_URL && env.RELAY_SECRET ? env.RELAY_SECRET : env.JWT_SECRET;
+    if (relaySecret && !env.ADAPTER && env.RELAY !== 'off') useRelay(env.RELAY_SECRET && env.RELAY_URL ? env.RELAY_URL : RELAY_URL, relaySecret);
   }
 
   // Serializa todo lo que cambia algo en el exchange o en el estado
