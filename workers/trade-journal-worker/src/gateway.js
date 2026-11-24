@@ -777,7 +777,7 @@ export class ExchangeGateway {
     const g = ctx.gatesLedger;
     // Una posicion externa se juzga como si fuera una orden nueva del terminal
     const blocking = g.blocks;
-    const tradingAllowed = { ok: blocking.length === 0, reason: blocking[0]?.msg };
+    const tradingAllowed = { ok: blocking.length === 0, reason: blocking[0]?.msg, blocks: blocking };
     // Solo se juzgan las cuentas que se leyeron bien: si un exchange no
     // respondio, sus posiciones no "desaparecieron", simplemente no se ven.
     const readable = new Set(ctx.vwapLive.map(l => l.acc.exchange));
@@ -836,7 +836,7 @@ export class ExchangeGateway {
           if (await this.settle(a.trade, ex, miss >= 10)) { this.missing.delete(a.trade.id); acted.push('closed'); }
           continue;
         }
-        if (a.type === 'check_pending') { await this.checkPending(a.trade, ex, a.cancel); continue; }
+        if (a.type === 'check_pending') { await this.checkPending(a.trade, ex, a.cancel, a.reason); continue; }
 
         // Una posicion externa que se cierra (o se cerraria en simulacion) queda en el
         // libro para que, al cerrarse, entre al journal con su resultado
@@ -912,7 +912,7 @@ export class ExchangeGateway {
             p.leverage ?? null, external, nowSec(), external === 2 ? 'Abierta antes de activar el modo real' : 'Abierta fuera del terminal', strategy).run();
   }
 
-  async checkPending(t, ex, cancel) {
+  async checkPending(t, ex, cancel, reason = null) {
     const st = await ex.orderState(t.market, t.symbol, t.client_id).catch(() => null);
     if (!st) return;
     if (st.state === 'cancelled' && !(st.filled_qty > 0)) {
@@ -921,7 +921,7 @@ export class ExchangeGateway {
     } else if (cancel && st.state === 'open') {
       await ex.cancelOrder(t.market, t.symbol, t.client_id);
       await this.db.prepare("UPDATE exec_trades SET status='cancelled', closed_at=? WHERE id=?").bind(nowSec(), t.id).run();
-      await this.log('guardian', `${t.symbol}: limite cancelada porque ya no se puede operar (ventana/noticias/bloqueo)`, 'warn');
+      await this.log('guardian', `${t.symbol}: limite cancelada porque ya no se puede operar${reason ? ` (${reason})` : ''}`, 'warn');
     }
   }
 
