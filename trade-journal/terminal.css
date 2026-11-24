@@ -396,3 +396,17 @@
   background: #0c0c0c; border: 1px solid var(--green); color: var(--green); }
 .tc-pos .pnl.neg { border-color: var(--red); color: var(--red); }
 @media (max-width: 700px) { .tc-pos .l { font-size: 10px; padding: 2px 5px; } }
+/* Etiquetas del grafico: la forma corta solo en movil */
+.tc-handle .hs { display: none; }
+@media (max-width: 700px) {
+  /* Pequenas y semitransparentes para no tapar velas ni precios; el precio se lee en el eje */
+  .tc-handle { font-size: 10px; padding: 1px 5px; gap: 3px; opacity: .9; }
+  .tc-handle > span:first-child:not(.p-side) { display: none; }   /* el ⇕ */
+  .tc-handle .hp, .tc-handle .hl, .tc-h-entry .p-px { display: none; }
+  .tc-handle .hs { display: inline; }
+  .tc-h-entry { right: 62px; }
+  .tc-h-entry > span { padding: 2px 6px; }
+  .tc-handle .h-x { margin-left: 2px; padding: 0 1px 0 5px; }
+  .tc-pos .l { font-size: 9.5px; padding: 1px 4px; opacity: .9; }
+  .tc-pos .pnl { font-size: 10.5px; padding: 1px 5px; }
+}
