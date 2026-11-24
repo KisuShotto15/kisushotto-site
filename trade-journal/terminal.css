@@ -409,3 +409,6 @@
   .tc-pos .l { font-size: 9.5px; padding: 1px 4px; opacity: .9; }
   .tc-pos .pnl { font-size: 10.5px; padding: 1px 5px; }
 }
+/* Posicion abierta: solo lineas; zonas y etiquetas al tocarla */
+.tc-pos:not(.open) .z, .tc-pos:not(.open) .l { display: none !important; }
+.tc-pos:not(.open) .b.sl, .tc-pos:not(.open) .b.tp { opacity: .8; }
