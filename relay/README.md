@@ -1,4 +1,4 @@
-# Relay en Google Cloud Run
+# Relay de salida (Vercel, Cloud Run o Deno)
 
 Binance y Bitget bloquean las IP de Cloudflare, donde vive el guardián del trade
 journal. Este relay reenvía sus consultas firmadas. Es el mismo código que
@@ -29,7 +29,7 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregi
 ```
 
 ```bash
-git clone --depth 1 https://github.com/KisuShotto15/kisushotto-site.git && cd kisushotto-site/relay-cloudrun
+git clone --depth 1 https://github.com/KisuShotto15/kisushotto-site.git && cd kisushotto-site/relay
 ```
 
 ```bash

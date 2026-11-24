@@ -1,4 +1,4 @@
-// Relay de salida para el terminal del trade journal (lo usan Vercel y Cloud Run).
+// Relay de salida para el terminal del trade journal (lo usan Vercel, Deno Deploy y Cloud Run).
 // Binance y Bitget bloquean las IPs de Cloudflare Workers (403), y desde aqui
 // (Vercel sin1) Binance ya responde para el bot P2P. El worker firma cada lote
 // con una llave derivada de JWT_SECRET, que ambos ya comparten.
@@ -6,6 +6,7 @@
 // Solo reenvia a los hosts de la lista: no es un proxy abierto.
 
 import crypto from 'node:crypto';
+import { Buffer } from 'node:buffer';
 
 const HOSTS = new Set([
   'fapi.binance.com', 'api.binance.com', 'dapi.binance.com', 'demo-fapi.binance.com', 'testnet.binance.vision',
@@ -15,7 +16,7 @@ const MAX_SKEW_MS = 30000;
 const MAX_BATCH = 20;
 
 function relayKey() {
-  // RELAY_SECRET: clave propia del relay (Cloud Run). En Vercel se usa JWT_SECRET.
+  // RELAY_SECRET: clave propia del relay (Deno Deploy / Cloud Run). En Vercel se usa JWT_SECRET.
   const s = process.env.RELAY_SECRET || process.env.JWT_SECRET;
   if (!s) throw new Error('RELAY_SECRET no configurado');
   return crypto.createHmac('sha256', s).update('exchange-relay-v1').digest();
