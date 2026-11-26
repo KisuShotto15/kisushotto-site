@@ -53,7 +53,7 @@ export function canonical(ts, reqs) {
   return `${ts}\n` + reqs.map(r => `${r.method}\n${r.url}\n${JSON.stringify(r.headers || {})}\n${r.body || ''}`).join('\n--\n');
 }
 
-export function useRelay(relayUrl, jwtSecret, { batchMs = 8, maxBatch = 20 } = {}) {
+export function useRelay(relayUrl, jwtSecret, { batchMs = 30, maxBatch = 20 } = {}) {
   let queue = [], timer = null, keyBytes = null;
 
   async function key() {

@@ -319,3 +319,16 @@ test('guardian: una posicion que se dio por cerrada y reaparece se reabre, no se
   assert.equal(a[0].type, 'reopen');
   assert.ok(!a.some(x => x.type === 'close'));
 });
+
+test('guardian: una limite pendiente no se cancela por su propio riesgo o cupo, si por ventana o bloqueo', () => {
+  const pend = { exchange: 'bitget', market: 'futures', symbol: 'BTCUSDT', side: 'long', status: 'pending', opened_at: 1e9 };
+  const run = blocks => guardianPlan({ positions: [], ledger: [pend], rules: DEFAULT_RULES, baseEquity: 1000, now: 1e12,
+    tradingAllowed: { ok: !blocks.length, reason: blocks[0]?.msg, blocks } }).find(a => a.type === 'check_pending');
+  // La propia orden ocupa el presupuesto, la posicion y cuenta como operacion del dia
+  assert.equal(run([{ code: 'budget', msg: 'Sin presupuesto' }, { code: 'max_positions', msg: 'max' }, { code: 'max_trades', msg: '6/6' }]).cancel, false);
+  assert.equal(run([{ code: 'read', msg: 'No se pudo leer' }]).cancel, false);
+  const w = run([{ code: 'budget', msg: 'x' }, { code: 'window', msg: 'La ventana cerro' }]);
+  assert.equal(w.cancel, true);
+  assert.match(w.reason, /ventana/);
+  assert.equal(run([{ code: 'daily_loss', msg: 'Perdida del dia' }]).cancel, true);
+});

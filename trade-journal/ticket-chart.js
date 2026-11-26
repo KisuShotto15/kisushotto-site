@@ -88,6 +88,15 @@ export class TicketChart {
 
     new ResizeObserver(() => this.place()).observe(this.box);
     this.chart.timeScale().subscribeVisibleLogicalRangeChange(() => this.place());
+    // La posicion abierta se ve solo con lineas; al tocarla se muestran zonas y
+    // etiquetas, y al tocar fuera se ocultan otra vez
+    this.chart.subscribeClick(e => {
+      if (!this.pos || !e?.point) return;
+      const ys = [this.pos.entry, this.pos.stop, this.pos.tp].map(v => (v > 0 ? this.series.priceToCoordinate(v) : null)).filter(v => v != null);
+      const inside = ys.length > 1 && e.point.y >= Math.min(...ys) - 8 && e.point.y <= Math.max(...ys) + 8 && e.point.x >= (this.posX0 || 0);
+      this.posOpen = inside ? !this.posOpen : false;
+      this.placePos();
+    });
     // La escala de precios se ajusta sola con las velas: las asas se reubican seguido
     this.timer = setInterval(() => this.place(), 300);
   }
@@ -210,6 +219,8 @@ export class TicketChart {
       const x = t != null ? this.chart.timeScale().timeToCoordinate(t) : null;
       if (x != null) x0 = Math.max(0, x);
     }
+    this.posX0 = x0;
+    L.classList.toggle('open', !!this.posOpen);
     const yE = y(p.entry), yS = y(p.stop), yT = y(p.tp), short = p.side === 'short';
     const show = (el, on) => { el.style.display = on ? '' : 'none'; return on; };
     const zone = (el, a, b) => { if (show(el, a != null && b != null)) Object.assign(el.style, { left: `${x0}px`, width: `${Math.max(0, W - x0)}px`, top: `${Math.min(a, b)}px`, height: `${Math.abs(a - b)}px` }); };

@@ -698,7 +698,7 @@ function levelLabel(name, price) {
     // Limite: el precio se arrastra y la × la pasa a mercado. Mercado: sigue al precio.
     const limit = $('tType').value === 'limit';
     const qty = plan && plan.type === (limit ? 'limit' : 'market') ? fmt(plan.qty, 4) : '—';
-    return `<span class="p-side ${side}">${side === 'long' ? 'Compra' : 'Venta'}</span>` +
+    return `<span class="p-side ${side}"><span class="hl">${side === 'long' ? 'Compra' : 'Venta'}</span><span class="hs">${side === 'long' ? 'C' : 'V'}</span></span>` +
       `<span class="p-btn tp" data-act="add-tp" title="Arrastra para poner el TP">TP</span>` +
       `<span class="p-btn sl" data-act="add-sl" title="Arrastra para poner el SL">SL</span>` +
       `<span class="p-qty">${qty}</span>` +
@@ -707,12 +707,13 @@ function levelLabel(name, price) {
   }
   if (name === 'sl') {
     const loss = plan && Math.abs(plan.stop - price) < 1e-9 ? `<span class="hm"> · −${fmt(plan.loss_if_stop)} USDT</span>` : '';
-    return `SL ${px(price)} · ${pct(d)}${loss}<span class="h-x" data-act="remove" title="Quitar el SL">×</span>`;
+    // En movil solo "SL ×": el precio ya se ve en el eje de la derecha
+    return `SL<span class="hp"> ${px(price)} · ${pct(d)}</span>${loss}<span class="h-x" data-act="remove" title="Quitar el SL">×</span>`;
   }
   const stop = +$('tStop').value;
   const rr = ref && stop && Math.abs(ref - stop) > 0 ? Math.abs(price - ref) / Math.abs(ref - stop) : null;
   const gain = plan && Math.abs(plan.tp - price) < 1e-9 ? `<span class="hm"> · +${fmt(plan.gain_if_tp)} USDT</span>` : '';
-  return `TP ${px(price)} · ${rr ? `${rr.toFixed(2)}R` : pct(d)}${gain}<span class="h-x" data-act="remove" title="Quitar el TP">×</span>`;
+  return `TP<span class="hp"> ${px(price)} ·</span> ${rr ? `${rr.toFixed(2)}R` : `<span class="hp">${pct(d)}</span>`}${gain}<span class="h-x" data-act="remove" title="Quitar el TP">×</span>`;
 }
 
 const chart = new TicketChart($('tChart'), {
@@ -742,10 +743,11 @@ function positionLabels(p) {
   return {
     pnl: `${S_} · ${sign(p.upnl)} USDT${rNow != null ? ` · ${sign(rNow)}R` : ''}${p.stop ? '' : ' · SIN STOP'}`,
     pnlPos: p.upnl >= 0,
-    ep: `${S_} ${narrow ? '' : (p.market === 'coinm' ? fmt(p.size, 0) + ' ct' : fmt(p.size, 4)) + ' · '}${px(p.entry)}`,
-    sl: p.stop ? (narrow ? `SL ${px(p.stop)}${risk > 0 ? ` · −${fmt(risk)}` : ''}`
+    // En movil sin precios: ya se leen en el eje de la derecha
+    ep: narrow ? S_ : `${S_} ${(p.market === 'coinm' ? fmt(p.size, 0) + ' ct' : fmt(p.size, 4))} · ${px(p.entry)}`,
+    sl: p.stop ? (narrow ? `SL${risk > 0 ? ` −${fmt(risk)}` : ''}`
                          : `SL ${px(p.stop)} · ${pct((p.stop / p.entry - 1) * 100)}${risk > 0 ? ` · −${fmt(risk)} USDT` : ' · en ganancia'}`) : null,
-    tp: p.tp ? (narrow ? `TP ${px(p.tp)}${rr ? ` · ${fmt(rr, 1)}R` : ''}`
+    tp: p.tp ? (narrow ? `TP${rr ? ` ${fmt(rr, 1)}R` : ''}`
                        : `TP ${px(p.tp)} · ${pct((p.tp / p.entry - 1) * 100)}${rr ? ` · ${fmt(rr, 1)}R` : ''}`) : null,
   };
 }

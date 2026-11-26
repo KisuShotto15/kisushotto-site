@@ -483,6 +483,11 @@ export function chooseLeverage({ notional, available, leverage, stop_dist_pct, m
 // cerrar a mercado un swing heredado puede realizar una perdida grande.
 // recent: operaciones cerradas hace poco. Si una "reaparece" (una lectura vacia
 // del exchange la dio por cerrada), se reabre en vez de tratarla como externa.
+// Bloqueos que cancelan una orden limite pendiente. No cuentan los que la propia
+// orden provoca al estar en el libro (su riesgo ocupa el presupuesto y la posicion,
+// y ya esta contada en las operaciones del dia) ni un fallo de lectura.
+const CANCEL_PENDING = new Set(['lock', 'window', 'news', 'news_unknown', 'daily_loss', 'weekly_loss', 'consec', 'cooldown']);
+
 export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEquity, now, onCrossed = 'close', recent = [] }) {
   const actions = [];
   const key = x => `${x.exchange}|${x.market}|${x.symbol}|${x.side}`;
@@ -574,7 +579,11 @@ export function guardianPlan({ positions, ledger, tradingAllowed, rules, baseEqu
   for (const [k, t] of open) {
     if (t.market === 'spot' || seen.has(k)) continue;
     // Una orden limite que aun no entra no tiene posicion: no es un cierre
-    if (t.status === 'pending') { actions.push({ type: 'check_pending', trade: t, cancel: !tradingAllowed.ok }); continue; }
+    if (t.status === 'pending') {
+      const stop = tradingAllowed.blocks ? tradingAllowed.blocks.find(b => CANCEL_PENDING.has(b.code)) : (!tradingAllowed.ok ? { msg: tradingAllowed.reason } : null);
+      actions.push({ type: 'check_pending', trade: t, cancel: !!stop, reason: stop?.msg || null });
+      continue;
+    }
     if (now / 1000 - t.opened_at < 90) continue;   // margen para que el exchange refleje la posicion
     actions.push({ type: 'closed', trade: t });
   }

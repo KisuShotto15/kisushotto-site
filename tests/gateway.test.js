@@ -299,6 +299,16 @@ test('guardian: fuera de la ventana y sin nada abierto revisa cada 5 min', async
   await call('/guardian', {});
   clock += 60000;
   assert.equal((await call('/guardian', {})).skipped, undefined);
+  // Dentro de la ventana y sin nada abierto tambien espacia a 5 min
+  st.positions = [];
+  clock = Date.UTC(2026, 10, 16, 16, 0);   // lunes 11:00 NY
+  await call('/guardian', {});               // cierra en el libro la operacion del paso anterior
+  clock += 60000;
+  await call('/guardian', {});               // ya sin nada abierto
+  clock += 60000;
+  assert.equal((await call('/guardian', {})).skipped, true);
+  clock += 5 * 60000;
+  assert.equal((await call('/guardian', {})).skipped, undefined);
   Date.now = realNow;
 });
 
@@ -364,4 +374,36 @@ test('TP limite: el guardian lo pone si falta y se cancela al cerrar', async () 
   await gw.cancelTpOrders(ex, 'BTCUSDT', 'short');
   assert.deepEqual(calls, [['cancel', '7']]);
   gw.adapter = realAdapter;
+});
+
+test('capital en cache: no se relee cada minuto, si al cambiar posiciones; el realizado no se desvia', async () => {
+  Date.now = () => clock;
+  clock = Date.UTC(2026, 10, 25, 15, 0);
+  let reads = 0;
+  const realEq = api.equity;
+  api.equity = async () => { reads++; return realEq(); };
+  st.positions = [{ exchange: 'bitget', market: 'futures', symbol: 'BTCUSDT', side: 'long', size: 1, entry: 100, stop: 90, upnl: 0, stop_refs: [] }];
+  st.equity = 1000;
+  await call('/status?fresh=1');               // primera lectura completa
+  const r0 = reads;
+  clock += 60000;
+  st.positions[0].upnl = -30; st.equity = 970;  // el flotante baja, el realizado no
+  const s1 = await gw.status(false);
+  clock += 60000;
+  const ctx = await gw.context(true);           // vuelta del guardian
+  assert.equal(reads, r0, 'sin cambios de posiciones no se relee el capital');
+  assert.equal(Math.round(ctx.equity.now), 1000, 'capital realizado intacto con el flotante en cache');
+  assert.equal(Math.round(ctx.equity.total), 970);
+  // Se cierra la posicion: se relee de inmediato
+  st.positions = []; st.equity = 975;
+  clock += 60000;
+  const c2 = await gw.context(true);
+  assert.equal(reads, r0 + 1);
+  assert.equal(Math.round(c2.equity.now), 975);
+  // Una orden siempre relee
+  await gw.context(true, { equity: true });
+  assert.equal(reads, r0 + 2);
+  api.equity = realEq;
+  Date.now = realNow;
+  void s1;
 });
