@@ -184,6 +184,18 @@ function shopItems() {
   return Object.values(map).sort((a, b) => b.g - a.g);
 }
 const grams = g => g >= 1000 ? (Math.round(g / 100) / 10).toLocaleString('es') + ' kg' : Math.round(g) + ' g';
+// Lo que se compra por unidad: huevo grande estandar ~60 g, carton de 30. El precio
+// se pone por carton y la lista dice cuantos huevos (y cartones) son.
+const UNITS = [{ re: /huevo/i, g: 60, one: 'huevo', many: 'huevos', pack: 30, packOne: 'cartón', packMany: 'cartones' }];
+const unitOf = name => UNITS.find(u => u.re.test(name || '')) || null;
+const qtyTxt = it => {
+  const u = unitOf(it.name); if (!u) return grams(it.g);
+  const n = Math.ceil(it.g / u.g - 0.05), packs = n / u.pack;
+  return `${n} ${n === 1 ? u.one : u.many} · ${(Math.round(packs * 10) / 10).toLocaleString('es')} ${packs === 1 ? u.packOne : u.packMany}`;
+};
+// Precio guardado: por carton (unidades) o por kg; costo y precio por kg salen de ahi
+const perKg = it => { const u = unitOf(it.name), p = shop().prices[it.key]; return u ? p / (u.pack * u.g / 1000) : p; };
+const costOf = it => it.g / 1000 * perKg(it);
 const money = (sh, v) => sh.currency + ' ' + (v >= 100 ? Math.round(v).toLocaleString('es') : (Math.round(v * 100) / 100).toLocaleString('es'));
 function renderShop() {
   const el = document.getElementById('shopItems');
@@ -197,16 +209,16 @@ function renderShop() {
     const price = sh.prices[it.key];
     return `<li class="si${checked.has(it.key) ? ' on' : ''}">
       <button class="si-ck" onclick="window._shopCheck('${esc(it.key)}')" aria-label="Tachar"></button>
-      <span class="si-n">${esc(it.name)} <small>${grams(it.g)}</small></span>
-      <span class="si-p"><input type="number" inputmode="decimal" min="0" step="any" value="${price ?? ''}" placeholder="precio/kg"
-        onchange="window._shopPrice('${esc(it.key)}',this.value)"><small>${price ? money(sh, it.g / 1000 * price) : ''}</small></span></li>`;
+      <span class="si-n">${esc(it.name)} <small>${qtyTxt(it)}</small></span>
+      <span class="si-p"><input type="number" inputmode="decimal" min="0" step="any" value="${price ?? ''}" placeholder="${unitOf(it.name) ? 'precio/' + unitOf(it.name).packOne : 'precio/kg'}"
+        onchange="window._shopPrice('${esc(it.key)}',this.value)"><small>${price ? money(sh, costOf(it)) : ''}</small></span></li>`;
   }).join('') : '<li class="si-empty">Elige cuántos días de la semana comes cada día del plan.</li>';
   // costo, presupuesto y lo mas barato por caloria
   const priced = items.filter(it => sh.prices[it.key] > 0);
-  const cost = priced.reduce((a, it) => a + it.g / 1000 * sh.prices[it.key], 0);
+  const cost = priced.reduce((a, it) => a + costOf(it), 0);
   const kcal = items.reduce((a, it) => a + it.g / 100 * it.kcal100, 0);
   const pct = sh.budget ? Math.round(cost / sh.budget * 100) : null;
-  const cheap = priced.filter(it => it.kcal100 > 0).map(it => ({ ...it, kpm: it.kcal100 * 10 / sh.prices[it.key] }))
+  const cheap = priced.filter(it => it.kcal100 > 0).map(it => ({ ...it, kpm: it.kcal100 * 10 / perKg(it) }))
     .sort((a, b) => b.kpm - a.kpm).slice(0, 3);
   document.getElementById('shopNote').textContent = `${items.length} alimentos · ${checked.size ? checked.size + ' tachados' : 'toca para tachar'}`;
   document.getElementById('shopCost').innerHTML = `
@@ -732,7 +744,7 @@ function renderIngredient(ing, mealId) {
     : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>`;
   return `
   <li class="ingredient-item${disabled ? ' ing--disabled' : ''}" id="ii-${ing.id}">
-    <span class="ing-name">${esc(ing.name)}</span>
+    <span class="ing-name">${esc(ing.name)}${unitOf(ing.name) ? `<small class="ing-cnt">≈ ${Math.round(ing.amountG / unitOf(ing.name).g * 10) / 10} ${unitOf(ing.name).many}</small>` : ''}</span>
     <div class="ing-amount-wrap">
       <input class="ing-amount" type="number" value="${ing.amountG}" min="1" step="any"
         onchange="window._updateAmount('${mealId}','${ing.id}',this.value)"
