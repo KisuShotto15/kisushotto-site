@@ -1439,6 +1439,7 @@ details.rules-section:not([open]) > summary { margin-bottom: 0; }
   font-weight: 500;
 }
 .amount-row { display: flex; align-items: center; gap: 8px; }
+.amount-extra { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; font-size: 12.5px; color: var(--muted); min-height: 1em; }
 .amount-row input { width: 110px !important; flex: none; text-align: right; }
 .amount-unit {
   font-family: var(--font-mono);

@@ -207,9 +207,13 @@
       <div id="amountWrap" class="amount-wrap hidden">
         <div id="selectedFoodName" class="selected-food-name"></div>
         <div class="amount-row">
-          <input type="number" id="ingredientAmount" placeholder="100" min="1" step="any" value="100">
-          <span class="amount-unit">g</span>
+          <input type="number" id="ingredientAmount" placeholder="100" min="1" step="any" value="100" oninput="window._amountHint()">
+          <span class="amount-unit" id="amountUnit">g</span>
           <button class="btn-accent" onclick="window._confirmIngredient()">Agregar</button>
+        </div>
+        <div class="amount-extra">
+          <span id="amountHint"></span>
+          <button type="button" class="link-btn" id="amountSwitch" onclick="window._amountSwitch()" hidden></button>
         </div>
       </div>
     </div>

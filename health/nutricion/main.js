@@ -184,9 +184,9 @@ function shopItems() {
   return Object.values(map).sort((a, b) => b.g - a.g);
 }
 const grams = g => g >= 1000 ? (Math.round(g / 100) / 10).toLocaleString('es') + ' kg' : Math.round(g) + ' g';
-// Lo que se compra por unidad: huevo grande estandar ~60 g, carton de 30. El precio
-// se pone por carton y la lista dice cuantos huevos (y cartones) son.
-const UNITS = [{ re: /huevo/i, g: 60, one: 'huevo', many: 'huevos', pack: 30, packOne: 'cartón', packMany: 'cartones' }];
+// Lo que se compra por unidad: huevo mediano ~55 g, carton de 30. El precio se pone
+// por carton, la lista dice cuantos huevos (y cartones) son y se agregan por unidad.
+const UNITS = [{ re: /huevo|\begg/i, g: 55, one: 'huevo', many: 'huevos', pack: 30, packOne: 'cartón', packMany: 'cartones' }];
 const unitOf = name => UNITS.find(u => u.re.test(name || '')) || null;
 const qtyTxt = it => {
   const u = unitOf(it.name); if (!u) return grams(it.g);
@@ -744,7 +744,7 @@ function renderIngredient(ing, mealId) {
     : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>`;
   return `
   <li class="ingredient-item${disabled ? ' ing--disabled' : ''}" id="ii-${ing.id}">
-    <span class="ing-name">${esc(ing.name)}${unitOf(ing.name) ? `<small class="ing-cnt">≈ ${Math.round(ing.amountG / unitOf(ing.name).g * 10) / 10} ${unitOf(ing.name).many}</small>` : ''}</span>
+    <span class="ing-name">${esc(ing.name)}${unitOf(ing.name) ? `<small class="ing-cnt">≈ ${(Math.round(ing.amountG / unitOf(ing.name).g * 10) / 10).toLocaleString("es")} ${unitOf(ing.name).many}</small>` : ''}</span>
     <div class="ing-amount-wrap">
       <input class="ing-amount" type="number" value="${ing.amountG}" min="1" step="any"
         onchange="window._updateAmount('${mealId}','${ing.id}',this.value)"
@@ -864,6 +864,8 @@ window._updateAmount = function(mealId, ingId, val) {
   if (li) {
     const macroEl = li.querySelector('.ing-macros');
     if (macroEl) macroEl.textContent = `${fmt(m.protein)}P · ${fmt(m.fat)}F · ${fmt(m.carbs)}C · ${fmt(m.calories)}kcal`;
+    const cnt = li.querySelector('.ing-cnt'), u = unitOf(ing.name);
+    if (cnt && u) cnt.textContent = `≈ ${(Math.round(ing.amountG / u.g * 10) / 10).toLocaleString("es")} ${u.many}`;
   }
   const mealMac = mealMacros(day().meals.find(m2 => m2.id === mealId)?.ingredients || []);
   const card = document.getElementById(`mc-${mealId}`);
@@ -914,7 +916,9 @@ async function doSearch(q) {
   if (!apiKey) return;
   results.innerHTML = '<div class="search-loading">Buscando...</div>';
   try {
-    const foods = await searchFoods(q, apiKey);
+    // primero la lista local (en español: "huevo" encuentra "Huevo entero"), luego USDA
+    const local = FALLBACK_FOODS.filter(f => normName(f.name).includes(normName(q)));
+    const foods = [...local, ...(await searchFoods(q, apiKey))];
     if (!foods.length) { renderFallbackResults(q); return; }
     searchResultsList = foods;
     results.innerHTML = foods.map((f, i) => renderFoodResult(f, i)).join('');
@@ -926,7 +930,7 @@ async function doSearch(q) {
 function renderFallbackResults(q) {
   const results = document.getElementById('searchResults');
   const filtered = q
-    ? FALLBACK_FOODS.filter(f => f.name.toLowerCase().includes(q.toLowerCase()))
+    ? FALLBACK_FOODS.filter(f => normName(f.name).includes(normName(q)))
     : FALLBACK_FOODS;
   if (!filtered.length) { results.innerHTML = '<div class="search-loading">Sin resultados.</div>'; return; }
   searchResultsList = filtered;
@@ -939,7 +943,7 @@ function renderFoodResult(food, i) {
   const p100 = food.per100g;
   return `<div class="search-result" onclick="window._selectFood(${i})">
     <div class="sr-name">${esc(food.name)}</div>
-    <div class="sr-macros">${fmtD(p100.protein)}P · ${fmtD(p100.fat)}F · ${fmtD(p100.carbs)}C · ${fmt(p100.calories)}kcal <span class="sr-per">/ 100g</span></div>
+    <div class="sr-macros">${fmtD(p100.protein)}P · ${fmtD(p100.fat)}F · ${fmtD(p100.carbs)}C · ${fmt(p100.calories)}kcal <span class="sr-per">/ 100g${unitOf(food.name) ? ` · se agrega por ${unitOf(food.name).one}` : ''}</span></div>
   </div>`;
 }
 
@@ -949,7 +953,8 @@ window._selectFood = function(idx) {
   pendingFood = JSON.parse(JSON.stringify(food)); // clonar: no mutar FALLBACK_FOODS ni resultados
   document.getElementById('amountWrap').classList.remove('hidden');
   document.getElementById('selectedFoodName').textContent = pendingFood.name;
-  document.getElementById('ingredientAmount').value = '100';
+  // Huevos y demas por unidad: se escribe cuantos y se guarda en gramos
+  setAmountMode(unitOf(pendingFood.name) ? 'unit' : 'g');
   document.getElementById('ingredientAmount').focus();
   document.getElementById('searchResults').innerHTML = '';
   document.getElementById('searchInput').value = '';
@@ -965,11 +970,31 @@ window._selectFood = function(idx) {
   }
 };
 
+let amountMode = 'g';
+function setAmountMode(mode) {
+  const u = unitOf(pendingFood?.name), el = document.getElementById('ingredientAmount');
+  amountMode = u ? mode : 'g';
+  el.value = amountMode === 'unit' ? '2' : '100';
+  el.step = amountMode === 'unit' ? '1' : 'any';
+  document.getElementById('amountUnit').textContent = amountMode === 'unit' ? u.many : 'g';
+  const sw = document.getElementById('amountSwitch');
+  sw.hidden = !u;
+  if (u) sw.textContent = amountMode === 'unit' ? 'Usar gramos' : `Por ${u.one}`;
+  amountHint();
+}
+function amountHint() {
+  const u = unitOf(pendingFood?.name), n = parseFloat(document.getElementById('ingredientAmount').value) || 0;
+  document.getElementById('amountHint').textContent = !u ? '' : amountMode === 'unit'
+    ? `≈ ${Math.round(n * u.g)} g (huevo mediano ~${u.g} g)` : `≈ ${(Math.round(n / u.g * 10) / 10).toLocaleString("es")} ${u.many}`;
+}
+window._amountSwitch = () => setAmountMode(amountMode === 'unit' ? 'g' : 'unit');
+window._amountHint = amountHint;
 window._confirmIngredient = async function() {
   if (!pendingFood || !searchTargetMealId) return;
   if (pendingDetailFetch) await pendingDetailFetch;
   const amtEl = document.getElementById('ingredientAmount');
-  const amountG = Math.max(1, parseFloat(amtEl.value) || 100);
+  const v = parseFloat(amtEl.value) || 0, u = unitOf(pendingFood.name);
+  const amountG = amountMode === 'unit' && u ? Math.max(1, Math.round((v || 1) * u.g)) : Math.max(1, v || 100);
   const meal = day().meals.find(m => m.id === searchTargetMealId);
   if (!meal) return;
   if (pendingFood.fdcId && pendingFood.per100g) {
