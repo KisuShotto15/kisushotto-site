@@ -64,7 +64,9 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET' || url.origin !== self.location.origin) return; // APIs: siempre red
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const net = fetch(req).then(r => {
+    // no-cache: el navegador revalida con el servidor (304 si no cambio). Sin esto
+    // usaba su cache HTTP (Cloudflare manda los .js con 4 h) y los cambios tardaban horas.
+    const net = fetch(req, { cache: 'no-cache' }).then(r => {
       if (r.ok && !r.redirected && r.type === 'basic') cache.put(req, r.clone());
       return r;
     });

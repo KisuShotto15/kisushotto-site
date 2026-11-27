@@ -785,6 +785,10 @@ function todayMarks(it){
   return td.map(z=>{const rec=seen.length&&!seen.some(o=>(o.weight||0)>=(z.weight||0)&&o.reps>=z.reps);seen.push(z);return {...z,rec};});
 }
 const logChips=(it,label)=>{const m=todayMarks(it);return m.length?(label?`<div class="rb-lbl">${esc(label)}</div>`:'')+`<div class="rb-log">${m.map((z,k)=>`<span class="${z.rec?'r':''}"><b>${setTxt(z)}${z.rec?' 🏆':''}</b>${z.side?z.side:'Serie '+(k+1)}</span>`).join('')}</div>`:'';};
+// Que peso se anota: con dos mancuernas, el de cada una; con barra, el total
+const kgWhat=n=>/barra/i.test(n)?'Peso total de la barra (con discos)'
+  :/mancuernas|laterales|rear delt|curl/i.test(n)?'Peso de cada mancuerna'
+  :/mancuerna|goblet|remo a una mano|extensi/i.test(n)?'Peso de la mancuerna':'';
 // Pantalla de la serie: contador grande, lo de la vez pasada y la meta para record
 function renderRep(el,i,it,ph){
   const E=exOf(it,ph),k=ph.ex??0,nSets=E.sets||it.phases.filter(p=>!p.rest&&!p.warm).length;
@@ -801,7 +805,8 @@ function renderRep(el,i,it,ph){
       <div class="rb-big"><button data-a="r" data-d="-1" aria-label="Menos reps">−</button><b id="aReps">${T.reps}</b><button data-a="r" data-d="1" aria-label="Más reps">+</button></div>
       <div class="rb-cap">reps${E.fail?' · <b>al fallo</b>':E.rir&&!ph.warm?' · <b>RIR '+esc(E.rir)+'</b>':''}</div>
       ${ph.warm?'':`<div class="rb-goal">${l.length?`<span>La vez pasada: ${l.map(setTxt).join(' · ')}</span>`:''}${tgt?`<span class="g" id="rbTgt">Para récord: ${tgt}+</span>`:''}${E.range?`<span>Meta ${esc(E.range)}</span>`:E.fail?'<span>Meta 6–12</span>':''}</div>`}
-      ${kgOn?`<div class="adj"><div class="ad"><button data-a="k" data-d="-${st}" aria-label="Menos peso">−</button><span><b id="aKg">${T.kg||0}</b> kg</span><button data-a="k" data-d="${st}" aria-label="Más peso">+</button></div></div>`:''}
+      ${kgOn?`<div class="adj"><div class="ad"><button data-a="k" data-d="-${st}" aria-label="Menos peso">−</button><span><b id="aKg">${T.kg||0}</b> kg</span><button data-a="k" data-d="${st}" aria-label="Más peso">+</button></div></div>
+      ${kgWhat(E.name)?`<div class="rb-cap">${kgWhat(E.name)}</div>`:''}`:''}
       <button class="btn green rb-done" id="hSet">✓ Serie hecha</button>
       ${then}
       <div class="rb-links">${kgOn?'<span></span>':'<button class="lk" id="hKg">+ Añadir lastre (kg)</button>'}<button class="lk" id="hStop">Detener</button></div>
