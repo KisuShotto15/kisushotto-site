@@ -1,7 +1,7 @@
 // Datos de Metricas (Body Metrics) por cuenta: se guardan en el backend de
 // Health (habits-worker, /health/bodymetrics) con el token del usuario.
 import { authFetch } from '../auth.js';
-import { TEMPLATES } from '../rutina-data.js';
+import { TEMPLATES, RENAMES } from '../rutina-data.js';
 
 const DATA_URL = 'https://habits-worker.efrenalejandro2010.workers.dev/health/bodymetrics';
 const LS_KEY   = 'body_metrics_v1';
@@ -47,7 +47,9 @@ export async function push(state) {
 // el otro ejercicio o el otro lado. Devuelve cuantas borro (0 = nada que tocar).
 const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 export function dedupeRutina(state) {
-  if (!state?.sessions?.length) return 0;
+  // de paso: los ejercicios de la rutina A/B pasaron a ingles (el historial sigue, es el mismo id)
+  for (const e of state?.exercises || []) if (RENAMES[e.name]) { e.name = RENAMES[e.name]; state.lastModified = Date.now(); state._renamed = 1; }
+  if (!state?.sessions?.length) { const r = state?._renamed ? 1 : 0; if (state) delete state._renamed; return r; }
   const ss = new Set();
   const add = list => (list || []).forEach(it => { if (it.ss) ss.add(norm(it.name)); });
   TEMPLATES.forEach(t => add(t.items));
@@ -65,7 +67,8 @@ export function dedupeRutina(state) {
     s.sets = keep;
   }
   if (removed) state.lastModified = Date.now();
-  return removed;
+  const renamed = state._renamed; delete state._renamed;
+  return removed || (renamed ? -1 : 0); // -1: solo nombres cambiados
 }
 
 function retryPending() {

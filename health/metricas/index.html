@@ -475,7 +475,8 @@ async function init() {
   }
   // series duplicadas por el bug del boton "Ya" de la Rutina: se borran solas
   const n = dedupeRutina(S);
-  if (n) { save(); render(); toast(`Borré ${n} ${n === 1 ? 'serie duplicada' : 'series duplicadas'} de la Rutina`); }
+  if (n) { save(); render(); }
+  if (n > 0) toast(`Borré ${n} ${n === 1 ? 'serie duplicada' : 'series duplicadas'} de la Rutina`);
 }
 
 init();

@@ -332,7 +332,7 @@
 </dialog>
 
 <script type="module">
-import {BUILTIN,compile,dur,phasesOf,doseOf,listOf,TEMPLATES,OLD_AB} from './rutina-data.js';
+import {BUILTIN,compile,dur,phasesOf,doseOf,listOf,TEMPLATES,OLD_AB,renameRoutine} from './rutina-data.js';
 import {loadLocal as bmLoad,saveLocal as bmSave,pull as bmPull,push as bmPush,dedupeRutina} from './metricas/sync.js';
 // App Android (Capacitor, health-app/): sus plugins propios; null en la web.
 // Las pestanas viven en iframes: el puente nativo es el de la pagina principal.
@@ -786,9 +786,9 @@ function todayMarks(it){
 }
 const logChips=(it,label)=>{const m=todayMarks(it);return m.length?(label?`<div class="rb-lbl">${esc(label)}</div>`:'')+`<div class="rb-log">${m.map((z,k)=>`<span class="${z.rec?'r':''}"><b>${setTxt(z)}${z.rec?' 🏆':''}</b>${z.side?z.side:'Serie '+(k+1)}</span>`).join('')}</div>`:'';};
 // Que peso se anota: con dos mancuernas, el de cada una; con barra, el total
-const kgWhat=n=>/barra/i.test(n)?'Peso total de la barra (con discos)'
-  :/mancuernas|laterales|rear delt|curl/i.test(n)?'Peso de cada mancuerna'
-  :/mancuerna|goblet|remo a una mano|extensi/i.test(n)?'Peso de la mancuerna':'';
+const kgWhat=n=>/goblet|one-arm|triceps|tríceps|una mano|extensi/i.test(n)?'Peso de la mancuerna'
+  :/barbell|barra/i.test(n)?'Peso total de la barra (con discos)'
+  :/dumbbell|mancuerna|hammer|curl|laterales|rear delt/i.test(n)?'Peso de cada mancuerna':'';
 // Pantalla de la serie: contador grande, lo de la vez pasada y la meta para record
 function renderRep(el,i,it,ph){
   const E=exOf(it,ph),k=ph.ex??0,nSets=E.sets||it.phases.filter(p=>!p.rest&&!p.warm).length;
@@ -1171,6 +1171,7 @@ $('edDel').onclick=()=>{
 
 /* ---------- arranque ---------- */
 let ready=false;
+if(custom.reduce((a,r)=>a+renameRoutine(r),0))save(); // A/B en ingles
 load();renderAll();ready=true;pickRequested();
 
 /* ---------- traer el estado de la nube y fusionarlo ---------- */
@@ -1180,10 +1181,10 @@ window.addEventListener('load',()=>window.healthFetch(SYNC_URL).then(r=>r.ok?r.j
   if(!r){if(saved.updated||hist.length)pushRemote();return;}
   const remoteDays=(r.history||[]).length;
   (r.history||[]).forEach(d=>{if(!hist.includes(d))hist.push(d);});
-  const localNewer=(saved.updated||0)>(r.updated||0);
+  const localNewer=(saved.updated||0)>(r.updated||0);let renamed=0;
   if((r.updated||0)>(saved.updated||0)&&T.i===null){
     // la nube es mas reciente: adoptar sus rutinas, progreso del dia y preferencias
-    if(Array.isArray(r.routines))custom=r.routines;
+    if(Array.isArray(r.routines)){custom=r.routines;renamed=custom.reduce((a,x)=>a+renameRoutine(x),0);}
     if(r.routine)active=rotated(r)||r.routine;
     doneBy=doneByOf(r);
     if(r.prefs)['voice','sound','auto'].forEach(k=>{if(typeof r.prefs[k]==='boolean')state[k]=r.prefs[k];});
@@ -1195,7 +1196,8 @@ window.addEventListener('load',()=>window.healthFetch(SYNC_URL).then(r=>r.ok?r.j
     sel=null;load();
   }
   // subir si lo local es mas nuevo o tiene dias completados que la nube no tiene
-  if(localNewer||hist.length>remoteDays)pushRemote();
+  if(renamed)saved.updated=Date.now(); // la A/B de la nube paso a ingles: subirla
+  if(localNewer||hist.length>remoteDays||renamed)pushRemote();
   writeLocal();renderAll();
 }).catch(()=>{}));
 

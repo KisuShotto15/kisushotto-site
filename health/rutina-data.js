@@ -3,7 +3,7 @@
 // cues: avisos por voz dentro de una fase ({t: segundos desde el inicio, say}).
 export const DATA=[
 {block:"Bloque 1 — Activación (5 min)",items:[
- {name:"Círculos de cadera",dose:"30 s cada sentido",q:"hip circles exercise standing",
+ {name:"Hip circles",dose:"30 s cada sentido",q:"hip circles exercise standing",
   phases:[{l:"Sentido horario",s:30},{l:"Sentido antihorario",s:30}],
   steps:["Pies separados al ancho de los hombros, manos en la cintura.",
          "Mantén los pies fijos y las rodillas suaves, sin bloquear.",
@@ -11,7 +11,7 @@ export const DATA=[
          "Movimiento lento y controlado: cada círculo completo debe tomar unos 3 segundos."],
   watch:"No muevas los hombros ni el torso. Solo la cadera gira."},
 
- {name:"Círculos de hombro",dose:"30 s cada sentido",q:"arm circles shoulder warmup",
+ {name:"Arm circles",dose:"30 s cada sentido",q:"arm circles shoulder warmup",
   phases:[{l:"Hacia adelante",s:30,cues:[{t:20,say:"Últimos 10 segundos, círculos amplios"}]},{l:"Hacia atrás",s:30,cues:[{t:20,say:"Últimos 10 segundos, círculos amplios"}]}],
   steps:["De pie, brazos extendidos a los lados formando una T.",
          "Comienza con círculos pequeños y agrándalos progresivamente.",
@@ -19,7 +19,7 @@ export const DATA=[
          "Últimos 10 segundos: círculos lo más amplios que puedas."],
   watch:"No encojas los hombros hacia las orejas. Mantén el cuello largo."},
 
- {name:"Balanceo de pierna",dose:"30 s cada pierna",q:"leg swings dynamic stretch",
+ {name:"Leg swings",dose:"30 s cada pierna",q:"leg swings dynamic stretch",
   phases:[{l:"Pierna derecha",s:30},{l:"Pierna izquierda",s:30}],
   steps:["Apóyate con una mano en la pared o en el marco de la puerta.",
          "Balancea la pierna libre hacia adelante y hacia atrás como un péndulo.",
@@ -35,7 +35,7 @@ export const DATA=[
          "Regresa y repite el ciclo durante todo el minuto, sin apuro."],
   watch:"La rodilla trasera estirada y la cadera baja. Ahí está el estiramiento del flexor."},
 
- {name:"Rotación de tobillo",dose:"30 s cada pie",q:"ankle circles mobility exercise",
+ {name:"Ankle circles",dose:"30 s cada pie",q:"ankle circles mobility exercise",
   phases:[{l:"Pie derecho",s:30,cues:[{t:15,say:"Cambia de sentido"}]},{l:"Pie izquierdo",s:30,cues:[{t:15,say:"Cambia de sentido"}]}],
   steps:["Apóyate si lo necesitas y levanta un pie del piso.",
          "Dibuja círculos amplios con la punta del pie, 15 s en cada sentido.",
@@ -45,7 +45,7 @@ export const DATA=[
 ]},
 
 {block:"Bloque 2 — Equilibrio funcional (10 min)",items:[
- {name:"Balance a una pierna · ojos abiertos",dose:"2 × 30 s cada pierna",q:"single leg balance exercise standing",
+ {name:"Single-leg balance · eyes open",dose:"2 × 30 s cada pierna",q:"single leg balance exercise standing",
   phases:[{l:"Serie 1 · derecha",s:30},{l:"Serie 1 · izquierda",s:30},{l:"Serie 2 · derecha",s:30},{l:"Serie 2 · izquierda",s:30}],
   steps:["Párate sobre una pierna, rodilla ligeramente flexionada.",
          "La otra rodilla sube hasta la altura de la cadera.",
@@ -53,7 +53,7 @@ export const DATA=[
          "Reparte el peso entre el talón y los dedos. Deja que el pie trabaje."],
   watch:"Si te tambaleas mucho, el problema es el tobillo, no el equilibrio. Mejora con las semanas."},
 
- {name:"Balance a una pierna · ojos cerrados",dose:"2 × 20 s cada pierna",q:"single leg balance eyes closed",
+ {name:"Single-leg balance · eyes closed",dose:"2 × 20 s cada pierna",q:"single leg balance eyes closed",
   phases:[{l:"Serie 1 · derecha",s:20},{l:"Serie 1 · izquierda",s:20},{l:"Serie 2 · derecha",s:20},{l:"Serie 2 · izquierda",s:20}],
   steps:["Misma posición que el ejercicio anterior.",
          "Cierra los ojos por completo antes de que empiece el conteo.",
@@ -61,7 +61,7 @@ export const DATA=[
          "Si pierdes el equilibrio, reposiciona y continúa sin detener el reloj."],
   watch:"Hazlo cerca de una pared. Es normal durar mucho menos que con los ojos abiertos."},
 
- {name:"Single-leg RDL sin peso",dose:"2 × 8 reps cada pierna",q:"single leg romanian deadlift bodyweight",
+ {name:"Bodyweight single-leg RDL",dose:"2 × 8 reps cada pierna",q:"single leg romanian deadlift bodyweight",
   phases:[{l:"Serie 1 · derecha",s:40},{l:"Serie 1 · izquierda",s:40},{l:"Serie 2 · derecha",s:40},{l:"Serie 2 · izquierda",s:40}],
   steps:["Párate sobre una pierna, la otra extendida hacia atrás.",
          "Empuja la cadera hacia atrás mientras el torso baja al frente.",
@@ -77,7 +77,7 @@ export const DATA=[
          "Regresa controlado sin tocar el piso y repite."],
   watch:"La cadera no debe rotar. Imagina un vaso de agua en tu espalda baja."},
 
- {name:"Búlgara isométrica · sin peso",dose:"2 × 20 s cada pierna",q:"bulgarian split squat isometric hold",
+ {name:"Bulgarian split squat hold",dose:"2 × 20 s cada pierna",q:"bulgarian split squat isometric hold",
   phases:[{l:"Serie 1 · derecha",s:20},{l:"Serie 1 · izquierda",s:20},{l:"Serie 2 · derecha",s:20},{l:"Serie 2 · izquierda",s:20}],
   steps:["Empeine del pie trasero sobre una silla o el borde de la cama.",
          "Pie delantero suficientemente adelante para que la rodilla no pase los dedos.",
@@ -87,7 +87,7 @@ export const DATA=[
 ]},
 
 {block:"Bloque 3 — Estiramiento estático (5 min)",items:[
- {name:"Pecho en marco de puerta",dose:"45 s cada lado",q:"doorway chest stretch",
+ {name:"Doorway chest stretch",dose:"45 s cada lado",q:"doorway chest stretch",
   phases:[{l:"Lado derecho",s:45},{l:"Lado izquierdo",s:45}],
   steps:["Antebrazo apoyado en el marco, codo a la altura del hombro.",
          "Da un paso adelante con la pierna del mismo lado.",
@@ -95,7 +95,7 @@ export const DATA=[
          "Respira profundo: en cada exhalación cede un poco más."],
   watch:"Estiramiento en el pecho, no en el hombro. Si duele el hombro, baja el codo."},
 
- {name:"Hombro cruzado",dose:"30 s cada lado",q:"cross body shoulder stretch",
+ {name:"Cross-body shoulder stretch",dose:"30 s cada lado",q:"cross body shoulder stretch",
   phases:[{l:"Lado derecho",s:30},{l:"Lado izquierdo",s:30}],
   steps:["Cruza el brazo derecho por delante del pecho, bien extendido.",
          "Con el antebrazo izquierdo, engánchalo y acércalo al cuerpo.",
@@ -103,7 +103,7 @@ export const DATA=[
          "Presión constante, sin rebotes."],
   watch:"Si no sientes nada, estás subiendo el hombro. Bájalo y aumenta la presión."},
 
- {name:"Flexor de cadera",dose:"45 s cada lado",q:"kneeling hip flexor stretch",
+ {name:"Kneeling hip flexor stretch",dose:"45 s cada lado",q:"kneeling hip flexor stretch",
   phases:[{l:"Lado derecho",s:45},{l:"Lado izquierdo",s:45}],
   steps:["Rodilla derecha en el piso sobre algo acolchado, pie izquierdo adelante.",
          "Aprieta el glúteo derecho con fuerza. Esto es lo que activa el estiramiento.",
@@ -111,7 +111,7 @@ export const DATA=[
          "Para más intensidad, sube el brazo derecho e inclínate a la izquierda."],
   watch:"No arquees la espalda baja. El glúteo apretado lo previene."},
 
- {name:"Isquiotibial",dose:"45 s cada lado",q:"standing hamstring stretch",
+ {name:"Standing hamstring stretch",dose:"45 s cada lado",q:"standing hamstring stretch",
   phases:[{l:"Lado derecho",s:45},{l:"Lado izquierdo",s:45}],
   steps:["Talón derecho apoyado en una silla baja o escalón, pierna extendida.",
          "Pie en flexión, dedos apuntando hacia arriba.",
@@ -119,7 +119,7 @@ export const DATA=[
          "Mantén la rodilla casi recta pero sin bloquearla por completo."],
   watch:"Si redondeas la espalda, estiras la espalda y no el isquiotibial. Baja la altura."},
 
- {name:"Pantorrilla en pared",dose:"30 s cada lado",q:"calf stretch against wall",
+ {name:"Wall calf stretch",dose:"30 s cada lado",q:"calf stretch against wall",
   phases:[{l:"Lado derecho",s:30},{l:"Lado izquierdo",s:30}],
   steps:["Manos en la pared, pierna derecha atrás bien extendida.",
          "Talón trasero completamente pegado al piso.",
@@ -127,7 +127,7 @@ export const DATA=[
          "Dedos del pie trasero apuntando al frente, no hacia afuera."],
   watch:"Si el talón se levanta, acerca el pie. Esa es la señal de que fuiste muy lejos."},
 
- {name:"Respiración para dormir",dose:"1 min · 4-7-8",q:"4-7-8 breathing technique",
+ {name:"4-7-8 breathing",dose:"1 min · 4-7-8",q:"4-7-8 breathing technique",
   phases:[{l:"Respira 4-7-8",s:60,cues:[{t:20,say:"Suelta los hombros"},{t:40,say:"Una más, lento"}]}],
   steps:["Acostado o sentado, una mano en el abdomen.",
          "Inhala por la nariz contando 4.",
@@ -212,30 +212,63 @@ export const listOf=r=>compile(r).map(it=>({name:it.name,dose:it.dose,dur:dur(it
 // Plantillas para "+ Nueva rutina": A/B con superseries (v2). Compuestos a RIR
 // 1-2, aislamiento a RIR 0-1; cuando haces el tope del rango en todas las series,
 // sube el peso. Semana A-B-A-B-A-B + descanso; descarga cada 6 semanas.
-const RC='RIR 1-2: para cuando te queden 1-2 reps limpias. Casi todo el estímulo con mucha menos fatiga. Tope del rango en todas las series → sube el peso.';
-const RI='Aislamiento: RIR 0-1 (puedes llegar al fallo). Tope del rango en todas las series → sube el peso.';
-const ex=(name,o={})=>({name,type:'reps',sets:3,reps:8,secs:30,rest:0,kg:null,sides:false,w:true,note:RC,...o});
+const RC='RIR 1-2: para cuando te queden 1-2 reps limpias. Tope del rango en todas las series → sube el peso.';
+const RI='RIR 0-1 (puedes llegar al fallo). Tope del rango en todas las series → sube el peso.';
+const ex=(name,o={})=>({name,type:'reps',sets:3,reps:8,secs:30,rest:0,kg:null,sides:false,w:true,...o});
 export const TEMPLATES=[
   {key:'A',v:2,name:'Día A · Empuje + cuádriceps',restBetween:90,items:[
-    ex('Floor press con mancuernas',{ss:'A',range:'6-10',reps:6,rir:'1-2',rest:120,warm:2,step:1,note:'Antes: 2 series de calentamiento al 50 % del peso. '+RC}),
-    ex('Búlgara con mancuernas',{ss:'A',range:'8-12',reps:8,rir:'1-2',rest:120,sides:true,step:1}),
-    ex('Overhead press con barra',{ss:'B',range:'6-10',reps:6,rir:'1-2',rest:120,step:2.5}),
-    ex('Goblet squat',{ss:'B',range:'10-15',reps:10,rir:'1-2',rest:120,step:1}),
-    ex('Elevaciones laterales',{ss:'C',range:'12-15',reps:12,rir:'0-1',rest:75,step:1,note:RI}),
-    ex('Extensión de tríceps sobre la cabeza',{ss:'C',range:'10-12',reps:10,rir:'0-1',rest:75,step:1,note:RI}),
-    ex('Elevación de pantorrilla a una pierna',{ss:'D',range:'12-20',reps:12,rir:'0',rest:60,sides:true,w:false,note:'RIR 0: hasta el fallo. Pausa de 1 s arriba y abajo. Con 20+ reps, sostén una mancuerna.'}),
-    ex('Pallof press con mancuerna',{ss:'D',sets:2,range:'12',reps:12,rest:60,sides:true,step:1,note:'Antirrotación: el torso no gira. 12 por lado.'}),
+    ex('Dumbbell floor press',{ss:'A',range:'6-10',reps:6,rir:'1-2',rest:120,warm:2,step:1,
+      note:'Acostado en el piso, rodillas dobladas. Baja las mancuernas hasta que los codos toquen el piso (a ~45° del cuerpo), pausa y empuja. Antes: 2 series de calentamiento al 50 %. '+RC}),
+    ex('Dumbbell Bulgarian split squat',{ss:'A',range:'8-12',reps:8,rir:'1-2',rest:120,sides:true,step:1,
+      note:'Pie de atrás sobre una silla o la cama, pie de adelante a ~60 cm. Baja recto hasta que la rodilla de atrás casi toque el piso y sube empujando con el talón de adelante. Una mancuerna en cada mano. '+RC}),
+    ex('Barbell overhead press',{ss:'B',range:'6-10',reps:6,rir:'1-2',rest:120,step:2.5,
+      note:'De pie, barra a la altura de la clavícula, glúteos y abdomen apretados. Empuja la barra recta hacia arriba pasando la cara hasta estirar los brazos sobre la cabeza. '+RC}),
+    ex('Goblet squat',{ss:'B',range:'10-15',reps:10,rir:'1-2',rest:120,step:1,
+      note:'Sostén una mancuerna vertical pegada al pecho. Baja en sentadilla profunda con el pecho arriba y los codos entre las rodillas; sube empujando el piso. '+RC}),
+    ex('Dumbbell lateral raise',{ss:'C',range:'12-15',reps:12,rir:'0-1',rest:75,step:1,
+      note:'De pie, una mancuerna en cada mano. Sube los brazos hacia los lados hasta la altura de los hombros, codos un poco doblados, sin balancearte. Baja lento. '+RI}),
+    ex('Overhead triceps extension',{ss:'C',range:'10-12',reps:10,rir:'0-1',rest:75,step:1,
+      note:'Una mancuerna con las dos manos sobre la cabeza. Bájala detrás de la cabeza doblando solo los codos (apuntando al frente) y vuelve a estirar. '+RI}),
+    ex('Single-leg calf raise',{ss:'D',range:'12-20',reps:12,rir:'0',rest:60,sides:true,w:false,
+      note:'En el borde de un escalón, en un pie. Baja el talón todo lo que puedas, pausa 1 s, y sube en puntas lo más alto posible, pausa 1 s. RIR 0: hasta el fallo. Con 20+ reps, sostén una mancuerna.'}),
+    ex('Pallof press',{ss:'D',sets:2,range:'12',reps:12,rest:60,sides:true,w:false,
+      note:'Abdomen antirrotación. Necesita una banda elástica atada a la altura del pecho, a tu lado. De pie de perfil a la banda, agárrala con las dos manos pegadas al pecho y empuja los brazos al frente sin dejar que el torso gire; aguanta 2 s y vuelve. 12 por lado. Sin banda: Suitcase hold (una mancuerna pesada en una mano, de pie y recto, 30 s por lado).'}),
   ]},
   {key:'B',v:2,name:'Día B · Tirón + cadena posterior',restBetween:90,items:[
-    ex('Dominadas',{ss:'A',range:'6-12',reps:6,rir:'1-2',rest:120,warm:2,w:false,note:'Antes: 2 series fáciles de calentamiento (pocas reps). '+RC+' Con 12 en todas las series, añade lastre.'}),
-    ex('Peso muerto rumano con barra',{ss:'A',range:'8-12',reps:8,rir:'1-2',rest:120,step:2.5}),
-    ex('Remo a una mano',{ss:'B',range:'8-12',reps:8,rir:'1-2',rest:120,sides:true,step:1}),
-    ex('Rueda abdominal',{ss:'B',range:'8-15',reps:8,rir:'1',rest:120,w:false,note:'RIR 1. Rango completo sin arquear la espalda baja.'}),
-    ex('Rear delt fly',{ss:'C',range:'12-20',reps:12,rir:'0-1',rest:75,step:1,note:RI}),
-    ex('Encogimiento de hombros con barra',{ss:'C',range:'12-15',reps:12,rir:'0-1',rest:75,step:2.5,note:RI}),
-    ex('Curl con mancuernas',{ss:'D',range:'8-12',reps:8,rir:'0-1',rest:60,step:1,note:RI}),
-    ex('Curl martillo',{ss:'D',sets:2,range:'10-12',reps:10,rir:'0-1',rest:60,step:1,note:RI}),
+    ex('Pull-up',{ss:'A',range:'6-12',reps:6,rir:'1-2',rest:120,warm:2,w:false,
+      note:'Agarre por encima, un poco más ancho que los hombros. Desde brazos estirados, sube hasta que la barbilla pase la barra y baja controlado. Antes: 2 series fáciles de calentamiento. '+RC+' Con 12 en todas las series, añade lastre.'}),
+    ex('Barbell Romanian deadlift',{ss:'A',range:'8-12',reps:8,rir:'1-2',rest:120,step:2.5,
+      note:'De pie, barra frente a los muslos, rodillas un poco dobladas. Lleva la cadera atrás bajando la barra pegada a las piernas, espalda recta, hasta sentir el estiramiento atrás del muslo (media espinilla). Sube apretando glúteos. '+RC}),
+    ex('One-arm dumbbell row',{ss:'B',range:'8-12',reps:8,rir:'1-2',rest:120,sides:true,step:1,
+      note:'Mano y rodilla de un lado apoyadas en una banca o la cama, espalda plana. Tira la mancuerna hacia la cadera llevando el codo atrás y baja estirando del todo. '+RC}),
+    ex('Ab wheel rollout',{ss:'B',range:'8-15',reps:8,rir:'1',rest:120,w:false,
+      note:'De rodillas, manos en la rueda bajo los hombros. Rueda hacia adelante lo más lejos que puedas sin arquear la espalda baja (abdomen apretado) y vuelve. RIR 1.'}),
+    ex('Dumbbell rear delt fly',{ss:'C',range:'12-20',reps:12,rir:'0-1',rest:75,step:1,
+      note:'Inclinado hacia adelante, torso casi paralelo al piso, una mancuerna en cada mano. Abre los brazos hacia los lados con los codos un poco doblados, apretando atrás de los hombros. Peso ligero. '+RI}),
+    ex('Barbell shrug',{ss:'C',range:'12-15',reps:12,rir:'0-1',rest:75,step:2.5,
+      note:'De pie, barra con los brazos estirados. Sube los hombros hacia las orejas, pausa 1 s y baja, sin girarlos. '+RI}),
+    ex('Dumbbell curl',{ss:'D',range:'8-12',reps:8,rir:'0-1',rest:60,step:1,
+      note:'De pie, palmas hacia arriba. Sube las mancuernas doblando solo los codos (pegados al cuerpo) y baja lento. '+RI}),
+    ex('Hammer curl',{ss:'D',sets:2,range:'10-12',reps:10,rir:'0-1',rest:60,step:1,
+      note:'Como el curl, pero con las palmas mirándose (agarre neutro, como un martillo). '+RI}),
   ]},
 ];
+// Nombres en español de la v2 -> en ingles (rutinas ya cargadas e historial de Metricas)
+export const RENAMES={'Floor press con mancuernas':'Dumbbell floor press','Búlgara con mancuernas':'Dumbbell Bulgarian split squat',
+  'Overhead press con barra':'Barbell overhead press','Elevaciones laterales':'Dumbbell lateral raise',
+  'Extensión de tríceps sobre la cabeza':'Overhead triceps extension','Elevación de pantorrilla a una pierna':'Single-leg calf raise',
+  'Pallof press con mancuerna':'Pallof press','Dominadas':'Pull-up','Peso muerto rumano con barra':'Barbell Romanian deadlift',
+  'Remo a una mano':'One-arm dumbbell row','Rueda abdominal':'Ab wheel rollout','Rear delt fly':'Dumbbell rear delt fly',
+  'Encogimiento de hombros con barra':'Barbell shrug','Curl con mancuernas':'Dumbbell curl','Curl martillo':'Hammer curl'};
+// Pasa al ingles los ejercicios de una rutina cargada de la plantilla (nombre, explicacion y si lleva peso)
+export function renameRoutine(r){
+  let n=0;
+  for(const it of r?.items||[]){
+    const en=RENAMES[it.name];if(!en)continue;
+    const t=TEMPLATES.flatMap(x=>x.items).find(x=>x.name===en);
+    Object.assign(it,{name:en,note:t?.note??it.note,w:t?.w??it.w});n++;
+  }
+  return n;
+}
 // Nombres de la A/B anterior (al fallo, sin superseries): se reemplaza al cargar la nueva
 export const OLD_AB=['Día A · Empuje + piernas','Día B · Jalón + core'];
